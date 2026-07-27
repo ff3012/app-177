@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageEventsFor } from '@/lib/auth/permissions';
+import { canCreateSectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
 import { CalendarView, type CalendarEventInput } from '@/components/calendar/calendar-view';
 
 export default async function AbschnittKalenderPage() {
@@ -41,6 +41,14 @@ export default async function AbschnittKalenderPage() {
           <Link href="/kalender" className="text-neutral-600 hover:underline">
             Zurück zu meiner Feuerwehr
           </Link>
+          {canCreateSectionWideEvent(user) && (
+            <Link
+              href="/kalender/neu?sectionWide=1"
+              className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+            >
+              Neuer Termin
+            </Link>
+          )}
         </div>
       </div>
       <CalendarView events={calendarEvents} />
