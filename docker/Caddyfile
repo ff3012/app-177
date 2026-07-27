@@ -1,0 +1,4 @@
+# Replace with your real domain (Caddy will automatically provision a Let's Encrypt certificate for it).
+termine.abschnitt-purkersdorf.example {
+	reverse_proxy app:3000
+}

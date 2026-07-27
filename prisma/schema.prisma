@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum OrganizationType {
+  FEUERWEHR
+  ABSCHNITTSKOMMANDO
+}
+
+enum MembershipRole {
+  ADMIN
+  MEMBER
+}
+
+enum DroneRole {
+  PILOT
+  VIEWER
+}
+
+enum FlightPurpose {
+  UEBUNG
+  EINSATZ
+}
+
+// ---------- Core org & users ----------
+
+model Organization {
+  id        String           @id @default(cuid())
+  name      String           @unique
+  shortName String?
+  type      OrganizationType
+  icsToken  String           @unique @default(cuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  members     User[]       @relation("HomeOrganization")
+  memberships Membership[]
+  events      Event[]
+
+  @@index([type])
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  passwordHash       String
+  firstName          String
+  lastName           String
+  isActive           Boolean  @default(true)
+  homeOrganizationId String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  homeOrganization Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
+  memberships      Membership[]
+  droneMembership  DrohnengruppeMembership?
+  createdEvents    Event[]                  @relation("EventCreatedBy")
+  droneFlights     DroneFlight[]            @relation("FlightRegisteredBy")
+
+  @@index([homeOrganizationId])
+}
+
+// Admin/staff rights, scoped per organization
+model Membership {
+  id             String         @id @default(cuid())
+  userId         String
+  organizationId String
+  role           MembershipRole
+  createdAt      DateTime       @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId, role])
+  @@index([organizationId])
+}
+
+// Flat cross-org group membership for the drone team
+model DrohnengruppeMembership {
+  id      String    @id @default(cuid())
+  userId  String    @unique
+  role    DroneRole @default(PILOT)
+  addedAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Module 1: Terminplanung ----------
+
+model Event {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  location       String?
+  startsAt       DateTime
+  endsAt         DateTime
+  allDay         Boolean  @default(false)
+  organizationId String
+  isSectionWide  Boolean  @default(false)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation("EventCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, startsAt])
+  @@index([isSectionWide, startsAt])
+}
+
+// ---------- Module 2: Drohnengruppe ----------
+
+model Drone {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  flights DroneFlight[]
+}
+
+model DroneFlight {
+  id             String        @id @default(cuid())
+  startsAt       DateTime
+  pilotName      String
+  location       String
+  droneId        String
+  purpose        FlightPurpose
+  notes          String?
+  registeredById String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  drone        Drone @relation(fields: [droneId], references: [id])
+  registeredBy User  @relation("FlightRegisteredBy", fields: [registeredById], references: [id])
+
+  @@index([startsAt])
+  @@index([droneId])
+}
