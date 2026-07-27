@@ -30,6 +30,29 @@ export async function createDrone(_prevState: DroneFormState, formData: FormData
   return {};
 }
 
+export async function renameDrone(
+  droneId: string,
+  _prevState: DroneFormState,
+  formData: FormData,
+): Promise<DroneFormState> {
+  const user = await requireUser();
+  assertPermission(isSiteAdmin(user));
+
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) {
+    return { error: 'Name ist erforderlich.' };
+  }
+
+  const existing = await prisma.drone.findUnique({ where: { name } });
+  if (existing && existing.id !== droneId) {
+    return { error: 'Eine Drohne mit diesem Namen existiert bereits.' };
+  }
+
+  await prisma.drone.update({ where: { id: droneId }, data: { name } });
+  revalidatePath('/admin/drohnen');
+  return {};
+}
+
 export async function toggleDroneActive(droneId: string): Promise<void> {
   const user = await requireUser();
   assertPermission(isSiteAdmin(user));

@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { AddDroneForm } from './add-drone-form';
+import { RenameDroneForm } from './rename-drone-form';
 import { toggleDroneActive } from './actions';
 
 export default async function DrohnenVerwaltungPage() {
@@ -36,7 +37,9 @@ export default async function DrohnenVerwaltungPage() {
               const boundToggle = toggleDroneActive.bind(null, drone.id);
               return (
                 <tr key={drone.id} className="border-b border-neutral-100">
-                  <td className="px-4 py-2">{drone.name}</td>
+                  <td className="px-4 py-2">
+                    <RenameDroneForm droneId={drone.id} currentName={drone.name} />
+                  </td>
                   <td className="px-4 py-2">{drone.isActive ? 'Aktiv' : 'Deaktiviert'}</td>
                   <td className="px-4 py-2 text-right">
                     <form action={boundToggle}>
