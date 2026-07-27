@@ -26,10 +26,16 @@ export function Nav({ user }: { user: SessionUser }) {
     items.push({ href: '/admin/benutzer', label: 'Verwaltung' });
   }
 
+  // Nested routes (e.g. /kalender/abschnitt under /kalender) would otherwise match
+  // more than one item's prefix check; only the longest (most specific) match wins.
+  const activeHref = items
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <nav className="flex flex-wrap gap-1">
       {items.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const active = item.href === activeHref;
         return (
           <Link
             key={item.href}
