@@ -4,6 +4,7 @@ import { isSiteAdmin } from '@/lib/auth/permissions';
 import { UserForm } from '@/components/admin/user-form';
 import { MembershipRole } from '@prisma/client';
 import { updateUser } from '../actions';
+import { DeleteUserButton } from './delete-user-button';
 
 export default async function BenutzerBearbeitenPage({ params }: { params: Promise<{ userId: string }> }) {
   const currentUser = await requireUser();
@@ -51,6 +52,7 @@ export default async function BenutzerBearbeitenPage({ params }: { params: Promi
           password: '',
         }}
       />
+      {currentUser.id !== targetUser.id && <DeleteUserButton userId={targetUser.id} />}
     </div>
   );
 }

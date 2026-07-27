@@ -3,7 +3,7 @@
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { DroneRole, MembershipRole, TokenPurpose } from '@prisma/client';
+import { DroneRole, MembershipRole, Prisma, TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
@@ -124,6 +124,38 @@ export async function updateUser(
 
   await syncAdminMemberships(userId, data.adminOrgIds);
   await syncDroneMembership(userId, data.droneRole);
+
+  revalidatePath('/admin/benutzer');
+  redirect('/admin/benutzer');
+}
+
+export interface DeleteUserState {
+  error?: string;
+}
+
+export async function deleteUser(
+  userId: string,
+  _prevState: DeleteUserState,
+  _formData: FormData,
+): Promise<DeleteUserState> {
+  const currentUser = await requireUser();
+  assertPermission(isSiteAdmin(currentUser));
+
+  if (currentUser.id === userId) {
+    return { error: 'Du kannst dein eigenes Konto nicht löschen.' };
+  }
+
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return {
+        error:
+          'Dieser Benutzer kann nicht gelöscht werden, da er Termine oder Drohnenflüge angelegt hat. Bitte stattdessen deaktivieren ("Konto aktiv" entfernen).',
+      };
+    }
+    throw error;
+  }
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');
