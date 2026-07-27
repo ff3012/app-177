@@ -30,6 +30,6 @@ Login unter [http://localhost:3000](http://localhost:3000) mit den in `.env` kon
 
 Siehe [docker/README.md](docker/README.md) für das Produktions-Setup (Hetzner Ubuntu Server, Docker Compose, Caddy, Backups).
 
-## Offene Punkte
+## Feuerwehren im Abschnitt
 
-- In [prisma/seed.ts](prisma/seed.ts) die Platzhalternamen `FF Musterort 2..9` durch die echten Namen der 9 Feuerwehren ersetzen.
+Wolfsgraben, Pressbaum, Purkersdorf, Gablitz, Tullnerbach, Tullnerbach-Irenental, Steinbach, Mauerbach, Rekawinkel + Abschnittsfeuerwehrkommando (AFKDO) Purkersdorf. Siehe [prisma/seed.ts](prisma/seed.ts).

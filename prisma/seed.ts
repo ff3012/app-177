@@ -3,17 +3,16 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// TODO: durch die echten Namen der 9 Feuerwehren im Abschnitt Purkersdorf ersetzen.
 const FEUERWEHR_NAMEN = [
+  'FF Wolfsgraben',
+  'FF Pressbaum',
   'FF Purkersdorf',
-  'FF Musterort 2',
-  'FF Musterort 3',
-  'FF Musterort 4',
-  'FF Musterort 5',
-  'FF Musterort 6',
-  'FF Musterort 7',
-  'FF Musterort 8',
-  'FF Musterort 9',
+  'FF Gablitz',
+  'FF Tullnerbach',
+  'FF Tullnerbach-Irenental',
+  'FF Steinbach',
+  'FF Mauerbach',
+  'FF Rekawinkel',
 ];
 
 const DROHNEN_NAMEN = ['Drohne 1', 'Drohne 2'];
