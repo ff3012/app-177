@@ -10,6 +10,7 @@ export interface SessionUser {
   isAbschnittsAdmin: boolean;
   isAbschnittskommandoMitglied: boolean;
   isDrohnengruppeMember: boolean;
+  droneGroupRole: 'PILOT' | 'VIEWER' | 'ADMIN' | null;
 }
 
 declare module 'next-auth' {

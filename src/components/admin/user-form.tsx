@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { userSchema, type UserInput } from '@/lib/validation/user.schema';
+import { DRONE_ROLE_OPTIONS, userSchema, type UserInput } from '@/lib/validation/user.schema';
 import type { UserFormState } from '@/app/(app)/admin/benutzer/actions';
 
 interface OrganizationOption {
@@ -37,7 +37,7 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
       isActive: true,
       homeOrganizationId: organizations[0]?.id ?? '',
       adminOrgIds: [],
-      droneMember: false,
+      droneRole: 'NONE',
       password: '',
       ...defaultValues,
     },
@@ -53,7 +53,7 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
     for (const orgId of values.adminOrgIds) {
       formData.append('adminOrgIds', orgId);
     }
-    if (values.droneMember) formData.set('droneMember', 'on');
+    formData.set('droneRole', values.droneRole);
     if (values.password) formData.set('password', values.password);
 
     startTransition(async () => {
@@ -116,10 +116,19 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
         ))}
       </fieldset>
 
-      <label className="flex items-center gap-2 text-sm text-neutral-700">
-        <input type="checkbox" {...register('droneMember')} />
-        Mitglied der Drohnengruppe
-      </label>
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-neutral-700">Drohnengruppe</label>
+        <select {...register('droneRole')} className="rounded border border-neutral-300 px-3 py-2">
+          {DRONE_ROLE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option === 'NONE' ? 'Kein Mitglied' : option === 'ADMIN' ? 'Admin Drohnengruppe' : 'Mitglied'}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-neutral-500">
+          Admin Drohnengruppe kann alle registrierten Flüge sehen, bearbeiten und löschen.
+        </p>
+      </div>
 
       <label className="flex items-center gap-2 text-sm text-neutral-700">
         <input type="checkbox" {...register('isActive')} />

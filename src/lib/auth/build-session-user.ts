@@ -32,5 +32,6 @@ export function buildSessionUser(user: UserWithRelations): SessionUser {
     isAbschnittskommandoMitglied:
       user.homeOrganization.type === OrganizationType.ABSCHNITTSKOMMANDO || Boolean(abschnittskommandoMembership),
     isDrohnengruppeMember: Boolean(user.droneMembership),
+    droneGroupRole: user.droneMembership?.role ?? null,
   };
 }

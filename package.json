@@ -25,6 +25,7 @@
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^6.1.0",
     "bcryptjs": "^2.4.3",
+    "exceljs": "^4.4.0",
     "ical-generator": "^7.2.0",
     "next": "^15.1.0",
     "next-auth": "5.0.0-beta.25",

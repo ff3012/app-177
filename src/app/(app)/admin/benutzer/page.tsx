@@ -57,7 +57,9 @@ export default async function BenutzerverwaltungPage() {
                 <td className="px-4 py-2">
                   {u.memberships.map((m) => m.organization.shortName ?? m.organization.name).join(', ') || '–'}
                 </td>
-                <td className="px-4 py-2">{u.droneMembership ? 'Ja' : '–'}</td>
+                <td className="px-4 py-2">
+                  {u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '–'}
+                </td>
                 <td className="px-4 py-2">{u.isActive ? 'Aktiv' : 'Deaktiviert'}</td>
                 <td className="px-4 py-2 text-right">
                   <Link href={`/admin/benutzer/${u.id}`} className="text-brand hover:underline">

@@ -28,6 +28,7 @@ export default async function BenutzerBearbeitenPage({ params }: { params: Promi
   }
 
   const boundUpdate = updateUser.bind(null, targetUser.id);
+  const droneRole = !targetUser.droneMembership ? 'NONE' : targetUser.droneMembership.role === 'ADMIN' ? 'ADMIN' : 'PILOT';
 
   return (
     <div className="flex flex-col gap-4">
@@ -46,7 +47,7 @@ export default async function BenutzerBearbeitenPage({ params }: { params: Promi
           isActive: targetUser.isActive,
           homeOrganizationId: targetUser.homeOrganizationId,
           adminOrgIds: targetUser.memberships.map((m) => m.organizationId),
-          droneMember: Boolean(targetUser.droneMembership),
+          droneRole,
           password: '',
         }}
       />

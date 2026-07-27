@@ -2,12 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { MembershipRole } from '@prisma/client';
+import { DroneRole, MembershipRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
-import { parseUserFormData, userSchema } from '@/lib/validation/user.schema';
+import { type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
 
 export interface UserFormState {
   error?: string;
@@ -27,16 +27,17 @@ async function syncAdminMemberships(userId: string, adminOrgIds: string[]) {
   }
 }
 
-async function syncDroneMembership(userId: string, droneMember: boolean) {
-  if (droneMember) {
-    await prisma.drohnengruppeMembership.upsert({
-      where: { userId },
-      update: {},
-      create: { userId },
-    });
-  } else {
+async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
+  if (droneRole === 'NONE') {
     await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
+    return;
   }
+  const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  await prisma.drohnengruppeMembership.upsert({
+    where: { userId },
+    update: { role },
+    create: { userId, role },
+  });
 }
 
 export async function createUser(_prevState: UserFormState, formData: FormData): Promise<UserFormState> {
@@ -71,7 +72,7 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   });
 
   await syncAdminMemberships(user.id, data.adminOrgIds);
-  await syncDroneMembership(user.id, data.droneMember);
+  await syncDroneMembership(user.id, data.droneRole);
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');
@@ -110,7 +111,7 @@ export async function updateUser(
   });
 
   await syncAdminMemberships(userId, data.adminOrgIds);
-  await syncDroneMembership(userId, data.droneMember);
+  await syncDroneMembership(userId, data.droneRole);
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');

@@ -31,11 +31,21 @@ export default async function DrohnenPage() {
             {seeAll ? 'Alle Einträge (Admin-Ansicht).' : 'Nur deine eigenen Einträge.'}
           </p>
         </div>
-        {canRegisterFlight(user) && (
-          <Link href="/drohnen/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
-            Flug registrieren
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {seeAll && (
+            <a
+              href="/drohnen/export"
+              className="rounded border border-neutral-300 px-3 py-1.5 font-medium text-neutral-700 hover:bg-neutral-100"
+            >
+              Export Drohnenflüge
+            </a>
+          )}
+          {canRegisterFlight(user) && (
+            <Link href="/drohnen/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
+              Flug registrieren
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
