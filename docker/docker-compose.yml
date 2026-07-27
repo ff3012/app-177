@@ -16,7 +16,7 @@ services:
       MAILJET_API_KEY: ${MAILJET_API_KEY}
       MAILJET_API_SECRET: ${MAILJET_API_SECRET}
       MAILJET_FROM_EMAIL: ${MAILJET_FROM_EMAIL}
-      MAILJET_FROM_NAME: ${MAILJET_FROM_NAME}
+      MAILJET_FROM_NAME: ${MAILJET_FROM_NAME:-AFKDO Purkersdorf}
     depends_on:
       postgres:
         condition: service_healthy
