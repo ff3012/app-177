@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth/auth.edge';
+import { auth } from '@/lib/auth/auth.config';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -15,9 +15,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isPublic = PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-  // Nur ein grober Gate hier (edge-taugliche Instanz, kein DB-Zugriff): "ist überhaupt ein Token da".
-  // Die feingranulare, DB-aktuelle Rechteprüfung (inkl. deaktivierter Benutzer) passiert in
-  // requireUser()/getOptionalUser() via auth.config.ts, die im Node-Runtime laufen.
+  // token.id wird im jwt()-Callback von auth.config.ts geleert, wenn der Benutzer nicht mehr existiert/aktiv ist.
   if (!req.auth?.user?.id && !isPublic) {
     const loginUrl = new URL('/login', req.nextUrl.origin);
     loginUrl.searchParams.set('callbackUrl', pathname);
@@ -26,5 +24,6 @@ export default auth((req) => {
 });
 
 export const config = {
+  runtime: 'nodejs',
   matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|txt)$).*)'],
 };
