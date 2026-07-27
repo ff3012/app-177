@@ -1,9 +1,10 @@
 'use client';
 
 import FullCalendar from '@fullcalendar/react';
+import type { EventClickArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin, { type EventClickArg } from '@fullcalendar/interaction';
+import interactionPlugin from '@fullcalendar/interaction';
 import deLocale from '@fullcalendar/core/locales/de';
 import { useRouter } from 'next/navigation';
 
