@@ -1,9 +1,19 @@
 import { requireUser } from '@/lib/auth/session';
+import { prisma } from '@/lib/db/prisma';
+import { isSiteAdmin } from '@/lib/auth/permissions';
 import { Nav } from '@/components/layout/nav';
+import { ProfileMenu } from '@/components/layout/profile-menu';
 import { logoutAction } from './logout-action';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+
+  const [homeOrganization, adminOrganizations] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: user.homeOrganizationId } }),
+    user.feuerwehrAdminOrgIds.length > 0
+      ? prisma.organization.findMany({ where: { id: { in: user.feuerwehrAdminOrgIds } } })
+      : Promise.resolve([]),
+  ]);
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -14,7 +24,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Nav user={user} />
           </div>
           <div className="flex items-center gap-3 text-sm text-neutral-600">
-            <span>{user.name}</span>
+            <ProfileMenu
+              name={user.name}
+              email={user.email}
+              homeOrganizationName={homeOrganization?.shortName ?? homeOrganization?.name ?? '–'}
+              isSiteAdmin={isSiteAdmin(user)}
+              adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
+              isDrohnengruppeMember={user.isDrohnengruppeMember}
+            />
             <form action={logoutAction}>
               <button type="submit" className="rounded px-2 py-1 hover:bg-neutral-100">
                 Abmelden
