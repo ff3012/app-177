@@ -1,7 +1,7 @@
 'use server';
 
-import { AuthError } from 'next-auth';
 import { signIn } from '@/lib/auth/auth.config';
+import { isAuthError } from '@/lib/auth/is-auth-error';
 
 export interface LoginState {
   error?: string;
@@ -20,7 +20,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     });
     return {};
   } catch (error) {
-    if (error instanceof AuthError) {
+    if (isAuthError(error)) {
       return { error: 'E-Mail oder Passwort ist falsch.' };
     }
     throw error;

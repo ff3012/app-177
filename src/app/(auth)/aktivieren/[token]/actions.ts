@@ -1,10 +1,10 @@
 'use server';
 
-import { AuthError } from 'next-auth';
 import { TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { consumeToken } from '@/lib/auth/tokens';
 import { signIn } from '@/lib/auth/auth.config';
+import { isAuthError } from '@/lib/auth/is-auth-error';
 import { hashPassword } from '@/lib/password';
 import {
   parseSetPasswordFormData,
@@ -38,7 +38,7 @@ export async function activateAccount(
     });
     return {};
   } catch (error) {
-    if (error instanceof AuthError) {
+    if (isAuthError(error)) {
       return { success: true };
     }
     throw error;
