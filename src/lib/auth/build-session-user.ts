@@ -14,6 +14,10 @@ export async function findUserWithRelationsByEmail(email: string) {
   return prisma.user.findUnique({ where: { email }, include: userInclude });
 }
 
+export async function findUserWithRelationsById(id: string) {
+  return prisma.user.findUnique({ where: { id }, include: userInclude });
+}
+
 export function buildSessionUser(user: UserWithRelations): SessionUser {
   const abschnittskommandoMembership = user.memberships.find(
     (m) => m.organization.type === OrganizationType.ABSCHNITTSKOMMANDO,

@@ -4,7 +4,11 @@ import type { SessionUser } from '@/types/next-auth';
 
 export async function getOptionalUser(): Promise<SessionUser | null> {
   const session = await auth();
-  return session?.user ?? null;
+  // Der jwt()-Callback leert token.id, wenn der Benutzer nicht mehr existiert oder deaktiviert wurde.
+  if (!session?.user?.id) {
+    return null;
+  }
+  return session.user;
 }
 
 export async function requireUser(): Promise<SessionUser> {

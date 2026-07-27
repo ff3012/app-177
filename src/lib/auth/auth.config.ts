@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { verifyPassword } from '@/lib/password';
-import { buildSessionUser, findUserWithRelationsByEmail } from '@/lib/auth/build-session-user';
+import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsById } from '@/lib/auth/build-session-user';
 import type { SessionUser } from '@/types/next-auth';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -40,7 +40,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         Object.assign(token, user as SessionUser);
+        return token;
       }
+
+      // Kein frischer Login: Rechte (Rollen, Drohnengruppe, Admin-Mitgliedschaften, isActive) auf jedem
+      // Request neu aus der DB laden, statt die beim Login geladenen Claims unbegrenzt weiterzuverwenden.
+      // Sonst würde z.B. ein Entzug der Drohnengruppen-Mitgliedschaft erst beim nächsten Login wirksam.
+      const userId = token.id as string | undefined;
+      if (!userId) {
+        return token;
+      }
+
+      const dbUser = await findUserWithRelationsById(userId);
+      if (!dbUser || !dbUser.isActive) {
+        // Benutzer existiert nicht mehr oder wurde deaktiviert: id leeren, damit getOptionalUser()
+        // dies als "nicht angemeldet" behandelt, statt die alten (ggf. veralteten) Rechte weiterzureichen.
+        token.id = undefined;
+        return token;
+      }
+
+      Object.assign(token, buildSessionUser(dbUser));
       return token;
     },
     async session({ session, token }) {

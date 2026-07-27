@@ -15,7 +15,8 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isPublic = PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-  if (!req.auth && !isPublic) {
+  // token.id wird im jwt()-Callback geleert, wenn der Benutzer nicht mehr existiert/aktiv ist.
+  if (!req.auth?.user?.id && !isPublic) {
     const loginUrl = new URL('/login', req.nextUrl.origin);
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
