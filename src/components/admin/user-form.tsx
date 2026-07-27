@@ -17,10 +17,11 @@ interface UserFormProps {
   defaultValues?: Partial<UserInput>;
   action: (prevState: UserFormState, formData: FormData) => Promise<UserFormState>;
   submitLabel: string;
-  passwordRequired: boolean;
+  /** create: kein Passwort-Feld (Benutzer setzt es selbst über den Aktivierungs-Link). edit: optionales Passwort-Override + Aktiv-Schalter. */
+  mode: 'create' | 'edit';
 }
 
-export function UserForm({ organizations, defaultValues, action, submitLabel, passwordRequired }: UserFormProps) {
+export function UserForm({ organizations, defaultValues, action, submitLabel, mode }: UserFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -34,7 +35,7 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
       firstName: '',
       lastName: '',
       email: '',
-      isActive: true,
+      isActive: mode === 'create' ? false : true,
       homeOrganizationId: organizations[0]?.id ?? '',
       adminOrgIds: [],
       droneRole: 'NONE',
@@ -83,16 +84,20 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
         {errors.email && <p className="text-sm text-red-700">{errors.email.message}</p>}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-neutral-700">
-          {passwordRequired ? 'Passwort' : 'Neues Passwort (optional)'}
-        </label>
-        <input type="password" {...register('password')} className="rounded border border-neutral-300 px-3 py-2" />
-        <p className="text-xs text-neutral-500">
-          Mindestens 8 Zeichen und 3 von 4: Kleinbuchstabe, Großbuchstabe, Ziffer, Sonderzeichen.
+      {mode === 'create' ? (
+        <p className="rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+          Der Benutzer erhält eine E-Mail mit einem Aktivierungslink und legt sein Passwort selbst fest.
         </p>
-        {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
-      </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Neues Passwort (optional)</label>
+          <input type="password" {...register('password')} className="rounded border border-neutral-300 px-3 py-2" />
+          <p className="text-xs text-neutral-500">
+            Mindestens 8 Zeichen und 3 von 4: Kleinbuchstabe, Großbuchstabe, Ziffer, Sonderzeichen.
+          </p>
+          {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Heimat-Feuerwehr / Organisation</label>
@@ -130,10 +135,12 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
         </p>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-neutral-700">
-        <input type="checkbox" {...register('isActive')} />
-        Konto aktiv
-      </label>
+      {mode === 'edit' && (
+        <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <input type="checkbox" {...register('isActive')} />
+          Konto aktiv
+        </label>
+      )}
 
       {serverError && <p className="text-sm text-red-700">{serverError}</p>}
 

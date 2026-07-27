@@ -15,6 +15,8 @@
    - `AUTH_URL` auf die echte Domain setzen (z. B. `https://termine.abschnitt-purkersdorf.at`)
    - `AUTH_SECRET` mit `openssl rand -base64 32` erzeugen
    - `ABSCHNITTS_ICS_TOKEN` mit `openssl rand -hex 16` erzeugen
+   - `MAILJET_API_KEY` / `MAILJET_API_SECRET` aus [app.mailjet.com/account/apikeys](https://app.mailjet.com/account/apikeys)
+   - `MAILJET_FROM_EMAIL` muss eine bei Mailjet validierte Absender-Domain/-Adresse sein, sonst schlägt der Versand fehl
 3. [docker/Caddyfile](Caddyfile): Platzhalter-Domain durch die echte Domain ersetzen.
 4. Stack bauen und starten:
    ```bash

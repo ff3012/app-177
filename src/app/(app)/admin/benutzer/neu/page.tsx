@@ -15,7 +15,7 @@ export default async function NeuerBenutzerPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-neutral-900">Neuer Benutzer</h1>
-      <UserForm organizations={organizations} action={createUser} submitLabel="Benutzer anlegen" passwordRequired />
+      <UserForm organizations={organizations} action={createUser} submitLabel="Benutzer anlegen" mode="create" />
     </div>
   );
 }

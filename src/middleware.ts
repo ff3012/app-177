@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/auth.config';
 
-const PUBLIC_PATH_PREFIXES = ['/login', '/api/auth', '/api/health', '/kalender/ics'];
+const PUBLIC_PATH_PREFIXES = [
+  '/login',
+  '/api/auth',
+  '/api/health',
+  '/kalender/ics',
+  '/aktivieren',
+  '/passwort-vergessen',
+  '/passwort-zuruecksetzen',
+];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

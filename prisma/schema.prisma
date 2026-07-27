@@ -30,6 +30,11 @@ enum FlightPurpose {
   EINSATZ
 }
 
+enum TokenPurpose {
+  ACTIVATION
+  PASSWORD_RESET
+}
+
 // ---------- Core org & users ----------
 
 model Organization {
@@ -64,8 +69,25 @@ model User {
   droneMembership  DrohnengruppeMembership?
   createdEvents    Event[]                  @relation("EventCreatedBy")
   droneFlights     DroneFlight[]            @relation("FlightRegisteredBy")
+  passwordTokens   PasswordToken[]
 
   @@index([homeOrganizationId])
+}
+
+// One-time links for account activation and "Passwort vergessen". The token
+// column stores a SHA-256 hash of the random token, never the raw value.
+model PasswordToken {
+  id        String       @id @default(cuid())
+  userId    String
+  token     String       @unique
+  purpose   TokenPurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Admin/staff rights, scoped per organization

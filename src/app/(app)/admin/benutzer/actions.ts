@@ -1,12 +1,15 @@
 'use server';
 
+import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { DroneRole, MembershipRole } from '@prisma/client';
+import { DroneRole, MembershipRole, TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
+import { createToken } from '@/lib/auth/tokens';
+import { sendActivationEmail } from '@/lib/email/templates';
 import { type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
 
 export interface UserFormState {
@@ -50,22 +53,20 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const data = parsed.data;
-  if (!data.password) {
-    return { fieldErrors: { password: ['Passwort ist für einen neuen Benutzer erforderlich.'] } };
-  }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) {
     return { error: 'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.' };
   }
 
-  const passwordHash = await hashPassword(data.password);
+  // Unbenutzbarer Platzhalter-Hash: der Benutzer setzt sein eigenes Passwort über den Aktivierungslink.
+  const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
   const user = await prisma.user.create({
     data: {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email.toLowerCase(),
-      isActive: data.isActive,
+      isActive: false,
       homeOrganizationId: data.homeOrganizationId,
       passwordHash,
     },
@@ -73,6 +74,17 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
 
   await syncAdminMemberships(user.id, data.adminOrgIds);
   await syncDroneMembership(user.id, data.droneRole);
+
+  const token = await createToken(user.id, TokenPurpose.ACTIVATION);
+  try {
+    await sendActivationEmail(user, token);
+  } catch (error) {
+    console.error('Fehler beim Senden der Aktivierungs-E-Mail:', error);
+    return {
+      error:
+        'Benutzer wurde angelegt, aber die Aktivierungs-E-Mail konnte nicht gesendet werden. Bitte Mailjet-Konfiguration prüfen.',
+    };
+  }
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');

@@ -39,7 +39,7 @@ export default async function BenutzerBearbeitenPage({ params }: { params: Promi
         organizations={organizations}
         action={boundUpdate}
         submitLabel="Änderungen speichern"
-        passwordRequired={false}
+        mode="edit"
         defaultValues={{
           firstName: targetUser.firstName,
           lastName: targetUser.lastName,
