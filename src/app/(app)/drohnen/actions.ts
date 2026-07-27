@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageDroneFlights } from '@/lib/auth/permissions';
+import { assertPermission, canManageFlight, canRegisterFlight } from '@/lib/auth/permissions';
 import { flightSchema, parseFlightFormData } from '@/lib/validation/flight.schema';
 
 export interface FlightFormState {
@@ -14,7 +14,7 @@ export interface FlightFormState {
 
 export async function createFlight(_prevState: FlightFormState, formData: FormData): Promise<FlightFormState> {
   const user = await requireUser();
-  if (!canManageDroneFlights(user)) {
+  if (!canRegisterFlight(user)) {
     return { error: 'Keine Berechtigung, Flüge zu registrieren.' };
   }
 
@@ -46,12 +46,12 @@ export async function updateFlight(
   formData: FormData,
 ): Promise<FlightFormState> {
   const user = await requireUser();
-  assertPermission(canManageDroneFlights(user));
 
   const existing = await prisma.droneFlight.findUnique({ where: { id: flightId } });
   if (!existing) {
     return { error: 'Flug wurde nicht gefunden.' };
   }
+  assertPermission(canManageFlight(user, existing));
 
   const parsed = flightSchema.safeParse(parseFlightFormData(formData));
   if (!parsed.success) {
@@ -77,9 +77,14 @@ export async function updateFlight(
 
 export async function deleteFlight(flightId: string): Promise<void> {
   const user = await requireUser();
-  assertPermission(canManageDroneFlights(user));
 
-  await prisma.droneFlight.delete({ where: { id: flightId } }).catch(() => null);
+  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId } });
+  if (!existing) {
+    redirect('/drohnen');
+  }
+  assertPermission(canManageFlight(user, existing));
+
+  await prisma.droneFlight.delete({ where: { id: flightId } });
   revalidatePath('/drohnen');
   redirect('/drohnen');
 }

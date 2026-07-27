@@ -1,13 +1,13 @@
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageDroneFlights } from '@/lib/auth/permissions';
+import { canRegisterFlight } from '@/lib/auth/permissions';
 import { FlightForm } from '@/components/drone/flight-form';
 import { createFlight } from '../actions';
 
 export default async function NeuerFlugPage() {
   const user = await requireUser();
 
-  if (!canManageDroneFlights(user)) {
+  if (!canRegisterFlight(user)) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, Flüge zu registrieren.</p>;
   }
 

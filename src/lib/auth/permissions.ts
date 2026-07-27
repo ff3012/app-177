@@ -25,9 +25,22 @@ export function canViewDroneModule(user: SessionUser): boolean {
   return user.isDrohnengruppeMember || user.isAbschnittskommandoMitglied;
 }
 
-/** Darf Flüge registrieren/bearbeiten (aktuell identisch zur Sichtbarkeit). */
-export function canManageDroneFlights(user: SessionUser): boolean {
+/** Darf einen neuen Flug registrieren (wird immer unter der eigenen registeredById angelegt). */
+export function canRegisterFlight(user: SessionUser): boolean {
   return canViewDroneModule(user);
+}
+
+/**
+ * Darf ALLE Flüge sehen (statt nur die selbst erfassten). Nur Admin, nicht schon
+ * durch Drohnengruppe-/Abschnittskommando-Mitgliedschaft alleine.
+ */
+export function canViewAllFlights(user: SessionUser): boolean {
+  return isSiteAdmin(user);
+}
+
+/** Darf einen bestehenden Flug bearbeiten/löschen: Admin oder der Ersteller selbst. */
+export function canManageFlight(user: SessionUser, flight: { registeredById: string }): boolean {
+  return isSiteAdmin(user) || flight.registeredById === user.id;
 }
 
 export class ForbiddenError extends Error {

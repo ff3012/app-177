@@ -1,6 +1,6 @@
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageDroneFlights } from '@/lib/auth/permissions';
+import { canManageFlight } from '@/lib/auth/permissions';
 import { FlightForm } from '@/components/drone/flight-form';
 import { toDatetimeLocalValue } from '@/lib/format';
 import { deleteFlight, updateFlight } from '../../actions';
@@ -9,10 +9,6 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
   const user = await requireUser();
   const { flightId } = await params;
 
-  if (!canManageDroneFlights(user)) {
-    return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Flug zu bearbeiten.</p>;
-  }
-
   const [flight, drones] = await Promise.all([
     prisma.droneFlight.findUnique({ where: { id: flightId } }),
     prisma.drone.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
@@ -20,6 +16,9 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
 
   if (!flight) {
     return <p className="text-neutral-700">Flug wurde nicht gefunden.</p>;
+  }
+  if (!canManageFlight(user, flight)) {
+    return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Flug zu bearbeiten.</p>;
   }
 
   const boundUpdate = updateFlight.bind(null, flight.id);
