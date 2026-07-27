@@ -88,6 +88,9 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, pa
           {passwordRequired ? 'Passwort' : 'Neues Passwort (optional)'}
         </label>
         <input type="password" {...register('password')} className="rounded border border-neutral-300 px-3 py-2" />
+        <p className="text-xs text-neutral-500">
+          Mindestens 8 Zeichen und 3 von 4: Kleinbuchstabe, Großbuchstabe, Ziffer, Sonderzeichen.
+        </p>
         {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
       </div>
 

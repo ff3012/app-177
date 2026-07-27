@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passwordPolicySchema } from './password-policy';
 
 export const userSchema = z.object({
   firstName: z.string().trim().min(1, 'Vorname ist erforderlich.').max(100),
@@ -8,7 +9,7 @@ export const userSchema = z.object({
   homeOrganizationId: z.string().min(1, 'Feuerwehr/Organisation ist erforderlich.'),
   adminOrgIds: z.array(z.string()),
   droneMember: z.boolean(),
-  password: z.string().trim().min(8, 'Passwort muss mindestens 8 Zeichen haben.').optional().or(z.literal('')),
+  password: passwordPolicySchema.optional().or(z.literal('')),
 });
 
 export type UserInput = z.infer<typeof userSchema>;

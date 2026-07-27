@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ChangePasswordForm } from './change-password-form';
 
 interface ProfileMenuProps {
   name: string;
@@ -20,12 +21,14 @@ export function ProfileMenu({
   isDrohnengruppeMember,
 }: ProfileMenuProps) {
   const [open, setOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false);
+        setChangingPassword(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -68,6 +71,20 @@ export function ProfileMenu({
               <dd className="text-neutral-800">{isDrohnengruppeMember ? 'Mitglied' : 'Kein Mitglied'}</dd>
             </div>
           </dl>
+
+          <div className="mt-4 border-t border-neutral-200 pt-3">
+            {changingPassword ? (
+              <ChangePasswordForm />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setChangingPassword(true)}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                Passwort ändern
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

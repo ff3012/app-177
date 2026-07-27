@@ -25,6 +25,8 @@ export default async function EigeneKalenderPage() {
     allDay: event.allDay,
     editable: canManageEventsFor(user, event.organizationId),
     backgroundColor: event.isSectionWide ? '#780000' : undefined,
+    description: event.description ?? undefined,
+    location: event.location ?? undefined,
   }));
 
   return (
