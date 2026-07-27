@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { Nav } from '@/components/layout/nav';
 import { ProfileMenu } from '@/components/layout/profile-menu';
+import { Footer } from '@/components/layout/footer';
 import { logoutAction } from './logout-action';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="flex min-h-screen flex-col bg-neutral-50">
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
@@ -41,7 +42,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>
+      <Footer />
     </div>
   );
 }
