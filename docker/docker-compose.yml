@@ -11,6 +11,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}
       ABSCHNITTS_ICS_TOKEN: ${ABSCHNITTS_ICS_TOKEN}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
