@@ -66,7 +66,12 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
     <form onSubmit={handleSubmit(onSubmit)} className="flex max-w-lg flex-col gap-4">
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Datum/Uhrzeit</label>
-        <input type="datetime-local" {...register('startsAt')} className="rounded border border-neutral-300 px-3 py-2" />
+        <input
+          type="datetime-local"
+          step={900}
+          {...register('startsAt')}
+          className="rounded border border-neutral-300 px-3 py-2"
+        />
         {errors.startsAt && <p className="text-sm text-red-700">{errors.startsAt.message}</p>}
       </div>
 
