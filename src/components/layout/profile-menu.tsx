@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChangePasswordForm } from './change-password-form';
 import { FeedbackForm } from './feedback-form';
+import { PushNotificationsToggle } from './push-notifications-toggle';
 
 type ProfilePanel = 'password' | 'feedback' | null;
 
@@ -13,6 +14,7 @@ interface ProfileMenuProps {
   isSiteAdmin: boolean;
   adminOrganizationNames: string[];
   isDrohnengruppeMember: boolean;
+  vapidPublicKey: string | null;
 }
 
 export function ProfileMenu({
@@ -22,6 +24,7 @@ export function ProfileMenu({
   isSiteAdmin,
   adminOrganizationNames,
   isDrohnengruppeMember,
+  vapidPublicKey,
 }: ProfileMenuProps) {
   const [open, setOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanel>(null);
@@ -74,6 +77,10 @@ export function ProfileMenu({
               <dd className="text-neutral-800">{isDrohnengruppeMember ? 'Mitglied' : 'Kein Mitglied'}</dd>
             </div>
           </dl>
+
+          <div className="mt-4 border-t border-neutral-200 pt-3">
+            <PushNotificationsToggle vapidPublicKey={vapidPublicKey} />
+          </div>
 
           <div className="mt-4 border-t border-neutral-200 pt-3">
             {activePanel === 'password' ? (

@@ -40,6 +40,11 @@ enum EventCategory {
   DROHNENGRUPPE
 }
 
+enum NewsAudienceType {
+  ORGANIZATION
+  DROHNENGRUPPE
+}
+
 // ---------- Core org & users ----------
 
 model Organization {
@@ -51,9 +56,10 @@ model Organization {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  members     User[]       @relation("HomeOrganization")
-  memberships Membership[]
-  events      Event[]
+  members      User[]        @relation("HomeOrganization")
+  memberships  Membership[]
+  events       Event[]
+  newsMessages NewsMessage[]
 
   @@index([type])
 }
@@ -76,6 +82,8 @@ model User {
   registeredFlights DroneFlight[]           @relation("FlightRegisteredBy")
   pilotedFlights   DroneFlight[]            @relation("FlightPilot")
   passwordTokens   PasswordToken[]
+  pushSubscriptions PushSubscription[]
+  newsMessagesCreated NewsMessage[]         @relation("NewsCreatedBy")
 
   @@index([homeOrganizationId])
 }
@@ -194,4 +202,42 @@ model DroneFlight {
   @@index([startsAt])
   @@index([droneId])
   @@index([pilotUserId])
+}
+
+// ---------- Module 3: News (Web-Push-Benachrichtigungen) ----------
+
+// Eine Web-Push-Registrierung pro Gerät/Browser-Installation eines Benutzers (nicht pro Benutzer:
+// dieselbe Person kann mehrere Geräte/PWA-Installationen abonniert haben). endpoint ist von der
+// Push-Service-URL des Browsers vorgegeben und damit von Natur aus eindeutig.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Eine Push-Nachricht an eine Zielgruppe (eine Feuerwehr oder die Drohnengruppe), sofort oder
+// terminiert. scheduledAt=null + sentAt gesetzt bedeutet "sofort gesendet"; scheduledAt gesetzt +
+// sentAt=null bedeutet "wartet auf den Versand-Cronjob".
+model NewsMessage {
+  id            String           @id @default(cuid())
+  title         String
+  body          String
+  audienceType  NewsAudienceType
+  audienceOrgId String?
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  createdById   String
+  createdAt     DateTime         @default(now())
+
+  audienceOrg Organization? @relation(fields: [audienceOrgId], references: [id])
+  createdBy   User          @relation("NewsCreatedBy", fields: [createdById], references: [id])
+
+  @@index([scheduledAt])
 }

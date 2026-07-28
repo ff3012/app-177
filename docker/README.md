@@ -17,6 +17,7 @@
    - `ABSCHNITTS_ICS_TOKEN` mit `openssl rand -hex 16` erzeugen
    - `MAILJET_API_KEY` / `MAILJET_API_SECRET` aus [app.mailjet.com/account/apikeys](https://app.mailjet.com/account/apikeys)
    - `MAILJET_FROM_EMAIL` muss eine bei Mailjet validierte Absender-Domain/-Adresse sein, sonst schlägt der Versand fehl
+   - `CRON_SECRET` mit `openssl rand -hex 16` erzeugen (schützt den News-Versand-Cronjob, siehe unten)
 3. [docker/Caddyfile](Caddyfile): Platzhalter-Domain durch die echte Domain ersetzen.
 4. Stack bauen und starten:
    ```bash
@@ -27,7 +28,12 @@
    ```bash
    docker compose -f docker/docker-compose.yml --env-file .env exec app node node_modules/tsx/dist/cli.mjs prisma/seed.ts
    ```
-6. Bootstrap-Login mit `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` aus der `.env` testen, danach Passwort in der Benutzerverwaltung ändern.
+6. VAPID-Schlüsselpaar für das News-Modul (Web-Push) erzeugen, `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` in `.env` eintragen und den Stack einmal neu starten:
+   ```bash
+   docker compose -f docker/docker-compose.yml --env-file .env exec app node -e "console.log(require('web-push').generateVAPIDKeys())"
+   docker compose -f docker/docker-compose.yml --env-file .env up -d app
+   ```
+7. Bootstrap-Login mit `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` aus der `.env` testen, danach Passwort in der Benutzerverwaltung ändern.
 
 ## Migrationen bei späteren Deploys
 
@@ -44,6 +50,22 @@ crontab -e
 ```
 
 Backups landen (gzip) in `docker/backups/`, 30 Tage Aufbewahrung. Empfehlung: zusätzlich regelmäßig off-box sichern (z. B. `rsync` auf eine Hetzner Storage Box).
+
+## News-Modul: terminierte Push-Nachrichten versenden
+
+Sofort-Versand passiert direkt in der Server Action beim Erstellen einer News. Für **terminierte**
+News braucht es zusätzlich einen Cronjob, der `docker/send-scheduled-news.sh` regelmäßig aufruft
+(das Skript ruft `/api/cron/send-scheduled-news` mit dem `CRON_SECRET` aus `.env` auf):
+
+```bash
+chmod +x docker/send-scheduled-news.sh
+crontab -e
+# Every 5 minutes
+*/5 * * * * /opt/ffapp/docker/send-scheduled-news.sh >> /var/log/ffapp-news.log 2>&1
+```
+
+Ohne diesen Cronjob werden nur sofort gesendete News tatsächlich zugestellt; terminierte News
+bleiben in der Datenbank auf "Ausstehend" stehen.
 
 ## Restore-Test
 

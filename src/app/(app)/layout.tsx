@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               isSiteAdmin={isSiteAdmin(user)}
               adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
               isDrohnengruppeMember={user.isDrohnengruppeMember}
+              vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
             />
             <form action={logoutAction}>
               <button type="submit" className="rounded px-2 py-1 text-neutral-200 hover:bg-white/10">

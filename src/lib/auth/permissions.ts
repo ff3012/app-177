@@ -53,6 +53,16 @@ export function canManageFlight(user: SessionUser, flight: { registeredById: str
   return isDroneGroupAdmin(user) || flight.registeredById === user.id;
 }
 
+/**
+ * News/Push-Modul: bewusst auf Abschnittskommando-Admin beschränkt (erste Version) statt
+ * feuerwehrAdminOrgIds — eine Push-Nachricht geht direkt an Mobilgeräte, ohne die redaktionelle
+ * Kontrolle, die z. B. ein Kalendertermin durch bloße Sichtbarkeit hat. Kann später auf
+ * FF-Admins für ihre eigene Feuerwehr ausgeweitet werden, wenn das gewünscht ist.
+ */
+export function canManageNews(user: SessionUser): boolean {
+  return isSiteAdmin(user);
+}
+
 export class ForbiddenError extends Error {
   constructor(message = 'Keine Berechtigung für diese Aktion.') {
     super(message);

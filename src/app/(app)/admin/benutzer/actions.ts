@@ -189,7 +189,7 @@ export async function deleteUser(
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
       return {
         error:
-          'Dieser Benutzer kann nicht gelöscht werden, da er Termine oder Drohnenflüge angelegt hat. Bitte stattdessen deaktivieren ("Konto aktiv" entfernen).',
+          'Dieser Benutzer kann nicht gelöscht werden, da er Termine, Drohnenflüge oder News angelegt hat. Bitte stattdessen deaktivieren ("Konto aktiv" entfernen).',
       };
     }
     throw error;

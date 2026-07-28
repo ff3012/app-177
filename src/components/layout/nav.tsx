@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { SessionUser } from '@/types/next-auth';
-import { canViewDroneModule, isSiteAdmin } from '@/lib/auth/permissions';
+import { canManageNews, canViewDroneModule, isSiteAdmin } from '@/lib/auth/permissions';
 
 interface NavItem {
   href: string;
@@ -17,6 +17,10 @@ export function Nav({ user }: { user: SessionUser }) {
 
   if (canViewDroneModule(user)) {
     items.push({ href: '/drohnen', label: 'Drohnengruppe' });
+  }
+
+  if (canManageNews(user)) {
+    items.push({ href: '/news', label: 'News' });
   }
 
   if (isSiteAdmin(user)) {
