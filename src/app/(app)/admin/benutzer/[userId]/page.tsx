@@ -5,6 +5,7 @@ import { UserForm } from '@/components/admin/user-form';
 import { MembershipRole } from '@prisma/client';
 import { updateUser } from '../actions';
 import { DeleteUserButton } from './delete-user-button';
+import { PasswordResetEmailButton } from './password-reset-email-button';
 
 export default async function BenutzerBearbeitenPage({ params }: { params: Promise<{ userId: string }> }) {
   const currentUser = await requireUser();
@@ -52,6 +53,7 @@ export default async function BenutzerBearbeitenPage({ params }: { params: Promi
           password: '',
         }}
       />
+      <PasswordResetEmailButton userId={targetUser.id} />
       {currentUser.id !== targetUser.id && <DeleteUserButton userId={targetUser.id} />}
     </div>
   );

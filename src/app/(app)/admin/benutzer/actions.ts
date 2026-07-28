@@ -9,7 +9,7 @@ import { requireUser } from '@/lib/auth/session';
 import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
-import { sendActivationEmail } from '@/lib/email/templates';
+import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
 import { type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
 
 export interface UserFormState {
@@ -127,6 +127,31 @@ export async function updateUser(
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');
+}
+
+export interface PasswordResetEmailState {
+  success?: boolean;
+  error?: string;
+}
+
+export async function sendPasswordResetEmailToUser(userId: string): Promise<PasswordResetEmailState> {
+  const currentUser = await requireUser();
+  assertPermission(isSiteAdmin(currentUser));
+
+  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!targetUser) {
+    return { error: 'Benutzer wurde nicht gefunden.' };
+  }
+
+  try {
+    const token = await createToken(targetUser.id, TokenPurpose.PASSWORD_RESET);
+    await sendPasswordResetEmail(targetUser, token);
+  } catch (error) {
+    console.error('Passwort-Reset-E-Mail fehlgeschlagen:', error);
+    return { error: 'E-Mail konnte nicht gesendet werden. Bitte Mailjet-Konfiguration prüfen.' };
+  }
+
+  return { success: true };
 }
 
 export interface DeleteUserState {
