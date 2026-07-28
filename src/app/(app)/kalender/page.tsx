@@ -61,7 +61,17 @@ export default async function KalenderPage() {
         <h1 className="text-lg font-semibold text-neutral-900">
           Kalender – {organization.shortName ?? organization.name}
         </h1>
-        <div className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
+        {canCreateAnyEvent && (
+          <Link href="/kalender/neu" className="self-start rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark sm:self-auto">
+            Neuer Termin
+          </Link>
+        )}
+      </div>
+      <KalenderWithLayers events={calendarEvents} layers={layers} />
+
+      <div className="rounded-lg bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-900">ICS Kalender Import</h2>
+        <div className="flex flex-col gap-2 text-sm">
           <div className="flex items-center gap-1.5">
             <a href={`/kalender/ics/${organization.icsToken}`} className="text-brand hover:underline">
               Kalender abonnieren (.ics)
@@ -76,14 +86,8 @@ export default async function KalenderPage() {
               <CopyLinkButton text={`${baseUrl()}/kalender/ics/${combinedIcsToken}`} />
             </div>
           )}
-          {canCreateAnyEvent && (
-            <Link href="/kalender/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
-              Neuer Termin
-            </Link>
-          )}
         </div>
       </div>
-      <KalenderWithLayers events={calendarEvents} layers={layers} />
     </div>
   );
 }
