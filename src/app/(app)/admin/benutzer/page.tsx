@@ -24,9 +24,14 @@ export default async function BenutzerverwaltungPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-neutral-900">Benutzerverwaltung</h1>
-          <Link href="/admin/drohnen" className="text-sm text-brand hover:underline">
-            Drohnen verwalten
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/admin/drohnen" className="text-sm text-brand hover:underline">
+              Drohnen verwalten
+            </Link>
+            <Link href="/admin/email" className="text-sm text-brand hover:underline">
+              E-Mail
+            </Link>
+          </div>
         </div>
         <Link href="/admin/benutzer/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
           Neuer Benutzer
