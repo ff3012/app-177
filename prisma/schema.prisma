@@ -167,6 +167,13 @@ model Drone {
   flights DroneFlight[]
 }
 
+/** Singleton-Tabelle für Einstellungen aus der Verwaltung (immer genau eine Zeile, id="singleton"). */
+model AppSettings {
+  id                           String   @id @default("singleton")
+  droneFlightNotificationEmail String?
+  updatedAt                    DateTime @updatedAt
+}
+
 model DroneFlight {
   id             String        @id @default(cuid())
   startsAt       DateTime
