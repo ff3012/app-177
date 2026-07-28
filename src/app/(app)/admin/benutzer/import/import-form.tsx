@@ -1,14 +1,16 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import Link from 'next/link';
 import { importUsers, type ImportUsersState } from './actions';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
 
 const initialState: ImportUsersState = {};
 
 export function ImportUsersForm() {
   const [state, formAction, pending] = useActionState(importUsers, initialState);
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
 
   return (
     <div className="flex max-w-lg flex-col gap-4">
@@ -32,15 +34,13 @@ export function ImportUsersForm() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-neutral-700">Willkommen-E-Mail senden</label>
-          <select
-            name="sendWelcomeEmail"
-            defaultValue="ja"
-            className="rounded border border-neutral-300 px-3 py-2"
-          >
-            <option value="ja">Ja – jeder neu angelegte Benutzer erhält eine Aktivierungs-E-Mail</option>
-            <option value="nein">Nein – Aktivierungslinks werden stattdessen hier angezeigt</option>
-          </select>
+          <ToggleSwitch label="Willkommen-E-Mail senden" checked={sendWelcomeEmail} onChange={setSendWelcomeEmail} />
+          <input type="hidden" name="sendWelcomeEmail" value={sendWelcomeEmail ? 'ja' : 'nein'} />
+          <p className="text-xs text-neutral-500">
+            {sendWelcomeEmail
+              ? 'Jeder neu angelegte Benutzer erhält eine Aktivierungs-E-Mail.'
+              : 'Keine E-Mails – Aktivierungslinks werden stattdessen im Ergebnis unten angezeigt.'}
+          </p>
         </div>
 
         {state.error && <p className="text-sm text-red-700">{state.error}</p>}
