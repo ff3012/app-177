@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { DRONE_ROLE_OPTIONS, userSchema, type UserInput } from '@/lib/validation/user.schema';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
+import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import type { UserFormState } from '@/app/(app)/admin/benutzer/actions';
 
 interface OrganizationOption {
@@ -24,10 +26,14 @@ interface UserFormProps {
 export function UserForm({ organizations, defaultValues, action, submitLabel, mode }: UserFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
+  const [activationLink, setActivationLink] = useState<string | undefined>();
 
   const {
     register,
+    control,
     handleSubmit,
+    watch,
+    reset,
     formState: { errors },
   } = useForm<UserInput>({
     resolver: zodResolver(userSchema),
@@ -40,9 +46,12 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, mo
       adminOrgIds: [],
       droneRole: 'NONE',
       password: '',
+      sendWelcomeEmail: true,
       ...defaultValues,
     },
   });
+
+  const sendWelcomeEmail = watch('sendWelcomeEmail');
 
   function onSubmit(values: UserInput) {
     const formData = new FormData();
@@ -56,11 +65,49 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, mo
     }
     formData.set('droneRole', values.droneRole);
     if (values.password) formData.set('password', values.password);
+    if (values.sendWelcomeEmail) formData.set('sendWelcomeEmail', 'on');
 
     startTransition(async () => {
       const result = await action({}, formData);
       setServerError(result?.error);
+      if (result?.success && result?.activationLink) {
+        setActivationLink(result.activationLink);
+      }
     });
+  }
+
+  if (activationLink) {
+    return (
+      <div className="flex max-w-lg flex-col gap-4 rounded border border-green-200 bg-green-50 p-4">
+        <p className="text-sm font-medium text-green-800">
+          Benutzer wurde angelegt. Da keine Willkommen-E-Mail gesendet wurde, hier der Aktivierungslink zum
+          manuellen Weitergeben:
+        </p>
+        <div className="flex items-start gap-2">
+          <p className="flex-1 break-all rounded border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800">
+            {activationLink}
+          </p>
+          <CopyLinkButton text={activationLink} />
+        </div>
+        <p className="text-xs text-neutral-500">Der Link ist 7 Tage gültig und einmalig verwendbar.</p>
+        <div className="flex items-center gap-4">
+          <Link href="/admin/benutzer" className="text-sm font-medium text-brand hover:underline">
+            Zur Benutzerliste
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              reset();
+              setActivationLink(undefined);
+              setServerError(undefined);
+            }}
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            Weiteren Benutzer anlegen
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -85,9 +132,20 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, mo
       </div>
 
       {mode === 'create' ? (
-        <p className="rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
-          Der Benutzer erhält eine E-Mail mit einem Aktivierungslink und legt sein Passwort selbst fest.
-        </p>
+        <div className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <Controller
+            control={control}
+            name="sendWelcomeEmail"
+            render={({ field }) => (
+              <ToggleSwitch label="Willkommen-E-Mail senden" checked={field.value} onChange={field.onChange} />
+            )}
+          />
+          <p className="text-sm text-neutral-600">
+            {sendWelcomeEmail
+              ? 'Der Benutzer erhält eine E-Mail mit einem Aktivierungslink und legt sein Passwort selbst fest.'
+              : 'Es wird keine E-Mail versendet. Der Aktivierungslink wird nach dem Anlegen angezeigt, damit du ihn selbst weitergeben kannst.'}
+          </p>
+        </div>
       ) : (
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Neues Passwort (optional)</label>

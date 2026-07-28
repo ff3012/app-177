@@ -13,6 +13,7 @@ export const userSchema = z.object({
   adminOrgIds: z.array(z.string()),
   droneRole: z.enum(DRONE_ROLE_OPTIONS),
   password: passwordPolicySchema.optional().or(z.literal('')),
+  sendWelcomeEmail: z.boolean(),
 });
 
 export type UserInput = z.infer<typeof userSchema>;
@@ -30,5 +31,6 @@ export function parseUserFormData(formData: FormData) {
       ? (rawDroneRole as DroneRoleOption)
       : 'NONE',
     password: String(formData.get('password') ?? ''),
+    sendWelcomeEmail: formData.get('sendWelcomeEmail') === 'on',
   };
 }

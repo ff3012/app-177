@@ -15,6 +15,12 @@ import { type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/valid
 export interface UserFormState {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;
+  success?: boolean;
+  activationLink?: string;
+}
+
+function baseUrl(): string {
+  return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
 }
 
 async function syncAdminMemberships(userId: string, adminOrgIds: string[]) {
@@ -76,6 +82,13 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   await syncDroneMembership(user.id, data.droneRole);
 
   const token = await createToken(user.id, TokenPurpose.ACTIVATION);
+
+  if (!data.sendWelcomeEmail) {
+    // Kein Mail-Versand gewünscht: Aktivierungslink stattdessen dem Admin zum manuellen Weitergeben anzeigen.
+    revalidatePath('/admin/benutzer');
+    return { success: true, activationLink: `${baseUrl()}/aktivieren/${token}` };
+  }
+
   try {
     await sendActivationEmail(user, token);
   } catch (error) {
