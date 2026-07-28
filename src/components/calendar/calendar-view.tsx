@@ -20,6 +20,7 @@ export interface CalendarEventInput {
   description?: string;
   location?: string;
   organizationName?: string;
+  layer?: string;
 }
 
 function formatEventTime(event: CalendarEventInput) {

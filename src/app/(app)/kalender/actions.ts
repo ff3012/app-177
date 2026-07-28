@@ -14,7 +14,6 @@ export interface EventFormState {
 
 function revalidateCalendars() {
   revalidatePath('/kalender');
-  revalidatePath('/kalender/abschnitt');
 }
 
 export async function createEvent(_prevState: EventFormState, formData: FormData): Promise<EventFormState> {

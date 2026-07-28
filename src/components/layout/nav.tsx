@@ -13,10 +13,7 @@ interface NavItem {
 export function Nav({ user }: { user: SessionUser }) {
   const pathname = usePathname();
 
-  const items: NavItem[] = [
-    { href: '/kalender', label: 'Meine Feuerwehr' },
-    { href: '/kalender/abschnitt', label: 'Abschnitt-Kalender' },
-  ];
+  const items: NavItem[] = [{ href: '/kalender', label: 'Kalender' }];
 
   if (canViewDroneModule(user)) {
     items.push({ href: '/drohnen', label: 'Drohnengruppe' });
