@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { verifyPassword } from '@/lib/password';
+import { getDummyPasswordHash, verifyPassword } from '@/lib/password';
 import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsById } from '@/lib/auth/build-session-user';
 import type { SessionUser } from '@/types/next-auth';
 
@@ -23,12 +23,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const user = await findUserWithRelationsByEmail(email.toLowerCase().trim());
-        if (!user || !user.isActive) {
-          return null;
-        }
+        // Always run a real bcrypt.compare, against the user's hash if found or a dummy hash
+        // otherwise, so a nonexistent email doesn't return measurably faster (timing/enumeration).
+        const hashToCompare = user?.passwordHash ?? (await getDummyPasswordHash());
+        const passwordValid = await verifyPassword(password, hashToCompare);
 
-        const passwordValid = await verifyPassword(password, user.passwordHash);
-        if (!passwordValid) {
+        if (!user || !user.isActive || !passwordValid) {
           return null;
         }
 

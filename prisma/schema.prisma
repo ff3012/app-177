@@ -80,6 +80,17 @@ model User {
   @@index([homeOrganizationId])
 }
 
+// Login-Rate-Limiting: getrackt pro eingegebener E-Mail-Adresse (auch wenn sie zu keinem
+// Benutzer gehört), damit ein Lockout selbst nicht verrät, ob ein Account existiert.
+model LoginAttempt {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  failedCount   Int       @default(0)
+  firstFailedAt DateTime  @default(now())
+  lockedUntil   DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
 // One-time links for account activation and "Passwort vergessen". The token
 // column stores a SHA-256 hash of the random token, never the raw value.
 model PasswordToken {

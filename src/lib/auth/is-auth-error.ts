@@ -24,3 +24,13 @@ export function isAuthError(error: unknown): boolean {
   }
   return false;
 }
+
+/**
+ * Next.js's redirect() throws a control-flow error whose `digest` starts with "NEXT_REDIRECT"
+ * (the exact digest string also encodes the target/type, e.g. "NEXT_REDIRECT;push;/kalender;307;").
+ * That's what a successful signIn() with redirectTo looks like from the caller's side.
+ */
+export function isNextRedirectError(error: unknown): boolean {
+  const digest = error && typeof error === 'object' ? (error as { digest?: unknown }).digest : undefined;
+  return typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT');
+}
