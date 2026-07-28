@@ -42,6 +42,7 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
           allDay: event.allDay,
           organizationId: event.organizationId,
           isSectionWide: event.isSectionWide,
+          category: event.category,
         }}
       />
       <form action={boundDelete}>

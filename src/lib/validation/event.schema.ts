@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const EVENT_CATEGORIES = ['ALLGEMEIN', 'DROHNENGRUPPE'] as const;
+export type EventCategoryOption = (typeof EVENT_CATEGORIES)[number];
+
 export const eventSchema = z
   .object({
     title: z.string().trim().min(1, 'Titel ist erforderlich.').max(200),
@@ -10,6 +13,7 @@ export const eventSchema = z
     allDay: z.boolean(),
     organizationId: z.string().min(1, 'Organisation ist erforderlich.'),
     isSectionWide: z.boolean(),
+    category: z.enum(EVENT_CATEGORIES),
   })
   .refine((data) => new Date(data.endsAt).getTime() >= new Date(data.startsAt).getTime(), {
     message: 'Ende darf nicht vor dem Start liegen.',
@@ -19,6 +23,7 @@ export const eventSchema = z
 export type EventInput = z.infer<typeof eventSchema>;
 
 export function parseEventFormData(formData: FormData) {
+  const rawCategory = String(formData.get('category') ?? 'ALLGEMEIN');
   return {
     title: String(formData.get('title') ?? ''),
     description: String(formData.get('description') ?? ''),
@@ -28,5 +33,8 @@ export function parseEventFormData(formData: FormData) {
     allDay: formData.get('allDay') === 'on',
     organizationId: String(formData.get('organizationId') ?? ''),
     isSectionWide: formData.get('isSectionWide') === 'on',
+    category: (EVENT_CATEGORIES as readonly string[]).includes(rawCategory)
+      ? (rawCategory as EventCategoryOption)
+      : 'ALLGEMEIN',
   };
 }

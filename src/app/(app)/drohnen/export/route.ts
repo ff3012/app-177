@@ -16,7 +16,7 @@ export async function GET() {
   }
 
   const flights = await prisma.droneFlight.findMany({
-    include: { drone: true, registeredBy: true },
+    include: { drone: true, registeredBy: true, pilotUser: true },
     orderBy: { startsAt: 'desc' },
   });
 
@@ -36,7 +36,7 @@ export async function GET() {
   for (const flight of flights) {
     sheet.addRow({
       startsAt: flight.startsAt.toLocaleString('de-AT'),
-      pilotName: flight.pilotName,
+      pilotName: `${flight.pilotUser.firstName} ${flight.pilotUser.lastName}`,
       location: flight.location,
       drone: flight.drone.name,
       purpose: PURPOSE_LABEL[flight.purpose] ?? flight.purpose,

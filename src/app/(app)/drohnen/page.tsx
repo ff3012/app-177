@@ -18,7 +18,7 @@ export default async function DrohnenPage() {
   const seeAll = canViewAllFlights(user);
   const flights = await prisma.droneFlight.findMany({
     where: seeAll ? {} : { registeredById: user.id },
-    include: { drone: true, registeredBy: true },
+    include: { drone: true, registeredBy: true, pilotUser: true },
     orderBy: { startsAt: 'desc' },
   });
 
@@ -32,6 +32,14 @@ export default async function DrohnenPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {seeAll && (
+            <Link
+              href="/drohnen/90-tage"
+              className="rounded border border-neutral-300 px-3 py-1.5 font-medium text-neutral-700 hover:bg-neutral-100"
+            >
+              90 Tage Flüge
+            </Link>
+          )}
           {seeAll && (
             <a
               href="/drohnen/export"
@@ -67,7 +75,9 @@ export default async function DrohnenPage() {
               return (
                 <tr key={flight.id} className="border-b border-neutral-100">
                   <td className="px-4 py-2">{flight.startsAt.toLocaleString('de-AT')}</td>
-                  <td className="px-4 py-2">{flight.pilotName}</td>
+                  <td className="px-4 py-2">
+                    {flight.pilotUser.firstName} {flight.pilotUser.lastName}
+                  </td>
                   <td className="px-4 py-2">{flight.location}</td>
                   <td className="px-4 py-2">{flight.drone.name}</td>
                   <td className="px-4 py-2">{PURPOSE_LABEL[flight.purpose] ?? flight.purpose}</td>

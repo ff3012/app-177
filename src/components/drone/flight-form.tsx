@@ -12,14 +12,21 @@ interface DroneOption {
   name: string;
 }
 
+interface PilotOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface FlightFormProps {
   drones: DroneOption[];
+  pilots: PilotOption[];
   defaultValues?: Partial<FlightInput>;
   action: (prevState: FlightFormState, formData: FormData) => Promise<FlightFormState>;
   submitLabel: string;
 }
 
-export function FlightForm({ drones, defaultValues, action, submitLabel }: FlightFormProps) {
+export function FlightForm({ drones, pilots, defaultValues, action, submitLabel }: FlightFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -31,7 +38,7 @@ export function FlightForm({ drones, defaultValues, action, submitLabel }: Fligh
     resolver: zodResolver(flightSchema),
     defaultValues: {
       startsAt: '',
-      pilotName: '',
+      pilotUserId: pilots[0]?.id ?? '',
       location: '',
       droneId: drones[0]?.id ?? '',
       purpose: 'UEBUNG',
@@ -43,7 +50,7 @@ export function FlightForm({ drones, defaultValues, action, submitLabel }: Fligh
   function onSubmit(values: FlightInput) {
     const formData = new FormData();
     formData.set('startsAt', values.startsAt);
-    formData.set('pilotName', values.pilotName);
+    formData.set('pilotUserId', values.pilotUserId);
     formData.set('location', values.location);
     formData.set('droneId', values.droneId);
     formData.set('purpose', values.purpose);
@@ -65,8 +72,14 @@ export function FlightForm({ drones, defaultValues, action, submitLabel }: Fligh
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Name Pilot</label>
-        <input {...register('pilotName')} className="rounded border border-neutral-300 px-3 py-2" />
-        {errors.pilotName && <p className="text-sm text-red-700">{errors.pilotName.message}</p>}
+        <select {...register('pilotUserId')} className="rounded border border-neutral-300 px-3 py-2">
+          {pilots.map((pilot) => (
+            <option key={pilot.id} value={pilot.id}>
+              {pilot.firstName} {pilot.lastName}
+            </option>
+          ))}
+        </select>
+        {errors.pilotUserId && <p className="text-sm text-red-700">{errors.pilotUserId.message}</p>}
       </div>
 
       <div className="flex flex-col gap-1">

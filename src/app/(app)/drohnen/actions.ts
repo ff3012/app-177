@@ -12,6 +12,11 @@ export interface FlightFormState {
   fieldErrors?: Record<string, string[] | undefined>;
 }
 
+async function isDrohnengruppeMemberId(userId: string): Promise<boolean> {
+  const membership = await prisma.drohnengruppeMembership.findUnique({ where: { userId } });
+  return Boolean(membership);
+}
+
 export async function createFlight(_prevState: FlightFormState, formData: FormData): Promise<FlightFormState> {
   const user = await requireUser();
   if (!canRegisterFlight(user)) {
@@ -24,10 +29,14 @@ export async function createFlight(_prevState: FlightFormState, formData: FormDa
   }
   const data = parsed.data;
 
+  if (!(await isDrohnengruppeMemberId(data.pilotUserId))) {
+    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein Mitglied der Drohnengruppe.'] } };
+  }
+
   await prisma.droneFlight.create({
     data: {
       startsAt: new Date(data.startsAt),
-      pilotName: data.pilotName,
+      pilotUserId: data.pilotUserId,
       location: data.location,
       droneId: data.droneId,
       purpose: data.purpose,
@@ -59,11 +68,15 @@ export async function updateFlight(
   }
   const data = parsed.data;
 
+  if (!(await isDrohnengruppeMemberId(data.pilotUserId))) {
+    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein Mitglied der Drohnengruppe.'] } };
+  }
+
   await prisma.droneFlight.update({
     where: { id: flightId },
     data: {
       startsAt: new Date(data.startsAt),
-      pilotName: data.pilotName,
+      pilotUserId: data.pilotUserId,
       location: data.location,
       droneId: data.droneId,
       purpose: data.purpose,

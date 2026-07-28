@@ -1,17 +1,21 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateSectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
+import { canCreateSectionWideEvent, canManageEventsFor, canViewDroneModule } from '@/lib/auth/permissions';
 import { CalendarView, type CalendarEventInput } from '@/components/calendar/calendar-view';
 
 export default async function AbschnittKalenderPage() {
   const user = await requireUser();
 
-  const events = await prisma.event.findMany({
+  const allEvents = await prisma.event.findMany({
     where: { isSectionWide: true },
     include: { organization: true },
     orderBy: { startsAt: 'asc' },
   });
+
+  // Kategorie "Drohnengruppe" ist nur für Mitglieder/Admins der Drohnengruppe sichtbar.
+  const canSeeDroneCategory = canViewDroneModule(user);
+  const events = allEvents.filter((event) => event.category !== 'DROHNENGRUPPE' || canSeeDroneCategory);
 
   const calendarEvents: CalendarEventInput[] = events.map((event) => ({
     id: event.id,
@@ -20,7 +24,7 @@ export default async function AbschnittKalenderPage() {
     end: event.endsAt.toISOString(),
     allDay: event.allDay,
     editable: canManageEventsFor(user, event.organizationId),
-    backgroundColor: '#780000',
+    backgroundColor: event.category === 'DROHNENGRUPPE' ? '#1d4ed8' : '#780000',
     description: event.description ?? undefined,
     location: event.location ?? undefined,
     organizationName: event.organization.shortName ?? event.organization.name,

@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageFlight } from '@/lib/auth/permissions';
+import { listDrohnengruppeMembers } from '@/lib/drone/members';
 import { FlightForm } from '@/components/drone/flight-form';
 import { toDatetimeLocalValue } from '@/lib/format';
 import { deleteFlight, updateFlight } from '../../actions';
@@ -9,9 +10,10 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
   const user = await requireUser();
   const { flightId } = await params;
 
-  const [flight, drones] = await Promise.all([
+  const [flight, drones, pilots] = await Promise.all([
     prisma.droneFlight.findUnique({ where: { id: flightId } }),
     prisma.drone.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
+    listDrohnengruppeMembers(),
   ]);
 
   if (!flight) {
@@ -29,11 +31,12 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
       <h1 className="text-lg font-semibold text-neutral-900">Flug bearbeiten</h1>
       <FlightForm
         drones={drones}
+        pilots={pilots}
         action={boundUpdate}
         submitLabel="Änderungen speichern"
         defaultValues={{
           startsAt: toDatetimeLocalValue(flight.startsAt),
-          pilotName: flight.pilotName,
+          pilotUserId: flight.pilotUserId,
           location: flight.location,
           droneId: flight.droneId,
           purpose: flight.purpose,

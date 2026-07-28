@@ -20,9 +20,19 @@ export function canCreateSectionWideEvent(user: SessionUser): boolean {
   return user.isAbschnittsAdmin;
 }
 
-/** Sichtbarkeit des Drohnengruppe-Moduls: Drohnengruppe-Mitglieder + Abschnittskommando. */
+/** Admin Drohnengruppe: eigenes Recht innerhalb der Drohnengruppe, unabhängig vom Abschnittskommando-Admin. */
+export function isDroneGroupAdmin(user: SessionUser): boolean {
+  return user.droneGroupRole === 'ADMIN';
+}
+
+/**
+ * Sichtbarkeit des gesamten Drohnengruppe-Moduls: NUR "Mitglied Drohnengruppe" oder "Admin
+ * Drohnengruppe" (isDrohnengruppeMember deckt beide Rollen ab, da es unabhängig von role gesetzt
+ * wird). Bewusst KEINE Ausnahme mehr für Abschnittskommando-Mitglieder/-Admins ohne explizite
+ * Drohnengruppen-Rolle — bewusste Sicherheitsentscheidung, siehe Security-Review der Drohnengruppe.
+ */
 export function canViewDroneModule(user: SessionUser): boolean {
-  return user.isDrohnengruppeMember || user.isAbschnittskommandoMitglied;
+  return user.isDrohnengruppeMember;
 }
 
 /** Darf einen neuen Flug registrieren (wird immer unter der eigenen registeredById angelegt). */
@@ -30,22 +40,17 @@ export function canRegisterFlight(user: SessionUser): boolean {
   return canViewDroneModule(user);
 }
 
-/** Admin Drohnengruppe: eigenes Recht innerhalb der Drohnengruppe, unabhängig vom Abschnittskommando-Admin. */
-export function isDroneGroupAdmin(user: SessionUser): boolean {
-  return user.droneGroupRole === 'ADMIN';
-}
-
 /**
- * Darf ALLE Flüge sehen (statt nur die selbst erfassten). Nur Admin (Abschnittskommando-
- * oder Drohnengruppe-Admin), nicht schon durch einfache Mitgliedschaft alleine.
+ * Darf ALLE Flüge sehen (statt nur die selbst erfassten). Nur Admin Drohnengruppe — bewusst
+ * kein pauschales Recht mehr für Abschnittskommando-Admins ohne diese Rolle.
  */
 export function canViewAllFlights(user: SessionUser): boolean {
-  return isSiteAdmin(user) || isDroneGroupAdmin(user);
+  return isDroneGroupAdmin(user);
 }
 
-/** Darf einen bestehenden Flug bearbeiten/löschen: Admin oder der Ersteller selbst. */
+/** Darf einen bestehenden Flug bearbeiten/löschen: Admin Drohnengruppe oder der Ersteller selbst. */
 export function canManageFlight(user: SessionUser, flight: { registeredById: string }): boolean {
-  return isSiteAdmin(user) || isDroneGroupAdmin(user) || flight.registeredById === user.id;
+  return isDroneGroupAdmin(user) || flight.registeredById === user.id;
 }
 
 export class ForbiddenError extends Error {

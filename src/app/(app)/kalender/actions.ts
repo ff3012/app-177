@@ -42,6 +42,7 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       allDay: data.allDay,
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
+      category: data.category,
       createdById: user.id,
     },
   });
@@ -86,6 +87,7 @@ export async function updateEvent(
       allDay: data.allDay,
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
+      category: data.category,
     },
   });
 

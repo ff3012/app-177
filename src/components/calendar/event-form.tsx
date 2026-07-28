@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { eventSchema, type EventInput } from '@/lib/validation/event.schema';
+import { EVENT_CATEGORIES, eventSchema, type EventInput } from '@/lib/validation/event.schema';
 import type { EventFormState } from '@/app/(app)/kalender/actions';
 
 interface OrganizationOption {
@@ -41,6 +41,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
       allDay: false,
       organizationId: organizations[0]?.id ?? '',
       isSectionWide: false,
+      category: 'ALLGEMEIN',
       ...defaultValues,
     },
   });
@@ -59,6 +60,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
     if (values.allDay) formData.set('allDay', 'on');
     formData.set('organizationId', values.organizationId);
     if (values.isSectionWide) formData.set('isSectionWide', 'on');
+    formData.set('category', values.category);
 
     startTransition(async () => {
       const result = await action({}, formData);
@@ -119,6 +121,22 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
           <input type="checkbox" {...register('isSectionWide')} />
           Abschnitt-weiter Termin (in allen Feuerwehr-Kalendern sichtbar)
         </label>
+      )}
+
+      {showSectionWideOption && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Kategorie</label>
+          <select {...register('category')} className="rounded border border-neutral-300 px-3 py-2">
+            {EVENT_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category === 'DROHNENGRUPPE' ? 'Drohnengruppe' : 'Allgemein'}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-neutral-500">
+            Kategorie "Drohnengruppe" ist nur für Mitglieder der Drohnengruppe sichtbar.
+          </p>
+        </div>
       )}
 
       {serverError && <p className="text-sm text-red-700">{serverError}</p>}
