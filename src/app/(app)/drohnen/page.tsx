@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageFlight, canRegisterFlight, canViewAllFlights, canViewDroneModule } from '@/lib/auth/permissions';
+import { NINETY_DAY_REQUIRED_FLIGHTS, NINETY_DAY_WINDOW_DAYS, getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 
 const PURPOSE_LABEL: Record<string, string> = {
   UEBUNG: 'Übung',
@@ -16,11 +17,17 @@ export default async function DrohnenPage() {
   }
 
   const seeAll = canViewAllFlights(user);
-  const flights = await prisma.droneFlight.findMany({
-    where: seeAll ? {} : { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] },
-    include: { drone: true, registeredBy: true, pilotUser: true },
-    orderBy: { startsAt: 'desc' },
-  });
+  const [flights, ownFlightCount] = await Promise.all([
+    prisma.droneFlight.findMany({
+      where: seeAll ? {} : { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] },
+      include: { drone: true, registeredBy: true, pilotUser: true },
+      orderBy: { startsAt: 'desc' },
+    }),
+    prisma.droneFlight.count({
+      where: { pilotUserId: user.id, startsAt: { gte: getNinetyDayCutoff() } },
+    }),
+  ]);
+  const ownRuleMet = meetsNinetyDayRule(ownFlightCount);
 
   return (
     <div className="flex flex-col gap-4">
@@ -49,9 +56,23 @@ export default async function DrohnenPage() {
             </a>
           )}
           {canRegisterFlight(user) && (
-            <Link href="/drohnen/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
-              Flug registrieren
-            </Link>
+            <>
+              <Link href="/drohnen/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
+                Flug registrieren
+              </Link>
+              <span
+                className="flex items-center gap-1.5 text-sm"
+                title={`90-Tage-Regel: ${ownFlightCount} von ${NINETY_DAY_REQUIRED_FLIGHTS} Flügen in den letzten ${NINETY_DAY_WINDOW_DAYS} Tagen`}
+              >
+                <span
+                  aria-hidden
+                  className={`h-3 w-3 rounded-full ${ownRuleMet ? 'bg-green-600' : 'bg-red-600'}`}
+                />
+                <span className={ownRuleMet ? 'text-green-700' : 'text-red-700'}>
+                  90-Tage-Regel {ownRuleMet ? 'erfüllt' : 'nicht erfüllt'}
+                </span>
+              </span>
+            </>
           )}
         </div>
       </div>

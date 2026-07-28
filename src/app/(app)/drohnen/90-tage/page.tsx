@@ -3,9 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canViewAllFlights } from '@/lib/auth/permissions';
 import { listDrohnengruppeMembers } from '@/lib/drone/members';
-
-const REQUIRED_FLIGHTS = 3;
-const WINDOW_DAYS = 90;
+import { NINETY_DAY_REQUIRED_FLIGHTS, NINETY_DAY_WINDOW_DAYS, getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 
 export default async function NinetyDayFlightsPage() {
   const user = await requireUser();
@@ -14,8 +12,7 @@ export default async function NinetyDayFlightsPage() {
     return <p className="text-neutral-700">Dieser Bereich ist nur für Admin Drohnengruppe sichtbar.</p>;
   }
 
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - WINDOW_DAYS);
+  const cutoff = getNinetyDayCutoff();
 
   const [members, counts] = await Promise.all([
     listDrohnengruppeMembers(),
@@ -33,7 +30,7 @@ export default async function NinetyDayFlightsPage() {
       <div>
         <h1 className="text-lg font-semibold text-neutral-900">90 Tage Flüge</h1>
         <p className="text-sm text-neutral-500">
-          Mindestens {REQUIRED_FLIGHTS} Flüge in den letzten {WINDOW_DAYS} Tagen (ab heute).
+          Mindestens {NINETY_DAY_REQUIRED_FLIGHTS} Flüge in den letzten {NINETY_DAY_WINDOW_DAYS} Tagen (ab heute).
         </p>
         <Link href="/drohnen" className="text-sm text-brand hover:underline">
           Zurück zum Flugbuch
@@ -52,7 +49,7 @@ export default async function NinetyDayFlightsPage() {
           <tbody>
             {members.map((member) => {
               const count = countByPilot.get(member.id) ?? 0;
-              const met = count >= REQUIRED_FLIGHTS;
+              const met = meetsNinetyDayRule(count);
               return (
                 <tr key={member.id} className="border-b border-neutral-100">
                   <td className="px-4 py-2">
