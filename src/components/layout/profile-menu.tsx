@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChangePasswordForm } from './change-password-form';
+import { FeedbackForm } from './feedback-form';
+
+type ProfilePanel = 'password' | 'feedback' | null;
 
 interface ProfileMenuProps {
   name: string;
@@ -21,14 +24,14 @@ export function ProfileMenu({
   isDrohnengruppeMember,
 }: ProfileMenuProps) {
   const [open, setOpen] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [activePanel, setActivePanel] = useState<ProfilePanel>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false);
-        setChangingPassword(false);
+        setActivePanel(null);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -73,16 +76,27 @@ export function ProfileMenu({
           </dl>
 
           <div className="mt-4 border-t border-neutral-200 pt-3">
-            {changingPassword ? (
+            {activePanel === 'password' ? (
               <ChangePasswordForm />
+            ) : activePanel === 'feedback' ? (
+              <FeedbackForm />
             ) : (
-              <button
-                type="button"
-                onClick={() => setChangingPassword(true)}
-                className="text-sm font-medium text-brand hover:underline"
-              >
-                Passwort ändern
-              </button>
+              <div className="flex flex-col items-start gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('password')}
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  Passwort ändern
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('feedback')}
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  Feedback geben
+                </button>
+              </div>
             )}
           </div>
         </div>
