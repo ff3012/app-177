@@ -17,15 +17,15 @@ export interface UserRow {
 
 type SortKey = 'name' | 'email' | 'stbNr' | 'phone' | 'homeOrg' | 'adminFor' | 'droneLabel' | 'statusLabel';
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'email', label: 'E-Mail' },
-  { key: 'stbNr', label: 'StbNr' },
-  { key: 'phone', label: 'Telefonnummer' },
-  { key: 'homeOrg', label: 'Heimat-Feuerwehr' },
-  { key: 'adminFor', label: 'Admin für' },
-  { key: 'droneLabel', label: 'Drohnengruppe' },
-  { key: 'statusLabel', label: 'Status' },
+const COLUMNS: { key: SortKey; label: string; width: string }[] = [
+  { key: 'name', label: 'Name', width: 'w-[14%]' },
+  { key: 'email', label: 'E-Mail', width: 'w-[19%]' },
+  { key: 'stbNr', label: 'StbNr', width: 'w-[8%]' },
+  { key: 'phone', label: 'Telefonnummer', width: 'w-[12%]' },
+  { key: 'homeOrg', label: 'Heimat-Feuerwehr', width: 'w-[12%]' },
+  { key: 'adminFor', label: 'Admin für', width: 'w-[14%]' },
+  { key: 'droneLabel', label: 'Drohnengruppe', width: 'w-[8%]' },
+  { key: 'statusLabel', label: 'Status', width: 'w-[8%]' },
 ];
 
 export function UserManagementSection({ users }: { users: UserRow[] }) {
@@ -94,17 +94,17 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
       </div>
 
       <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
+        <table className="w-full table-fixed text-left text-sm">
           <thead className="border-b border-neutral-200 text-neutral-500">
             <tr>
               {COLUMNS.map((column) => {
                 const active = column.key === sortKey;
                 return (
-                  <th key={column.key} className="px-4 py-2">
+                  <th key={column.key} className={`${column.width} px-3 py-2 align-bottom`}>
                     <button
                       type="button"
                       onClick={() => toggleSort(column.key)}
-                      className={`font-medium hover:text-neutral-900 ${active ? 'text-neutral-900' : ''}`}
+                      className={`break-words text-left font-medium hover:text-neutral-900 ${active ? 'text-neutral-900' : ''}`}
                     >
                       {column.label}
                       {active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
@@ -112,21 +112,21 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
                   </th>
                 );
               })}
-              <th className="px-4 py-2" />
+              <th className="w-[5%] px-3 py-2" />
             </tr>
           </thead>
           <tbody>
             {sorted.map((u) => (
               <tr key={u.id} className="border-b border-neutral-100">
-                <td className="px-4 py-2">{u.name}</td>
-                <td className="px-4 py-2">{u.email}</td>
-                <td className="px-4 py-2">{u.stbNr || '–'}</td>
-                <td className="px-4 py-2">{u.phone || '–'}</td>
-                <td className="px-4 py-2">{u.homeOrg}</td>
-                <td className="px-4 py-2">{u.adminFor}</td>
-                <td className="px-4 py-2">{u.droneLabel}</td>
-                <td className="px-4 py-2">{u.statusLabel}</td>
-                <td className="px-4 py-2 text-right">
+                <td className="break-words px-3 py-2">{u.name}</td>
+                <td className="break-words px-3 py-2">{u.email}</td>
+                <td className="break-words px-3 py-2">{u.stbNr || '–'}</td>
+                <td className="break-words px-3 py-2">{u.phone || '–'}</td>
+                <td className="break-words px-3 py-2">{u.homeOrg}</td>
+                <td className="break-words px-3 py-2">{u.adminFor}</td>
+                <td className="break-words px-3 py-2">{u.droneLabel}</td>
+                <td className="break-words px-3 py-2">{u.statusLabel}</td>
+                <td className="break-words px-3 py-2 text-right">
                   <Link href={`/admin/benutzer/${u.id}`} className="text-brand hover:underline">
                     Bearbeiten
                   </Link>
@@ -135,7 +135,7 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-neutral-500">
+                <td colSpan={9} className="px-3 py-6 text-center text-neutral-500">
                   Keine Benutzer gefunden.
                 </td>
               </tr>
