@@ -1,15 +1,24 @@
 # Feuerwehr-App AFKDO Purkersdorf
 
-Web-App für die 9 Feuerwehren und das Abschnittsfeuerwehrkommando des Abschnitts Purkersdorf.
+Web-App für die 9 Feuerwehren und das Abschnittsfeuerwehrkommando des Abschnitts Purkersdorf. Installierbar
+als PWA (Icon am Homescreen, iOS/Android) – kein App-Store-Build nötig.
 
 ## Module
 
-- **Terminplanung** – eigener Kalender pro Feuerwehr + Abschnitt-weiter Kalender, .ics-Export/Abo für Outlook/Google/Apple Kalender.
-- **Drohnengruppe** – Flugbuch (Datum/Uhrzeit, Pilot, Ort, Drohne, Zweck), nur sichtbar für die Drohnengruppe und das Abschnittskommando.
+- **Kalender** – eigener Kalender pro Feuerwehr + Abschnitt-weiter Kalender, Kalender- oder Listenansicht
+  (Listenansicht ist Standard), .ics-Export/Abo für Outlook/Google/Apple Kalender.
+- **Drohnengruppe** – Flugbuch (Datum/Uhrzeit, Pilot, Ort, Drohne, Zweck), nur sichtbar für Mitglieder der
+  Drohnengruppe. Zeigt jedem Mitglied den eigenen Status zur 90-Tage/3-Flüge-Regel; ein QR-Code-Link erlaubt
+  das Registrieren eines Flugs ohne Login. Optional: E-Mail-Benachrichtigung bei neuen Flügen.
+- **Verwaltung** (nur Abschnittskommando-Admin) – Benutzerverwaltung (Suche, sortierbare Spalten,
+  Passwort-Reset-E-Mail), Drohnengruppe (Drohnen-Liste, QR-Link), E-Mail (Mailjet-Test, Benachrichtigungsadresse),
+  Status (Server/Datenbank/Mailjet-Check).
+- **Feedback** – jeder Benutzer kann über das Profilmenü eine Sterne-Bewertung + Freitext senden.
 
 ## Tech-Stack
 
-Next.js (App Router, TypeScript) · PostgreSQL + Prisma · Auth.js (E-Mail/Passwort) · Tailwind CSS
+Next.js (App Router, TypeScript) · PostgreSQL + Prisma · Auth.js (E-Mail/Passwort) · Tailwind CSS · Mailjet
+(Transaktions-E-Mails)
 
 ## Lokale Entwicklung
 
