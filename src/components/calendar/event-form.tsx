@@ -64,17 +64,28 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
     }
   }, [category, setValue]);
 
-  // Ende übernimmt bei jeder Änderung von Start automatisch dessen Datum (Uhrzeit von Ende
-  // bleibt unangetastet, falls bereits gesetzt).
+  // Ende übernimmt bei jeder Änderung von Start automatisch dessen Datum. Solange Ende noch gar
+  // keine eigene Uhrzeit hat, wird zusätzlich Start + 15 Minuten als Uhrzeit vorgeschlagen; hat
+  // Ende bereits eine (manuell oder zuvor automatisch gesetzte) Uhrzeit, bleibt nur das Datum synchron.
   useEffect(() => {
-    if (!startsAt || !startsAt.includes('T')) return;
+    if (!startsAt) return;
     const [startDate, startTime] = startsAt.split('T');
+    if (!startDate || !startTime) return;
+
     const currentEnd = getValues('endsAt');
-    const endTime = currentEnd && currentEnd.includes('T') ? currentEnd.split('T')[1] : startTime;
-    const newEnd = `${startDate}T${endTime}`;
-    if (newEnd !== currentEnd) {
-      setValue('endsAt', newEnd);
+    const currentEndTime = currentEnd && currentEnd.includes('T') ? currentEnd.split('T')[1] : '';
+
+    if (currentEndTime) {
+      const newEnd = `${startDate}T${currentEndTime}`;
+      if (newEnd !== currentEnd) setValue('endsAt', newEnd);
+      return;
     }
+
+    const suggestedEnd = new Date(`${startDate}T${startTime}`);
+    suggestedEnd.setMinutes(suggestedEnd.getMinutes() + 15);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const newEnd = `${suggestedEnd.getFullYear()}-${pad(suggestedEnd.getMonth() + 1)}-${pad(suggestedEnd.getDate())}T${pad(suggestedEnd.getHours())}:${pad(suggestedEnd.getMinutes())}`;
+    setValue('endsAt', newEnd);
   }, [startsAt, getValues, setValue]);
 
   function onSubmit(values: EventInput) {
