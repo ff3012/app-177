@@ -23,5 +23,11 @@ docker compose -f docker/docker-compose.yml exec -T postgres \
 
 echo "Backup geschrieben: $FILE"
 
+# Zeitpunkt in AppSettings festhalten, damit die Status-Seite (Verwaltung > Status) das letzte
+# erfolgreiche Backup anzeigen kann, ohne dass der App-Container Zugriff auf dieses Verzeichnis braucht.
+docker compose -f docker/docker-compose.yml exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "INSERT INTO \"AppSettings\" (id, \"lastBackupAt\", \"updatedAt\") VALUES ('singleton', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET \"lastBackupAt\" = NOW(), \"updatedAt\" = NOW();"
+
 # 30 Tage Aufbewahrung
 find "$BACKUP_DIR" -name 'db-*.sql.gz' -mtime +30 -delete

@@ -244,7 +244,18 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,
   which is the practically useful signal. "Mailjet Integration" is a read-only, non-sending authenticated
-  call (`checkMailjetConnection` in `mailjet.ts`) against Mailjet's own API-key endpoint.
+  call (`checkMailjetConnection` in `mailjet.ts`) against Mailjet's own API-key endpoint. Three more checks
+  work around the same "app container can't see the host" limit that shapes "Docker läuft": "Cron Job
+  (News)" and "Letztes Backup" don't probe the host directly (no visibility into the host crontab or
+  `docker/backups/`) — instead the cron endpoint (`/api/cron/send-scheduled-news`) calls
+  `recordNewsCronRun()` on every invocation (even when nothing was due) and `docker/backup.sh` runs a direct
+  `psql` UPSERT after each successful `pg_dump`, both writing into `AppSettings.lastNewsCronRunAt` /
+  `lastBackupAt`; the Status page only reads those columns back via `src/lib/settings.ts` and flags them
+  stale after 15 minutes (cron runs every 5) / 26 hours (nightly backup) respectively. "NTP-Synchronisierung"
+  can't run a real NTP client check inside the container either (it shares the host's clock, so there's
+  nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against the
+  `Date` response header of an external HTTPS call (`api.mailjet.com`) as a drift proxy, flagging >10s as
+  out of sync.
 
 ### Email
 

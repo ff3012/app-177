@@ -31,3 +31,23 @@ export async function generateDroneQuickRegisterToken(): Promise<string> {
   });
   return token;
 }
+
+export async function getLastNewsCronRunAt(): Promise<Date | null> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
+  return settings?.lastNewsCronRunAt ?? null;
+}
+
+/** Vom Cronjob-Endpunkt bei jedem Lauf aufgerufen (auch wenn nichts zu versenden war) — Status-Seite zeigt daran, ob der Cronjob überhaupt noch läuft. */
+export async function recordNewsCronRun(): Promise<void> {
+  const now = new Date();
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, lastNewsCronRunAt: now },
+    update: { lastNewsCronRunAt: now },
+  });
+}
+
+export async function getLastBackupAt(): Promise<Date | null> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
+  return settings?.lastBackupAt ?? null;
+}

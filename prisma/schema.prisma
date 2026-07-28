@@ -179,10 +179,12 @@ model Drone {
 
 /** Singleton-Tabelle für Einstellungen aus der Verwaltung (immer genau eine Zeile, id="singleton"). */
 model AppSettings {
-  id                           String   @id @default("singleton")
+  id                           String    @id @default("singleton")
   droneFlightNotificationEmail String?
   droneQuickRegisterToken      String?
-  updatedAt                    DateTime @updatedAt
+  lastNewsCronRunAt            DateTime?
+  lastBackupAt                 DateTime?
+  updatedAt                    DateTime  @updatedAt
 }
 
 model DroneFlight {
