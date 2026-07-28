@@ -4,11 +4,18 @@ import { useEffect, useState } from 'react';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { savePushSubscription, deletePushSubscription } from '@/app/(app)/profile/push-actions';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// Uint8Array.from(...) infers a Uint8Array<ArrayBufferLike>, which TS's DOM types no longer accept
+// for PushManager.subscribe's applicationServerKey (it wants a real ArrayBuffer-backed view) -
+// constructing via `new Uint8Array(length)` instead keeps the backing buffer a concrete ArrayBuffer.
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 export function PushNotificationsToggle({ vapidPublicKey }: { vapidPublicKey: string | null }) {
