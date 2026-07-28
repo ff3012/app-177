@@ -29,6 +29,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#333333',
+  // Android Chrome auto-darkens web content specifically when this meta tag is missing (the CSS
+  // color-scheme property alone doesn't stop it) — this app has no dark theme, so opt out entirely.
+  colorScheme: 'light',
 };
 
 export default function RootLayout({
