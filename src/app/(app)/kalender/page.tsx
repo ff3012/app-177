@@ -4,6 +4,11 @@ import { prisma } from '@/lib/db/prisma';
 import { canManageEventsFor, canViewDroneModule } from '@/lib/auth/permissions';
 import { KalenderWithLayers, type CalendarLayer } from '@/components/calendar/kalender-with-layers';
 import type { CalendarEventInput } from '@/components/calendar/calendar-view';
+import { CopyLinkButton } from '@/components/ui/copy-link-button';
+
+function baseUrl(): string {
+  return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
+}
 
 export default async function KalenderPage() {
   const user = await requireUser();
@@ -57,13 +62,19 @@ export default async function KalenderPage() {
           Kalender – {organization.shortName ?? organization.name}
         </h1>
         <div className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
-          <a href={`/kalender/ics/${organization.icsToken}`} className="text-brand hover:underline">
-            Kalender abonnieren (.ics)
-          </a>
-          {combinedIcsToken && (
-            <a href={`/kalender/ics/${combinedIcsToken}`} className="text-brand hover:underline">
-              Abschnitt-Kalender abonnieren (.ics)
+          <div className="flex items-center gap-1.5">
+            <a href={`/kalender/ics/${organization.icsToken}`} className="text-brand hover:underline">
+              Kalender abonnieren (.ics)
             </a>
+            <CopyLinkButton text={`${baseUrl()}/kalender/ics/${organization.icsToken}`} />
+          </div>
+          {combinedIcsToken && (
+            <div className="flex items-center gap-1.5">
+              <a href={`/kalender/ics/${combinedIcsToken}`} className="text-brand hover:underline">
+                Abschnitt-Kalender abonnieren (.ics)
+              </a>
+              <CopyLinkButton text={`${baseUrl()}/kalender/ics/${combinedIcsToken}`} />
+            </div>
           )}
           {canCreateAnyEvent && (
             <Link href="/kalender/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">

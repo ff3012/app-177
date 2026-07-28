@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canCreateSectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
 import { EventForm } from '@/components/calendar/event-form';
+import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
 import { toDatetimeLocalValue } from '@/lib/format';
 import { deleteEvent, updateEvent } from '../../actions';
 
@@ -27,7 +28,10 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-neutral-900">Termin bearbeiten</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-neutral-900">Termin bearbeiten</h1>
+        <AddToCalendarLink eventId={event.id} />
+      </div>
       <EventForm
         organizations={organizations}
         canSectionWide={canCreateSectionWideEvent(user)}

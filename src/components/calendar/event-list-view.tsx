@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import type { CalendarEventInput } from './calendar-view';
+import { AddToCalendarLink } from './add-to-calendar-link';
 
 const CATEGORY_LABEL: Record<string, string> = {
   ALLGEMEIN: 'Allgemein',
@@ -31,6 +32,7 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
             <th className="px-4 py-2">Betreff</th>
             <th className="px-4 py-2">Organisation</th>
             <th className="px-4 py-2">Kategorie</th>
+            <th className="px-4 py-2" />
           </tr>
         </thead>
         <tbody>
@@ -53,12 +55,15 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
                 <td className="whitespace-nowrap px-4 py-2">
                   {(event.category && CATEGORY_LABEL[event.category]) ?? event.category ?? '–'}
                 </td>
+                <td className="whitespace-nowrap px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                  <AddToCalendarLink eventId={event.id} variant="icon" />
+                </td>
               </tr>
             );
           })}
           {events.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-neutral-500">
+              <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
                 Keine Termine vorhanden.
               </td>
             </tr>

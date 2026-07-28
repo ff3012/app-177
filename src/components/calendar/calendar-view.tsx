@@ -8,6 +8,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import deLocale from '@fullcalendar/core/locales/de';
 import { useRouter } from 'next/navigation';
+import { AddToCalendarLink } from './add-to-calendar-link';
 
 export interface CalendarEventInput {
   id: string;
@@ -102,6 +103,9 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
                 </div>
               )}
             </dl>
+            <div className="mt-4 border-t border-neutral-200 pt-3">
+              <AddToCalendarLink eventId={viewEvent.id} />
+            </div>
           </div>
         </div>
       )}
