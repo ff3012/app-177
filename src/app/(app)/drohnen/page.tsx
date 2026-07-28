@@ -61,16 +61,10 @@ export default async function DrohnenPage() {
                 Flug registrieren
               </Link>
               <span
-                className="flex items-center gap-1.5 text-sm"
+                className={`rounded px-3 py-1.5 font-medium text-white ${ownRuleMet ? 'bg-green-600' : 'bg-red-600'}`}
                 title={`90-Tage-Regel: ${ownFlightCount} von ${NINETY_DAY_REQUIRED_FLIGHTS} Flügen in den letzten ${NINETY_DAY_WINDOW_DAYS} Tagen`}
               >
-                <span
-                  aria-hidden
-                  className={`h-3 w-3 rounded-full ${ownRuleMet ? 'bg-green-600' : 'bg-red-600'}`}
-                />
-                <span className={ownRuleMet ? 'text-green-700' : 'text-red-700'}>
-                  90-Tage-Regel {ownRuleMet ? 'erfüllt' : 'nicht erfüllt'}
-                </span>
+                90-Tage-Regel
               </span>
             </>
           )}
