@@ -33,8 +33,11 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
 
   const workbook = new ExcelJS.Workbook();
   try {
-    const buffer = Buffer.from(new Uint8Array(await file.arrayBuffer()));
-    await workbook.xlsx.load(buffer);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    // exceljs's eigene .d.ts erwartet den nicht-generischen Buffer-Typ; @types/node ^22 macht
+    // Buffer generisch (Buffer<ArrayBuffer> hier), rein ein Typkonflikt zwischen den beiden
+    // Paket-Typdefinitionen, kein Laufzeitproblem - daher der explizite Cast.
+    await workbook.xlsx.load(buffer as unknown as Buffer);
   } catch (error) {
     console.error('Excel-Import: Datei konnte nicht gelesen werden:', error);
     return { error: 'Datei konnte nicht gelesen werden. Bitte eine gültige .xlsx-Datei hochladen.' };
