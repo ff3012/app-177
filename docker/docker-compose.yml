@@ -7,6 +7,11 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     environment:
+      # The server OS runs in UTC. Termine/Flüge/News are always entered as Vienna wall-clock
+      # time (matching the .ics export's Europe/Vienna timezone) - without this, `new Date()`
+      # parsing a plain "YYYY-MM-DDTHH:mm" string in a Server Action would interpret it as UTC
+      # instead, silently shifting every stored time by Vienna's UTC offset (1-2h depending on DST).
+      TZ: Europe/Vienna
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}

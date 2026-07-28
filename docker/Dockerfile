@@ -15,6 +15,10 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Alpine's base image doesn't ship the IANA timezone database; without it, TZ=Europe/Vienna
+# (set in docker-compose.yml) would be silently ignored and all date/time parsing would fall
+# back to UTC - which is exactly the bug this is here to prevent.
+RUN apk add --no-cache tzdata
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
 COPY --from=builder /app/public ./public
