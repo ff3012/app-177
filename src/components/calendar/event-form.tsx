@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
@@ -29,6 +29,8 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
     register,
     handleSubmit,
     watch,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<EventInput>({
     resolver: zodResolver(eventSchema),
@@ -49,6 +51,15 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
   const selectedOrgId = watch('organizationId');
   const selectedOrg = organizations.find((org) => org.id === selectedOrgId);
   const showSectionWideOption = canSectionWide && selectedOrg?.type === 'ABSCHNITTSKOMMANDO';
+  const category = watch('category');
+
+  // Drohnengruppe-Termine sind gruppenübergreifend gedacht, daher beim Auswählen automatisch
+  // als Abschnitt-weit vorbelegen (Benutzer kann es danach weiterhin manuell abwählen).
+  useEffect(() => {
+    if (category === 'DROHNENGRUPPE') {
+      setValue('isSectionWide', true);
+    }
+  }, [category, setValue]);
 
   function onSubmit(values: EventInput) {
     const formData = new FormData();
@@ -89,12 +100,31 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Start</label>
-          <input type="datetime-local" {...register('startsAt')} className="rounded border border-neutral-300 px-3 py-2" />
+          <input
+            type="datetime-local"
+            step={900}
+            {...register('startsAt', {
+              onChange: (event) => {
+                const value = event.target.value;
+                if (!value || !value.includes('T')) return;
+                const [datePart] = value.split('T');
+                const currentEnd = getValues('endsAt');
+                const endTimePart = currentEnd && currentEnd.includes('T') ? currentEnd.split('T')[1] : value.split('T')[1];
+                setValue('endsAt', `${datePart}T${endTimePart}`);
+              },
+            })}
+            className="rounded border border-neutral-300 px-3 py-2"
+          />
           {errors.startsAt && <p className="text-sm text-red-700">{errors.startsAt.message}</p>}
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Ende</label>
-          <input type="datetime-local" {...register('endsAt')} className="rounded border border-neutral-300 px-3 py-2" />
+          <input
+            type="datetime-local"
+            step={900}
+            {...register('endsAt')}
+            className="rounded border border-neutral-300 px-3 py-2"
+          />
           {errors.endsAt && <p className="text-sm text-red-700">{errors.endsAt.message}</p>}
         </div>
       </div>
@@ -127,9 +157,9 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Kategorie</label>
           <select {...register('category')} className="rounded border border-neutral-300 px-3 py-2">
-            {EVENT_CATEGORIES.map((category) => (
-              <option key={category} value={category}>
-                {category === 'DROHNENGRUPPE' ? 'Drohnengruppe' : 'Allgemein'}
+            {EVENT_CATEGORIES.map((categoryOption) => (
+              <option key={categoryOption} value={categoryOption}>
+                {categoryOption === 'DROHNENGRUPPE' ? 'Drohnengruppe' : 'Allgemein'}
               </option>
             ))}
           </select>

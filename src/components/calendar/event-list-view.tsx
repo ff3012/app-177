@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import type { CalendarEventInput } from './calendar-view';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -17,6 +18,8 @@ function formatTimeRange(event: CalendarEventInput): string {
 }
 
 export function EventListView({ events }: { events: CalendarEventInput[] }) {
+  const router = useRouter();
+
   return (
     <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
       <table className="w-full text-left text-sm">
@@ -34,7 +37,14 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
           {events.map((event) => {
             const start = new Date(event.start);
             return (
-              <tr key={event.id} className="border-b border-neutral-100">
+              <tr
+                key={event.id}
+                onDoubleClick={() => {
+                  if (event.editable) router.push(`/kalender/${event.id}/bearbeiten`);
+                }}
+                className={`border-b border-neutral-100 ${event.editable ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
+                title={event.editable ? 'Doppelklick zum Bearbeiten' : undefined}
+              >
                 <td className="whitespace-nowrap px-4 py-2">{start.toLocaleDateString('de-AT')}</td>
                 <td className="whitespace-nowrap px-4 py-2">{formatTimeRange(event)}</td>
                 <td className="whitespace-nowrap px-4 py-2">{start.toLocaleDateString('de-AT', { weekday: 'long' })}</td>
