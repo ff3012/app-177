@@ -21,7 +21,7 @@ export function KalenderWithLayers({ events, layers }: KalenderWithLayersProps) 
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(layers.map((layer) => [layer.key, true])),
   );
-  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const filteredEvents = useMemo(
     () => events.filter((event) => enabled[event.layer ?? ''] !== false),
