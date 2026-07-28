@@ -42,3 +42,21 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
     throw new Error(`Mailjet-Versand fehlgeschlagen (${response.status}): ${body}`);
   }
 }
+
+/** Prüft nur Konfiguration + Auth gegen die Mailjet-API (liest die eigenen API-Key-Infos) – versendet keine E-Mail. */
+export async function checkMailjetConnection(): Promise<boolean> {
+  const apiKey = process.env.MAILJET_API_KEY;
+  const apiSecret = process.env.MAILJET_API_SECRET;
+  const fromEmail = process.env.MAILJET_FROM_EMAIL;
+
+  if (!apiKey || !apiSecret || !fromEmail) return false;
+
+  try {
+    const response = await fetch(`https://api.mailjet.com/v3/REST/apikey/${apiKey}`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}` },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

@@ -7,6 +7,7 @@ const ITEMS = [
   { href: '/admin/benutzer', label: 'Benutzerverwaltung' },
   { href: '/admin/drohnen', label: 'Drohnengruppe' },
   { href: '/admin/email', label: 'E-Mail' },
+  { href: '/admin/status', label: 'Status' },
 ];
 
 export function AdminNav() {
