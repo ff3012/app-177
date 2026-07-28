@@ -2,9 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Background/text match afkdopurkersdorf.at's body styling. */
 :root {
-  --background: #f8f7f5;
-  --foreground: #1c1c1c;
+  --background: #f4f4f4;
+  --foreground: #333333;
 }
 
 body {

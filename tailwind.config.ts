@@ -5,10 +5,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Matches the accent red used on afkdopurkersdorf.at (mobile menu button etc.).
         brand: {
-          DEFAULT: '#c1121f',
-          dark: '#780000',
+          DEFAULT: '#f44336',
+          dark: '#c62828',
         },
+      },
+      fontFamily: {
+        sans: ['var(--font-noto-sans)', 'system-ui', 'sans-serif'],
       },
     },
   },

@@ -1,14 +1,14 @@
 export function Footer() {
   return (
-    <footer className="py-4 text-center text-sm text-neutral-400">
+    <footer className="bg-[#474747] py-4 text-center text-sm text-neutral-300">
       AFKDO Purkersdorf ·{' '}
       <a
-        href="https://www.afkdo-purkersdorf.at"
+        href="https://afkdopurkersdorf.at/"
         target="_blank"
         rel="noopener noreferrer"
-        className="hover:text-neutral-500 hover:underline"
+        className="text-neutral-200 hover:text-white hover:underline"
       >
-        www.afkdo-purkersdorf.at
+        afkdopurkersdorf.at
       </a>
     </footer>
   );

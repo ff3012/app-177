@@ -47,7 +47,7 @@ export function ProfileMenu({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="max-w-[8rem] truncate rounded px-2 py-1 text-sm text-neutral-700 hover:bg-neutral-100 sm:max-w-none"
+        className="max-w-[8rem] truncate rounded px-2 py-1 text-sm text-neutral-200 hover:bg-white/10 sm:max-w-none"
       >
         {name}
       </button>

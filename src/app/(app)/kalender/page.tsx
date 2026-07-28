@@ -39,7 +39,7 @@ export default async function KalenderPage() {
         end: event.endsAt.toISOString(),
         allDay: event.allDay,
         editable: canManageEventsFor(user, event.organizationId),
-        backgroundColor: layer === 'drohnengruppe' ? '#15803d' : layer === 'abschnitt' ? '#780000' : undefined,
+        backgroundColor: layer === 'drohnengruppe' ? '#15803d' : layer === 'abschnitt' ? '#c62828' : undefined,
         description: event.description ?? undefined,
         location: event.location ?? undefined,
         organizationName: event.organization.shortName ?? event.organization.name,

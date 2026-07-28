@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import { Noto_Sans } from 'next/font/google';
 import './globals.css';
+
+// Matches the font used on afkdopurkersdorf.at.
+const notoSans = Noto_Sans({ subsets: ['latin', 'latin-ext'], weight: ['400', '700'], variable: '--font-noto-sans' });
 
 export const metadata: Metadata = {
   title: 'Feuerwehr Abschnitt Purkersdorf',
@@ -18,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className={`${notoSans.variable} min-h-screen font-sans antialiased`}>{children}</body>
     </html>
   );
 }

@@ -17,14 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50">
-      <header className="border-b border-neutral-200 bg-white">
+    <div className="flex min-h-screen flex-col bg-[#f4f4f4]">
+      <header className="bg-[#333333] text-white">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
-            <span className="text-sm font-semibold text-neutral-900">FF Abschnitt Purkersdorf</span>
+            <span className="text-sm font-semibold text-white">FF Abschnitt Purkersdorf</span>
             <Nav user={user} />
           </div>
-          <div className="flex items-center gap-3 text-sm text-neutral-600">
+          <div className="flex items-center gap-3 text-sm text-neutral-200">
             <img src="/wappen-afkdo.png" alt="Wappen AFKDO Purkersdorf" className="h-8 w-auto sm:h-10" />
             <ProfileMenu
               name={user.name}
@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               isDrohnengruppeMember={user.isDrohnengruppeMember}
             />
             <form action={logoutAction}>
-              <button type="submit" className="rounded px-2 py-1 hover:bg-neutral-100">
+              <button type="submit" className="rounded px-2 py-1 text-neutral-200 hover:bg-white/10">
                 Abmelden
               </button>
             </form>

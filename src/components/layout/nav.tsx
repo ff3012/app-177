@@ -38,7 +38,7 @@ export function Nav({ user }: { user: SessionUser }) {
             key={item.href}
             href={item.href}
             className={`rounded px-3 py-2 text-sm font-medium ${
-              active ? 'bg-brand text-white' : 'text-neutral-700 hover:bg-neutral-100'
+              active ? 'bg-brand text-white' : 'text-neutral-200 hover:bg-white/10'
             }`}
           >
             {item.label}
