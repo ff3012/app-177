@@ -171,6 +171,7 @@ model Drone {
 model AppSettings {
   id                           String   @id @default("singleton")
   droneFlightNotificationEmail String?
+  droneQuickRegisterToken      String?
   updatedAt                    DateTime @updatedAt
 }
 

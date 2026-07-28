@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
+import { generateDroneQuickRegisterToken } from '@/lib/settings';
 
 export interface DroneFormState {
   error?: string;
@@ -61,5 +62,13 @@ export async function toggleDroneActive(droneId: string): Promise<void> {
   if (!drone) return;
 
   await prisma.drone.update({ where: { id: droneId }, data: { isActive: !drone.isActive } });
+  revalidatePath('/admin/drohnen');
+}
+
+export async function regenerateQuickRegisterLink(): Promise<void> {
+  const user = await requireUser();
+  assertPermission(isSiteAdmin(user));
+
+  await generateDroneQuickRegisterToken();
   revalidatePath('/admin/drohnen');
 }

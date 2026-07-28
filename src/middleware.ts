@@ -9,6 +9,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/aktivieren',
   '/passwort-vergessen',
   '/passwort-zuruecksetzen',
+  '/drohnen-schnell',
 ];
 
 export default auth((req) => {
