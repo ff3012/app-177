@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { savePushSubscription, deletePushSubscription } from '@/app/(app)/profile/push-actions';
 
-// Uint8Array.from(...) infers a Uint8Array<ArrayBufferLike>, which TS's DOM types no longer accept
-// for PushManager.subscribe's applicationServerKey (it wants a real ArrayBuffer-backed view) -
-// constructing via `new Uint8Array(length)` instead keeps the backing buffer a concrete ArrayBuffer.
+// Uint8Array.from(...) infers a Uint8Array<ArrayBufferLike>, which the DOM types no longer accept
+// for PushManager.subscribe's applicationServerKey. Build via `new Uint8Array(length)` instead so
+// the backing buffer stays a concrete ArrayBuffer.
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -18,22 +18,22 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
-export function PushNotificationsToggle({ vapidPublicKey }: { vapidPublicKey: string | null }) {
-  const [supported, setSupported] = useState(false);
-  const [enabled, setEnabled] = useState(false);
+interface PushNotificationsToggleProps {
+  vapidPublicKey: string | null;
+  supported: boolean;
+  enabled: boolean;
+  onEnabledChange: (enabled: boolean) => void;
+}
+
+/** Kontrolliert von ProfileMenu (das den Status auch für das Glocken-Icon in der Kopfzeile braucht). */
+export function PushNotificationsToggle({
+  vapidPublicKey,
+  supported,
+  enabled,
+  onEnabledChange,
+}: PushNotificationsToggleProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-      return;
-    }
-    setSupported(true);
-    navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => setEnabled(Boolean(subscription)))
-      .catch(() => {});
-  }, []);
 
   async function handleToggle(next: boolean) {
     setError(undefined);
@@ -61,14 +61,14 @@ export function PushNotificationsToggle({ vapidPublicKey }: { vapidPublicKey: st
           throw new Error('Unvollständige Push-Subscription vom Browser erhalten.');
         }
         await savePushSubscription({ endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } });
-        setEnabled(true);
+        onEnabledChange(true);
       } else {
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
           await deletePushSubscription(subscription.endpoint);
           await subscription.unsubscribe();
         }
-        setEnabled(false);
+        onEnabledChange(false);
       }
     } catch (err) {
       console.error('Push-Benachrichtigungen konnten nicht geändert werden:', err);
