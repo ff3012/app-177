@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { getDroneFlightNotificationEmail } from '@/lib/settings';
+import { AdminNav } from '@/components/layout/admin-nav';
 import { TestMailjetForm } from './test-mailjet-form';
 import { DroneFlightEmailForm } from './drone-flight-email-form';
 
@@ -16,15 +16,8 @@ export default async function EmailVerwaltungPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold text-neutral-900">E-Mail</h1>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <Link href="/admin/benutzer" className="text-brand hover:underline">
-            Zur Benutzerverwaltung
-          </Link>
-          <Link href="/admin/drohnen" className="text-brand hover:underline">
-            Drohnen verwalten
-          </Link>
-        </div>
+        <h1 className="mb-3 text-lg font-semibold text-neutral-900">Verwaltung</h1>
+        <AdminNav />
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm">

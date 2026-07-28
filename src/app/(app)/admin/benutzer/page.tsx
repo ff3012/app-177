@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { MembershipRole } from '@prisma/client';
+import { AdminNav } from '@/components/layout/admin-nav';
 
 export default async function BenutzerverwaltungPage() {
   const user = await requireUser();
@@ -21,24 +22,17 @@ export default async function BenutzerverwaltungPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-neutral-900">Benutzerverwaltung</h1>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/admin/drohnen" className="text-sm text-brand hover:underline">
-              Drohnen verwalten
-            </Link>
-            <Link href="/admin/email" className="text-sm text-brand hover:underline">
-              E-Mail
-            </Link>
-          </div>
+      <div>
+        <h1 className="mb-3 text-lg font-semibold text-neutral-900">Verwaltung</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <AdminNav />
+          <Link
+            href="/admin/benutzer/neu"
+            className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+          >
+            Neuer Benutzer
+          </Link>
         </div>
-        <Link
-          href="/admin/benutzer/neu"
-          className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark self-start sm:self-auto"
-        >
-          Neuer Benutzer
-        </Link>
       </div>
 
       <div className="overflow-x-auto rounded-lg bg-white shadow-sm">

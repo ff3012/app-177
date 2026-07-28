@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { getDroneQuickRegisterToken } from '@/lib/settings';
+import { AdminNav } from '@/components/layout/admin-nav';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
 import { toggleDroneActive, regenerateQuickRegisterLink } from './actions';
@@ -26,15 +26,8 @@ export default async function DrohnenVerwaltungPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold text-neutral-900">Drohnen verwalten</h1>
-        <div className="flex flex-wrap gap-4">
-          <Link href="/admin/benutzer" className="text-sm text-brand hover:underline">
-            Zur Benutzerverwaltung
-          </Link>
-          <Link href="/admin/email" className="text-sm text-brand hover:underline">
-            E-Mail
-          </Link>
-        </div>
+        <h1 className="mb-3 text-lg font-semibold text-neutral-900">Verwaltung</h1>
+        <AdminNav />
       </div>
 
       <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
