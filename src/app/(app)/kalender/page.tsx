@@ -43,6 +43,7 @@ export default async function KalenderPage() {
         description: event.description ?? undefined,
         location: event.location ?? undefined,
         organizationName: event.organization.shortName ?? event.organization.name,
+        category: event.category,
         layer,
       };
     });

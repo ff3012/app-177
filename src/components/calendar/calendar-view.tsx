@@ -20,6 +20,7 @@ export interface CalendarEventInput {
   description?: string;
   location?: string;
   organizationName?: string;
+  category?: string;
   layer?: string;
 }
 
