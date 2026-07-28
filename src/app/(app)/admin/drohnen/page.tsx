@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { getDroneQuickRegisterToken } from '@/lib/settings';
 import { AdminNav } from '@/components/layout/admin-nav';
+import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
 import { toggleDroneActive, regenerateQuickRegisterLink } from './actions';
@@ -74,9 +75,12 @@ export default async function DrohnenVerwaltungPage() {
         </p>
 
         {quickRegisterLink && (
-          <p className="mb-3 break-all rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800">
-            {quickRegisterLink}
-          </p>
+          <div className="mb-3 flex items-start gap-2">
+            <p className="flex-1 break-all rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800">
+              {quickRegisterLink}
+            </p>
+            <CopyLinkButton text={quickRegisterLink} />
+          </div>
         )}
 
         <form action={regenerateQuickRegisterLink}>
