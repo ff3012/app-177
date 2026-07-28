@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Nav user={user} />
           </div>
           <div className="flex items-center gap-3 text-sm text-neutral-600">
-            <img src="/wappen-afkdo.png" alt="Wappen AFKDO Purkersdorf" className="h-10 w-auto" />
+            <img src="/wappen-afkdo.png" alt="Wappen AFKDO Purkersdorf" className="h-8 w-auto sm:h-10" />
             <ProfileMenu
               name={user.name}
               email={user.email}

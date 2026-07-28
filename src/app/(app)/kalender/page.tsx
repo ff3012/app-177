@@ -39,7 +39,7 @@ export default async function EigeneKalenderPage() {
         <h1 className="text-lg font-semibold text-neutral-900">
           Termine – {organization.shortName ?? organization.name}
         </h1>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
           <a href={`/kalender/ics/${organization.icsToken}`} className="text-brand hover:underline">
             Kalender abonnieren (.ics)
           </a>

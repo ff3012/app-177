@@ -86,7 +86,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
         <input {...register('location')} className="rounded border border-neutral-300 px-3 py-2" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Start</label>
           <input type="datetime-local" {...register('startsAt')} className="rounded border border-neutral-300 px-3 py-2" />

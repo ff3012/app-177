@@ -17,21 +17,21 @@ export default async function DrohnenPage() {
 
   const seeAll = canViewAllFlights(user);
   const flights = await prisma.droneFlight.findMany({
-    where: seeAll ? {} : { registeredById: user.id },
+    where: seeAll ? {} : { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] },
     include: { drone: true, registeredBy: true, pilotUser: true },
     orderBy: { startsAt: 'desc' },
   });
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold text-neutral-900">Flugbuch Drohnengruppe</h1>
           <p className="text-sm text-neutral-500">
-            {seeAll ? 'Alle Einträge (Admin-Ansicht).' : 'Nur deine eigenen Einträge.'}
+            {seeAll ? 'Alle Einträge (Admin-Ansicht).' : 'Deine eigenen Einträge sowie Flüge, bei denen du Pilot bist.'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {seeAll && (
             <Link
               href="/drohnen/90-tage"

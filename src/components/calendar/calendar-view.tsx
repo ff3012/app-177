@@ -43,16 +43,18 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
   }
 
   return (
-    <div className="rounded-lg bg-white p-3 shadow-sm">
-      <FullCalendar
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        locale={deLocale}
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
-        height="auto"
-        events={events.map((event) => ({ ...event, extendedProps: { editable: event.editable } }))}
-        eventClick={handleEventClick}
-      />
+    <div className="rounded-lg bg-white p-2 shadow-sm sm:p-3">
+      <div className="overflow-x-auto">
+        <FullCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          locale={deLocale}
+          headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
+          height="auto"
+          events={events.map((event) => ({ ...event, extendedProps: { editable: event.editable } }))}
+          eventClick={handleEventClick}
+        />
+      </div>
 
       {viewEvent && (
         <div

@@ -18,7 +18,7 @@ export default async function DrohnenVerwaltungPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold text-neutral-900">Drohnen verwalten</h1>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <Link href="/admin/benutzer" className="text-sm text-brand hover:underline">
             Zur Benutzerverwaltung
           </Link>

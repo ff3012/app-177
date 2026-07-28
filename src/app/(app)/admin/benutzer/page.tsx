@@ -21,10 +21,10 @@ export default async function BenutzerverwaltungPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold text-neutral-900">Benutzerverwaltung</h1>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <Link href="/admin/drohnen" className="text-sm text-brand hover:underline">
               Drohnen verwalten
             </Link>
@@ -33,7 +33,10 @@ export default async function BenutzerverwaltungPage() {
             </Link>
           </div>
         </div>
-        <Link href="/admin/benutzer/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
+        <Link
+          href="/admin/benutzer/neu"
+          className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark self-start sm:self-auto"
+        >
           Neuer Benutzer
         </Link>
       </div>

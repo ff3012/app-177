@@ -36,7 +36,7 @@ export default async function AbschnittKalenderPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-neutral-900">Abschnitt-Kalender (Abschnitt-weite Termine)</h1>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
           {combinedIcsToken && (
             <a href={`/kalender/ics/${combinedIcsToken}`} className="text-brand hover:underline">
               Abschnitt-Kalender abonnieren (.ics)

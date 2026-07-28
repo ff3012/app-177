@@ -11,3 +11,26 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* FullCalendar: on narrow screens the default toolbar (prev/next/today, title,
+   month/week switcher) crowds into one row. Stack it so every part stays usable.
+   !important because FullCalendar injects its own stylesheet at runtime, which can
+   land after this one in the cascade regardless of source order. */
+@media (max-width: 640px) {
+  .fc .fc-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+  .fc .fc-toolbar-chunk {
+    display: flex !important;
+    justify-content: center !important;
+  }
+  .fc .fc-toolbar-title {
+    font-size: 1.05rem !important;
+  }
+  .fc .fc-button {
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.8rem !important;
+  }
+}
