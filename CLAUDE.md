@@ -225,7 +225,21 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   `sendActivationEmail` and instead renders the activation link on the same page (with a copy button) for
   the admin to hand over manually; there's no way today to retrieve that link again afterward if the admin
   navigates away without copying it (the admin-triggered password-reset email is a separate, unrelated flow
-  for existing users, not a way to recover this).
+  for existing users, not a way to recover this). `User.stbNr`/`User.phone` (Standesbuchnummer, E.164 phone)
+  are plain optional fields with no DB-level uniqueness — `phone` is only format-validated
+  (`E164_PHONE_REGEX` in `lib/validation/user.schema.ts`), and the create form pre-fills `+43` as a starting
+  point (edit mode leaves it untouched).
+- **Excel export/import** (`/admin/benutzer/export`, `/admin/benutzer/import`): both read/write the same
+  column set from `lib/admin/user-excel-columns.ts` (`USER_EXCEL_COLUMNS`) — the export is deliberately also
+  the import template (same header names), so re-uploading an unmodified export works without edits. Export
+  includes active *and* deactivated users (no `isActive` filter) and extra columns (Admin für, Drohnengruppe,
+  Status) that the import ignores (`USER_IMPORT_COLUMN_KEYS` is the subset it actually reads). Import matches
+  existing users by **StbNr + Heimat-Feuerwehr** (not email) to decide what's a duplicate to skip vs. a new
+  row to create; header names are resolved from row 1 rather than assumed to be in a fixed column order.
+  Rows are processed independently (one bad row records an error message and moves on, doesn't abort the
+  batch) and always attempt the activation email for newly created users — there's no "skip email" option
+  here like the single-user form has, since bulk-importing without giving people a way to set a password
+  would leave the imported accounts unusable.
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,

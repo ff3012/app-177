@@ -46,6 +46,8 @@ export default async function BenutzerBearbeitenPage({ params }: { params: Promi
           firstName: targetUser.firstName,
           lastName: targetUser.lastName,
           email: targetUser.email,
+          stbNr: targetUser.stbNr ?? '',
+          phone: targetUser.phone ?? '',
           isActive: targetUser.isActive,
           homeOrganizationId: targetUser.homeOrganizationId,
           adminOrgIds: targetUser.memberships.map((m) => m.organizationId),

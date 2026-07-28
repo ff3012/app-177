@@ -70,6 +70,8 @@ model User {
   passwordHash       String
   firstName          String
   lastName           String
+  stbNr              String?
+  phone              String?
   isActive           Boolean  @default(true)
   homeOrganizationId String
   createdAt          DateTime @default(now())

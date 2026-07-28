@@ -7,17 +7,21 @@ export interface UserRow {
   id: string;
   name: string;
   email: string;
+  stbNr: string;
+  phone: string;
   homeOrg: string;
   adminFor: string;
   droneLabel: string;
   statusLabel: string;
 }
 
-type SortKey = 'name' | 'email' | 'homeOrg' | 'adminFor' | 'droneLabel' | 'statusLabel';
+type SortKey = 'name' | 'email' | 'stbNr' | 'phone' | 'homeOrg' | 'adminFor' | 'droneLabel' | 'statusLabel';
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'email', label: 'E-Mail' },
+  { key: 'stbNr', label: 'StbNr' },
+  { key: 'phone', label: 'Telefonnummer' },
   { key: 'homeOrg', label: 'Heimat-Feuerwehr' },
   { key: 'adminFor', label: 'Admin für' },
   { key: 'droneLabel', label: 'Drohnengruppe' },
@@ -33,7 +37,7 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
     const q = query.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) =>
-      [u.name, u.email, u.homeOrg, u.adminFor, u.droneLabel, u.statusLabel].some((field) =>
+      [u.name, u.email, u.stbNr, u.phone, u.homeOrg, u.adminFor, u.droneLabel, u.statusLabel].some((field) =>
         field.toLowerCase().includes(q),
       ),
     );
@@ -67,12 +71,26 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
           placeholder="Benutzer suchen…"
           className="w-full rounded border border-neutral-300 px-3 py-1.5 text-sm sm:max-w-xs"
         />
-        <Link
-          href="/admin/benutzer/neu"
-          className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark sm:self-auto"
-        >
-          Neuer Benutzer
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href="/admin/benutzer/export"
+            className="rounded border border-neutral-300 px-3 py-1.5 font-medium text-neutral-700 hover:bg-neutral-100"
+          >
+            Excel Export
+          </a>
+          <Link
+            href="/admin/benutzer/import"
+            className="rounded border border-neutral-300 px-3 py-1.5 font-medium text-neutral-700 hover:bg-neutral-100"
+          >
+            Excel Import
+          </Link>
+          <Link
+            href="/admin/benutzer/neu"
+            className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+          >
+            Neuer Benutzer
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
@@ -102,6 +120,8 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
               <tr key={u.id} className="border-b border-neutral-100">
                 <td className="px-4 py-2">{u.name}</td>
                 <td className="px-4 py-2">{u.email}</td>
+                <td className="px-4 py-2">{u.stbNr || '–'}</td>
+                <td className="px-4 py-2">{u.phone || '–'}</td>
                 <td className="px-4 py-2">{u.homeOrg}</td>
                 <td className="px-4 py-2">{u.adminFor}</td>
                 <td className="px-4 py-2">{u.droneLabel}</td>
@@ -115,7 +135,7 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
+                <td colSpan={9} className="px-4 py-6 text-center text-neutral-500">
                   Keine Benutzer gefunden.
                 </td>
               </tr>

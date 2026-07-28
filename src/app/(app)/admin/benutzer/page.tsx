@@ -24,6 +24,8 @@ export default async function BenutzerverwaltungPage() {
     id: u.id,
     name: `${u.firstName} ${u.lastName}`,
     email: u.email,
+    stbNr: u.stbNr ?? '',
+    phone: u.phone ?? '',
     homeOrg: u.homeOrganization.shortName ?? u.homeOrganization.name,
     adminFor: u.memberships.map((m) => m.organization.shortName ?? m.organization.name).join(', ') || '–',
     droneLabel: u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '–',

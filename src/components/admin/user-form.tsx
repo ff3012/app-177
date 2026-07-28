@@ -41,6 +41,8 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, mo
       firstName: '',
       lastName: '',
       email: '',
+      stbNr: '',
+      phone: mode === 'create' ? '+43' : '',
       isActive: mode === 'create' ? false : true,
       homeOrganizationId: organizations[0]?.id ?? '',
       adminOrgIds: [],
@@ -58,6 +60,8 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, mo
     formData.set('firstName', values.firstName);
     formData.set('lastName', values.lastName);
     formData.set('email', values.email);
+    formData.set('stbNr', values.stbNr ?? '');
+    formData.set('phone', values.phone ?? '');
     if (values.isActive) formData.set('isActive', 'on');
     formData.set('homeOrganizationId', values.homeOrganizationId);
     for (const orgId of values.adminOrgIds) {
@@ -129,6 +133,20 @@ export function UserForm({ organizations, defaultValues, action, submitLabel, mo
         <label className="text-sm font-medium text-neutral-700">E-Mail</label>
         <input type="email" {...register('email')} className="rounded border border-neutral-300 px-3 py-2" />
         {errors.email && <p className="text-sm text-red-700">{errors.email.message}</p>}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Standesbuchnummer (StbNr)</label>
+          <input {...register('stbNr')} className="rounded border border-neutral-300 px-3 py-2" />
+          {errors.stbNr && <p className="text-sm text-red-700">{errors.stbNr.message}</p>}
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Telefonnummer</label>
+          <input {...register('phone')} placeholder="+436601234567" className="rounded border border-neutral-300 px-3 py-2" />
+          <p className="text-xs text-neutral-500">E.164-Format, z. B. +436601234567.</p>
+          {errors.phone && <p className="text-sm text-red-700">{errors.phone.message}</p>}
+        </div>
       </div>
 
       {mode === 'create' ? (
