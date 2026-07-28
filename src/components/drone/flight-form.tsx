@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { flightSchema, type FlightInput } from '@/lib/validation/flight.schema';
+import { DateTime15MinInput } from '@/components/ui/datetime-15min-input';
 import type { FlightFormState } from '@/app/(app)/drohnen/actions';
 
 interface DroneOption {
@@ -32,6 +33,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<FlightInput>({
@@ -66,11 +68,10 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
     <form onSubmit={handleSubmit(onSubmit)} className="flex max-w-lg flex-col gap-4">
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Datum/Uhrzeit</label>
-        <input
-          type="datetime-local"
-          step={900}
-          {...register('startsAt')}
-          className="rounded border border-neutral-300 px-3 py-2"
+        <Controller
+          control={control}
+          name="startsAt"
+          render={({ field }) => <DateTime15MinInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />}
         />
         {errors.startsAt && <p className="text-sm text-red-700">{errors.startsAt.message}</p>}
       </div>

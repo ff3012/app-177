@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { EVENT_CATEGORIES, eventSchema, type EventInput } from '@/lib/validation/event.schema';
+import { DateTime15MinInput } from '@/components/ui/datetime-15min-input';
 import type { EventFormState } from '@/app/(app)/kalender/actions';
 
 interface OrganizationOption {
@@ -27,6 +28,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
 
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -52,6 +54,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
   const selectedOrg = organizations.find((org) => org.id === selectedOrgId);
   const showSectionWideOption = canSectionWide && selectedOrg?.type === 'ABSCHNITTSKOMMANDO';
   const category = watch('category');
+  const startsAt = watch('startsAt');
 
   // Drohnengruppe-Termine sind gruppenübergreifend gedacht, daher beim Auswählen automatisch
   // als Abschnitt-weit vorbelegen (Benutzer kann es danach weiterhin manuell abwählen).
@@ -60,6 +63,19 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
       setValue('isSectionWide', true);
     }
   }, [category, setValue]);
+
+  // Ende übernimmt bei jeder Änderung von Start automatisch dessen Datum (Uhrzeit von Ende
+  // bleibt unangetastet, falls bereits gesetzt).
+  useEffect(() => {
+    if (!startsAt || !startsAt.includes('T')) return;
+    const [startDate, startTime] = startsAt.split('T');
+    const currentEnd = getValues('endsAt');
+    const endTime = currentEnd && currentEnd.includes('T') ? currentEnd.split('T')[1] : startTime;
+    const newEnd = `${startDate}T${endTime}`;
+    if (newEnd !== currentEnd) {
+      setValue('endsAt', newEnd);
+    }
+  }, [startsAt, getValues, setValue]);
 
   function onSubmit(values: EventInput) {
     const formData = new FormData();
@@ -100,30 +116,19 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Start</label>
-          <input
-            type="datetime-local"
-            step={900}
-            {...register('startsAt', {
-              onChange: (event) => {
-                const value = event.target.value;
-                if (!value || !value.includes('T')) return;
-                const [datePart] = value.split('T');
-                const currentEnd = getValues('endsAt');
-                const endTimePart = currentEnd && currentEnd.includes('T') ? currentEnd.split('T')[1] : value.split('T')[1];
-                setValue('endsAt', `${datePart}T${endTimePart}`);
-              },
-            })}
-            className="rounded border border-neutral-300 px-3 py-2"
+          <Controller
+            control={control}
+            name="startsAt"
+            render={({ field }) => <DateTime15MinInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />}
           />
           {errors.startsAt && <p className="text-sm text-red-700">{errors.startsAt.message}</p>}
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Ende</label>
-          <input
-            type="datetime-local"
-            step={900}
-            {...register('endsAt')}
-            className="rounded border border-neutral-300 px-3 py-2"
+          <Controller
+            control={control}
+            name="endsAt"
+            render={({ field }) => <DateTime15MinInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />}
           />
           {errors.endsAt && <p className="text-sm text-red-700">{errors.endsAt.message}</p>}
         </div>
