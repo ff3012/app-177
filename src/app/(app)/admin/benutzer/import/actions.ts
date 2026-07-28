@@ -19,7 +19,12 @@ export interface ImportUsersState {
     created: number;
     skipped: number;
     errors: string[];
+    activationLinks: { name: string; email: string; link: string }[];
   };
+}
+
+function baseUrl(): string {
+  return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
 }
 
 export async function importUsers(_prevState: ImportUsersState, formData: FormData): Promise<ImportUsersState> {
@@ -30,6 +35,8 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
   if (!(file instanceof File) || file.size === 0) {
     return { error: 'Bitte eine Excel-Datei auswählen.' };
   }
+
+  const sendWelcomeEmail = formData.get('sendWelcomeEmail') !== 'nein';
 
   const workbook = new ExcelJS.Workbook();
   try {
@@ -71,6 +78,7 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
   });
 
   const errors: string[] = [];
+  const activationLinks: { name: string; email: string; link: string }[] = [];
   let created = 0;
   let skipped = 0;
 
@@ -141,12 +149,19 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
       existingUsers.push({ email: newUser.email, stbNr: newUser.stbNr, homeOrganizationId: newUser.homeOrganizationId });
       created++;
 
-      try {
-        const token = await createToken(newUser.id, TokenPurpose.ACTIVATION);
-        await sendActivationEmail(newUser, token);
-      } catch (emailError) {
-        console.error(`Aktivierungs-E-Mail für Zeile ${rowNumber} fehlgeschlagen:`, emailError);
-        errors.push(`Zeile ${rowNumber}: Benutzer angelegt, aber Aktivierungs-E-Mail konnte nicht gesendet werden.`);
+      const token = await createToken(newUser.id, TokenPurpose.ACTIVATION);
+
+      if (!sendWelcomeEmail) {
+        // Kein Mail-Versand gewünscht: Aktivierungslink stattdessen sammeln und im Ergebnis zum
+        // manuellen Weitergeben anzeigen (analog zum Einzel-Anlegen-Formular).
+        activationLinks.push({ name: `${firstName} ${lastName}`, email, link: `${baseUrl()}/aktivieren/${token}` });
+      } else {
+        try {
+          await sendActivationEmail(newUser, token);
+        } catch (emailError) {
+          console.error(`Aktivierungs-E-Mail für Zeile ${rowNumber} fehlgeschlagen:`, emailError);
+          errors.push(`Zeile ${rowNumber}: Benutzer angelegt, aber Aktivierungs-E-Mail konnte nicht gesendet werden.`);
+        }
       }
     } catch (error) {
       console.error(`Import Zeile ${rowNumber} fehlgeschlagen:`, error);
@@ -155,5 +170,5 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
   }
 
   revalidatePath('/admin/benutzer');
-  return { result: { created, skipped, errors } };
+  return { result: { created, skipped, errors, activationLinks } };
 }

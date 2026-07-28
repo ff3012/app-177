@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import Link from 'next/link';
 import { importUsers, type ImportUsersState } from './actions';
+import { CopyLinkButton } from '@/components/ui/copy-link-button';
 
 const initialState: ImportUsersState = {};
 
@@ -28,6 +29,18 @@ export function ImportUsersForm() {
             </a>{' '}
             als Vorlage. Bereits vorhandene Benutzer (gleiche StbNr + Heimat-Feuerwehr) werden übersprungen.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Willkommen-E-Mail senden</label>
+          <select
+            name="sendWelcomeEmail"
+            defaultValue="ja"
+            className="rounded border border-neutral-300 px-3 py-2"
+          >
+            <option value="ja">Ja – jeder neu angelegte Benutzer erhält eine Aktivierungs-E-Mail</option>
+            <option value="nein">Nein – Aktivierungslinks werden stattdessen hier angezeigt</option>
+          </select>
         </div>
 
         {state.error && <p className="text-sm text-red-700">{state.error}</p>}
@@ -58,6 +71,25 @@ export function ImportUsersForm() {
                 <li key={message}>{message}</li>
               ))}
             </ul>
+          )}
+
+          {state.result.activationLinks.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="font-medium text-neutral-900">
+                Aktivierungslinks zum manuellen Weitergeben (7 Tage gültig, einmalig verwendbar):
+              </p>
+              {state.result.activationLinks.map((entry) => (
+                <div key={entry.email} className="flex items-start gap-2">
+                  <div className="flex-1 rounded border border-neutral-200 bg-white px-3 py-2">
+                    <p className="font-medium text-neutral-800">
+                      {entry.name} <span className="font-normal text-neutral-500">({entry.email})</span>
+                    </p>
+                    <p className="break-all text-neutral-600">{entry.link}</p>
+                  </div>
+                  <CopyLinkButton text={entry.link} />
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

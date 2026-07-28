@@ -237,9 +237,11 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   existing users by **StbNr + Heimat-Feuerwehr** (not email) to decide what's a duplicate to skip vs. a new
   row to create; header names are resolved from row 1 rather than assumed to be in a fixed column order.
   Rows are processed independently (one bad row records an error message and moves on, doesn't abort the
-  batch) and always attempt the activation email for newly created users — there's no "skip email" option
-  here like the single-user form has, since bulk-importing without giving people a way to set a password
-  would leave the imported accounts unusable.
+  batch). A single "Willkommen-E-Mail senden" Ja/Nein select applies to the whole batch (default Ja) —
+  when Nein, `importUsers` still creates every user and its `PasswordToken` as normal but skips
+  `sendActivationEmail` and instead collects `{name, email, link}` per created user, returned to the client
+  and rendered as a list of activation links with copy buttons (same `CopyLinkButton`/link-expiry pattern as
+  the single-user form's own Nein path) — there's no per-row toggle, only one setting for the entire upload.
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,
