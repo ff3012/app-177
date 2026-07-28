@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="bg-[#333333] text-white">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
-            <span className="text-sm font-semibold text-white">FF Abschnitt Purkersdorf</span>
+            <span className="text-sm font-semibold text-white">AFKDO Purkersdorf</span>
             <Nav user={user} />
           </div>
           <div className="flex items-center gap-3 text-sm text-neutral-200">
