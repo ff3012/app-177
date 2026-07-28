@@ -6,8 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A member-facing web app for the Freiwillige Feuerwehr Abschnitt Purkersdorf (Austria): 9 Feuerwehren + 1
 Abschnittsfeuerwehrkommando (AFKDO), ~200 users. Two modules: **Kalender** (per-org + Abschnitt-wide event
-calendar with .ics export) and **Drohnengruppe** (drone flight log). All UI copy and commit-adjacent docs are
-German; code identifiers are a German/English mix (keep matching the existing convention in a given file).
+calendar with .ics export, calendar-grid or list view) and **Drohnengruppe** (drone flight log, including a
+QR-code quick-registration flow — see below). Installable as a PWA (manifest + minimal service worker) so it
+can be added to an iOS/Android home screen without an app-store build. All UI copy and commit-adjacent docs
+are German; code identifiers are a German/English mix (keep matching the existing convention in a given file).
 
 ## Commands
 
@@ -56,6 +58,11 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
   this group, so individual pages don't need their own "am I logged in" check — but they still need their
   own **authorization** check (see Permissions below), since the layout only proves you're logged in, not
   that you're allowed to see that particular page/action.
+- `src/app/drohnen-schnell/[token]/*` — a **third**, top-level route outside both groups, on purpose: it's a
+  fully public, session-less page (see QR quick-registration below) and must render with neither the
+  `(app)` header/nav chrome nor its `requireUser()` gate. Nesting it under `(app)/drohnen/...` would have
+  inherited that gate since layouts apply by directory nesting, not by URL. Follow the same pattern (new
+  top-level segment + `PUBLIC_PATH_PREFIXES` entry) for any future no-login, capability-URL page.
 - `src/middleware.ts` runs on the **Node.js runtime** (`export const config = { runtime: 'nodejs' }`), not
   the default Edge runtime — required because its `auth()` call triggers the same DB-backed permission
   refresh as everywhere else (see Session model below), and Prisma cannot run on Edge. Don't move this back
@@ -109,6 +116,10 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
 - `DroneFlight` has two separate `User` relations: `registeredBy` (who logged the entry — controls edit
   rights) and `pilotUser` (who actually flew — a dropdown of current Drohnengruppe members in the form, not
   free text). Don't conflate the two; "can I edit this flight" is based on `registeredBy`, not `pilotUser`.
+- `AppSettings` is a singleton table (always exactly one row, `id = "singleton"`, upserted — never
+  `create`d directly) for admin-configurable values that don't warrant their own table:
+  `droneFlightNotificationEmail` and `droneQuickRegisterToken`. Read/write it only through
+  `src/lib/settings.ts`, not raw Prisma calls at the call site.
 - Migrations are committed SQL under `prisma/migrations/`, applied automatically by
   `docker/entrypoint.sh` via `prisma migrate deploy` on every container start. Generate new ones with
   `npm run db:migrate` after editing `schema.prisma`; don't hand-edit already-committed migration files.
@@ -117,11 +128,14 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
 
 `src/app/(app)/kalender/page.tsx` is the single calendar page (an earlier separate `/kalender/abschnitt` page
 was merged in and now just redirects here). It fetches every event the user is allowed to see, tags each
-with a `layer` (`own` / `abschnitt` / `drohnengruppe`), and hands them to
+with a `layer` (`own` / `abschnitt` / `drohnengruppe`) and a `category`, and hands them to
 `components/calendar/kalender-with-layers.tsx`, a client component that renders one `ToggleSwitch` per layer
-(default: all on) and filters client-side before handing the remainder to `CalendarView` (FullCalendar
-wrapper). Adding a new layer means: extend the `layer` tagging logic in the page, add it to the `layers`
-array passed down, and pick a `backgroundColor` for it.
+(default: all on), filters client-side, and then renders either `CalendarView` (FullCalendar grid) or
+`EventListView` (plain sortable-by-date table: Datum/Uhrzeit/Tag/Betreff/Organisation/Kategorie) depending on
+a `viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new layer
+means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and pick a
+`backgroundColor` for it; both `CalendarEventInput` consumers (grid + list) read the same event shape, so add
+new fields there once.
 
 ### Drohnengruppe module
 
@@ -131,9 +145,71 @@ Drohnengruppe only). `src/lib/drone/members.ts` (`listDrohnengruppeMembers`) is 
 "who can be picked as a pilot" — reused by the flight form, the 90-day report, and nowhere else; keep it that
 way rather than duplicating the `where: { droneMembership: { isNot: null } }` filter.
 
+- **90-day/3-flight rule**: constants and the shared cutoff/predicate helpers live in
+  `src/lib/drone/ninety-day-rule.ts` (`NINETY_DAY_REQUIRED_FLIGHTS`, `NINETY_DAY_WINDOW_DAYS`,
+  `getNinetyDayCutoff()`, `meetsNinetyDayRule()`) — both the Admin-only `/drohnen/90-tage` report (all
+  members) and the green/red badge every member sees for *themselves* next to "Flug registrieren" on
+  `/drohnen` read from here, so the rule can never drift between the two views.
+- **Flight-created email notification**: `src/lib/drone/notify-flight-created.ts` is the single place that
+  builds and sends the "neuer Drohnenflug" email (reads the recipient from `AppSettings` via
+  `getDroneFlightNotificationEmail()`, no-ops if unset, swallows send errors so a Mailjet outage never blocks
+  saving a flight). Called from both `createFlight` (normal form) and the QR quick-register action below —
+  don't duplicate the email-building logic at either call site again.
+- **QR-code quick registration** (`src/app/drohnen-schnell/[token]/*`): a fully public, no-login page meant
+  to be printed as a QR code so a pilot can log a flight on their phone without signing in. Gated purely by
+  a bearer token stored in `AppSettings.droneQuickRegisterToken` (generated/rotated from `/admin/drohnen`,
+  same shape as `Organization.icsToken` — an unguessable capability URL, not a password). The server action
+  re-checks the token itself (never trusts that the page-level check ran). Flights created this way are
+  attributed to a dedicated, `isActive: false` system user (`src/lib/drone/quick-register-user.ts`,
+  lazily upserted by email `drohnen-schnellerfassung@system.local`) instead of a real session — this is what
+  makes the link create-only: that user can never log in, so nothing it "owns" can be read back or edited
+  through this path, only by an Admin Drohnengruppe via the normal UI. Don't route this flow through
+  `requireUser()`/a real login — that would reintroduce a shared-session risk the token design avoids.
+
+### Verwaltung (admin) navigation
+
+All `/admin/*` pages (`benutzer`, `drohnen`, `email`, `status`) are independently gated by `isSiteAdmin` and
+share `components/layout/admin-nav.tsx` (`AdminNav`) — four equally-styled buttons, active one highlighted,
+rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page by (1) gating it the same way,
+(2) adding one entry to `AdminNav`'s `ITEMS`, not by inventing another sub-nav pattern.
+
+- `/admin/benutzer` — `UserManagementSection` (client) owns free-text search and click-to-sort-any-column
+  over a flat `UserRow[]` the server maps the Prisma result into; don't push search/sort server-side, ~200
+  users is small enough to do it in the browser.
+- `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
+  "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
+  can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,
+  which is the practically useful signal. "Mailjet Integration" is a read-only, non-sending authenticated
+  call (`checkMailjetConnection` in `mailjet.ts`) against Mailjet's own API-key endpoint.
+
 ### Email
 
-`src/lib/email/mailjet.ts` is a thin `fetch` wrapper around Mailjet's v3.1 Send API (no SDK dependency).
-`src/lib/email/templates.ts` builds the two transactional emails (activation, password reset); `AUTH_URL` is
-the base for the links it builds. `/admin/email` has a manual "send test email" action for verifying the
-Mailjet API key/sender config without triggering a real activation or reset flow.
+`src/lib/email/mailjet.ts` is a thin `fetch` wrapper around Mailjet's v3.1 Send API (no SDK dependency), plus
+`checkMailjetConnection()` for the Status-page health check (read-only, sends nothing).
+`src/lib/email/templates.ts` builds the transactional emails (activation, password reset); `AUTH_URL` is the
+base for the links it builds. `src/lib/email/escape-html.ts` (`escapeHtml`) is used wherever free-text or
+user-controlled values (flight location, feedback message) get interpolated into an email's `htmlPart` —
+`templates.ts` itself predates this and still doesn't escape `firstName`, a known minor gap, but new email
+code should use it. `/admin/email` has a manual "send test email" action for verifying the Mailjet API
+key/sender config without triggering a real activation or reset flow, plus the `droneFlightNotificationEmail`
+setting (`AppSettings`) editable via `DroneFlightEmailForm`.
+
+An admin can also trigger the password-reset email directly for a given user from `/admin/benutzer/[userId]`
+(`sendPasswordResetEmailToUser`, reuses the same `createToken`/`sendPasswordResetEmail` as the self-service
+"Passwort vergessen" flow) — this exists *alongside*, not instead of, the manual "Neues Passwort (optional)"
+override already on that form; keep both.
+
+The "Feedback geben" panel in the profile menu (`components/layout/feedback-form.tsx` +
+`app/(app)/profile/actions.ts`'s `sendFeedback`) is a 5-star-rating + free-text form that emails a hardcoded
+recipient (`florian.krebs@feuerwehr.gv.at`) via the same `sendEmail()` — not admin-configurable like the
+drone-flight notification address, by design (it's feedback about the app itself, not an operational setting).
+
+### PWA
+
+`src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (cropped from `public/wappen-afkdo.png`
+via a one-off PowerShell/System.Drawing script, not checked in) + `public/sw.js` (hand-written, no
+`next-pwa`/similar dependency — deliberately minimal: caches only the app shell/offline fallback, does
+network-first with an offline-page fallback for GET navigations, and explicitly leaves all POSTs/Server
+Actions/API calls untouched so nothing dynamic ever gets stale-cached) + `components/pwa-register.tsx`
+(client-side `navigator.serviceWorker.register()`, best-effort). If you regenerate the icons, keep the same
+sizes referenced in `manifest.ts`/`layout.tsx` metadata (16/32/180/192/512).
