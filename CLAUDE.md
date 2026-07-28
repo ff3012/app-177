@@ -5,11 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A member-facing web app for the Freiwillige Feuerwehr Abschnitt Purkersdorf (Austria): 9 Feuerwehren + 1
-Abschnittsfeuerwehrkommando (AFKDO), ~200 users. Two modules: **Kalender** (per-org + Abschnitt-wide event
-calendar with .ics export, calendar-grid or list view) and **Drohnengruppe** (drone flight log, including a
-QR-code quick-registration flow — see below). Installable as a PWA (manifest + minimal service worker) so it
-can be added to an iOS/Android home screen without an app-store build. All UI copy and commit-adjacent docs
-are German; code identifiers are a German/English mix (keep matching the existing convention in a given file).
+Abschnittsfeuerwehrkommando (AFKDO), ~200 users. Three modules: **Kalender** (per-org + Abschnitt-wide event
+calendar with .ics export, calendar-grid or list view), **Drohnengruppe** (drone flight log, including a
+QR-code quick-registration flow — see below), and **News** (Web Push notifications to a Feuerwehr or the
+Drohnengruppe, sent immediately or scheduled — see below). Installable as a PWA (manifest + minimal service
+worker) so it can be added to an iOS/Android home screen without an app-store build. All UI copy and
+commit-adjacent docs are German; code identifiers are a German/English mix (keep matching the existing
+convention in a given file).
 
 ## Commands
 
@@ -43,6 +45,20 @@ migrations never need to be triggered manually in production. See `docker/README
 runtime (`migrate deploy` and one-off `db seed` calls against the running container), and the Docker build
 copies the **full** `node_modules` into the runner stage rather than cherry-picking subfolders, because
 `@prisma/config`'s transitive deps (e.g. `effect`) broke when only `prisma`/`@prisma` were copied.
+
+`docker/docker-compose.yml` lists the `app` service's environment variables **explicitly** (not
+`env_file: .env`) — adding a new variable to `.env`/`.env.example` alone does nothing; it must also be added
+to that `environment:` block or the container never sees it. This has already caused one deploy where the
+News module's `VAPID_*`/`CRON_SECRET` vars were set in `.env` but silently missing at runtime.
+
+The `app` container's `TZ` is pinned to `Europe/Vienna` in `docker-compose.yml`, and the runner image
+installs `tzdata` (Alpine doesn't ship the IANA timezone database by default, so `TZ` would otherwise be
+silently ignored). This matters because every date/time form (Kalender, Flug registrieren, News) submits a
+plain `"YYYY-MM-DDTHH:mm"` string with no UTC offset; `new Date(...)` parsing that string in a Server Action
+resolves it using the *executing process's* local timezone. Without the pinned `TZ`, that's the server OS
+(UTC), silently shifting every stored time by Vienna's UTC offset (1–2h depending on DST) — this was a real
+production bug, caught only after the News module's scheduled-send feature made the mistiming obvious. Don't
+remove or "simplify" the `TZ` env var or the `tzdata` install.
 
 ## Architecture
 
@@ -120,6 +136,9 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
   `create`d directly) for admin-configurable values that don't warrant their own table:
   `droneFlightNotificationEmail` and `droneQuickRegisterToken`. Read/write it only through
   `src/lib/settings.ts`, not raw Prisma calls at the call site.
+- `PushSubscription` (one row per browser/device, keyed by that browser's own `endpoint`) and `NewsMessage`
+  (`audienceType` ORGANIZATION/DROHNENGRUPPE + optional `audienceOrgId`, `scheduledAt`/`sentAt`) back the
+  News module — see below.
 - Migrations are committed SQL under `prisma/migrations/`, applied automatically by
   `docker/entrypoint.sh` via `prisma migrate deploy` on every container start. Generate new ones with
   `npm run db:migrate` after editing `schema.prisma`; don't hand-edit already-committed migration files.
@@ -135,7 +154,33 @@ with a `layer` (`own` / `abschnitt` / `drohnengruppe`) and a `category`, and han
 a `viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new layer
 means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and pick a
 `backgroundColor` for it; both `CalendarEventInput` consumers (grid + list) read the same event shape, so add
-new fields there once.
+new fields there once. `EventListView` rows double-click to the edit page when `event.editable` is true (no
+action for non-editable rows beyond the view-only modal `CalendarView` already shows on click).
+
+`components/calendar/event-form.tsx`: changing Start always carries its date onto Ende; Ende's *time* is only
+auto-suggested (Start + 15 minutes) while Ende has no time of its own yet — once it has one (typed or
+suggested), further Start edits only sync the date, never overwrite a chosen Ende time. Picking category
+"Drohnengruppe" auto-checks "Abschnitt-weiter Termin" (still manually uncheckable) since Drohnengruppe
+events are cross-org by nature.
+
+The .ics subscription links live in their own "ICS Kalender Import" card below the calendar (not the page
+header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. Separately,
+`src/app/(app)/kalender/[eventId]/ics/route.ts` serves a **single-event** .ics download (session-authenticated,
+same organization/category visibility check as the main Kalender query) so a real file response — not a
+`data:` URI — triggers the native "add to calendar" flow on mobile. `components/calendar/add-to-calendar-link.tsx`
+links to it from wherever an event is actually visible: the list view (icon per row), the grid view's
+event-detail popup (non-editable events only show up there), and the edit page (editable events navigate
+straight there instead, so the popup never renders for them).
+
+### Shared: 15-minute time picker
+
+`components/ui/datetime-15min-input.tsx` (a plain `<input type="date">` + a `<select>` whose only options
+are `:00`/`:15`/`:30`/`:45`) is used via react-hook-form's `Controller` everywhere a time needs to snap to
+15-minute steps: `event-form.tsx` (Kalender), `components/drone/flight-form.tsx` and the QR quick-register
+form, and `components/news/news-form.tsx`. Don't go back to `<input type="datetime-local" step={900}>` for
+this — it was tried first and doesn't work: Chrome/Edge's native picker only enforces `step` as a *validity*
+constraint, the minute dropdown in the picker UI still lists every single minute, so users could (and did)
+pick e.g. `:12`. The date+select combo makes off-step minutes impossible to select at all, not just invalid.
 
 ### Drohnengruppe module
 
@@ -175,7 +220,12 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
 
 - `/admin/benutzer` — `UserManagementSection` (client) owns free-text search and click-to-sort-any-column
   over a flat `UserRow[]` the server maps the Prisma result into; don't push search/sort server-side, ~200
-  users is small enough to do it in the browser.
+  users is small enough to do it in the browser. `/admin/benutzer/neu`'s "Willkommen-E-Mail senden" toggle
+  (default on) still creates the user + activation token either way — turning it off just skips
+  `sendActivationEmail` and instead renders the activation link on the same page (with a copy button) for
+  the admin to hand over manually; there's no way today to retrieve that link again afterward if the admin
+  navigates away without copying it (the admin-triggered password-reset email is a separate, unrelated flow
+  for existing users, not a way to recover this).
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,
@@ -218,6 +268,13 @@ infrastructure already in place:
 - **Opt-in is per-device, not per-user**: `PushSubscription` rows key off the browser's own `endpoint` (unique
   per installation), so the same person can have several active subscriptions (phone + laptop). The toggle in
   the profile menu subscribes/unsubscribes the *current* browser only.
+- **Status is visible without opening the menu**: `components/layout/profile-menu.tsx` owns the
+  `pushSupported`/`pushEnabled` state itself (not `push-notifications-toggle.tsx`) and renders a bell icon in
+  the header — green when subscribed, red otherwise/unsupported — next to the profile name, both opening the
+  same dropdown. The subscription check has to live in `ProfileMenu` because it's always mounted; the toggle
+  component only mounts while the dropdown is open, so state living there couldn't color a bell that's
+  visible before the dropdown is ever opened. `PushNotificationsToggle` is a controlled component
+  (`enabled`/`onEnabledChange` props) for this reason — don't move its state back to being self-contained.
 - **`src/lib/push/web-push-client.ts`** wraps the `web-push` package, configured from `VAPID_PUBLIC_KEY` /
   `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (generate with `node -e "console.log(require('web-push').generateVAPIDKeys())"`
   inside the running container — see `docker/README.md`). Subscriptions that come back 404/410 (revoked/expired)

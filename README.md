@@ -10,15 +10,19 @@ als PWA (Icon am Homescreen, iOS/Android) – kein App-Store-Build nötig.
 - **Drohnengruppe** – Flugbuch (Datum/Uhrzeit, Pilot, Ort, Drohne, Zweck), nur sichtbar für Mitglieder der
   Drohnengruppe. Zeigt jedem Mitglied den eigenen Status zur 90-Tage/3-Flüge-Regel; ein QR-Code-Link erlaubt
   das Registrieren eines Flugs ohne Login. Optional: E-Mail-Benachrichtigung bei neuen Flügen.
+- **News** (nur Abschnittskommando-Admin) – Push-Benachrichtigung an eine Feuerwehr oder die Drohnengruppe,
+  sofort oder terminiert. Glocken-Icon in der Kopfzeile zeigt grün/rot, ob am aktuellen Gerät Push aktiviert
+  ist; Aktivierung selbst läuft über das Profilmenü. Auf iPhone/iPad nur nutzbar, wenn die App zuvor über
+  "Zum Home-Bildschirm" installiert wurde (iOS-Einschränkung, keine App-Beschränkung).
 - **Verwaltung** (nur Abschnittskommando-Admin) – Benutzerverwaltung (Suche, sortierbare Spalten,
-  Passwort-Reset-E-Mail), Drohnengruppe (Drohnen-Liste, QR-Link), E-Mail (Mailjet-Test, Benachrichtigungsadresse),
-  Status (Server/Datenbank/Mailjet-Check).
+  Passwort-Reset-E-Mail, Willkommen-E-Mail optional abschaltbar), Drohnengruppe (Drohnen-Liste, QR-Link),
+  E-Mail (Mailjet-Test, Benachrichtigungsadresse), Status (Server/Datenbank/Mailjet-Check).
 - **Feedback** – jeder Benutzer kann über das Profilmenü eine Sterne-Bewertung + Freitext senden.
 
 ## Tech-Stack
 
 Next.js (App Router, TypeScript) · PostgreSQL + Prisma · Auth.js (E-Mail/Passwort) · Tailwind CSS · Mailjet
-(Transaktions-E-Mails)
+(Transaktions-E-Mails) · Web Push/VAPID (News-Modul)
 
 ## Lokale Entwicklung
 
@@ -37,7 +41,8 @@ Login unter [http://localhost:3000](http://localhost:3000) mit den in `.env` kon
 
 ## Deployment
 
-Siehe [docker/README.md](docker/README.md) für das Produktions-Setup (Hetzner Ubuntu Server, Docker Compose, Caddy, Backups).
+Siehe [docker/README.md](docker/README.md) für das Produktions-Setup (Hetzner Ubuntu Server, Docker Compose,
+Caddy, Backups, VAPID-Schlüssel und Cronjob für terminierte News).
 
 ## Feuerwehren im Abschnitt
 
