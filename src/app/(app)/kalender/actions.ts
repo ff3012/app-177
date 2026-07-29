@@ -61,6 +61,9 @@ export async function updateEvent(
     return { error: 'Termin wurde nicht gefunden.' };
   }
   assertPermission(canManageEventsFor(user, existing.organizationId));
+  if (existing.isSectionWide && !canCreateSectionWideEvent(user)) {
+    return { error: 'Keine Berechtigung, diesen Abschnitt-weiten Termin zu bearbeiten.' };
+  }
 
   const parsed = eventSchema.safeParse(parseEventFormData(formData));
   if (!parsed.success) {
