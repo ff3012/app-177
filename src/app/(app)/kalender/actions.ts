@@ -101,6 +101,9 @@ export async function deleteEvent(eventId: string): Promise<void> {
     redirect('/kalender');
   }
   assertPermission(canManageEventsFor(user, existing.organizationId));
+  if (existing.isSectionWide) {
+    assertPermission(canCreateSectionWideEvent(user));
+  }
 
   await prisma.event.delete({ where: { id: eventId } });
   revalidateCalendars();
