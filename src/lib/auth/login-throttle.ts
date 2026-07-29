@@ -42,13 +42,22 @@ export async function recordFailedLogin(email: string): Promise<void> {
     return;
   }
 
-  const failedCount = existing.failedCount + 1;
-  const lockedUntil = failedCount >= MAX_ATTEMPTS ? new Date(now.getTime() + LOCKOUT_MS) : null;
-
-  await prisma.loginAttempt.update({
+  // Atomares Increment auf DB-Ebene (SET failedCount = failedCount + 1) statt eines in
+  // Anwendungscode berechneten Werts - sonst könnten gleichzeitige Fehlversuche denselben Stand
+  // lesen und sich gegenseitig überschreiben (Lost-Update-Race), wodurch mehr Versuche möglich
+  // wären als MAX_ATTEMPTS erlaubt. Die Sperr-Entscheidung liest bewusst den zurückgegebenen,
+  // tatsächlichen Zählerstand nach dem Increment statt des vorherigen (potenziell veralteten) Reads.
+  const updated = await prisma.loginAttempt.update({
     where: { email },
-    data: { failedCount, lockedUntil },
+    data: { failedCount: { increment: 1 } },
   });
+
+  if (updated.failedCount >= MAX_ATTEMPTS && !updated.lockedUntil) {
+    await prisma.loginAttempt.update({
+      where: { email },
+      data: { lockedUntil: new Date(now.getTime() + LOCKOUT_MS) },
+    });
+  }
 }
 
 /** Nach erfolgreichem Login: Zähler für diese E-Mail-Adresse zurücksetzen. */
