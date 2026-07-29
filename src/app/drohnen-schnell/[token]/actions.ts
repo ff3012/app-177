@@ -5,16 +5,12 @@ import { flightSchema, parseFlightFormData } from '@/lib/validation/flight.schem
 import { getDroneQuickRegisterToken } from '@/lib/settings';
 import { getOrCreateQuickRegisterUser } from '@/lib/drone/quick-register-user';
 import { notifyDroneFlightCreated } from '@/lib/drone/notify-flight-created';
+import { isEligiblePilot, isActiveDrone } from '@/lib/drone/members';
 
 export interface QuickFlightFormState {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;
   success?: boolean;
-}
-
-async function isDrohnengruppeMemberId(userId: string): Promise<boolean> {
-  const membership = await prisma.drohnengruppeMembership.findUnique({ where: { userId } });
-  return Boolean(membership);
 }
 
 /**
@@ -39,8 +35,12 @@ export async function registerFlightViaQuickLink(
   }
   const data = parsed.data;
 
-  if (!(await isDrohnengruppeMemberId(data.pilotUserId))) {
-    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein Mitglied der Drohnengruppe.'] } };
+  if (!(await isEligiblePilot(data.pilotUserId))) {
+    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied der Drohnengruppe.'] } };
+  }
+
+  if (!(await isActiveDrone(data.droneId))) {
+    return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
   const systemUser = await getOrCreateQuickRegisterUser();

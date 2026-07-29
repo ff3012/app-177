@@ -7,15 +7,11 @@ import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageFlight, canRegisterFlight } from '@/lib/auth/permissions';
 import { flightSchema, parseFlightFormData } from '@/lib/validation/flight.schema';
 import { notifyDroneFlightCreated } from '@/lib/drone/notify-flight-created';
+import { isEligiblePilot, isActiveDrone } from '@/lib/drone/members';
 
 export interface FlightFormState {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;
-}
-
-async function isDrohnengruppeMemberId(userId: string): Promise<boolean> {
-  const membership = await prisma.drohnengruppeMembership.findUnique({ where: { userId } });
-  return Boolean(membership);
 }
 
 export async function createFlight(_prevState: FlightFormState, formData: FormData): Promise<FlightFormState> {
@@ -30,8 +26,12 @@ export async function createFlight(_prevState: FlightFormState, formData: FormDa
   }
   const data = parsed.data;
 
-  if (!(await isDrohnengruppeMemberId(data.pilotUserId))) {
-    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein Mitglied der Drohnengruppe.'] } };
+  if (!(await isEligiblePilot(data.pilotUserId))) {
+    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied der Drohnengruppe.'] } };
+  }
+
+  if (!(await isActiveDrone(data.droneId))) {
+    return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
   const flight = await prisma.droneFlight.create({
@@ -72,8 +72,12 @@ export async function updateFlight(
   }
   const data = parsed.data;
 
-  if (!(await isDrohnengruppeMemberId(data.pilotUserId))) {
-    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein Mitglied der Drohnengruppe.'] } };
+  if (!(await isEligiblePilot(data.pilotUserId))) {
+    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied der Drohnengruppe.'] } };
+  }
+
+  if (!(await isActiveDrone(data.droneId))) {
+    return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
   await prisma.droneFlight.update({
