@@ -37,6 +37,18 @@ export async function consumeToken(rawToken: string, purpose: TokenPurpose) {
     return null;
   }
 
-  await prisma.passwordToken.update({ where: { id: record.id }, data: { usedAt: new Date() } });
+  // usedAt: null muss Teil der WHERE-Klausel des Updates selbst sein, nicht nur der vorherigen
+  // Lese-Prüfung - sonst könnten zwei gleichzeitige Anfragen beide den Lese-Check bestehen, bevor
+  // eine von beiden usedAt setzt (TOCTOU), und den Token doppelt verbrauchen. updateMany mit
+  // usedAt: null in der WHERE-Klausel garantiert, dass nur genau eine gleichzeitige Anfrage
+  // gewinnt (count === 1), jede weitere trifft auf 0 Zeilen (count === 0).
+  const { count } = await prisma.passwordToken.updateMany({
+    where: { id: record.id, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  if (count === 0) {
+    return null;
+  }
+
   return record.user;
 }
