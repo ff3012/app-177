@@ -57,9 +57,16 @@ in `/var/log/ffapp-backup.log` aus, ohne dass irgendwo sonst ein Fehler auftauch
 
 ### Off-Box-Kopie auf S3-kompatiblen Object Storage (z. B. Exoscale SOS)
 
-`docker/backup.sh` lädt den frischen Dump zusätzlich zu einem S3-kompatiblen Bucket hoch, sobald
+`docker/backup.sh` lädt zusätzlich zum frischen `pg_dump` auch `.env` und `docker/Caddyfile` zu
+einem S3-kompatiblen Bucket hoch (als `config-<timestamp>.tar.gz`, `chmod 600` wegen der
+Klartext-Secrets in `.env`, lokal nur für die Dauer des Uploads vorhanden), sobald
 `S3_BACKUP_BUCKET` in `.env` gesetzt ist — ist die Variable leer/nicht gesetzt, macht das Skript
-unverändert nur das lokale Backup wie bisher. In `.env` ergänzen:
+unverändert nur das lokale DB-Backup wie bisher. Beide Dateien existieren nur auf diesem einen
+Server (`.env` ist `.gitignore`t, die echte Domain in `Caddyfile` wurde nie committet) und sind für
+einen Restore auf einem neuen Server genauso wichtig wie die Datenbank selbst — ohne sie insbesondere
+kein Zugriff auf `VAPID_PRIVATE_KEY`, ohne den alle bestehenden Push-Abos aus dem DB-Restore
+permanent nutzlos wären (jedes der ~200 Mitglieder müsste Push-Benachrichtigungen neu aktivieren).
+In `.env` ergänzen:
 
 ```
 S3_BACKUP_BUCKET=app-177-backup
@@ -123,6 +130,21 @@ Host-Systemzeit umrechnen (`timedatectl` zeigt die aktuell konfigurierte Host-Ze
 
 ## Restore-Test
 
+DB-Restore (auf einem bereits laufenden Stack mit leerer/vorhandener DB):
+
 ```bash
 gunzip -c docker/backups/db-2026-01-01_0300.sql.gz | docker compose -f docker/docker-compose.yml --env-file .env exec -T postgres psql -U ffapp -d ffapp
 ```
+
+Voller Restore auf einem **neuen** Server (die DB allein reicht dafür nicht — siehe oben, `.env` und
+`Caddyfile` sind genauso nötig): Repo klonen, dann `config-<timestamp>.tar.gz` vom S3-Bucket laden
+und entpacken, bevor der Stack das erste Mal gestartet wird:
+
+```bash
+aws s3 cp s3://app-177-backup/config-2026-01-01_0300.tar.gz . --endpoint-url https://sos-at-vie-1.exo.io
+tar -xzf config-2026-01-01_0300.tar.gz
+```
+
+Das legt `.env` und `docker/Caddyfile` an der richtigen Stelle im frisch geklonten Repo ab. Danach
+wie im Setup oben `docker compose ... up -d --build`, Seed **weglassen** (die Datenbank wird stattdessen
+aus dem DB-Backup wiederhergestellt, nicht neu geseedet), und den DB-Restore-Befehl von oben ausführen.

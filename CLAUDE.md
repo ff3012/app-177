@@ -364,7 +364,14 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   `git add` of a new host-cron script re-introduce this; check `git ls-files -s` shows `100755` for it.
   `backup.sh` additionally uploads the dump to an S3-compatible bucket (Exoscale SOS) when
   `S3_BACKUP_BUCKET` is set in `.env`, purely as an off-box copy alongside the existing local one — see
-  "Off-Box-Kopie" in `docker/README.md`. Retention for that copy is scripted directly in `backup.sh`
+  "Off-Box-Kopie" in `docker/README.md`. It also tars up `.env` and `docker/Caddyfile` into a
+  `config-<timestamp>.tar.gz` (`chmod 600`, deleted locally right after upload) and uploads that too — the DB
+  dump alone can't restore a working server: `.env` is `.gitignore`d and only ever exists on this one host,
+  and losing `VAPID_PRIVATE_KEY` specifically would permanently strand every `PushSubscription` row the DB
+  restore brings back, forcing all ~200 members to re-enable push by hand. The config archive isn't kept
+  locally (no local retention line to maintain for it) since the source files already sit right next to
+  `backup.sh` on disk — a local copy of them would add no protection a full-disk loss wouldn't also destroy.
+  Retention for the S3 copies is scripted directly in `backup.sh`
   (list objects older than 30 days via `aws s3api list-objects-v2`, then `aws s3 rm` each), mirroring the
   local `find -mtime +30`, rather than a bucket lifecycle rule — confirmed by testing that Exoscale SOS has
   no native lifecycle support at all yet (`PutBucketLifecycleConfiguration` either silently no-ops or

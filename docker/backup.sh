@@ -37,6 +37,23 @@ if [ -n "${S3_BACKUP_BUCKET:-}" ]; then
     aws s3 cp "$FILE" "s3://$S3_BACKUP_BUCKET/$(basename "$FILE")" --endpoint-url "$S3_ENDPOINT_URL"
   echo "Off-Box-Kopie hochgeladen: s3://$S3_BACKUP_BUCKET/$(basename "$FILE")"
 
+  # .env und docker/Caddyfile existieren NUR auf diesem Server (.env ist bewusst .gitignore't, die
+  # echte Domain in Caddyfile wurde direkt auf dem Server eingetragen, nie committet) - ohne sie ist
+  # ein pg_dump-Restore auf einem neuen Server für sich allein nutzlos, allem voran weil
+  # VAPID_PRIVATE_KEY nicht nachträglich rekonstruierbar ist: ohne den exakt gleichen Schlüssel
+  # werden alle bestehenden PushSubscription-Zeilen aus dem DB-Restore permanent nutzlos, und jedes
+  # der ~200 Mitglieder müsste Push-Benachrichtigungen manuell neu aktivieren. Nur als S3-Kopie
+  # gedacht (nicht zusätzlich lokal aufgehoben) - die Dateien liegen ohnehin schon unverändert direkt
+  # neben diesem Skript, ein lokales "Backup" davon hätte keinen zusätzlichen Schutzwert; chmod 600
+  # wegen der Klartext-Secrets in .env, und die lokale Kopie wird nach dem Upload sofort gelöscht.
+  CONFIG_FILE="$BACKUP_DIR/config-$TIMESTAMP.tar.gz"
+  tar -czf "$CONFIG_FILE" .env docker/Caddyfile
+  chmod 600 "$CONFIG_FILE"
+  AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+    aws s3 cp "$CONFIG_FILE" "s3://$S3_BACKUP_BUCKET/$(basename "$CONFIG_FILE")" --endpoint-url "$S3_ENDPOINT_URL"
+  echo "Off-Box-Kopie hochgeladen: s3://$S3_BACKUP_BUCKET/$(basename "$CONFIG_FILE")"
+  rm -f "$CONFIG_FILE"
+
   # Exoscale SOS (Stand jetzt) unterstützt keine native Bucket-Lifecycle-Policy - eine
   # PutBucketLifecycleConfiguration wird entweder stillschweigend ignoriert oder mit MalformedXML
   # abgelehnt, je nach Rule-Inhalt (getestet). Exoscales eigener Workaround (ein separater
