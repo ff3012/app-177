@@ -35,7 +35,7 @@ const COLUMNS: { key: SortKey; label: string; width: string }[] = [
   { key: 'homeOrg', label: 'Heimat-Feuerwehr', width: 'w-[11%]' },
   { key: 'adminFor', label: 'Admin für', width: 'w-[13%]' },
   { key: 'droneLabel', label: 'Drohnengruppe', width: 'w-[7%]' },
-  { key: 'pushLabel', label: 'Push Benachrichtigung', width: 'w-[9%]' },
+  { key: 'pushLabel', label: 'Push', width: 'w-[9%]' },
   { key: 'statusLabel', label: 'Status', width: 'w-[7%]' },
 ];
 
@@ -115,7 +115,7 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
                     <button
                       type="button"
                       onClick={() => toggleSort(column.key)}
-                      className={`break-words text-left font-medium hover:text-neutral-900 ${active ? 'text-neutral-900' : ''}`}
+                      className={`block w-full break-words text-left font-medium hover:text-neutral-900 ${active ? 'text-neutral-900' : ''}`}
                     >
                       {column.label}
                       {active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
