@@ -94,6 +94,7 @@ model User {
   pushSubscriptions PushSubscription[]
   newsMessagesCreated NewsMessage[]         @relation("NewsCreatedBy")
   terminZusagen    TerminZusage[]
+  droneDocumentsUploaded DroneDocument[]    @relation("DroneDocumentUploadedBy")
 
   @@index([homeOrganizationId])
 }
@@ -233,6 +234,24 @@ model DroneFlight {
   @@index([startsAt])
   @@index([droneId])
   @@index([pilotUserId])
+}
+
+// Unterlagen (PDFs) für Mitglieder der Drohnengruppe. Der PDF-Inhalt liegt direkt in der DB
+// (bytea), nicht auf einem eigenen Volume - erspart einen zusätzlichen Docker-Mount und läuft
+// automatisch im bestehenden pg_dump-Backup mit. Bei den erwarteten wenigen, kleinen Dateien für
+// diese Gruppe (~handful Dokumente) überwiegt das gegenüber Dateisystem-Speicherung.
+model DroneDocument {
+  id           String   @id @default(cuid())
+  title        String
+  filename     String
+  sizeBytes    Int
+  data         Bytes
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy User @relation("DroneDocumentUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([createdAt])
 }
 
 // ---------- Module 3: News (Web-Push-Benachrichtigungen) ----------

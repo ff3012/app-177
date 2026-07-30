@@ -48,6 +48,12 @@ export default async function DrohnenPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-lg font-semibold text-neutral-900">Flugbuch Drohnengruppe</h1>
         <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/drohnen/unterlagen"
+            className="rounded border border-neutral-300 px-3 py-1.5 font-medium text-neutral-700 hover:bg-neutral-100"
+          >
+            Unterlagen
+          </Link>
           {seeAll && (
             <Link
               href="/drohnen/90-tage"

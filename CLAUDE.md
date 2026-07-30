@@ -245,6 +245,18 @@ to the current user's own registered/piloted flights when switched off. Only ren
 `canToggle` (= `canViewAllFlights`) is true — non-admins never see it and always get the server-side-scoped
 own-flights query, same as before this toggle existed.
 
+- **Unterlagen (PDFs for members)**: `DroneDocument` stores the PDF bytes directly in Postgres
+  (`data Bytes`) rather than on a filesystem/volume — deliberate, since the expected volume is a
+  handful of small documents, and this way there's no extra Docker mount to provision and the
+  files ride along automatically in the existing `pg_dump` backup. List queries (`/admin/drohnen`,
+  `/drohnen/unterlagen`) always `select` metadata only (never `data`) to avoid pulling PDF bytes
+  into memory just to render a list; only the single-document download route
+  (`/drohnen/unterlagen/[id]/route.ts`) fetches the full row. Upload/delete live on `/admin/drohnen`
+  (gated `isSiteAdmin`, same as the rest of that page) rather than a new admin page — the "Flug
+  registrieren"/"Drohnen"-style precedent here is to add a section to an existing admin page, not a
+  new `AdminNav` entry, unless the feature needs its own URL. The 1MB default Server Action body
+  limit was raised app-wide to 10MB (`next.config.mjs`) specifically for this upload, since Server
+  Actions have no per-route size config.
 - **90-day/3-flight rule**: constants and the shared cutoff/predicate helpers live in
   `src/lib/drone/ninety-day-rule.ts` (`NINETY_DAY_REQUIRED_FLIGHTS`, `NINETY_DAY_WINDOW_DAYS`,
   `getNinetyDayCutoff()`, `meetsNinetyDayRule()`) — both the Admin-only `/drohnen/90-tage` report (all

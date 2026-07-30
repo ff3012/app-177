@@ -72,3 +72,57 @@ export async function regenerateQuickRegisterLink(): Promise<void> {
   await generateDroneQuickRegisterToken();
   revalidatePath('/admin/drohnen');
 }
+
+const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+export interface DroneDocumentFormState {
+  error?: string;
+}
+
+export async function uploadDroneDocument(
+  _prevState: DroneDocumentFormState,
+  formData: FormData,
+): Promise<DroneDocumentFormState> {
+  const user = await requireUser();
+  assertPermission(isSiteAdmin(user));
+
+  const title = String(formData.get('title') ?? '').trim();
+  const file = formData.get('file');
+
+  if (!title) {
+    return { error: 'Titel ist erforderlich.' };
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: 'Bitte eine PDF-Datei auswählen.' };
+  }
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    return { error: 'Nur PDF-Dateien sind erlaubt.' };
+  }
+  if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+    return { error: 'Die Datei ist zu groß (maximal 10 MB).' };
+  }
+
+  const data = Buffer.from(await file.arrayBuffer());
+  await prisma.droneDocument.create({
+    data: {
+      title,
+      filename: file.name,
+      sizeBytes: file.size,
+      data,
+      uploadedById: user.id,
+    },
+  });
+
+  revalidatePath('/admin/drohnen');
+  revalidatePath('/drohnen/unterlagen');
+  return {};
+}
+
+export async function deleteDroneDocument(documentId: string): Promise<void> {
+  const user = await requireUser();
+  assertPermission(isSiteAdmin(user));
+
+  await prisma.droneDocument.delete({ where: { id: documentId } });
+  revalidatePath('/admin/drohnen');
+  revalidatePath('/drohnen/unterlagen');
+}

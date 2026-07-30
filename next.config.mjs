@@ -15,6 +15,12 @@ const CONTENT_SECURITY_POLICY = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  experimental: {
+    // Default Server Action body limit is 1MB - too small for the Drohnengruppe-Unterlagen PDF
+    // upload (admin/drohnen). Raised for the whole app since Server Actions don't have a
+    // per-route config.
+    serverActions: { bodySizeLimit: '10mb' },
+  },
   async headers() {
     return [
       {
