@@ -17,7 +17,7 @@ export default async function LoginTokenSuccessPage() {
   const isIOS = /iphone|ipad|ipod/i.test(userAgent);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f6f6f7] px-4">
+    <div className="pt-safe flex min-h-screen items-center justify-center bg-[#f6f6f7] px-4">
       <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow">
         <h1 className="mb-1 text-xl font-semibold text-neutral-900">Anmeldung erfolgreich</h1>
         <p className="mb-4 text-sm text-neutral-500">Du bist jetzt in diesem Browser angemeldet.</p>

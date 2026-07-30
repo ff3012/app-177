@@ -62,8 +62,10 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
       </div>
 
       {viewEvent && (
+        // z-50: must sit above the mobile bottom tab bar (z-30) and profile dropdown (z-40) so
+        // taps can't reach through to them while this is meant to be blocking.
         <div
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
           onClick={() => setViewEvent(null)}
         >
           <div

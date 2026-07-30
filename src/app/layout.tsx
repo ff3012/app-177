@@ -42,6 +42,12 @@ export const viewport: Viewport = {
   // Android Chrome auto-darkens web content specifically when this meta tag is missing (the CSS
   // color-scheme property alone doesn't stop it) — this app has no dark theme, so opt out entirely.
   colorScheme: 'light',
+  // Lets content draw edge-to-edge under the iOS status bar/notch and the Android gesture-nav
+  // area, required for env(safe-area-inset-*) to resolve to anything but 0px anywhere in the app
+  // (see the .pt-safe/.pb-safe-tabbar/.pb-content-safe classes in globals.css). Applies globally,
+  // including (auth)/* and the public drohnen-schnell page — those add .pt-safe on their own
+  // wrapper divs too, since they don't share (app)/layout.tsx's header.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

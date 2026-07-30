@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { Nav } from '@/components/layout/nav';
+import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
 import { Footer } from '@/components/layout/footer';
 import { logoutAction } from './logout-action';
@@ -18,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f6f6f7]">
-      <header className="bg-[#1c1c1e] text-white">
+      <header className="pt-safe bg-[#1c1c1e] text-white">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
             <span className="text-sm font-semibold text-white">AFKDO Purkersdorf</span>
@@ -43,8 +44,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>
-      <Footer />
+      <main className="pb-content-safe mx-auto w-full max-w-5xl flex-1 px-4 pt-6 sm:pb-6">{children}</main>
+      <div className="hidden sm:block">
+        <Footer />
+      </div>
+      <MobileTabBar user={user} />
     </div>
   );
 }

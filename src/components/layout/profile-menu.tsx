@@ -87,7 +87,9 @@ export function ProfileMenu({
       </button>
 
       {open && (
-        <div className="fixed inset-x-4 top-16 z-20 w-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
+        // z-40: above the mobile bottom tab bar (z-30) - on short screens this dropdown (with the
+        // push toggle expanded) can reach far enough down to otherwise sit under the tab bar.
+        <div className="fixed inset-x-4 top-16 z-40 w-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
           <p className="font-semibold text-neutral-900">{name}</p>
           <p className="text-neutral-500">{email}</p>
 

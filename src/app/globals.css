@@ -18,6 +18,26 @@ body {
   color: var(--foreground);
 }
 
+/* V2 mobile-nav pass: safe-area handling for the fixed bottom tab bar and the dark header, needed
+   once viewport-fit=cover (layout.tsx) lets content draw under the iOS status bar/notch and the
+   Android gesture-nav area. Explicit ", 0px" fallback everywhere: safe on browsers that don't
+   understand env() at all (the whole declaration is simply dropped) and unambiguous on ones that
+   do but have no safe-area context (regular non-cover viewport, older Android). */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe-tabbar {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Bottom padding for authenticated page content so the fixed mobile tab bar never covers the end
+   of a page. 1.5rem matches the desktop py-6 this replaces below sm:; 56px is the tab bar's own
+   rendered height budget (icon + label + vertical padding). */
+.pb-content-safe {
+  padding-bottom: calc(1.5rem + 56px + env(safe-area-inset-bottom, 0px));
+}
+
 /* FullCalendar: on narrow screens the default toolbar (prev/next/today, title,
    month/week switcher) crowds into one row. Stack it so every part stays usable.
    !important because FullCalendar injects its own stylesheet at runtime, which can

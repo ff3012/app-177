@@ -3,38 +3,18 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { SessionUser } from '@/types/next-auth';
-import { canManageNews, canViewDroneModule, isSiteAdmin } from '@/lib/auth/permissions';
+import { getActiveNavHref, getNavItems } from '@/lib/nav-items';
 
-interface NavItem {
-  href: string;
-  label: string;
-}
-
+// Desktop-only (>=640px) - MobileTabBar (mobile-tab-bar.tsx) renders the same items below that
+// breakpoint. Both stay mounted in the DOM at all times; Tailwind's hidden/sm: classes decide
+// which one paints, matching this codebase's only responsive convention (no JS media queries).
 export function Nav({ user }: { user: SessionUser }) {
   const pathname = usePathname();
-
-  const items: NavItem[] = [{ href: '/kalender', label: 'Kalender' }];
-
-  if (canViewDroneModule(user)) {
-    items.push({ href: '/drohnen', label: 'Drohnengruppe' });
-  }
-
-  if (canManageNews(user)) {
-    items.push({ href: '/news', label: 'News' });
-  }
-
-  if (isSiteAdmin(user)) {
-    items.push({ href: '/admin/benutzer', label: 'Verwaltung' });
-  }
-
-  // Nested routes (e.g. /kalender/abschnitt under /kalender) would otherwise match
-  // more than one item's prefix check; only the longest (most specific) match wins.
-  const activeHref = items
-    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  const items = getNavItems(user);
+  const activeHref = getActiveNavHref(items, pathname);
 
   return (
-    <nav className="flex flex-wrap gap-1">
+    <nav className="hidden flex-wrap gap-1 sm:flex">
       {items.map((item) => {
         const active = item.href === activeHref;
         return (
