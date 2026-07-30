@@ -110,6 +110,19 @@ model LoginAttempt {
   updatedAt     DateTime  @updatedAt
 }
 
+// Rate-Limiting für angeforderte E-Mail-Anmelde-Token/Codes - dieselbe Idee wie LoginAttempt
+// (pro eingegebener E-Mail-Adresse, unabhängig davon ob ein Konto existiert), aber ein eigenes
+// Modell statt einer Wiederverwendung von LoginAttempt, da es ein anderes Ereignis zählt (eine
+// tatsächlich ausgestellte Token-Anfrage, nicht ein fehlgeschlagener Login-Versuch).
+model LoginTokenRequestAttempt {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  requestCount   Int       @default(0)
+  firstRequestAt DateTime  @default(now())
+  lockedUntil    DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
 // One-time links for account activation and "Passwort vergessen". The token
 // column stores a SHA-256 hash of the random token, never the raw value.
 // shortCode (also hashed) is only ever set for TokenPurpose.LOGIN: a 6-digit alternative to the

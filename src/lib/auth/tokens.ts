@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 
 const ACTIVATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
-const LOGIN_TTL_MS = 15 * 60 * 1000;
+const LOGIN_TTL_MS = 5 * 60 * 1000;
 
 const TTL_BY_PURPOSE: Record<TokenPurpose, number> = {
   [TokenPurpose.ACTIVATION]: ACTIVATION_TTL_MS,

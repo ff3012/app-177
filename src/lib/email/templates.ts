@@ -79,7 +79,7 @@ export async function sendLoginTokenEmail(
       '',
       shortCode,
       '',
-      'Code und Link sind 15 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung -',
+      'Code und Link sind 5 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung -',
       'sobald einer verwendet wurde, wird auch der andere ungültig). Falls du das nicht warst, kannst du',
       'diese E-Mail ignorieren.',
       '',
@@ -94,7 +94,7 @@ export async function sendLoginTokenEmail(
         'er würde nur in Safari anmelden, nicht in der bereits installierten App. Gib stattdessen diesen Code ' +
         'direkt in der App im Feld „Code aus E-Mail einfügen" ein:</p>',
       `<p style="font-family: monospace; font-size: 24px; letter-spacing: 4px; background: #f4f4f4; padding: 12px 16px; border-radius: 4px; text-align: center;">${shortCode}</p>`,
-      '<p>Code und Link sind 15 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung - ' +
+      '<p>Code und Link sind 5 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung - ' +
         'sobald einer verwendet wurde, wird auch der andere ungültig). Falls du das nicht warst, kannst du diese ' +
         'E-Mail ignorieren.</p>',
       '<p>Feuerwehr Abschnitt Purkersdorf</p>',

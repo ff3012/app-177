@@ -5,7 +5,14 @@ import { TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { signIn } from '@/lib/auth/auth.config';
 import { isAuthError, isNextRedirectError } from '@/lib/auth/is-auth-error';
-import { checkLoginThrottle, recordFailedLogin, resetLoginAttempts } from '@/lib/auth/login-throttle';
+import {
+  checkLoginThrottle,
+  recordFailedLogin,
+  resetLoginAttempts,
+  checkLoginTokenThrottle,
+  recordLoginTokenRequest,
+  resetLoginTokenThrottle,
+} from '@/lib/auth/login-throttle';
 import { createLoginToken } from '@/lib/auth/tokens';
 import { sendLoginTokenEmail } from '@/lib/email/templates';
 
@@ -69,6 +76,16 @@ export async function requestLoginToken(_prevState: LoginTokenState, formData: F
     return { error: 'E-Mail-Adresse ist erforderlich.' };
   }
 
+  // Sicherheitsmaßnahme: maximal 3 tatsächlich ausgestellte Token innerhalb von 5 Minuten, danach
+  // 15 Minuten gesperrt - geprüft VOR den bestehenden Dedupe-Checks unten, getrackt pro
+  // E-Mail-String unabhängig davon ob ein Konto existiert (siehe checkLoginTokenThrottle).
+  const tokenThrottle = await checkLoginTokenThrottle(email);
+  if (tokenThrottle.locked) {
+    return {
+      error: `Zu viele Anfragen. Bitte in ${tokenThrottle.minutesRemaining} Minute(n) erneut versuchen.`,
+    };
+  }
+
   const now = Date.now();
   const cookieStore = await cookies();
 
@@ -89,6 +106,9 @@ export async function requestLoginToken(_prevState: LoginTokenState, formData: F
 
       if (!recentToken) {
         const { token, shortCode } = await createLoginToken(user.id);
+        // Nur bei einer tatsächlich ausgestellten Anfrage zählen, nicht bei jedem Formular-Submit,
+        // der ohnehin schon durch die obigen Dedupe-Checks abgefangen wird.
+        await recordLoginTokenRequest(email);
         try {
           await sendLoginTokenEmail(user, token, shortCode);
         } catch (error) {
@@ -140,6 +160,7 @@ export async function confirmLoginWithToken(_prevState: LoginTokenState, formDat
   try {
     await signIn('email-token', { email, shortCode, redirectTo: '/kalender' });
     await resetLoginAttempts(email);
+    await resetLoginTokenThrottle(email);
     return {};
   } catch (error) {
     if (isNextRedirectError(error)) {

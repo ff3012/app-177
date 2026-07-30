@@ -99,7 +99,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           {tokenState.submitted ? (
             <p className="text-sm text-neutral-700">
               Falls ein aktives Konto mit dieser E-Mail-Adresse existiert, wurde eine E-Mail mit Anmeldelink und
-              Code gesendet. Bitte E-Mails prüfen (auch Spam-Ordner). Gültig 15 Minuten.
+              Code gesendet. Bitte E-Mails prüfen (auch Spam-Ordner). Gültig 5 Minuten.
             </p>
           ) : (
             <form action={tokenFormAction} className="flex flex-col gap-4">
@@ -117,7 +117,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
                   onChange={(event) => setTokenEmail(event.target.value)}
                   className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
                 />
-                <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink und einen 6-stelligen Code per E-Mail, gültig 15 Minuten.</p>
+                <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink und einen 6-stelligen Code per E-Mail, gültig 5 Minuten.</p>
               </div>
 
               {tokenState.error && <p className="text-sm text-red-700">{tokenState.error}</p>}

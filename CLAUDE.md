@@ -127,9 +127,23 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
   non-enumerating response and dual rate-limit pattern (per-browser cookie + per-account recent-token check)
   already established by `passwort-vergessen/actions.ts` — a nonexistent/inactive email gets the *same*
   generic "falls ein Konto existiert..." message as a real one. `TokenPurpose.LOGIN` reuses the shared
-  `PasswordToken` table (15-minute TTL, shortest of the three purposes — see `TTL_BY_PURPOSE` in
+  `PasswordToken` table (5-minute TTL, shortest of the three purposes — see `TTL_BY_PURPOSE` in
   `tokens.ts`); `createLoginToken` additionally generates a 6-digit `shortCode` (hashed at rest, same as the
   token) stored on that same row, so consuming either one invalidates both.
+
+  **Token-request throttle** (`LoginTokenRequestAttempt`, `login-throttle.ts`): a *separate* table/counter
+  from `LoginAttempt` — it counts token-*issuance* events (a link+code actually emailed), not failed login
+  attempts, so it can't just reuse `LoginAttempt`'s counter. `checkLoginTokenThrottle`/
+  `recordLoginTokenRequest`/`resetLoginTokenThrottle` mirror `checkLoginThrottle`/`recordFailedLogin`/
+  `resetLoginAttempts` exactly, including the atomic `increment` update (no lost-update race under concurrent
+  requests) and keying by the raw submitted email regardless of account existence. Limit: 3 issued
+  tokens per 5-minute window, then a 15-minute lockout. `requestLoginToken` checks
+  `checkLoginTokenThrottle` first, then calls `recordLoginTokenRequest` only inside the `if (!recentToken)`
+  branch where a token is actually created — the existing 30-second cookie/DB dedupe (re-clicking the button
+  without waiting) does *not* itself count against the 3-per-5-min budget, only real issuances do.
+  `confirmLoginWithToken` calls `resetLoginTokenThrottle` alongside `resetLoginAttempts` on success; the
+  link-click path (`login/token/[token]/actions.ts`) does not, since it would need an extra user lookup to
+  get the email — an accepted minor gap, not a bug to "fix" reflexively.
 
   **Why two forms of the same token exist — a real iOS constraint, confirmed by testing, not just theory**:
   an email link opened from Mail always lands in a regular Safari tab, never directly inside an

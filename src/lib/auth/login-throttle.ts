@@ -64,3 +64,62 @@ export async function recordFailedLogin(email: string): Promise<void> {
 export async function resetLoginAttempts(email: string): Promise<void> {
   await prisma.loginAttempt.deleteMany({ where: { email } });
 }
+
+const MAX_TOKEN_REQUESTS = 3;
+const TOKEN_REQUEST_WINDOW_MS = 5 * 60 * 1000;
+const TOKEN_REQUEST_LOCKOUT_MS = 15 * 60 * 1000;
+
+/**
+ * Wie checkLoginThrottle/recordFailedLogin, aber für angeforderte E-Mail-Anmelde-Token/Codes
+ * statt fehlgeschlagener Passwort-Versuche: maximal MAX_TOKEN_REQUESTS tatsächlich ausgestellte
+ * Token innerhalb von TOKEN_REQUEST_WINDOW_MS, danach TOKEN_REQUEST_LOCKOUT_MS gesperrt. Ebenfalls
+ * pro E-Mail-String getrackt, unabhängig davon ob ein Konto existiert, aus demselben Grund
+ * (Lockout selbst darf nicht verraten, ob ein Account existiert).
+ */
+export async function checkLoginTokenThrottle(email: string): Promise<ThrottleStatus> {
+  const record = await prisma.loginTokenRequestAttempt.findUnique({ where: { email } });
+  if (!record?.lockedUntil) {
+    return { locked: false };
+  }
+
+  const now = Date.now();
+  if (record.lockedUntil.getTime() <= now) {
+    return { locked: false };
+  }
+
+  return { locked: true, minutesRemaining: Math.ceil((record.lockedUntil.getTime() - now) / 60_000) };
+}
+
+/** Nur aufrufen, wenn tatsächlich ein neuer Token ausgestellt wurde (nicht bei jedem Formular-Submit). */
+export async function recordLoginTokenRequest(email: string): Promise<void> {
+  const now = new Date();
+  const existing = await prisma.loginTokenRequestAttempt.findUnique({ where: { email } });
+
+  if (!existing || now.getTime() - existing.firstRequestAt.getTime() > TOKEN_REQUEST_WINDOW_MS) {
+    await prisma.loginTokenRequestAttempt.upsert({
+      where: { email },
+      update: { requestCount: 1, firstRequestAt: now, lockedUntil: null },
+      create: { email, requestCount: 1 },
+    });
+    return;
+  }
+
+  // Atomares Increment auf DB-Ebene, aus demselben Grund wie in recordFailedLogin oben (siehe
+  // dortiger Kommentar) - kein Lost-Update unter gleichzeitigen Anfragen.
+  const updated = await prisma.loginTokenRequestAttempt.update({
+    where: { email },
+    data: { requestCount: { increment: 1 } },
+  });
+
+  if (updated.requestCount >= MAX_TOKEN_REQUESTS && !updated.lockedUntil) {
+    await prisma.loginTokenRequestAttempt.update({
+      where: { email },
+      data: { lockedUntil: new Date(now.getTime() + TOKEN_REQUEST_LOCKOUT_MS) },
+    });
+  }
+}
+
+/** Nach erfolgreicher Anmeldung per Token/Code: Zähler für diese E-Mail-Adresse zurücksetzen. */
+export async function resetLoginTokenThrottle(email: string): Promise<void> {
+  await prisma.loginTokenRequestAttempt.deleteMany({ where: { email } });
+}
