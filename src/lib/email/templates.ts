@@ -61,7 +61,33 @@ export async function sendLoginTokenEmail(user: { email: string; firstName: stri
     to: user.email,
     toName: `${user.firstName} ${user.lastName}`,
     subject: 'Dein Anmeldelink',
-    textPart: `Hallo ${user.firstName},\n\ndu hast eine Anmeldung per E-Mail-Link angefordert. Über folgenden Link kannst du dich anmelden:\n\n${link}\n\nDer Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.\n\nFeuerwehr Abschnitt Purkersdorf`,
-    htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast eine Anmeldung per E-Mail-Link angefordert. Über folgenden Link kannst du dich anmelden:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p>Feuerwehr Abschnitt Purkersdorf</p>`,
+    textPart: [
+      `Hallo ${user.firstName},`,
+      '',
+      'du hast eine Anmeldung per E-Mail angefordert. Über folgenden Link kannst du dich anmelden:',
+      link,
+      '',
+      'Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben nicht,',
+      'sondern kopiere stattdessen diesen Code und füge ihn direkt in der App im Feld',
+      '"Code aus E-Mail einfügen" ein - ein Link aus der Mail-App öffnet immer Safari, nie die',
+      'bereits installierte App:',
+      '',
+      token,
+      '',
+      'Der Code/Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.',
+      '',
+      'Feuerwehr Abschnitt Purkersdorf',
+    ].join('\n'),
+    htmlPart: [
+      `<p>Hallo ${user.firstName},</p>`,
+      '<p>du hast eine Anmeldung per E-Mail angefordert. Über folgenden Link kannst du dich anmelden:</p>',
+      `<p><a href="${link}">${link}</a></p>`,
+      '<p>Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben nicht, sondern kopiere ' +
+        'stattdessen diesen Code und füge ihn direkt in der App im Feld „Code aus E-Mail einfügen" ein - ein Link ' +
+        'aus der Mail-App öffnet immer Safari, nie die bereits installierte App:</p>',
+      `<p style="font-family: monospace; word-break: break-all; background: #f4f4f4; padding: 8px 12px; border-radius: 4px;">${token}</p>`,
+      '<p>Der Code/Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p>',
+      '<p>Feuerwehr Abschnitt Purkersdorf</p>',
+    ].join(''),
   });
 }

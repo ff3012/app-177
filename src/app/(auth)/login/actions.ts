@@ -108,3 +108,32 @@ export async function requestLoginToken(_prevState: LoginTokenState, formData: F
 
   return { submitted: true };
 }
+
+/**
+ * Meldet direkt auf dieser Seite an, statt über den per Mail verschickten Link zu gehen - eine
+ * am Homescreen installierte iOS-PWA hat einen eigenen, von Safari getrennten Speicher-Container
+ * (bestätigt durch Test: selbst vollständiges Schließen+Neuöffnen der App übernimmt eine in
+ * Safari über den Link hergestellte Anmeldung NICHT). Ein per Mail-App geöffneter Link landet
+ * immer in Safari, nie direkt in der bereits offenen Homescreen-App - das lässt sich nicht
+ * umgehen. Der einzige zuverlässige Weg: den Code direkt in der bereits geöffneten App-Instanz
+ * einfügen, damit signIn() im selben Speicher-Container läuft, in dem die Seite gerade läuft.
+ */
+export async function confirmLoginWithToken(_prevState: LoginTokenState, formData: FormData): Promise<LoginTokenState> {
+  const token = String(formData.get('token') ?? '').trim();
+  if (!token) {
+    return { error: 'Bitte den Code aus der E-Mail eingeben.' };
+  }
+
+  try {
+    await signIn('email-token', { token, redirectTo: '/kalender' });
+    return {};
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    if (isAuthError(error)) {
+      return { error: 'Der Code ist ungültig, abgelaufen oder bereits verwendet. Bitte fordere einen neuen an.' };
+    }
+    throw error;
+  }
+}

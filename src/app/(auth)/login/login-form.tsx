@@ -3,10 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useActionState } from 'react';
-import { loginAction, requestLoginToken, type LoginState, type LoginTokenState } from './actions';
+import {
+  loginAction,
+  requestLoginToken,
+  confirmLoginWithToken,
+  type LoginState,
+  type LoginTokenState,
+} from './actions';
 
 const initialLoginState: LoginState = {};
 const initialTokenState: LoginTokenState = {};
+const initialConfirmState: LoginTokenState = {};
 
 type Mode = 'password' | 'email-token';
 
@@ -14,6 +21,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const [mode, setMode] = useState<Mode>('password');
   const [loginState, loginFormAction, loginPending] = useActionState(loginAction, initialLoginState);
   const [tokenState, tokenFormAction, tokenPending] = useActionState(requestLoginToken, initialTokenState);
+  const [confirmState, confirmFormAction, confirmPending] = useActionState(confirmLoginWithToken, initialConfirmState);
 
   return (
     <div className="flex flex-col gap-4">
@@ -85,38 +93,76 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
             {loginPending ? 'Anmelden…' : 'Anmelden'}
           </button>
         </form>
-      ) : tokenState.submitted ? (
-        <p className="text-sm text-neutral-700">
-          Falls ein aktives Konto mit dieser E-Mail-Adresse existiert, wurde ein Anmeldelink gesendet. Bitte
-          E-Mails prüfen (auch Spam-Ordner). Der Link ist 15 Minuten gültig.
-        </p>
       ) : (
-        <form action={tokenFormAction} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="token-email" className="text-sm font-medium text-neutral-700">
-              E-Mail
-            </label>
-            <input
-              id="token-email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
-            />
-            <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink per E-Mail, gültig 15 Minuten.</p>
+        <div className="flex flex-col gap-4">
+          {tokenState.submitted ? (
+            <p className="text-sm text-neutral-700">
+              Falls ein aktives Konto mit dieser E-Mail-Adresse existiert, wurde eine E-Mail mit Anmeldelink und
+              Code gesendet. Bitte E-Mails prüfen (auch Spam-Ordner). Gültig 15 Minuten.
+            </p>
+          ) : (
+            <form action={tokenFormAction} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="token-email" className="text-sm font-medium text-neutral-700">
+                  E-Mail
+                </label>
+                <input
+                  id="token-email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
+                />
+                <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink und Code per E-Mail, gültig 15 Minuten.</p>
+              </div>
+
+              {tokenState.error && <p className="text-sm text-red-700">{tokenState.error}</p>}
+
+              <button
+                type="submit"
+                disabled={tokenPending}
+                className="rounded bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+              >
+                {tokenPending ? 'Senden…' : 'Anmeldelink senden'}
+              </button>
+            </form>
+          )}
+
+          <div className="flex items-center gap-3 text-xs text-neutral-400">
+            <div className="h-px flex-1 bg-neutral-200" />
+            oder
+            <div className="h-px flex-1 bg-neutral-200" />
           </div>
 
-          {tokenState.error && <p className="text-sm text-red-700">{tokenState.error}</p>}
+          <form action={confirmFormAction} className="flex flex-col gap-1">
+            <label htmlFor="token" className="text-sm font-medium text-neutral-700">
+              Code aus E-Mail einfügen
+            </label>
+            <input
+              id="token"
+              name="token"
+              type="text"
+              autoComplete="one-time-code"
+              className="rounded border border-neutral-300 px-3 py-2 font-mono text-sm focus:border-brand focus:outline-none"
+              placeholder="Code aus der E-Mail"
+            />
+            <p className="mb-2 text-xs text-neutral-500">
+              Nutzt du die App vom Homescreen aus? Öffne den Link in der E-Mail nicht, sondern füge den Code hier
+              direkt ein.
+            </p>
 
-          <button
-            type="submit"
-            disabled={tokenPending}
-            className="rounded bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark disabled:opacity-60"
-          >
-            {tokenPending ? 'Senden…' : 'Anmeldelink senden'}
-          </button>
-        </form>
+            {confirmState.error && <p className="mb-2 text-sm text-red-700">{confirmState.error}</p>}
+
+            <button
+              type="submit"
+              disabled={confirmPending}
+              className="self-start rounded border border-neutral-300 px-4 py-2 font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-60"
+            >
+              {confirmPending ? 'Anmelden…' : 'Mit Code anmelden'}
+            </button>
+          </form>
+        </div>
       )}
     </div>
   );

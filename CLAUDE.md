@@ -131,12 +131,21 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
   page load) specifically so an email link-scanner/security gateway's automatic GET can't silently burn the
   one-time token before the real user clicks it — same reasoning as why activation/password-reset are also
   form-submission-gated, not GET-consumed. On success it redirects to `/login/token/erfolgreich`, not straight
-  to `/kalender`, so it can show an iOS-specific note: any link opened from Mail always lands in a regular
-  Safari tab, never directly inside an already-installed "Zum Home-Bildschirm" PWA (a separate storage
-  container from Safari), so the new session doesn't automatically apply there — an already-open home-screen
-  instance needs a full close (swipe away in the app switcher, not just backgrounding) and relaunch to pick it
-  up. This applies equally to activation/password-reset links; it's just more noticeable for login. The page
-  detects iOS via the `user-agent` request header and only shows the note there.
+  to `/kalender`, so it can show an iOS-specific note (detected via the `user-agent` request header).
+
+  **iOS home-screen PWA caveat, confirmed by real testing, not just theory**: a link opened from Mail always
+  lands in a regular Safari tab, never directly inside an already-installed "Zum Home-Bildschirm" PWA, because
+  iOS gives standalone web apps their own storage container, genuinely separate from Safari — confirmed this
+  isn't just a stale in-memory session either: even a full close (swipe away in the app switcher) and relaunch
+  of the home-screen app does *not* pick up a session established via the emailed link in Safari. There is no
+  way to share a cookie across that boundary; it's a hard platform limitation, not something fixable in this
+  codebase. The actual fix is `confirmLoginWithToken` (`login/actions.ts`) plus the "Code aus E-Mail einfügen"
+  field always rendered in `login-form.tsx`'s E-Mail-Token tab: pasting the raw token there calls
+  `signIn('email-token', ...)` directly from whatever context the `/login` page itself is currently running
+  in (the home-screen app, if that's where it was opened from), so the session lands in the *same* storage
+  container the page is already in — no Safari hand-off at all. `sendLoginTokenEmail` shows the raw token as a
+  copyable monospace block for exactly this reason, not just embedded in the link's href. This same limitation
+  applies equally to activation/password-reset links; it's just far more commonly hit for login.
 
 ### Data model (`prisma/schema.prisma`)
 
