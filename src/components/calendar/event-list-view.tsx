@@ -32,17 +32,17 @@ function RsvpBadge({ counts }: { counts: NonNullable<CalendarEventInput['rsvpCou
  * Browser bei einem Doppelklick trotzdem zuerst zwei einzelne click-Events feuert, wird der
  * Einzelklick-Sprung kurz verzögert und bei einem eintreffenden dblclick wieder verworfen -
  * sonst würde die Navigation aus dem ersten Klick bereits laufen, bevor der Doppelklick erkannt wird.
+ * Geteilt zwischen der Tabellenzeile (breite Bildschirme) und der Karte (schmale Bildschirme).
  */
-function EventListRow({ event }: { event: CalendarEventInput }) {
+function useRowClick(eventId: string, editable: boolean) {
   const router = useRouter();
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const start = new Date(event.start);
 
   function handleClick() {
     if (clickTimer.current) return;
     clickTimer.current = setTimeout(() => {
       clickTimer.current = null;
-      router.push(`/kalender/${event.id}`);
+      router.push(`/kalender/${eventId}`);
     }, DOUBLE_CLICK_WINDOW_MS);
   }
 
@@ -51,8 +51,15 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
     }
-    if (event.editable) router.push(`/kalender/${event.id}/bearbeiten`);
+    if (editable) router.push(`/kalender/${eventId}/bearbeiten`);
   }
+
+  return { handleClick, handleDoubleClick };
+}
+
+function EventListRow({ event }: { event: CalendarEventInput }) {
+  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable);
+  const start = new Date(event.start);
 
   return (
     <tr
@@ -85,34 +92,75 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
   );
 }
 
-export function EventListView({ events }: { events: CalendarEventInput[] }) {
+/** Kartenansicht für schmale Bildschirme (Handy) - eine 7-spaltige Tabelle passt dort nicht lesbar hin. */
+function EventCard({ event }: { event: CalendarEventInput }) {
+  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable);
+  const start = new Date(event.start);
+
   return (
-    <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-      <table className="w-full table-fixed text-left text-xs">
-        <thead className="border-b border-neutral-200 text-neutral-500">
-          <tr>
-            <th className="w-[11%] px-3 py-1.5">Datum</th>
-            <th className="w-[8%] px-3 py-1.5">Start</th>
-            <th className="w-[10%] px-3 py-1.5">Tag</th>
-            <th className="w-[27%] px-3 py-1.5">Betreff</th>
-            <th className="w-[13%] px-3 py-1.5">Organisation</th>
-            <th className="w-[16%] px-3 py-1.5">Zusagen</th>
-            <th className="w-[15%] px-3 py-1.5" />
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((event) => (
-            <EventListRow key={event.id} event={event} />
-          ))}
-          {events.length === 0 && (
-            <tr>
-              <td colSpan={7} className="px-3 py-6 text-center text-neutral-500">
-                Keine Termine vorhanden.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+    <div
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      className="flex cursor-pointer flex-col gap-1.5 border-b border-neutral-100 px-4 py-3 active:bg-neutral-50"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="font-medium text-neutral-900">{event.title}</span>
+        <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
+      </div>
+      <div className="text-sm text-neutral-600">
+        {start.toLocaleDateString('de-AT', { weekday: 'short' })}, {start.toLocaleDateString('de-AT')} ·{' '}
+        {formatStartTime(event)}
+      </div>
+      <div className="text-sm text-neutral-500">{event.organizationName ?? '–'}</div>
+      <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+        <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
+          Zusage & Details
+        </a>
+        <AddToCalendarLink eventId={event.id} variant="icon" />
+      </div>
     </div>
+  );
+}
+
+export function EventListView({ events }: { events: CalendarEventInput[] }) {
+  if (events.length === 0) {
+    return (
+      <div className="rounded-lg bg-white p-6 text-center text-sm text-neutral-500 shadow-sm">
+        Keine Termine vorhanden.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Kartenansicht: unter sm (< 640px), z. B. Smartphones im Hochformat */}
+      <div className="flex flex-col rounded-lg bg-white shadow-sm sm:hidden">
+        {events.map((event) => (
+          <EventCard key={event.id} event={event} />
+        ))}
+      </div>
+
+      {/* Tabellenansicht: ab sm aufwärts */}
+      <div className="hidden overflow-x-auto rounded-lg bg-white shadow-sm sm:block">
+        <table className="w-full table-fixed text-left text-xs">
+          <thead className="border-b border-neutral-200 text-neutral-500">
+            <tr>
+              <th className="w-[11%] px-3 py-1.5">Datum</th>
+              <th className="w-[8%] px-3 py-1.5">Start</th>
+              <th className="w-[10%] px-3 py-1.5">Tag</th>
+              <th className="w-[27%] px-3 py-1.5">Betreff</th>
+              <th className="w-[13%] px-3 py-1.5">Organisation</th>
+              <th className="w-[16%] px-3 py-1.5">Zusagen</th>
+              <th className="w-[15%] px-3 py-1.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((event) => (
+              <EventListRow key={event.id} event={event} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
