@@ -295,8 +295,25 @@ own-flights query, same as before this toggle existed.
 - **90-day/3-flight rule**: constants and the shared cutoff/predicate helpers live in
   `src/lib/drone/ninety-day-rule.ts` (`NINETY_DAY_REQUIRED_FLIGHTS`, `NINETY_DAY_WINDOW_DAYS`,
   `getNinetyDayCutoff()`, `meetsNinetyDayRule()`) — both the Admin-only `/drohnen/90-tage` report (all
-  members) and the green/red badge every member sees for *themselves* next to "Flug registrieren" on
-  `/drohnen` read from here, so the rule can never drift between the two views.
+  members) and the `NinetyDayRing` every member sees for *themselves* on `/drohnen` read from here, so the
+  rule can never drift between the two views. `getComplianceUntilDate()` (same file) projects the date the
+  rule would lapse with no further flights: it's 90 days after the `NINETY_DAY_REQUIRED_FLIGHTS`-th most
+  recent flight still inside the window — that's the specific flight whose expiry would drop the count below
+  the threshold, not simply the oldest flight in the window.
+- **`NinetyDayRing`** (`src/components/drone/ninety-day-ring.tsx`) replaced a plain colored `<span>` badge
+  that only explained itself via a `title` tooltip — undiscoverable on touch devices, since there's no hover.
+  It's a hand-rolled SVG ring (`stroke-dasharray`/`stroke-dashoffset`), not a chart library, matching this
+  codebase's "no icon/chart dependency, inline SVG" convention elsewhere (e.g. the edit-pencil icon in
+  `user-management-section.tsx`).
+- **`GroupStatusChart`** (`src/components/drone/group-status-chart.tsx`), a per-pilot bar chart of 90-day
+  compliance, is rendered on `/drohnen` only when `canViewAllFlights(user)` (Admin Drohnengruppe) — deliberately
+  the same permission as the existing `/drohnen/90-tage` report, not opened up to all members. Showing every
+  pilot's name next to a compliant/non-compliant color is more exposing than what a regular member could see
+  before (only their own status), so this was a conscious choice confirmed with the app owner rather than
+  matched blindly to a design mockup that had no permission model behind it.
+- **`PurposeBadge`** (`src/components/drone/purpose-badge.tsx`) renders "Einsatz" as a solid brand-red pill and
+  "Übung" as an outlined neutral pill, used in both `FlightTable`'s desktop row and its mobile `FlightCard` —
+  a single shared component so the two views can't diverge on this styling.
 - **Flight-created email notification**: `src/lib/drone/notify-flight-created.ts` is the single place that
   builds and sends the "neuer Drohnenflug" email (reads the recipient from `AppSettings` via
   `getDroneFlightNotificationEmail()`, no-ops if unset, swallows send errors so a Mailjet outage never blocks

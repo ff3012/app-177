@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
+import { PurposeBadge } from './purpose-badge';
 
 const EMPTY_MESSAGE = 'Noch keine Flüge erfasst.';
 
@@ -40,7 +41,9 @@ function FlightCard({ flight }: { flight: FlightRow }) {
       <span className="text-sm text-neutral-500">
         {flight.location} · {flight.droneName}
       </span>
-      <span className="text-sm text-neutral-500">{flight.purposeLabel}</span>
+      <span>
+        <PurposeBadge label={flight.purposeLabel} />
+      </span>
       <span className="text-xs text-neutral-400">Erfasst von {flight.registeredByName}</span>
     </div>
   );
@@ -117,7 +120,9 @@ export function FlightTable({ flights, currentUserId, canToggle }: FlightTablePr
                     <td className="px-4 py-2">{flight.pilotName}</td>
                     <td className="px-4 py-2">{flight.location}</td>
                     <td className="px-4 py-2">{flight.droneName}</td>
-                    <td className="px-4 py-2">{flight.purposeLabel}</td>
+                    <td className="px-4 py-2">
+                      <PurposeBadge label={flight.purposeLabel} />
+                    </td>
                     <td className="px-4 py-2">{flight.registeredByName}</td>
                     <td className="px-4 py-2 text-right">
                       {flight.editable && (

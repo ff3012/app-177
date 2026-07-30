@@ -11,3 +11,18 @@ export function getNinetyDayCutoff(): Date {
 export function meetsNinetyDayRule(flightCount: number): boolean {
   return flightCount >= NINETY_DAY_REQUIRED_FLIGHTS;
 }
+
+/**
+ * Bis wann die Regel ohne einen weiteren Flug erfüllt bleibt: die Regel bricht erst, sobald der
+ * NINETY_DAY_REQUIRED_FLIGHTS-neueste (noch mitgezählte) Flug aus dem 90-Tage-Fenster fällt - also
+ * 90 Tage nach dessen Datum. `flightDatesDesc` muss bereits auf das aktuelle Fenster gefiltert und
+ * absteigend (neuester zuerst) sortiert sein. Gibt null zurück, wenn die Regel aktuell nicht erfüllt
+ * ist (weniger als NINETY_DAY_REQUIRED_FLIGHTS Flüge im Fenster).
+ */
+export function getComplianceUntilDate(flightDatesDesc: Date[]): Date | null {
+  if (flightDatesDesc.length < NINETY_DAY_REQUIRED_FLIGHTS) return null;
+  const criticalFlight = flightDatesDesc[NINETY_DAY_REQUIRED_FLIGHTS - 1];
+  const until = new Date(criticalFlight);
+  until.setDate(until.getDate() + NINETY_DAY_WINDOW_DAYS);
+  return until;
+}
