@@ -14,7 +14,7 @@ export interface EmailTokenLoginState {
  */
 export async function confirmEmailTokenLogin(token: string): Promise<EmailTokenLoginState> {
   try {
-    await signIn('email-token', { token, redirectTo: '/kalender' });
+    await signIn('email-token', { token, redirectTo: '/login/token/erfolgreich' });
     return {};
   } catch (error) {
     if (isNextRedirectError(error)) {

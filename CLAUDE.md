@@ -130,7 +130,13 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
   `/login/token/[token]`, a page requiring one explicit "Jetzt anmelden" button click (not auto-consumed on
   page load) specifically so an email link-scanner/security gateway's automatic GET can't silently burn the
   one-time token before the real user clicks it — same reasoning as why activation/password-reset are also
-  form-submission-gated, not GET-consumed.
+  form-submission-gated, not GET-consumed. On success it redirects to `/login/token/erfolgreich`, not straight
+  to `/kalender`, so it can show an iOS-specific note: any link opened from Mail always lands in a regular
+  Safari tab, never directly inside an already-installed "Zum Home-Bildschirm" PWA (a separate storage
+  container from Safari), so the new session doesn't automatically apply there — an already-open home-screen
+  instance needs a full close (swipe away in the app switcher, not just backgrounding) and relaunch to pick it
+  up. This applies equally to activation/password-reset links; it's just more noticeable for login. The page
+  detects iOS via the `user-agent` request header and only shows the note there.
 
 ### Data model (`prisma/schema.prisma`)
 
