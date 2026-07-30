@@ -104,13 +104,13 @@ function EventCard({ event }: { event: CalendarEventInput }) {
       className="flex cursor-pointer flex-col gap-1.5 border-b border-neutral-100 px-4 py-3 active:bg-neutral-50"
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-medium text-neutral-900">{event.title}</span>
+        <span className="text-sm text-neutral-600">
+          {start.toLocaleDateString('de-AT', { weekday: 'short' })}, {start.toLocaleDateString('de-AT')} ·{' '}
+          {formatStartTime(event)}
+        </span>
         <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
       </div>
-      <div className="text-sm text-neutral-600">
-        {start.toLocaleDateString('de-AT', { weekday: 'short' })}, {start.toLocaleDateString('de-AT')} ·{' '}
-        {formatStartTime(event)}
-      </div>
+      <span className="font-medium text-neutral-900">{event.title}</span>
       <div className="text-sm text-neutral-500">{event.organizationName ?? '–'}</div>
       <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
         <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
