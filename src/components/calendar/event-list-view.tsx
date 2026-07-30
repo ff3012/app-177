@@ -4,18 +4,10 @@ import { useRouter } from 'next/navigation';
 import type { CalendarEventInput } from './calendar-view';
 import { AddToCalendarLink } from './add-to-calendar-link';
 
-const CATEGORY_LABEL: Record<string, string> = {
-  ALLGEMEIN: 'Allgemein',
-  DROHNENGRUPPE: 'Drohnengruppe',
-};
-
-function formatTimeRange(event: CalendarEventInput): string {
+function formatStartTime(event: CalendarEventInput): string {
   if (event.allDay) return 'Ganztägig';
   const start = new Date(event.start);
-  const end = new Date(event.end);
-  const startTime = start.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-  const endTime = end.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-  return startTime === endTime ? startTime : `${startTime}–${endTime}`;
+  return start.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function EventListView({ events }: { events: CalendarEventInput[] }) {
@@ -23,16 +15,15 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
 
   return (
     <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-      <table className="w-full text-left text-sm">
+      <table className="w-full text-left text-xs">
         <thead className="border-b border-neutral-200 text-neutral-500">
           <tr>
-            <th className="px-4 py-2">Datum</th>
-            <th className="px-4 py-2">Uhrzeit</th>
-            <th className="px-4 py-2">Tag</th>
-            <th className="px-4 py-2">Betreff</th>
-            <th className="px-4 py-2">Organisation</th>
-            <th className="px-4 py-2">Kategorie</th>
-            <th className="px-4 py-2" />
+            <th className="px-3 py-1.5">Datum</th>
+            <th className="px-3 py-1.5">Start</th>
+            <th className="px-3 py-1.5">Tag</th>
+            <th className="px-3 py-1.5">Betreff</th>
+            <th className="px-3 py-1.5">Organisation</th>
+            <th className="px-3 py-1.5" />
           </tr>
         </thead>
         <tbody>
@@ -47,15 +38,12 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
                 className={`border-b border-neutral-100 ${event.editable ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
                 title={event.editable ? 'Doppelklick zum Bearbeiten' : undefined}
               >
-                <td className="whitespace-nowrap px-4 py-2">{start.toLocaleDateString('de-AT')}</td>
-                <td className="whitespace-nowrap px-4 py-2">{formatTimeRange(event)}</td>
-                <td className="whitespace-nowrap px-4 py-2">{start.toLocaleDateString('de-AT', { weekday: 'long' })}</td>
-                <td className="px-4 py-2">{event.title}</td>
-                <td className="whitespace-nowrap px-4 py-2">{event.organizationName ?? '–'}</td>
-                <td className="whitespace-nowrap px-4 py-2">
-                  {(event.category && CATEGORY_LABEL[event.category]) ?? event.category ?? '–'}
-                </td>
-                <td className="whitespace-nowrap px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                <td className="whitespace-nowrap px-3 py-1">{start.toLocaleDateString('de-AT')}</td>
+                <td className="whitespace-nowrap px-3 py-1">{formatStartTime(event)}</td>
+                <td className="whitespace-nowrap px-3 py-1">{start.toLocaleDateString('de-AT', { weekday: 'long' })}</td>
+                <td className="px-3 py-1">{event.title}</td>
+                <td className="whitespace-nowrap px-3 py-1">{event.organizationName ?? '–'}</td>
+                <td className="whitespace-nowrap px-3 py-1 text-right" onClick={(e) => e.stopPropagation()}>
                   <AddToCalendarLink eventId={event.id} variant="icon" />
                 </td>
               </tr>
@@ -63,7 +51,7 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
           })}
           {events.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
+              <td colSpan={6} className="px-3 py-6 text-center text-neutral-500">
                 Keine Termine vorhanden.
               </td>
             </tr>
