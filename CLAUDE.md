@@ -155,9 +155,13 @@ with tight padding so it stays inside the page's `max-w-5xl` column without hori
 on a `viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new
 layer means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and pick
 a `backgroundColor` for it; both `CalendarEventInput` consumers (grid + list) read the same event shape, so
-add new fields there once. `EventListView` rows double-click to the edit page when `event.editable` is true;
-every row (editable or not) also gets a "Zusage" link to the new detail page (see RSVP below), next to the
-add-to-calendar icon.
+add new fields there once. Every `EventListView` row is clickable regardless of `event.editable` — a single
+click opens the detail page (RSVP + full info, see below), a double-click on an editable row instead jumps
+straight to the edit form. Since a browser fires two ordinary `click` events before recognizing a
+`dblclick`, the single-click navigation is deferred by `DOUBLE_CLICK_WINDOW_MS` (220ms) in `EventListRow`
+and cancelled if a `dblclick` arrives in that window — don't remove that debounce, a plain `onClick`
+would navigate away before the `dblclick` handler ever fires. Rows also carry an explicit "Zusage" link
+to the same detail page next to the add-to-calendar icon, for discoverability.
 
 **RSVP ("Zusage")**: `TerminZusage` (`prisma/schema.prisma`) is one row per (eventId, userId) — a
 `ZusageStatus` (ZUGESAGT/ABGESAGT/UNKLAR) plus an optional note (max 200 chars, validated in
