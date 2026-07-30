@@ -355,7 +355,18 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   `recordNewsCronRun()` on every invocation (even when nothing was due) and `docker/backup.sh` runs a direct
   `psql` UPSERT after each successful `pg_dump`, both writing into `AppSettings.lastNewsCronRunAt` /
   `lastBackupAt`; the Status page only reads those columns back via `src/lib/settings.ts` and flags them
-  stale after 15 minutes (cron runs every 5) / 26 hours (nightly backup) respectively. "NTP-Synchronisierung"
+  stale after 15 minutes (cron runs every 5) / 26 hours (nightly backup) respectively. `docker/backup.sh` and
+  `docker/send-scheduled-news.sh` are tracked executable in git (`git update-index --chmod=+x`) — both run
+  directly off the host checkout via cron with no build step to fix the mode for them (unlike
+  `entrypoint.sh`, which the `Dockerfile` `chmod +x`s during the image build). A real incident: both scripts
+  were committed non-executable, so every cron invocation since initial deploy silently failed with
+  `Permission denied` into their respective log files, with no other visible symptom — don't let a future
+  `git add` of a new host-cron script re-introduce this; check `git ls-files -s` shows `100755` for it.
+  `backup.sh` additionally uploads the dump to an S3-compatible bucket (Exoscale SOS) when
+  `S3_BACKUP_BUCKET` is set in `.env`, purely as an off-box copy alongside the existing local one — see
+  "Off-Box-Kopie" in `docker/README.md`. Retention for that copy is a lifecycle rule in the Exoscale
+  console, not scripted deletion, so the script doesn't need a second delete path against a second storage
+  API. "NTP-Synchronisierung"
   can't run a real NTP client check inside the container either (it shares the host's clock, so there's
   nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against the
   `Date` response header of an external HTTPS call (`api.mailjet.com`) as a drift proxy, flagging >10s as

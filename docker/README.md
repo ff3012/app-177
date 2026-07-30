@@ -46,10 +46,39 @@
 ```bash
 crontab -e
 # Nightly at 03:00
-0 3 * * * /opt/ffapp/docker/backup.sh >> /var/log/ffapp-backup.log 2>&1
+0 3 * * * /opt/app-177/docker/backup.sh >> /var/log/ffapp-backup.log 2>&1
 ```
 
-Backups landen (gzip) in `docker/backups/`, 30 Tage Aufbewahrung. Empfehlung: zusätzlich regelmäßig off-box sichern (z. B. `rsync` auf eine Hetzner Storage Box).
+Backups landen (gzip) in `docker/backups/`, 30 Tage Aufbewahrung. `backup.sh` und
+`send-scheduled-news.sh` sind im Repo als ausführbar (`chmod +x`) getrackt — nach einem frischen
+`git clone` sollte kein manuelles `chmod +x` mehr nötig sein; falls doch (z. B. nach einem
+Checkout-Tool, das den Modus nicht überträgt), gibt cron sonst stillschweigend `Permission denied`
+in `/var/log/ffapp-backup.log` aus, ohne dass irgendwo sonst ein Fehler auftaucht.
+
+### Off-Box-Kopie auf S3-kompatiblen Object Storage (z. B. Exoscale SOS)
+
+`docker/backup.sh` lädt den frischen Dump zusätzlich zu einem S3-kompatiblen Bucket hoch, sobald
+`S3_BACKUP_BUCKET` in `.env` gesetzt ist — ist die Variable leer/nicht gesetzt, macht das Skript
+unverändert nur das lokale Backup wie bisher. In `.env` ergänzen:
+
+```
+S3_BACKUP_BUCKET=app-177-backup
+S3_ENDPOINT_URL=https://sos-at-vie-1.exo.io
+S3_ACCESS_KEY=<Access Key aus dem Exoscale-Portal>
+S3_SECRET_KEY=<Secret Key aus dem Exoscale-Portal>
+```
+
+Voraussetzung ist die AWS CLI auf dem Host (Exoscale SOS ist S3-kompatibel, daher genügt ein
+generischer S3-Client mit `--endpoint-url`, keine Exoscale-spezifische Tooling-Abhängigkeit):
+
+```bash
+apt-get update && apt-get install -y awscli
+```
+
+Aufbewahrung/Löschung alter Backups im Bucket läuft bewusst **nicht** über das Skript, sondern über
+eine Lifecycle-Regel im Exoscale-Portal (Bucket → Lifecycle Rules, z. B. "nach 30 Tagen löschen") —
+das erspart eine zweite Löschlogik gegen eine zweite Storage-API im Skript, die sonst parallel zur
+lokalen 30-Tage-`find`-Löschung gepflegt werden müsste.
 
 ## News-Modul: terminierte Push-Nachrichten versenden
 
@@ -58,10 +87,9 @@ News braucht es zusätzlich einen Cronjob, der `docker/send-scheduled-news.sh` r
 (das Skript ruft `/api/cron/send-scheduled-news` mit dem `CRON_SECRET` aus `.env` auf):
 
 ```bash
-chmod +x docker/send-scheduled-news.sh
 crontab -e
 # Every 5 minutes
-*/5 * * * * /opt/ffapp/docker/send-scheduled-news.sh >> /var/log/ffapp-news.log 2>&1
+*/5 * * * * /opt/app-177/docker/send-scheduled-news.sh >> /var/log/ffapp-news.log 2>&1
 ```
 
 Ohne diesen Cronjob werden nur sofort gesendete News tatsächlich zugestellt; terminierte News
