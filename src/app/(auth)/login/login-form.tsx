@@ -19,6 +19,7 @@ type Mode = 'password' | 'email-token';
 
 export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const [mode, setMode] = useState<Mode>('password');
+  const [tokenEmail, setTokenEmail] = useState('');
   const [loginState, loginFormAction, loginPending] = useActionState(loginAction, initialLoginState);
   const [tokenState, tokenFormAction, tokenPending] = useActionState(requestLoginToken, initialTokenState);
   const [confirmState, confirmFormAction, confirmPending] = useActionState(confirmLoginWithToken, initialConfirmState);
@@ -112,9 +113,11 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
                   type="email"
                   required
                   autoComplete="email"
+                  value={tokenEmail}
+                  onChange={(event) => setTokenEmail(event.target.value)}
                   className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
                 />
-                <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink und Code per E-Mail, gültig 15 Minuten.</p>
+                <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink und einen 6-stelligen Code per E-Mail, gültig 15 Minuten.</p>
               </div>
 
               {tokenState.error && <p className="text-sm text-red-700">{tokenState.error}</p>}
@@ -135,24 +138,45 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
             <div className="h-px flex-1 bg-neutral-200" />
           </div>
 
-          <form action={confirmFormAction} className="flex flex-col gap-1">
-            <label htmlFor="token" className="text-sm font-medium text-neutral-700">
-              Code aus E-Mail einfügen
-            </label>
-            <input
-              id="token"
-              name="token"
-              type="text"
-              autoComplete="one-time-code"
-              className="rounded border border-neutral-300 px-3 py-2 font-mono text-sm focus:border-brand focus:outline-none"
-              placeholder="Code aus der E-Mail"
-            />
-            <p className="mb-2 text-xs text-neutral-500">
-              Nutzt du die App vom Homescreen aus? Öffne den Link in der E-Mail nicht, sondern füge den Code hier
-              direkt ein.
+          <form action={confirmFormAction} className="flex flex-col gap-3">
+            <p className="text-xs text-neutral-500">
+              Nutzt du die App vom Homescreen aus? Öffne den Link in der E-Mail nicht (er würde nur in Safari
+              anmelden), sondern gib E-Mail und den 6-stelligen Code hier direkt ein.
             </p>
 
-            {confirmState.error && <p className="mb-2 text-sm text-red-700">{confirmState.error}</p>}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="confirm-email" className="text-sm font-medium text-neutral-700">
+                E-Mail
+              </label>
+              <input
+                id="confirm-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={tokenEmail}
+                onChange={(event) => setTokenEmail(event.target.value)}
+                className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="shortCode" className="text-sm font-medium text-neutral-700">
+                6-stelliger Code aus E-Mail
+              </label>
+              <input
+                id="shortCode"
+                name="shortCode"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                autoComplete="one-time-code"
+                className="rounded border border-neutral-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-brand focus:outline-none"
+                placeholder="123456"
+              />
+            </div>
+
+            {confirmState.error && <p className="text-sm text-red-700">{confirmState.error}</p>}
 
             <button
               type="submit"

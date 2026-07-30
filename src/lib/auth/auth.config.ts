@@ -3,7 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { TokenPurpose } from '@prisma/client';
 import { getDummyPasswordHash, verifyPassword } from '@/lib/password';
 import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsById } from '@/lib/auth/build-session-user';
-import { consumeToken } from '@/lib/auth/tokens';
+import { consumeToken, consumeLoginTokenByShortCode } from '@/lib/auth/tokens';
 import type { SessionUser } from '@/types/next-auth';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -37,28 +37,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return buildSessionUser(user);
       },
     }),
-    // Zweiter Anmeldeweg neben Passwort: ein per E-Mail verschickter Einmal-Link (siehe
-    // app/(auth)/login/token/[token]). Bewusst ein eigener Provider statt eines Zweigs im
-    // credentials-Provider oben, damit beide Wege sauber getrennt bleiben (signIn('email-token', { token })).
+    // Zweiter Anmeldeweg neben Passwort: ein per E-Mail verschickter Einmal-Link ODER ein
+    // 6-stelliger Code (siehe app/(auth)/login/token/[token] bzw. login/actions.ts -
+    // confirmLoginWithToken). Bewusst ein eigener Provider statt eines Zweigs im
+    // credentials-Provider oben, damit beide Wege sauber getrennt bleiben. Beide Formen sind
+    // dieselbe Anmeldeart (email-token), nur zwei Eingabewege für denselben Token-Datensatz -
+    // daher hier zusammengefasst statt eines dritten Providers.
     Credentials({
       id: 'email-token',
       name: 'E-Mail Token',
       credentials: {
         token: { label: 'Token', type: 'text' },
+        email: { label: 'E-Mail', type: 'email' },
+        shortCode: { label: 'Code', type: 'text' },
       },
       async authorize(credentials) {
         const rawToken = credentials?.token;
-        if (typeof rawToken !== 'string' || !rawToken) {
-          return null;
-        }
+        const email = credentials?.email;
+        const shortCode = credentials?.shortCode;
 
-        const consumedUser = await consumeToken(rawToken, TokenPurpose.LOGIN);
+        let consumedUser: { id: string } | null = null;
+        if (typeof rawToken === 'string' && rawToken) {
+          consumedUser = await consumeToken(rawToken, TokenPurpose.LOGIN);
+        } else if (typeof email === 'string' && email && typeof shortCode === 'string' && shortCode) {
+          consumedUser = await consumeLoginTokenByShortCode(email.toLowerCase().trim(), shortCode);
+        }
         if (!consumedUser) {
           return null;
         }
 
-        // consumeToken liefert den Benutzer ohne die für buildSessionUser nötigen Relationen
-        // (homeOrganization, memberships, droneMembership) - deshalb hier erneut vollständig laden.
+        // Beide consume-Funktionen liefern den Benutzer ohne die für buildSessionUser nötigen
+        // Relationen (homeOrganization, memberships, droneMembership) - deshalb hier erneut
+        // vollständig laden.
         const user = await findUserWithRelationsById(consumedUser.id);
         if (!user || !user.isActive) {
           return null;

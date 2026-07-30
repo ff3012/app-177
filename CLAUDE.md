@@ -120,32 +120,38 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
 - **Email-token login**: `/login` lets a member choose Passwort or E-Mail Token via a tab toggle in
   `login-form.tsx`. The token path is a *second, separate* Auth.js Credentials provider
   (`id: 'email-token'` in `auth.config.ts`) rather than a branch inside the password provider, so the two
-  stay cleanly separated (`signIn('email-token', { token })` vs `signIn('credentials', { email, password })`).
-  Requesting a link (`requestLoginToken` in `login/actions.ts`) reuses the exact non-enumerating response
-  and dual rate-limit pattern (per-browser cookie + per-account recent-token check) already established by
-  `passwort-vergessen/actions.ts` — a nonexistent/inactive email gets the *same* generic "falls ein Konto
-  existiert..." message as a real one, deliberately, per how every other "request a link" flow here already
-  behaves. `TokenPurpose.LOGIN` reuses the shared `PasswordToken` table (15-minute TTL, shortest of the
-  three purposes — see `TTL_BY_PURPOSE` in `tokens.ts`). Clicking the emailed link lands on
-  `/login/token/[token]`, a page requiring one explicit "Jetzt anmelden" button click (not auto-consumed on
-  page load) specifically so an email link-scanner/security gateway's automatic GET can't silently burn the
-  one-time token before the real user clicks it — same reasoning as why activation/password-reset are also
-  form-submission-gated, not GET-consumed. On success it redirects to `/login/token/erfolgreich`, not straight
-  to `/kalender`, so it can show an iOS-specific note (detected via the `user-agent` request header).
+  stay cleanly separated. This provider itself accepts *two different* credential shapes for what's
+  conceptually one login grant: `{ token }` (the long link) or `{ email, shortCode }` (the short code) —
+  handled as two branches inside one `authorize()`, not a third provider, since both ultimately consume the
+  same `PasswordToken` row. Requesting one (`requestLoginToken` in `login/actions.ts`) reuses the exact
+  non-enumerating response and dual rate-limit pattern (per-browser cookie + per-account recent-token check)
+  already established by `passwort-vergessen/actions.ts` — a nonexistent/inactive email gets the *same*
+  generic "falls ein Konto existiert..." message as a real one. `TokenPurpose.LOGIN` reuses the shared
+  `PasswordToken` table (15-minute TTL, shortest of the three purposes — see `TTL_BY_PURPOSE` in
+  `tokens.ts`); `createLoginToken` additionally generates a 6-digit `shortCode` (hashed at rest, same as the
+  token) stored on that same row, so consuming either one invalidates both.
 
-  **iOS home-screen PWA caveat, confirmed by real testing, not just theory**: a link opened from Mail always
-  lands in a regular Safari tab, never directly inside an already-installed "Zum Home-Bildschirm" PWA, because
-  iOS gives standalone web apps their own storage container, genuinely separate from Safari — confirmed this
-  isn't just a stale in-memory session either: even a full close (swipe away in the app switcher) and relaunch
-  of the home-screen app does *not* pick up a session established via the emailed link in Safari. There is no
-  way to share a cookie across that boundary; it's a hard platform limitation, not something fixable in this
-  codebase. The actual fix is `confirmLoginWithToken` (`login/actions.ts`) plus the "Code aus E-Mail einfügen"
-  field always rendered in `login-form.tsx`'s E-Mail-Token tab: pasting the raw token there calls
-  `signIn('email-token', ...)` directly from whatever context the `/login` page itself is currently running
-  in (the home-screen app, if that's where it was opened from), so the session lands in the *same* storage
-  container the page is already in — no Safari hand-off at all. `sendLoginTokenEmail` shows the raw token as a
-  copyable monospace block for exactly this reason, not just embedded in the link's href. This same limitation
-  applies equally to activation/password-reset links; it's just far more commonly hit for login.
+  **Why two forms of the same token exist — a real iOS constraint, confirmed by testing, not just theory**:
+  an email link opened from Mail always lands in a regular Safari tab, never directly inside an
+  already-installed "Zum Home-Bildschirm" PWA, because iOS gives standalone web apps their own storage
+  container, genuinely separate from Safari. This isn't just a stale in-memory session either — confirmed
+  that even a full close (swipe away in the app switcher) and relaunch of the home-screen app does *not*
+  pick up a session established via the emailed link in Safari. There is no way to share a cookie across
+  that boundary; it's a hard platform limitation, not something fixable in this codebase. The long token
+  still powers `/login/token/[token]` (one explicit "Jetzt anmelden" click, not auto-consumed on page load,
+  so an email link-scanner's automatic GET can't burn it before the real user clicks — same reasoning as why
+  activation/password-reset are also form-submission-gated) for anyone in a normal browser tab. But for a
+  home-screen-PWA user, the *only* way to end up logged in inside that PWA's own container is to never leave
+  it — hence the always-visible "Code aus E-Mail einfügen" section in `login-form.tsx`'s E-Mail-Token tab,
+  wired to `confirmLoginWithToken`, which calls `signIn('email-token', { email, shortCode })` directly from
+  whatever context `/login` is currently running in. A 6-digit code is guessable by brute force where the
+  long token isn't, so `confirmLoginWithToken` requires the email too and runs through the exact same
+  `login-throttle.ts` rate limiting as password login (5 attempts per email, then a 15-minute lockout) —
+  don't drop that check when touching this code. `sendLoginTokenEmail` shows the short code as a large
+  copyable block and the link separately; this whole iOS storage-isolation limitation applies equally to
+  activation/password-reset links, it's just far more commonly hit for login. `/login/token/erfolgreich`
+  (redirected to after a successful *link* login, not the code path) shows an iOS-specific note about this
+  too, detected via the `user-agent` request header.
 
 ### Data model (`prisma/schema.prisma`)
 

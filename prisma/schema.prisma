@@ -112,10 +112,15 @@ model LoginAttempt {
 
 // One-time links for account activation and "Passwort vergessen". The token
 // column stores a SHA-256 hash of the random token, never the raw value.
+// shortCode (also hashed) is only ever set for TokenPurpose.LOGIN: a 6-digit alternative to the
+// long token, meant to be pasted directly into an already-open page (e.g. an iOS home-screen PWA,
+// which can't receive a session from a link opened in Safari - see login/actions.ts). Consuming
+// either the long token or the short code invalidates both, since they're the same login grant.
 model PasswordToken {
   id        String       @id @default(cuid())
   userId    String
   token     String       @unique
+  shortCode String?
   purpose   TokenPurpose
   expiresAt DateTime
   usedAt    DateTime?

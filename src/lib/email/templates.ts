@@ -55,7 +55,11 @@ export async function sendPasswordResetEmail(user: { email: string; firstName: s
   });
 }
 
-export async function sendLoginTokenEmail(user: { email: string; firstName: string; lastName: string }, token: string) {
+export async function sendLoginTokenEmail(
+  user: { email: string; firstName: string; lastName: string },
+  token: string,
+  shortCode: string,
+) {
   const link = `${baseUrl()}/login/token/${token}`;
   await sendEmail({
     to: user.email,
@@ -64,29 +68,35 @@ export async function sendLoginTokenEmail(user: { email: string; firstName: stri
     textPart: [
       `Hallo ${user.firstName},`,
       '',
-      'du hast eine Anmeldung per E-Mail angefordert. Über folgenden Link kannst du dich anmelden:',
+      'du hast eine Anmeldung per E-Mail angefordert.',
+      '',
+      'Am Computer oder im normalen Browser: Über folgenden Link kannst du dich anmelden:',
       link,
       '',
-      'Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben nicht,',
-      'sondern kopiere stattdessen diesen Code und füge ihn direkt in der App im Feld',
-      '"Code aus E-Mail einfügen" ein - ein Link aus der Mail-App öffnet immer Safari, nie die',
-      'bereits installierte App:',
+      'Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben NICHT - er würde',
+      'nur in Safari anmelden, nicht in der bereits installierten App. Gib stattdessen diesen Code',
+      'direkt in der App im Feld "Code aus E-Mail einfügen" ein:',
       '',
-      token,
+      shortCode,
       '',
-      'Der Code/Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.',
+      'Code und Link sind 15 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung -',
+      'sobald einer verwendet wurde, wird auch der andere ungültig). Falls du das nicht warst, kannst du',
+      'diese E-Mail ignorieren.',
       '',
       'Feuerwehr Abschnitt Purkersdorf',
     ].join('\n'),
     htmlPart: [
       `<p>Hallo ${user.firstName},</p>`,
-      '<p>du hast eine Anmeldung per E-Mail angefordert. Über folgenden Link kannst du dich anmelden:</p>',
+      '<p>du hast eine Anmeldung per E-Mail angefordert.</p>',
+      '<p>Am Computer oder im normalen Browser: Über folgenden Link kannst du dich anmelden:</p>',
       `<p><a href="${link}">${link}</a></p>`,
-      '<p>Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben nicht, sondern kopiere ' +
-        'stattdessen diesen Code und füge ihn direkt in der App im Feld „Code aus E-Mail einfügen" ein - ein Link ' +
-        'aus der Mail-App öffnet immer Safari, nie die bereits installierte App:</p>',
-      `<p style="font-family: monospace; word-break: break-all; background: #f4f4f4; padding: 8px 12px; border-radius: 4px;">${token}</p>`,
-      '<p>Der Code/Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p>',
+      '<p>Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben <strong>nicht</strong> - ' +
+        'er würde nur in Safari anmelden, nicht in der bereits installierten App. Gib stattdessen diesen Code ' +
+        'direkt in der App im Feld „Code aus E-Mail einfügen" ein:</p>',
+      `<p style="font-family: monospace; font-size: 24px; letter-spacing: 4px; background: #f4f4f4; padding: 12px 16px; border-radius: 4px; text-align: center;">${shortCode}</p>`,
+      '<p>Code und Link sind 15 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung - ' +
+        'sobald einer verwendet wurde, wird auch der andere ungültig). Falls du das nicht warst, kannst du diese ' +
+        'E-Mail ignorieren.</p>',
       '<p>Feuerwehr Abschnitt Purkersdorf</p>',
     ].join(''),
   });
