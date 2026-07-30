@@ -493,12 +493,12 @@ composer at all (only a "Nachricht senden" trigger button, no destination screen
 bottom-tab-bar navigation for real would mean building genuine safe-area-aware fixed positioning and
 designing that missing composer flow from scratch, both real engineering work, not a copy job.
 
-Given that, the color/typography were adopted now (low-risk); the mockup's bottom-tab-bar mobile navigation
-is intentionally deferred to a later pass rather than built alongside the color change — the existing single
-`Nav` component (`components/layout/nav.tsx`, shared as-is between desktop and mobile, wrapping via
-`flex-wrap`) is unchanged for now. What *did* change, as one coordinated token update (not scattered
-one-off hex edits) so the app shell, `<body>` fallback, PWA chrome, and browser UI chrome (address bar color
-on Android) never drift out of sync with each other:
+Given that, the color/typography were adopted first as a low-risk V1 pass, with the mockup's bottom-tab-bar
+mobile navigation deliberately built as a separate V2 afterward rather than alongside the color change, once
+the safe-area/z-index/responsive-table design questions below had been thought through and planned properly.
+Both passes have since shipped and been confirmed bug-free on real devices. What changed in V1, as one
+coordinated token update (not scattered one-off hex edits) so the app shell, `<body>` fallback, PWA chrome,
+and browser UI chrome (address bar color on Android) never drift out of sync with each other:
 - `tailwind.config.ts`'s `colors.brand.DEFAULT` (`#f44336` → `#e4322b`; `brand.dark` was already an exact
   match at `#c62828`, unchanged) and `fontFamily.sans`/`fontFamily.mono` (Noto Sans → Barlow via
   `next/font/google` in `src/app/layout.tsx`'s `--font-barlow` variable; new `--font-ibm-plex-mono` variable
@@ -513,3 +513,33 @@ on Android) never drift out of sync with each other:
 `src/lib/email/templates.ts`'s one inline `background: #f4f4f4` (the login short-code email block) was
 deliberately left untouched — email client rendering is a separate concern from the web app's own theme and
 wasn't part of this pass.
+
+**V2 (mobile bottom-tab-bar + safe-area + responsive tables)**: `Nav` (`components/layout/nav.tsx`) is now
+desktop-only (`hidden sm:flex`); a new `MobileTabBar` (`components/layout/mobile-tab-bar.tsx`) renders the
+same 1-4 permission-filtered items below `sm:` (640px, this codebase's only breakpoint — reused rather than
+inventing a new one). Both share item-list/active-route logic via `src/lib/nav-items.ts`
+(`getNavItems`/`getActiveNavHref`) so the two nav variants can never drift apart. `viewport.viewportFit` is
+`'cover'` in `src/app/layout.tsx` (required for `env(safe-area-inset-*)` to resolve to anything but `0px`
+anywhere, including inside the standalone iOS PWA's already-active `black-translucent` status bar) —
+this applies globally, so `.pt-safe`/`.pb-safe-tabbar`/`.pb-content-safe` (globals.css, all with an explicit
+`, 0px` fallback) pad not just `(app)/layout.tsx`'s header and `<main>`, but also every `(auth)/*` page and
+`drohnen-schnell/[token]`'s own wrapper `<div>`, since those don't share `(app)/layout.tsx` and would
+otherwise sit under the notch/status bar once `viewport-fit=cover` took effect. `<Footer/>` is hidden below
+`sm:` at its `(app)/layout.tsx` call site only (not inside the shared `Footer` component itself), so the
+auth pages that also render it keep showing it.
+
+Coordinated z-index scheme, since the new fixed tab bar sits permanently on top of page content and could
+otherwise let taps reach through elements meant to block them: tab bar `z-30` < profile dropdown
+(`profile-menu.tsx`) `z-40` < calendar's full-screen event-detail modal (`calendar-view.tsx`) `z-50`.
+
+The three tables that previously only degraded via `overflow-x-auto` on narrow screens (Drohnengruppe flight
+table, Benutzerverwaltung, News list) got a mobile card-fallback view added, following the exact pattern
+already established by `event-list-view.tsx`: the same already-computed/filtered array feeds both a
+`sm:hidden` card list and a `hidden sm:block` table, so the two views can't diverge. Benutzerverwaltung's
+desktop click-to-sort column headers have no card equivalent, so a `sm:hidden` sort control (a `<select>`
+of columns + a direction-toggle button) was added, wired to the exact same `sortKey`/`sortDir`/`toggleSort`
+state the table already used.
+
+While testing V2, an unrelated pre-existing bug was found and deliberately left unfixed (flagged as a
+separate follow-up instead): the profile dropdown (name/bell icon in the header) doesn't open on click,
+confirmed present on the code from before V2 too — see `profile-menu.tsx` if picking that up.
