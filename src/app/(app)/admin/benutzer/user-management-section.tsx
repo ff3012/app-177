@@ -138,9 +138,20 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
                 <td className="break-words px-3 py-2">{u.droneLabel}</td>
                 <td className="break-words px-3 py-2">{u.pushLabel}</td>
                 <td className="break-words px-3 py-2">{u.statusLabel}</td>
-                <td className="break-words px-3 py-2 text-right">
-                  <Link href={`/admin/benutzer/${u.id}`} className="text-brand hover:underline">
-                    Bearbeiten
+                <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <Link
+                    href={`/admin/benutzer/${u.id}`}
+                    aria-label="Bearbeiten"
+                    title="Bearbeiten"
+                    className="inline-flex rounded border border-neutral-300 bg-white p-1.5 text-neutral-600 hover:bg-neutral-100"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path
+                        d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </Link>
                 </td>
               </tr>
