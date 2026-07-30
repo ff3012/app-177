@@ -4,6 +4,13 @@ import { prisma } from '@/lib/db/prisma';
 
 const ACTIVATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const LOGIN_TTL_MS = 15 * 60 * 1000;
+
+const TTL_BY_PURPOSE: Record<TokenPurpose, number> = {
+  [TokenPurpose.ACTIVATION]: ACTIVATION_TTL_MS,
+  [TokenPurpose.PASSWORD_RESET]: PASSWORD_RESET_TTL_MS,
+  [TokenPurpose.LOGIN]: LOGIN_TTL_MS,
+};
 
 function hashToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -12,7 +19,7 @@ function hashToken(rawToken: string): string {
 /** Erzeugt einen neuen One-Time-Token für den Benutzer und gibt den (rohen, ungehashten) Token zurück. */
 export async function createToken(userId: string, purpose: TokenPurpose): Promise<string> {
   const rawToken = crypto.randomBytes(32).toString('hex');
-  const ttl = purpose === TokenPurpose.ACTIVATION ? ACTIVATION_TTL_MS : PASSWORD_RESET_TTL_MS;
+  const ttl = TTL_BY_PURPOSE[purpose];
 
   await prisma.passwordToken.create({
     data: {

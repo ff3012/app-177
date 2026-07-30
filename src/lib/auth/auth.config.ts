@@ -1,7 +1,9 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import { TokenPurpose } from '@prisma/client';
 import { getDummyPasswordHash, verifyPassword } from '@/lib/password';
 import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsById } from '@/lib/auth/build-session-user';
+import { consumeToken } from '@/lib/auth/tokens';
 import type { SessionUser } from '@/types/next-auth';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -29,6 +31,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const passwordValid = await verifyPassword(password, hashToCompare);
 
         if (!user || !user.isActive || !passwordValid) {
+          return null;
+        }
+
+        return buildSessionUser(user);
+      },
+    }),
+    // Zweiter Anmeldeweg neben Passwort: ein per E-Mail verschickter Einmal-Link (siehe
+    // app/(auth)/login/token/[token]). Bewusst ein eigener Provider statt eines Zweigs im
+    // credentials-Provider oben, damit beide Wege sauber getrennt bleiben (signIn('email-token', { token })).
+    Credentials({
+      id: 'email-token',
+      name: 'E-Mail Token',
+      credentials: {
+        token: { label: 'Token', type: 'text' },
+      },
+      async authorize(credentials) {
+        const rawToken = credentials?.token;
+        if (typeof rawToken !== 'string' || !rawToken) {
+          return null;
+        }
+
+        const consumedUser = await consumeToken(rawToken, TokenPurpose.LOGIN);
+        if (!consumedUser) {
+          return null;
+        }
+
+        // consumeToken liefert den Benutzer ohne die für buildSessionUser nötigen Relationen
+        // (homeOrganization, memberships, droneMembership) - deshalb hier erneut vollständig laden.
+        const user = await findUserWithRelationsById(consumedUser.id);
+        if (!user || !user.isActive) {
           return null;
         }
 

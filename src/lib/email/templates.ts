@@ -54,3 +54,14 @@ export async function sendPasswordResetEmail(user: { email: string; firstName: s
     htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p>Feuerwehr Abschnitt Purkersdorf</p>`,
   });
 }
+
+export async function sendLoginTokenEmail(user: { email: string; firstName: string; lastName: string }, token: string) {
+  const link = `${baseUrl()}/login/token/${token}`;
+  await sendEmail({
+    to: user.email,
+    toName: `${user.firstName} ${user.lastName}`,
+    subject: 'Dein Anmeldelink',
+    textPart: `Hallo ${user.firstName},\n\ndu hast eine Anmeldung per E-Mail-Link angefordert. Über folgenden Link kannst du dich anmelden:\n\n${link}\n\nDer Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.\n\nFeuerwehr Abschnitt Purkersdorf`,
+    htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast eine Anmeldung per E-Mail-Link angefordert. Über folgenden Link kannst du dich anmelden:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 15 Minuten gültig und einmalig verwendbar. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p>Feuerwehr Abschnitt Purkersdorf</p>`,
+  });
+}

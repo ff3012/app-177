@@ -33,6 +33,7 @@ enum FlightPurpose {
 enum TokenPurpose {
   ACTIVATION
   PASSWORD_RESET
+  LOGIN
 }
 
 enum EventCategory {

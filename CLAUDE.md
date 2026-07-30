@@ -117,6 +117,20 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
   `NEXT_REDIRECT`) is told apart from failure (throws an `AuthError`) when wrapping `signIn()`. The
   `instanceof AuthError` check alone isn't reliable because Next.js can bundle a Server Action's code into a
   different chunk than the one that threw, so both files fall back to duck-typing on `.name`/`.type`/`.digest`.
+- **Email-token login**: `/login` lets a member choose Passwort or E-Mail Token via a tab toggle in
+  `login-form.tsx`. The token path is a *second, separate* Auth.js Credentials provider
+  (`id: 'email-token'` in `auth.config.ts`) rather than a branch inside the password provider, so the two
+  stay cleanly separated (`signIn('email-token', { token })` vs `signIn('credentials', { email, password })`).
+  Requesting a link (`requestLoginToken` in `login/actions.ts`) reuses the exact non-enumerating response
+  and dual rate-limit pattern (per-browser cookie + per-account recent-token check) already established by
+  `passwort-vergessen/actions.ts` — a nonexistent/inactive email gets the *same* generic "falls ein Konto
+  existiert..." message as a real one, deliberately, per how every other "request a link" flow here already
+  behaves. `TokenPurpose.LOGIN` reuses the shared `PasswordToken` table (15-minute TTL, shortest of the
+  three purposes — see `TTL_BY_PURPOSE` in `tokens.ts`). Clicking the emailed link lands on
+  `/login/token/[token]`, a page requiring one explicit "Jetzt anmelden" button click (not auto-consumed on
+  page load) specifically so an email link-scanner/security gateway's automatic GET can't silently burn the
+  one-time token before the real user clicks it — same reasoning as why activation/password-reset are also
+  form-submission-gated, not GET-consumed.
 
 ### Data model (`prisma/schema.prisma`)
 
