@@ -63,6 +63,21 @@ export function canManageNews(user: SessionUser): boolean {
   return isSiteAdmin(user);
 }
 
+/**
+ * Sichtbarkeit eines einzelnen Termins - identische Regel wie die Kalenderübersicht-Query selbst
+ * (eigene Feuerwehr ODER abschnittsweit; Drohnengruppe-Kategorie zusätzlich nur mit Modulzugriff).
+ * Muss bei einer Änderung der Sichtbarkeitsregel in kalender/page.tsx mitgezogen werden.
+ */
+export function canViewEvent(
+  user: SessionUser,
+  event: { organizationId: string; isSectionWide: boolean; category: string },
+): boolean {
+  const visible = event.organizationId === user.homeOrganizationId || event.isSectionWide;
+  if (!visible) return false;
+  if (event.category === 'DROHNENGRUPPE') return canViewDroneModule(user);
+  return true;
+}
+
 export class ForbiddenError extends Error {
   constructor(message = 'Keine Berechtigung für diese Aktion.') {
     super(message);

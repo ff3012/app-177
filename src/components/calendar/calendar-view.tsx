@@ -23,6 +23,8 @@ export interface CalendarEventInput {
   organizationName?: string;
   category?: string;
   layer?: string;
+  myRsvpStatus?: 'ZUGESAGT' | 'ABGESAGT' | 'UNKLAR' | null;
+  rsvpCounts?: { ZUGESAGT: number; ABGESAGT: number; UNKLAR: number };
 }
 
 function formatEventTime(event: CalendarEventInput) {
@@ -103,8 +105,11 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
                 </div>
               )}
             </dl>
-            <div className="mt-4 border-t border-neutral-200 pt-3">
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-3">
               <AddToCalendarLink eventId={viewEvent.id} />
+              <a href={`/kalender/${viewEvent.id}`} className="text-sm font-medium text-brand hover:underline">
+                Zusage & Teilnehmerliste
+              </a>
             </div>
           </div>
         </div>

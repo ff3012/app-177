@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canCreateSectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
@@ -30,7 +31,12 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-neutral-900">Termin bearbeiten</h1>
-        <AddToCalendarLink eventId={event.id} />
+        <div className="flex items-center gap-3">
+          <AddToCalendarLink eventId={event.id} />
+          <Link href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
+            Zusage & Teilnehmerliste
+          </Link>
+        </div>
       </div>
       <EventForm
         organizations={organizations}

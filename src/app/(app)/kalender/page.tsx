@@ -22,6 +22,27 @@ export default async function KalenderPage() {
     }),
   ]);
 
+  const eventIds = allEvents.map((event) => event.id);
+  const [rsvpGroups, ownRsvps] = await Promise.all([
+    eventIds.length > 0
+      ? prisma.terminZusage.groupBy({ by: ['eventId', 'status'], where: { eventId: { in: eventIds } }, _count: true })
+      : Promise.resolve([]),
+    eventIds.length > 0
+      ? prisma.terminZusage.findMany({
+          where: { eventId: { in: eventIds }, userId: user.id },
+          select: { eventId: true, status: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const rsvpCountsByEvent = new Map<string, { ZUGESAGT: number; ABGESAGT: number; UNKLAR: number }>();
+  for (const group of rsvpGroups) {
+    const counts = rsvpCountsByEvent.get(group.eventId) ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 };
+    counts[group.status] = group._count;
+    rsvpCountsByEvent.set(group.eventId, counts);
+  }
+  const myRsvpByEvent = new Map(ownRsvps.map((rsvp) => [rsvp.eventId, rsvp.status]));
+
   const canSeeDroneCategory = canViewDroneModule(user);
   const canCreateAnyEvent = user.feuerwehrAdminOrgIds.length > 0;
 
@@ -50,6 +71,8 @@ export default async function KalenderPage() {
         organizationName: event.organization.shortName ?? event.organization.name,
         category: event.category,
         layer,
+        myRsvpStatus: myRsvpByEvent.get(event.id) ?? null,
+        rsvpCounts: rsvpCountsByEvent.get(event.id) ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 },
       };
     });
 

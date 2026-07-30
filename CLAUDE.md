@@ -150,12 +150,42 @@ was merged in and now just redirects here). It fetches every event the user is a
 with a `layer` (`own` / `abschnitt` / `drohnengruppe`) and a `category`, and hands them to
 `components/calendar/kalender-with-layers.tsx`, a client component that renders one `ToggleSwitch` per layer
 (default: all on), filters client-side, and then renders either `CalendarView` (FullCalendar grid) or
-`EventListView` (plain sortable-by-date table: Datum/Uhrzeit/Tag/Betreff/Organisation/Kategorie) depending on
-a `viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new layer
-means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and pick a
-`backgroundColor` for it; both `CalendarEventInput` consumers (grid + list) read the same event shape, so add
-new fields there once. `EventListView` rows double-click to the edit page when `event.editable` is true (no
-action for non-editable rows beyond the view-only modal `CalendarView` already shows on click).
+`EventListView` (compact `table-fixed` table: Datum/Start/Tag/Betreff/Organisation/Zusagen-Badge, `text-xs`
+with tight padding so it stays inside the page's `max-w-5xl` column without horizontal scrolling) depending
+on a `viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new
+layer means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and pick
+a `backgroundColor` for it; both `CalendarEventInput` consumers (grid + list) read the same event shape, so
+add new fields there once. `EventListView` rows double-click to the edit page when `event.editable` is true;
+every row (editable or not) also gets a "Zusage" link to the new detail page (see RSVP below), next to the
+add-to-calendar icon.
+
+**RSVP ("Zusage")**: `TerminZusage` (`prisma/schema.prisma`) is one row per (eventId, userId) — a
+`ZusageStatus` (ZUGESAGT/ABGESAGT/UNKLAR) plus an optional note (max 200 chars, validated in
+`lib/validation/rsvp.schema.ts`), upserted on re-submit rather than kept as history. `lib/auth/permissions.ts`'s
+`canViewEvent(user, event)` is the single source of truth for "may this user RSVP to / see this event" —
+identical rule to the Kalenderübersicht query itself (own org OR section-wide, Drohnengruppe category
+additionally gated on module access); keep both in sync if the visibility rule ever changes.
+`src/app/(app)/kalender/[eventId]/page.tsx` is a new, separate "Detailansicht" route (distinct from
+`.../bearbeiten`) reachable by anyone who can see the event, not just admins — it shows the read-only event
+info, the `EventRsvpButtons` widget (three status buttons + note field, `withNote` prop toggles the note
+UI on/off), and the full Teilnehmerliste with per-status counts. `EventListView`'s badge and the detail page's
+counts both come from `prisma.terminZusage.groupBy` in `kalender/page.tsx`/the detail page respectively — no
+separate "API route" for reading, since Server Components fetch this directly, consistent with the rest of
+the app (no REST endpoints exist for any other authenticated feature). `setRsvp` (in
+`kalender/[eventId]/rsvp-actions.ts`) is called directly from client code (not a `<form action>`) so both the
+list view's instant single-click toggle (no note) and the detail page's explicit save (with note) share one
+action; a quick toggle omits the `note` argument entirely (not empty string) so it never clobbers a
+previously saved note — see the comment above `noteProvided` in that file before changing this.
+
+The detail page's "Push-Benachrichtigung jetzt senden" button (`SendEventPushButton` +
+`triggerEventPushNotification`) is gated on `canManageEventsFor(user, event.organizationId)` — the same
+right as editing/deleting the event itself, so any Feuerwehr-admin can push for their own org's events, not
+just the Abschnittskommando-Admin. This is a deliberate departure from `canManageNews` (News module,
+Abschnittskommando-Admin only) — explicitly chosen for this feature despite the parallel. It reuses the News
+module's `sendPushToSubscriptions` but resolves its own audience via
+`resolveEventAudienceUserIds`/`sendEventPushNow` (`lib/push/`) rather than `NewsMessage`'s
+ORGANIZATION/DROHNENGRUPPE audience types, since an event can be section-wide without any corresponding
+`NewsMessage` row — it's a one-off send, not persisted, no `sentAt` tracking.
 
 `components/calendar/event-form.tsx`: changing Start always carries its date onto Ende; Ende's *time* is only
 auto-suggested (Start + 15 minutes) while Ende has no time of its own yet — once it has one (typed or

@@ -40,6 +40,12 @@ enum EventCategory {
   DROHNENGRUPPE
 }
 
+enum ZusageStatus {
+  ZUGESAGT
+  ABGESAGT
+  UNKLAR
+}
+
 enum NewsAudienceType {
   ORGANIZATION
   DROHNENGRUPPE
@@ -86,6 +92,7 @@ model User {
   passwordTokens   PasswordToken[]
   pushSubscriptions PushSubscription[]
   newsMessagesCreated NewsMessage[]         @relation("NewsCreatedBy")
+  terminZusagen    TerminZusage[]
 
   @@index([homeOrganizationId])
 }
@@ -159,11 +166,30 @@ model Event {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User         @relation("EventCreatedBy", fields: [createdById], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])
+  zusagen      TerminZusage[]
 
   @@index([organizationId, startsAt])
   @@index([isSectionWide, startsAt])
+}
+
+// RSVP pro Termin und Benutzer. Eine Zeile pro (eventId, userId) - erneutes Setzen aktualisiert
+// die bestehende Zeile (upsert), erzeugt keine Historie.
+model TerminZusage {
+  id        String       @id @default(cuid())
+  eventId   String
+  userId    String
+  status    ZusageStatus
+  note      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
 }
 
 // ---------- Module 2: Drohnengruppe ----------
