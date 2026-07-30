@@ -375,6 +375,27 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against the
   `Date` response header of an external HTTPS call (`api.mailjet.com`) as a drift proxy, flagging >10s as
   out of sync.
+- **Daily system-check email**: the same check that powers the `/admin/status` button also runs unattended
+  once a day via `/api/cron/system-check` (secret-gated like `/api/cron/send-scheduled-news`) +
+  `docker/system-check-email.sh` on the host crontab, mailing the result as a table to an address
+  configured under `/admin/email` ("System Check E-Mail", `AppSettings.systemCheckNotificationEmail` via
+  `src/lib/settings.ts` — same admin-configurable pattern as "Drohnenflug E-Mail", not hardcoded like
+  `FEEDBACK_RECIPIENT`). `src/lib/system/notify-system-check.ts`'s `notifySystemCheckResult()` mirrors
+  `notifyDroneFlightCreated()`'s shape exactly: reads the recipient from `AppSettings` and no-ops if unset,
+  and wraps the send in try/catch so a Mailjet outage never fails the cron run itself. The manual "System
+  Check" button on `/admin/status` calls the exact same `notifySystemCheckResult()` too (not only the daily
+  cron) — deliberately, so an admin can trigger a real end-to-end test of the email path (recipient
+  configured? Mailjet reachable?) on demand instead of waiting for the next 09:00 run.
+  `runSystemCheck()` in `admin/status/actions.ts` is session-gated (`requireUser()` +
+  `assertPermission(isSiteAdmin(user))`) and can't be called from a route with no session, so the actual
+  check logic was pulled out into a plain `getSystemCheckResult()` in `src/lib/system/system-check.ts`; the
+  Server Action is now a thin auth-check wrapper around it. The row-building logic that turns a
+  `SystemCheckResult` into label/OK/detail rows (`buildSystemCheckRows`) had to move into its own
+  dependency-free `src/lib/system/system-check-rows.ts` rather than living in `system-check.ts` itself —
+  `system-check.ts` imports Prisma/Mailjet/NTP checks, and `system-check-panel.tsx` (`'use client'`) needs
+  those rows for the UI, so importing the rows builder straight from `system-check.ts` would have pulled
+  Prisma into the client bundle. Both the status page and the email call the same `buildSystemCheckRows`, so
+  the two never drift out of sync on labels/wording.
 
 ### Email
 
@@ -386,7 +407,10 @@ user-controlled values (flight location, feedback message) get interpolated into
 `templates.ts` itself predates this and still doesn't escape `firstName`, a known minor gap, but new email
 code should use it. `/admin/email` has a manual "send test email" action for verifying the Mailjet API
 key/sender config without triggering a real activation or reset flow, plus the `droneFlightNotificationEmail`
-setting (`AppSettings`) editable via `DroneFlightEmailForm`.
+and `systemCheckNotificationEmail` settings (`AppSettings`) editable via `DroneFlightEmailForm` and
+`SystemCheckEmailForm` respectively — two near-identical forms/actions kept separate rather than
+parameterized into one generic "settings email" component, matching this codebase's general preference for
+duplication over a premature shared abstraction for two call sites.
 
 An admin can also trigger the password-reset email directly for a given user from `/admin/benutzer/[userId]`
 (`sendPasswordResetEmailToUser`, reuses the same `createToken`/`sendPasswordResetEmail` as the self-service

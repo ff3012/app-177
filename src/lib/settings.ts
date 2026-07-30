@@ -51,3 +51,16 @@ export async function getLastBackupAt(): Promise<Date | null> {
   const settings = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
   return settings?.lastBackupAt ?? null;
 }
+
+export async function getSystemCheckNotificationEmail(): Promise<string | null> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
+  return settings?.systemCheckNotificationEmail ?? null;
+}
+
+export async function setSystemCheckNotificationEmail(email: string): Promise<void> {
+  await prisma.appSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, systemCheckNotificationEmail: email },
+    update: { systemCheckNotificationEmail: email },
+  });
+}

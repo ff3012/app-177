@@ -100,6 +100,27 @@ crontab -e
 Ohne diesen Cronjob werden nur sofort gesendete News tatsächlich zugestellt; terminierte News
 bleiben in der Datenbank auf "Ausstehend" stehen.
 
+## Täglicher Systemcheck per E-Mail
+
+`docker/system-check-email.sh` ruft `/api/cron/system-check` auf, das denselben Check wie der
+"System Check"-Button auf `/admin/status` ausführt (Server/Docker/Mailjet/Cron/NTP/Backup) und das
+Ergebnis als Tabelle an die unter Verwaltung → E-Mail → "System Check E-Mail" hinterlegte Adresse
+mailt (analog zur "Drohnenflug E-Mail" — ohne hinterlegte Adresse wird keine E-Mail versendet, siehe
+`notifySystemCheckResult` in `src/lib/system/notify-system-check.ts`). Täglich um 09:00
+österreichischer Zeit einrichten:
+
+```bash
+crontab -e
+# Daily at 09:00 Vienna time (CRON_TZ wird von Debian/Ubuntus cron seit ~2019 unterstützt und
+# berücksichtigt automatisch die Sommerzeit-Umstellung, anders als ein fixer UTC-Offset)
+CRON_TZ=Europe/Vienna
+0 9 * * * /opt/app-177/docker/system-check-email.sh >> /var/log/ffapp-system-check.log 2>&1
+```
+
+Falls `CRON_TZ` auf dem jeweiligen System nicht greift (mit `date` bzw. am tatsächlichen
+Zustellzeitpunkt der ersten Test-Mail prüfen), stattdessen die Stunde direkt auf die
+Host-Systemzeit umrechnen (`timedatectl` zeigt die aktuell konfigurierte Host-Zeitzone).
+
 ## Restore-Test
 
 ```bash

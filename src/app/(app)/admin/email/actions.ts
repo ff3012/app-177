@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
 import { sendEmail } from '@/lib/email/mailjet';
-import { setDroneFlightNotificationEmail } from '@/lib/settings';
+import { setDroneFlightNotificationEmail, setSystemCheckNotificationEmail } from '@/lib/settings';
 
 export interface TestMailjetState {
   success?: boolean;
@@ -68,6 +68,32 @@ export async function saveDroneFlightEmail(
   }
 
   await setDroneFlightNotificationEmail(parsed.data.email);
+  revalidatePath('/admin/email');
+  return { success: true };
+}
+
+export interface SystemCheckEmailState {
+  success?: boolean;
+  error?: string;
+}
+
+const systemCheckEmailSchema = z.object({
+  email: z.string().trim().email('Ungültige E-Mail-Adresse.'),
+});
+
+export async function saveSystemCheckEmail(
+  _prevState: SystemCheckEmailState,
+  formData: FormData,
+): Promise<SystemCheckEmailState> {
+  const user = await requireUser();
+  assertPermission(isSiteAdmin(user));
+
+  const parsed = systemCheckEmailSchema.safeParse({ email: formData.get('email') });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };
+  }
+
+  await setSystemCheckNotificationEmail(parsed.data.email);
   revalidatePath('/admin/email');
   return { success: true };
 }

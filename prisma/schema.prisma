@@ -228,6 +228,7 @@ model AppSettings {
   id                           String    @id @default("singleton")
   droneFlightNotificationEmail String?
   droneQuickRegisterToken      String?
+  systemCheckNotificationEmail String?
   lastNewsCronRunAt            DateTime?
   lastBackupAt                 DateTime?
   updatedAt                    DateTime  @updatedAt
