@@ -12,20 +12,31 @@ export interface UserRow {
   homeOrg: string;
   adminFor: string;
   droneLabel: string;
+  pushLabel: string;
   statusLabel: string;
 }
 
-type SortKey = 'name' | 'email' | 'stbNr' | 'phone' | 'homeOrg' | 'adminFor' | 'droneLabel' | 'statusLabel';
+type SortKey =
+  | 'name'
+  | 'email'
+  | 'stbNr'
+  | 'phone'
+  | 'homeOrg'
+  | 'adminFor'
+  | 'droneLabel'
+  | 'pushLabel'
+  | 'statusLabel';
 
 const COLUMNS: { key: SortKey; label: string; width: string }[] = [
-  { key: 'name', label: 'Name', width: 'w-[14%]' },
-  { key: 'email', label: 'E-Mail', width: 'w-[19%]' },
-  { key: 'stbNr', label: 'StbNr', width: 'w-[8%]' },
-  { key: 'phone', label: 'Telefonnummer', width: 'w-[12%]' },
-  { key: 'homeOrg', label: 'Heimat-Feuerwehr', width: 'w-[12%]' },
-  { key: 'adminFor', label: 'Admin für', width: 'w-[14%]' },
-  { key: 'droneLabel', label: 'Drohnengruppe', width: 'w-[8%]' },
-  { key: 'statusLabel', label: 'Status', width: 'w-[8%]' },
+  { key: 'name', label: 'Name', width: 'w-[13%]' },
+  { key: 'email', label: 'E-Mail', width: 'w-[17%]' },
+  { key: 'stbNr', label: 'StbNr', width: 'w-[7%]' },
+  { key: 'phone', label: 'Telefonnummer', width: 'w-[11%]' },
+  { key: 'homeOrg', label: 'Heimat-Feuerwehr', width: 'w-[11%]' },
+  { key: 'adminFor', label: 'Admin für', width: 'w-[13%]' },
+  { key: 'droneLabel', label: 'Drohnengruppe', width: 'w-[7%]' },
+  { key: 'pushLabel', label: 'Push Benachrichtigung', width: 'w-[9%]' },
+  { key: 'statusLabel', label: 'Status', width: 'w-[7%]' },
 ];
 
 export function UserManagementSection({ users }: { users: UserRow[] }) {
@@ -37,8 +48,8 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
     const q = query.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) =>
-      [u.name, u.email, u.stbNr, u.phone, u.homeOrg, u.adminFor, u.droneLabel, u.statusLabel].some((field) =>
-        field.toLowerCase().includes(q),
+      [u.name, u.email, u.stbNr, u.phone, u.homeOrg, u.adminFor, u.droneLabel, u.pushLabel, u.statusLabel].some(
+        (field) => field.toLowerCase().includes(q),
       ),
     );
   }, [users, query]);
@@ -125,6 +136,7 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
                 <td className="break-words px-3 py-2">{u.homeOrg}</td>
                 <td className="break-words px-3 py-2">{u.adminFor}</td>
                 <td className="break-words px-3 py-2">{u.droneLabel}</td>
+                <td className="break-words px-3 py-2">{u.pushLabel}</td>
                 <td className="break-words px-3 py-2">{u.statusLabel}</td>
                 <td className="break-words px-3 py-2 text-right">
                   <Link href={`/admin/benutzer/${u.id}`} className="text-brand hover:underline">
@@ -135,7 +147,7 @@ export function UserManagementSection({ users }: { users: UserRow[] }) {
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-neutral-500">
+                <td colSpan={10} className="px-3 py-6 text-center text-neutral-500">
                   Keine Benutzer gefunden.
                 </td>
               </tr>

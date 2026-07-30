@@ -16,6 +16,7 @@ export default async function BenutzerverwaltungPage() {
       homeOrganization: true,
       memberships: { where: { role: MembershipRole.ADMIN }, include: { organization: true } },
       droneMembership: true,
+      _count: { select: { pushSubscriptions: true } },
     },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
   });
@@ -29,6 +30,7 @@ export default async function BenutzerverwaltungPage() {
     homeOrg: u.homeOrganization.shortName ?? u.homeOrganization.name,
     adminFor: u.memberships.map((m) => m.organization.shortName ?? m.organization.name).join(', ') || '–',
     droneLabel: u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '–',
+    pushLabel: u._count.pushSubscriptions > 0 ? 'Aktiv' : 'Deaktiviert',
     statusLabel: u.isActive ? 'Aktiv' : 'Deaktiviert',
   }));
 
