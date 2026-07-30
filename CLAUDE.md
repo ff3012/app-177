@@ -224,6 +224,13 @@ Drohnengruppe only). `src/lib/drone/members.ts` (`listDrohnengruppeMembers`) is 
 "who can be picked as a pilot" — reused by the flight form, the 90-day report, and nowhere else; keep it that
 way rather than duplicating the `where: { droneMembership: { isNot: null } }` filter.
 
+`/drohnen`'s "Alle Flüge einsehen" toggle (`components/drone/flight-table.tsx`, default on) is purely a
+client-side display filter, not a permission boundary: the server query in `page.tsx` already fetches every
+flight whenever `canViewAllFlights(user)` is true, and the toggle just filters that already-loaded array down
+to the current user's own registered/piloted flights when switched off. Only rendered at all when
+`canToggle` (= `canViewAllFlights`) is true — non-admins never see it and always get the server-side-scoped
+own-flights query, same as before this toggle existed.
+
 - **90-day/3-flight rule**: constants and the shared cutoff/predicate helpers live in
   `src/lib/drone/ninety-day-rule.ts` (`NINETY_DAY_REQUIRED_FLIGHTS`, `NINETY_DAY_WINDOW_DAYS`,
   `getNinetyDayCutoff()`, `meetsNinetyDayRule()`) — both the Admin-only `/drohnen/90-tage` report (all

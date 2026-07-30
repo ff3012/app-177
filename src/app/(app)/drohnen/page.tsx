@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageFlight, canRegisterFlight, canViewAllFlights, canViewDroneModule } from '@/lib/auth/permissions';
 import { NINETY_DAY_REQUIRED_FLIGHTS, NINETY_DAY_WINDOW_DAYS, getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
+import { FlightTable, type FlightRow } from '@/components/drone/flight-table';
 
 const PURPOSE_LABEL: Record<string, string> = {
   UEBUNG: 'Übung',
@@ -29,15 +30,23 @@ export default async function DrohnenPage() {
   ]);
   const ownRuleMet = meetsNinetyDayRule(ownFlightCount);
 
+  const flightRows: FlightRow[] = flights.map((flight) => ({
+    id: flight.id,
+    startsAtLabel: flight.startsAt.toLocaleString('de-AT'),
+    pilotName: `${flight.pilotUser.firstName} ${flight.pilotUser.lastName}`,
+    pilotUserId: flight.pilotUserId,
+    location: flight.location,
+    droneName: flight.drone.name,
+    purposeLabel: PURPOSE_LABEL[flight.purpose] ?? flight.purpose,
+    registeredByName: `${flight.registeredBy.firstName} ${flight.registeredBy.lastName}`,
+    registeredById: flight.registeredById,
+    editable: canManageFlight(user, flight),
+  }));
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-neutral-900">Flugbuch Drohnengruppe</h1>
-          <p className="text-sm text-neutral-500">
-            {seeAll ? 'Alle Einträge (Admin-Ansicht).' : 'Deine eigenen Einträge sowie Flüge, bei denen du Pilot bist.'}
-          </p>
-        </div>
+        <h1 className="text-lg font-semibold text-neutral-900">Flugbuch Drohnengruppe</h1>
         <div className="flex flex-wrap items-center gap-3">
           {seeAll && (
             <Link
@@ -71,54 +80,7 @@ export default async function DrohnenPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-neutral-200 text-neutral-500">
-            <tr>
-              <th className="px-4 py-2">Datum/Uhrzeit</th>
-              <th className="px-4 py-2">Pilot</th>
-              <th className="px-4 py-2">Ort</th>
-              <th className="px-4 py-2">Drohne</th>
-              <th className="px-4 py-2">Zweck</th>
-              <th className="px-4 py-2">Erstellt von</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {flights.map((flight) => {
-              const editable = canManageFlight(user, flight);
-              return (
-                <tr key={flight.id} className="border-b border-neutral-100">
-                  <td className="px-4 py-2">{flight.startsAt.toLocaleString('de-AT')}</td>
-                  <td className="px-4 py-2">
-                    {flight.pilotUser.firstName} {flight.pilotUser.lastName}
-                  </td>
-                  <td className="px-4 py-2">{flight.location}</td>
-                  <td className="px-4 py-2">{flight.drone.name}</td>
-                  <td className="px-4 py-2">{PURPOSE_LABEL[flight.purpose] ?? flight.purpose}</td>
-                  <td className="px-4 py-2">
-                    {flight.registeredBy.firstName} {flight.registeredBy.lastName}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {editable && (
-                      <Link href={`/drohnen/${flight.id}/bearbeiten`} className="text-brand hover:underline">
-                        Bearbeiten
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {flights.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
-                  Noch keine Flüge erfasst.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <FlightTable flights={flightRows} currentUserId={user.id} canToggle={seeAll} />
     </div>
   );
 }
