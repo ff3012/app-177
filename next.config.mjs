@@ -15,6 +15,13 @@ const CONTENT_SECURITY_POLICY = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // React 19's Strict Mode double-invokes render/ref/effect in `next dev` only (never in a
+  // production build, regardless of this flag) - that double-mount breaks react-hook-form's
+  // uncontrolled-input defaultValues application and the <form onSubmit> handler for every
+  // register()-based form (edit forms silently fall back to a native GET submission instead of
+  // calling the server action). Confirmed via a local production build that this never affects
+  // the deployed app; disabled here purely so local `npm run dev` form-testing works.
+  reactStrictMode: false,
   async headers() {
     return [
       {
