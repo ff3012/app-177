@@ -5,14 +5,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Matches the accent red used on afkdopurkersdorf.at (mobile menu button etc.).
+        // "Signalrot" palette (design pass, 2026-08) — DEFAULT tightened from the previous #f44336
+        // to #e4322b; dark was already an exact match and is unchanged.
         brand: {
-          DEFAULT: '#f44336',
+          DEFAULT: '#e4322b',
           dark: '#c62828',
         },
       },
       fontFamily: {
-        sans: ['var(--font-noto-sans)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-barlow)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-ibm-plex-mono)', 'ui-monospace', 'monospace'],
       },
     },
   },

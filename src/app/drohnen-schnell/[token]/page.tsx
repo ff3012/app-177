@@ -34,7 +34,7 @@ export default async function DrohnenSchnellPage({ params }: { params: Promise<{
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-[#f4f4f4] px-4 py-10">
+    <div className="flex min-h-screen flex-col items-center bg-[#f6f6f7] px-4 py-10">
       <img src="/wappen-afkdo.png" alt="Wappen AFKDO Purkersdorf" className="mb-6 w-28" />
       <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow">{content}</div>
     </div>

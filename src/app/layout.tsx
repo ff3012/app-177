@@ -1,10 +1,20 @@
 import type { Metadata, Viewport } from 'next';
-import { Noto_Sans } from 'next/font/google';
+import { Barlow, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { PwaRegister } from '@/components/pwa-register';
 
-// Matches the font used on afkdopurkersdorf.at.
-const notoSans = Noto_Sans({ subsets: ['latin', 'latin-ext'], weight: ['400', '700'], variable: '--font-noto-sans' });
+// "Signalrot" design pass: Barlow (body) + IBM Plex Mono (tokens/codes/timestamps) replace the
+// previous Noto Sans / default monospace, matching the new color palette below.
+const barlow = Barlow({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-barlow',
+});
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-ibm-plex-mono',
+});
 
 export const metadata: Metadata = {
   title: 'Feuerwehr Abschnitt Purkersdorf',
@@ -28,7 +38,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#333333',
+  themeColor: '#1c1c1e',
   // Android Chrome auto-darkens web content specifically when this meta tag is missing (the CSS
   // color-scheme property alone doesn't stop it) — this app has no dark theme, so opt out entirely.
   colorScheme: 'light',
@@ -41,7 +51,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body className={`${notoSans.variable} min-h-screen font-sans antialiased`}>
+      <body className={`${barlow.variable} ${ibmPlexMono.variable} min-h-screen font-sans antialiased`}>
         <PwaRegister />
         {children}
       </body>

@@ -2,10 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Background/text match afkdopurkersdorf.at's body styling. */
+/* "Signalrot" design pass (2026-08): near-black foreground + slightly cooler background,
+   matching the new dark header color below instead of afkdopurkersdorf.at's original styling. */
 :root {
-  --background: #f4f4f4;
-  --foreground: #333333;
+  --background: #f6f6f7;
+  --foreground: #1c1c1e;
   /* App is fixed-light-themed (no dark mode support) — without this, some mobile browsers
      render native form controls (input/textarea/select) with dark-mode text/background
      colors when the OS is in dark mode, making typed text unreadable on our white fields. */

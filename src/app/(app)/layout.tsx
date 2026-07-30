@@ -17,8 +17,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f4f4f4]">
-      <header className="bg-[#333333] text-white">
+    <div className="flex min-h-screen flex-col bg-[#f6f6f7]">
+      <header className="bg-[#1c1c1e] text-white">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
             <span className="text-sm font-semibold text-white">AFKDO Purkersdorf</span>

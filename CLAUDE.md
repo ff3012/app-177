@@ -479,3 +479,37 @@ network-first with an offline-page fallback for GET navigations, and explicitly 
 Actions/API calls untouched so nothing dynamic ever gets stale-cached) + `components/pwa-register.tsx`
 (client-side `navigator.serviceWorker.register()`, best-effort). If you regenerate the icons, keep the same
 sizes referenced in `manifest.ts`/`layout.tsx` metadata (16/32/180/192/512).
+
+### Visual design ("Signalrot" pass)
+
+A visual redesign proposal ("Signalrot") was produced in Claude Design and checked for desktop/iOS/Android
+feasibility before any code changed. The check found the mockup unsafe to adopt wholesale: it's a static
+canvas file (Claude Design's own `<x-dc>`/`{{ }}` template syntax, not runnable code) with two parallel
+fixed-width mockups (1160px desktop, 390px mobile) and zero `@media` queries, so none of its markup is
+reusable — only the color/type language transfers. Its mobile section specifically has no
+`env(safe-area-inset-*)` handling anywhere and no `position:fixed` on the bottom tab bar (it only *looks*
+fixed inside the mockup's static fake-phone frame), and its News module has no mobile layout for the admin
+composer at all (only a "Nachricht senden" trigger button, no destination screen) — adopting the mockup's
+bottom-tab-bar navigation for real would mean building genuine safe-area-aware fixed positioning and
+designing that missing composer flow from scratch, both real engineering work, not a copy job.
+
+Given that, the color/typography were adopted now (low-risk); the mockup's bottom-tab-bar mobile navigation
+is intentionally deferred to a later pass rather than built alongside the color change — the existing single
+`Nav` component (`components/layout/nav.tsx`, shared as-is between desktop and mobile, wrapping via
+`flex-wrap`) is unchanged for now. What *did* change, as one coordinated token update (not scattered
+one-off hex edits) so the app shell, `<body>` fallback, PWA chrome, and browser UI chrome (address bar color
+on Android) never drift out of sync with each other:
+- `tailwind.config.ts`'s `colors.brand.DEFAULT` (`#f44336` → `#e4322b`; `brand.dark` was already an exact
+  match at `#c62828`, unchanged) and `fontFamily.sans`/`fontFamily.mono` (Noto Sans → Barlow via
+  `next/font/google` in `src/app/layout.tsx`'s `--font-barlow` variable; new `--font-ibm-plex-mono` variable
+  added and wired to Tailwind's `mono` token, picked up automatically by the one pre-existing `font-mono`
+  usage in `login-form.tsx`'s short-code field)
+- `globals.css`'s `--background`/`--foreground` (`#f4f4f4`/`#333333` → `#f6f6f7`/`#1c1c1e`)
+- The app shell's header background (`(app)/layout.tsx`, `#333333` → `#1c1c1e`) and every `bg-[#f4f4f4]`
+  page-wrapper div across the auth/public pages (→ `#f6f6f7`, matching the new CSS variable)
+- `viewport.themeColor` in `layout.tsx` and `theme_color` in `manifest.ts` (`#333333` → `#1c1c1e`) — these
+  drive the Android Chrome address-bar tint and the PWA splash/task-switcher chrome; leaving them on the old
+  color while the header changed would have visibly mismatched the two
+`src/lib/email/templates.ts`'s one inline `background: #f4f4f4` (the login short-code email block) was
+deliberately left untouched — email client rendering is a separate concern from the web app's own theme and
+wasn't part of this pass.

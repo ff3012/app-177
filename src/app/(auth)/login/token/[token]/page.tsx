@@ -6,7 +6,7 @@ export default async function EmailTokenLoginPage({ params }: { params: Promise<
   const boundConfirm = confirmEmailTokenLogin.bind(null, token);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f4f4f4] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#f6f6f7] px-4">
       <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow">
         <h1 className="mb-1 text-xl font-semibold text-neutral-900">Anmeldung per E-Mail-Link</h1>
         <p className="mb-6 text-sm text-neutral-500">Klicke auf "Jetzt anmelden", um dich mit diesem Link anzumelden.</p>
