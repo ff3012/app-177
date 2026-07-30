@@ -75,10 +75,15 @@ generischer S3-Client mit `--endpoint-url`, keine Exoscale-spezifische Tooling-A
 apt-get update && apt-get install -y awscli
 ```
 
-Aufbewahrung/Löschung alter Backups im Bucket läuft bewusst **nicht** über das Skript, sondern über
-eine Lifecycle-Regel im Exoscale-Portal (Bucket → Lifecycle Rules, z. B. "nach 30 Tagen löschen") —
-das erspart eine zweite Löschlogik gegen eine zweite Storage-API im Skript, die sonst parallel zur
-lokalen 30-Tage-`find`-Löschung gepflegt werden müsste.
+Aufbewahrung/Löschung alter Backups im Bucket läuft direkt in `backup.sh` selbst (30 Tage, analog
+zur lokalen `find -mtime +30`-Zeile) — **nicht** über eine Bucket-Lifecycle-Regel: Exoscale SOS
+unterstützt (Stand jetzt) keine native Lifecycle-Policy, siehe
+[community.exoscale.com/.../bucketlifecycle](https://community.exoscale.com/product/storage/object-storage/how-to/bucketlifecycle/).
+Ein `PutBucketLifecycleConfiguration`-Aufruf wird von Exoscale je nach Rule-Inhalt entweder
+stillschweigend ignoriert oder mit `MalformedXML` abgelehnt (beides getestet). Exoscales eigener
+Workaround dafür ist ein separater, täglich laufender Docker-Container, der zusätzlich aktiviertes
+Bucket-Versioning voraussetzt — für die paar kleinen Backup-Dateien hier unverhältnismäßig viel
+zusätzliche Infrastruktur, daher die einfachere Inline-Löschung im ohnehin schon vorhandenen Skript.
 
 ## News-Modul: terminierte Push-Nachrichten versenden
 

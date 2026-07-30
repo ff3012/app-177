@@ -364,9 +364,13 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   `git add` of a new host-cron script re-introduce this; check `git ls-files -s` shows `100755` for it.
   `backup.sh` additionally uploads the dump to an S3-compatible bucket (Exoscale SOS) when
   `S3_BACKUP_BUCKET` is set in `.env`, purely as an off-box copy alongside the existing local one — see
-  "Off-Box-Kopie" in `docker/README.md`. Retention for that copy is a lifecycle rule in the Exoscale
-  console, not scripted deletion, so the script doesn't need a second delete path against a second storage
-  API. "NTP-Synchronisierung"
+  "Off-Box-Kopie" in `docker/README.md`. Retention for that copy is scripted directly in `backup.sh`
+  (list objects older than 30 days via `aws s3api list-objects-v2`, then `aws s3 rm` each), mirroring the
+  local `find -mtime +30`, rather than a bucket lifecycle rule — confirmed by testing that Exoscale SOS has
+  no native lifecycle support at all yet (`PutBucketLifecycleConfiguration` either silently no-ops or
+  errors `MalformedXML` depending on the rule shape); their own workaround for this is a separate
+  Docker-based tool that additionally requires bucket versioning enabled, which was judged disproportionate
+  for a handful of small backup files. "NTP-Synchronisierung"
   can't run a real NTP client check inside the container either (it shares the host's clock, so there's
   nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against the
   `Date` response header of an external HTTPS call (`api.mailjet.com`) as a drift proxy, flagging >10s as

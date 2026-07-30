@@ -31,13 +31,29 @@ docker compose -f docker/docker-compose.yml exec -T postgres \
 
 # Off-Box-Kopie auf S3-kompatiblen Object Storage (z. B. Exoscale SOS) - optional, nur aktiv wenn
 # S3_BACKUP_BUCKET in .env gesetzt ist, damit Server ohne konfigurierten Object Storage unverändert
-# weiterlaufen. Aufbewahrung auf der S3-Seite läuft über eine Lifecycle-Regel im Objectstorage-Bucket
-# statt hier im Skript, um keine zweite Löschlogik gegen eine zweite Storage-API pflegen zu müssen.
+# weiterlaufen.
 if [ -n "${S3_BACKUP_BUCKET:-}" ]; then
   AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
     aws s3 cp "$FILE" "s3://$S3_BACKUP_BUCKET/$(basename "$FILE")" --endpoint-url "$S3_ENDPOINT_URL"
   echo "Off-Box-Kopie hochgeladen: s3://$S3_BACKUP_BUCKET/$(basename "$FILE")"
+
+  # Exoscale SOS (Stand jetzt) unterstützt keine native Bucket-Lifecycle-Policy - eine
+  # PutBucketLifecycleConfiguration wird entweder stillschweigend ignoriert oder mit MalformedXML
+  # abgelehnt, je nach Rule-Inhalt (getestet). Exoscales eigener Workaround (ein separater
+  # Docker-Client) braucht zusätzlich aktiviertes Bucket-Versioning, was hier nicht gewünscht ist -
+  # daher wird die 30-Tage-Löschung analog zur lokalen find-Zeile unten direkt hier nachgebildet.
+  CUTOFF="$(date -d '30 days ago' +%Y-%m-%dT%H:%M:%S)"
+  OLD_KEYS="$(AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+    aws s3api list-objects-v2 --bucket "$S3_BACKUP_BUCKET" --endpoint-url "$S3_ENDPOINT_URL" \
+    --query "Contents[?LastModified<='$CUTOFF'].Key" --output text)"
+  if [ "$OLD_KEYS" != "None" ] && [ -n "$OLD_KEYS" ]; then
+    for KEY in $OLD_KEYS; do
+      AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+        aws s3 rm "s3://$S3_BACKUP_BUCKET/$KEY" --endpoint-url "$S3_ENDPOINT_URL"
+      echo "Alte Off-Box-Kopie gelöscht: $KEY"
+    done
+  fi
 fi
 
-# 30 Tage Aufbewahrung (nur lokal - S3-Aufbewahrung wird über eine Lifecycle-Regel im Bucket geregelt)
+# 30 Tage Aufbewahrung (lokal - siehe oben für die S3-Aufbewahrung)
 find "$BACKUP_DIR" -name 'db-*.sql.gz' -mtime +30 -delete
