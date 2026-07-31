@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { checkMailjetConnection } from '@/lib/email/mailjet';
 import { checkNtpDrift } from '@/lib/system/ntp-check';
@@ -84,4 +85,35 @@ export async function getSystemCheckResult(): Promise<SystemCheckResult> {
     },
     checkedAt: new Date().toISOString(),
   };
+}
+
+export interface AdminSidebarStatus {
+  database: boolean;
+  mailjet: boolean;
+  ntp: boolean;
+}
+
+/**
+ * Teilmenge von drei der acht getSystemCheckResult()-Signale, für die kleine Statuszusammenfassung
+ * unten in der Verwaltung-Sidebar (Verwaltung-Brief.md) - nicht die vollen 8 Zeilen, nur
+ * Datenbank/Mailjet/Zeitserver. Mit unstable_cache(..., {revalidate:60}) gewrappt, sonst würde
+ * jede einzelne Admin-Seitennavigation (die Sidebar rendert auf jeder /admin/*-Seite) drei
+ * Live-Checks auslösen (DB-Query, Mailjet-API-Call, externer NTP-Fetch) - 60s Toleranz ist für eine
+ * reine Statusanzeige unkritisch.
+ */
+const getCachedAdminSidebarStatus = unstable_cache(
+  async (): Promise<AdminSidebarStatus> => {
+    const [database, mailjet, ntp] = await Promise.all([
+      checkDatabaseConnection(),
+      checkMailjetConnection(),
+      checkNtpDrift(),
+    ]);
+    return { database, mailjet, ntp: ntp.ok };
+  },
+  ['admin-sidebar-status'],
+  { revalidate: 60 },
+);
+
+export async function getAdminSidebarStatus(): Promise<AdminSidebarStatus> {
+  return getCachedAdminSidebarStatus();
 }

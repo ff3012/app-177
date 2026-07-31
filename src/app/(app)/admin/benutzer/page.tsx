@@ -1,16 +1,11 @@
-import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { isSiteAdmin } from '@/lib/auth/permissions';
 import { MembershipRole } from '@prisma/client';
-import { AdminNav } from '@/components/layout/admin-nav';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
+// Admin-Gate (isSiteAdmin) läuft jetzt in admin/layout.tsx per notFound() - kein eigener Check
+// mehr nötig, Server Actions bleiben trotzdem unverändert eigenständig durch assertPermission
+// abgesichert (ein Layout schützt nur den Seiten-Render, keine direkten Server-Action-Aufrufe).
 export default async function BenutzerverwaltungPage() {
-  const user = await requireUser();
-  if (!isSiteAdmin(user)) {
-    return <p className="text-neutral-700">Dieser Bereich ist nur für die Abschnittskommando-Verwaltung sichtbar.</p>;
-  }
-
   const users = await prisma.user.findMany({
     include: {
       homeOrganization: true,
@@ -36,11 +31,6 @@ export default async function BenutzerverwaltungPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="mb-3 text-lg font-semibold text-neutral-900">Verwaltung</h1>
-        <AdminNav />
-      </div>
-
       <UserManagementSection users={rows} />
     </div>
   );

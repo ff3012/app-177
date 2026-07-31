@@ -1,8 +1,5 @@
-import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { isSiteAdmin } from '@/lib/auth/permissions';
 import { getDroneQuickRegisterToken } from '@/lib/settings';
-import { AdminNav } from '@/components/layout/admin-nav';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
@@ -17,12 +14,8 @@ function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
 }
 
+// Admin-Gate läuft jetzt in admin/layout.tsx per notFound() - siehe Kommentar dort.
 export default async function DrohnenVerwaltungPage() {
-  const user = await requireUser();
-  if (!isSiteAdmin(user)) {
-    return <p className="text-neutral-700">Dieser Bereich ist nur für die Abschnittskommando-Verwaltung sichtbar.</p>;
-  }
-
   const [drones, quickRegisterToken, documents] = await Promise.all([
     prisma.drone.findMany({ orderBy: { sortOrder: 'asc' } }),
     getDroneQuickRegisterToken(),
@@ -42,10 +35,6 @@ export default async function DrohnenVerwaltungPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="mb-3 text-lg font-semibold text-neutral-900">Verwaltung</h1>
-        <AdminNav />
-      </div>
 
       <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
         <table className="w-full text-left text-sm">

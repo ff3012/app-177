@@ -511,10 +511,24 @@ App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes au
 
 ### Verwaltung (admin) navigation
 
-All `/admin/*` pages (`benutzer`, `drohnen`, `email`, `status`) are independently gated by `isSiteAdmin` and
-share `components/layout/admin-nav.tsx` (`AdminNav`) — four equally-styled buttons, active one highlighted,
-rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page by (1) gating it the same way,
-(2) adding one entry to `AdminNav`'s `ITEMS`, not by inventing another sub-nav pattern.
+**Phase 2 (Verwaltung-Brief.md)**: `src/app/(app)/admin/layout.tsx` now gates all `/admin/*` pages centrally
+(`requireUser()` + `notFound()` if `!isSiteAdmin(user)`) instead of each page independently returning a plain
+"nur für die Abschnittskommando-Verwaltung sichtbar" fallback — a non-admin now gets a real 404, not an empty
+page with friendly text. This only protects the page **render**; the pre-existing `assertPermission(
+isSiteAdmin(...))` calls inside every admin Server Action (13 call sites, unchanged) still do the actual
+authorization work, since a layout can't stop a Server Action invoked directly. The old horizontal pill nav
+(`components/layout/admin-nav.tsx`, `AdminNav`) is replaced by a fixed 210px-left-sidebar
+(`components/admin/admin-sidebar.tsx` + `admin-sidebar-nav.tsx`, `md:` and up only — mobile gets its own
+tabs-based nav in a later phase) rendered once by the layout, not per-page; `AdminNav` itself is intentionally
+**left in place but unused** until every admin page has been migrated (Verwaltung-Brief.md's own step 7),
+to avoid a half-migrated state where some pages have a sidebar and others still render the old pill row.
+`AdminSidebar` additionally shows a 3-row status summary (Datenbank/Mailjet/Zeitserver, click → `/admin/status`)
+via a new `getAdminSidebarStatus()` in `lib/system/system-check.ts` — a subset of 3 of the 8
+`getSystemCheckResult()` signals, wrapped in `unstable_cache(..., { revalidate: 60 })` since the sidebar
+renders on every single admin page navigation; without the cache, every click within Verwaltung would
+trigger a live DB query + Mailjet API call + external NTP fetch just to paint three status dots. Add a new
+admin page by (1) letting the shared layout's gate cover it (no per-page `isSiteAdmin` check needed), (2)
+adding one entry to `AdminSidebarNav`'s `ITEMS`.
 
 - `/admin/benutzer` — `UserManagementSection` (client) owns free-text search and click-to-sort-any-column
   over a flat `UserRow[]` the server maps the Prisma result into; don't push search/sort server-side, ~200
