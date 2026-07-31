@@ -477,8 +477,20 @@ export function UserManagementSection({
         </button>
       </div>
 
-      {sorted.length === 0 ? (
-        <div className="rounded-lg bg-surface p-6 text-center text-sm text-ink-muted shadow-card">
+      {users.length === 0 ? (
+        // Verwaltung-Brief.md 3.4: "ganz leer" ist ein eigener Zustand, unterscheidet sich von
+        // "leer nach Filterung" unten - primäre Aktion ist hier der Import, nicht "zurücksetzen".
+        <div className="flex flex-col items-center gap-3 rounded-lg bg-surface p-8 text-center shadow-card">
+          <p className="text-[15px] text-ink-muted">Noch keine Benutzer angelegt.</p>
+          <Link
+            href="/admin/benutzer/import"
+            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Excel Import
+          </Link>
+        </div>
+      ) : sorted.length === 0 ? (
+        <div className="rounded-lg bg-surface p-6 text-center text-[15px] text-ink-muted shadow-card">
           Keine Benutzer entsprechen den Filtern.{' '}
           {(activeFilterCount > 0 || query) && (
             <button

@@ -581,6 +581,22 @@ behavior, just relocated) now swaps the sheet's body to that panel instead of na
 directly from the client (not a `<form action>`) inside `startTransition`, the same pattern already used
 before this phase and still works identically.
 
+**Phase 5 (Lade-/Leer-/Fehlerzustände)**: most of this phase's asks were already satisfied incidentally by
+earlier phases (the "leer nach Filterung" message + "Filter zurücksetzen" button from Phase 3; specific,
+non-generic `toast.error(...)` text throughout Phase 3/4's row/bulk/sheet actions, never a bare "Fehler").
+What was actually new: `src/app/(app)/admin/benutzer/loading.tsx` — Next's App Router Suspense-fallback
+convention, shown automatically both on first page load and on the `router.refresh()` calls Phase 3's bulk
+actions already trigger, six `Skeleton` rows in table form as the brief specifies (no spinner) — this file
+needs no data since it's a pure static shell shown *before* `page.tsx`'s data arrives. `user-management-
+section.tsx`'s single empty-state branch was split into two: `users.length === 0` ("Noch keine Benutzer
+angelegt" + Excel-Import as the primary action) is now distinct from `sorted.length === 0` ("Keine Benutzer
+entsprechen den Filtern" + "Filter zurücksetzen") — the brief treats these as two different states with
+different primary actions, the old code collapsed them into one message. `UserFormSheet`'s save button also
+got an actual spinner icon (inline SVG, `animate-spin`, matching this codebase's hand-rolled-icon convention)
+next to its "Speichern…" text while pending — the brief's "kein Spinner" rule is specifically about the
+list's own loading state (a static skeleton reads calmer for a whole-page wait), not the save button, which
+it explicitly asks to show one for.
+
 Verification note: this browser-automation environment does not hydrate client-side React on this page at
 all in the current session (confirmed via `__reactFiber$`/`__reactContainer$` lookups on `document.body`
 finding none, even after waiting) — the same harness-wide gap already documented for Mobile-Brief.md, now

@@ -379,6 +379,19 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
                   Abbrechen
                 </Button>
                 <Button type="submit" form="user-form-sheet" disabled={pending}>
+                  {pending && (
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      className="animate-spin"
+                      aria-hidden
+                    >
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                  )}
                   {pending ? 'Speichern…' : mode === 'create' ? 'Benutzer anlegen' : 'Änderungen speichern'}
                 </Button>
               </SheetFooter>
