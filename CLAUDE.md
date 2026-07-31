@@ -549,7 +549,12 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
 base for the links it builds. `src/lib/email/escape-html.ts` (`escapeHtml`) is used wherever free-text or
 user-controlled values (flight location, feedback message) get interpolated into an email's `htmlPart` —
 `templates.ts` itself predates this and still doesn't escape `firstName`, a known minor gap, but new email
-code should use it. `/admin/email` has a manual "send test email" action for verifying the Mailjet API
+code should use it. `MAILJET_FROM_EMAIL` is `noreply@ff-wolfsgraben.at` (GitHub issue #5) rather than a
+monitored address, so the three member-facing templates (activation, password reset, login token) each end
+with a short "bitte nicht antworten, bei Fragen wende dich an florian.krebs@feuerwehr.gv.at" line — the same
+contact address already hardcoded (by design, see below) for in-app feedback. Admin-facing operational mails
+(drone-flight notification, system-check result) don't need this line; the admin who receives them already
+knows who to contact. `/admin/email` has a manual "send test email" action for verifying the Mailjet API
 key/sender config without triggering a real activation or reset flow, plus the `droneFlightNotificationEmail`
 and `systemCheckNotificationEmail` settings (`AppSettings`) editable via `DroneFlightEmailForm` and
 `SystemCheckEmailForm` respectively — two near-identical forms/actions kept separate rather than

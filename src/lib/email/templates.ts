@@ -28,6 +28,9 @@ export async function sendActivationEmail(user: { email: string; firstName: stri
       '',
       'Feedback kannst du gerne direkt in der App mit uns teilen.',
       '',
+      'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an',
+      'florian.krebs@feuerwehr.gv.at.',
+      '',
       'Mit kameradschaftlichen Grüßen',
       'Dein AFKDO Purkersdorf',
     ].join('\n'),
@@ -39,6 +42,8 @@ export async function sendActivationEmail(user: { email: string; firstName: stri
       '<ul><li>Kalender für alle Termine im Abschnitt Purkersdorf</li><li>Verwaltung Drohnengruppe AFKDO Purkersdorf</li></ul>',
       '<p>Es freut uns dich in der neuen AFKDO App bald zu sehen.</p>',
       '<p>Feedback kannst du gerne direkt in der App mit uns teilen.</p>',
+      '<p style="color:#666;font-size:13px;">Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf ' +
+        'antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
       '<p>Mit kameradschaftlichen Grüßen<br>Dein AFKDO Purkersdorf</p>',
     ].join(''),
   });
@@ -50,8 +55,8 @@ export async function sendPasswordResetEmail(user: { email: string; firstName: s
     to: user.email,
     toName: `${user.firstName} ${user.lastName}`,
     subject: 'Passwort zurücksetzen',
-    textPart: `Hallo ${user.firstName},\n\ndu hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:\n\n${link}\n\nDer Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.\n\nFeuerwehr Abschnitt Purkersdorf`,
-    htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p>Feuerwehr Abschnitt Purkersdorf</p>`,
+    textPart: `Hallo ${user.firstName},\n\ndu hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:\n\n${link}\n\nDer Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.\n\nDiese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.\n\nFeuerwehr Abschnitt Purkersdorf`,
+    htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p style="color:#666;font-size:13px;">Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p><p>Feuerwehr Abschnitt Purkersdorf</p>`,
   });
 }
 
@@ -83,6 +88,9 @@ export async function sendLoginTokenEmail(
       'sobald einer verwendet wurde, wird auch der andere ungültig). Falls du das nicht warst, kannst du',
       'diese E-Mail ignorieren.',
       '',
+      'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an',
+      'florian.krebs@feuerwehr.gv.at.',
+      '',
       'Feuerwehr Abschnitt Purkersdorf',
     ].join('\n'),
     htmlPart: [
@@ -97,6 +105,8 @@ export async function sendLoginTokenEmail(
       '<p>Code und Link sind 5 Minuten gültig und einmalig verwendbar (beide gehören zur selben Anmeldung - ' +
         'sobald einer verwendet wurde, wird auch der andere ungültig). Falls du das nicht warst, kannst du diese ' +
         'E-Mail ignorieren.</p>',
+      '<p style="color:#666;font-size:13px;">Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf ' +
+        'antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
       '<p>Feuerwehr Abschnitt Purkersdorf</p>',
     ].join(''),
   });
