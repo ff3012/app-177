@@ -18,6 +18,36 @@ body {
   color: var(--foreground);
 }
 
+/* Verwaltung-Brief.md design tokens + shadcn/ui theme layer. Deliberately separate CSS variable
+   names from the --background/--foreground pair above (which drives the whole app's <body>) - a
+   Tailwind color KEY named e.g. "background" (so shadcn's generated component source, which
+   references classes like bg-background/text-foreground/bg-primary unmodified, keeps working) is
+   an independent namespace from a CSS custom property literally named "--background", so mapping
+   Tailwind's "background" key to var(--surface) here never touches the pre-existing app-wide
+   variable. Scoped to the Verwaltung module for now (see CLAUDE.md "Verwaltung (shadcn/ui)") but
+   defined globally since Tailwind config/CSS variables can't be scoped per-route anyway. */
+:root {
+  --brand-hover: #c62828;
+  --brand-subtle: #fdeeed;
+  --ink: #1c1c1e;
+  --ink-muted: #6c6c70;
+  --ink-faint: #8e8e93;
+  --line: #e5e5ea;
+  --line-strong: #1c1c1e;
+  --surface: #ffffff;
+  --surface-sunken: #f6f6f7;
+  --surface-raised: #fafafb;
+  --success: #22a06b;
+  --success-subtle: #eaf6f0;
+  --success-text: #1b7a52;
+  --warning: #f0a92c;
+  --warning-subtle: #fdf3e5;
+  --warning-text: #b07515;
+  --danger: #c62828;
+  --danger-subtle: #fdeeed;
+  --radius: 0.625rem;
+}
+
 /* V2 mobile-nav pass: safe-area handling for the fixed bottom tab bar and the dark header, needed
    once viewport-fit=cover (layout.tsx) lets content draw under the iOS status bar/notch and the
    Android gesture-nav area. Explicit ", 0px" fallback everywhere: safe on browsers that don't

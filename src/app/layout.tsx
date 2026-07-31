@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Barlow, IBM_Plex_Mono } from 'next/font/google';
+import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { PwaRegister } from '@/components/pwa-register';
 
@@ -14,6 +14,13 @@ const ibmPlexMono = IBM_Plex_Mono({
   subsets: ['latin'],
   weight: ['400', '500'],
   variable: '--font-ibm-plex-mono',
+});
+// Verwaltung-Brief.md: nur für Kennzahlen (z. B. die Mitgliederzahl-Kacheln), nicht als
+// allgemeine Schriftfamilie - siehe font-condensed in tailwind.config.ts.
+const barlowCondensed = Barlow_Condensed({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['600', '700'],
+  variable: '--font-barlow-condensed',
 });
 
 export const metadata: Metadata = {
@@ -57,7 +64,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body className={`${barlow.variable} ${ibmPlexMono.variable} min-h-screen font-sans antialiased`}>
+      <body
+        className={`${barlow.variable} ${ibmPlexMono.variable} ${barlowCondensed.variable} min-h-screen font-sans antialiased`}
+      >
         <PwaRegister />
         {children}
       </body>

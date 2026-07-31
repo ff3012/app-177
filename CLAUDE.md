@@ -461,6 +461,54 @@ mockup, done first among the four modules; Kalender's equivalent pass ("Kalender
   through this path, only by an Admin Drohnengruppe via the normal UI. Don't route this flow through
   `requireUser()`/a real login — that would reintroduce a shared-session risk the token design avoids.
 
+### Verwaltung (shadcn/ui-Grundlage)
+
+Verwaltung wird laut `Verwaltung-Brief.md` (Claude Design) modul-für-modul auf shadcn/ui umgestellt — die
+**erste UI-Bibliothek in dieser Codebase**, die sonst konsequent alles handrollt (`ToggleSwitch`,
+`BottomSheet`, Inline-SVGs statt Icon-Library, Mailjet per rohem `fetch` statt SDK). Bewusste, dokumentierte
+Ausnahme: Verwaltung braucht mehrere barrierefreiheitskritische Bausteine (fokus-fallenbehafteter Sheet,
+DropdownMenu, AlertDialog), bei denen Radix' geprüfte Fokus-/ARIA-/Tastatur-Logik einem Handbau vorzuziehen
+ist. Es existieren dadurch dauerhaft zwei Komponenten-Philosophien nebeneinander (Verwaltung=shadcn, Rest der
+App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes auf shadcn.
+
+- **Tailwind-Versions-Stolperstein**: `npx shadcn@latest` (aktuell v4.16) generiert standardmäßig für
+  Tailwind v4 (`@import "tw-animate-css"`/`@import "shadcn/tailwind.css"` in CSS, `oklch()`-Farben, kein
+  `tailwind.config.ts`-Eintrag) — dieses Projekt läuft aber auf Tailwind v3.4.17. Die CLI-generierten
+  globals.css-/tailwind.config.ts-Änderungen wurden deshalb verworfen und **von Hand** durch die klassische
+  v3-taugliche Variante ersetzt: CSS-Variablen mit fertigen Hex-Werten direkt in `globals.css`'s zweitem
+  `:root`-Block (eigene Namen wie `--surface`/`--ink`/`--brand-hover`, bewusst NICHT `--background`/
+  `--foreground` wiederverwendet, da diese beiden Namen bereits app-weit das `<body>`-Hintergrund/-Textfarbe
+  aus dem ursprünglichen "Signalrot"-Pass tragen), plus die passenden `theme.extend.colors`-Einträge in
+  `tailwind.config.ts` (sowohl die Brief-eigenen Tokens `ink`/`line`/`surface`/`success`/`warning`/`danger`
+  als auch die von generierten shadcn-Komponenten erwarteten Alias-Namen `background`/`foreground`/`card`/
+  `popover`/`primary`/`secondary`/`muted`/`accent`/`destructive`/`border`/`input`/`ring` — beide Gruppen
+  zeigen auf dieselben CSS-Variablen, nicht doppelt gepflegt). `tw-animate-css` (v4-only) wurde durch
+  `tailwindcss-animate` (v3-kompatibel, in `plugins: []` registriert) ersetzt; `shadcn`/`radix-ui`-Pakete
+  wurden dabei nicht durch eigene Einzelpakete ersetzt, da `radix-ui` selbst schon das aktuelle, gebündelte
+  Radix-Meta-Package ist (kein v4-spezifisches Detail, sondern nur die neuere Verpackung vieler
+  `@radix-ui/react-*`-Pakete in einem). `darkMode: 'class'` wurde explizit gesetzt (statt Tailwinds Default
+  `'media'`), obwohl nirgends eine `.dark`-Klasse gesetzt wird — sonst würden `dark:`-Varianten in
+  generiertem shadcn-Code (kommen vereinzelt vor, z. B. im Button) auf `prefers-color-scheme: dark`
+  reagieren, obwohl die App bewusst fixed-light ist (`color-scheme: light`, kein Theme-Umschalter). Ein paar
+  rein kosmetische v4-only-Utility-Klassen in generierten Komponentendateien (z. B. `origin-(--radix-...)`,
+  `**:`-Descendant-Variant in `tooltip.tsx`) erzeugen unter v3 einfach keine zusätzliche Regel (kein Build-
+  Fehler, nur ein minimal weniger präziser Animations-Ursprung) — bewusst nicht einzeln von Hand gepatcht,
+  da der Aufwand den kosmetischen Nutzen nicht rechtfertigt.
+- `tailwind.config.ts` braucht `import tailwindcssAnimate from 'tailwindcss-animate'` statt
+  `require('tailwindcss-animate')` im `plugins`-Array — dieses Next-15-Setup lädt `tailwind.config.ts` in
+  einem Kontext, in dem `require` zur Laufzeit nicht definiert ist (`ReferenceError: require is not defined`),
+  nur `import`/ESM funktioniert.
+- shadcn-Komponenten installiert (in `src/components/ui/`, eigene Dateinamen, keine Kollision mit den
+  bestehenden Handbau-Dateien dort): `table`, `badge`, `button`, `input`, `select`, `switch`, `dialog`,
+  `sheet`, `dropdown-menu`, `tabs`, `tooltip`, `skeleton`, `alert-dialog`, `separator`, `checkbox`.
+  `sonner` (Toast) wurde bewusst NICHT über `npx shadcn add sonner` (das nur einen dünnen
+  Wrapper generiert) hinzugefügt, sondern das rohe `sonner`-Package direkt in `(app)/layout.tsx` als
+  `<Toaster theme="light" position="top-right" richColors />` eingehängt. `TooltipProvider`
+  (`components/ui/tooltip.tsx`) wrappt ebenfalls in `(app)/layout.tsx`, wie von der CLI selbst verlangt.
+- Barlow Condensed (`--font-barlow-condensed`, `font-condensed`) neu in `src/app/layout.tsx`/
+  `tailwind.config.ts` ergänzt, ausschließlich für Kennzahlen (Mitgliederzahl-Kacheln) laut Brief — nicht als
+  allgemeine Schriftfamilie, Barlow bleibt der Fließtext-Font app-weit.
+
 ### Verwaltung (admin) navigation
 
 All `/admin/*` pages (`benutzer`, `drohnen`, `email`, `status`) are independently gated by `isSiteAdmin` and

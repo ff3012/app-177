@@ -1,3 +1,5 @@
+import { Toaster } from 'sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { isSiteAdmin } from '@/lib/auth/permissions';
@@ -21,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
+    <TooltipProvider>
     <MobileHeaderProvider>
       <div className="flex min-h-screen flex-col bg-[#f6f6f7]">
         {/* V2-Mobile: eine Zeile auf allen Breiten statt vormals flex-col (=> zwei gestapelte
@@ -72,7 +75,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Footer />
         </div>
         <MobileTabBar user={user} />
+        {/* App ist fixed-light-themed (siehe globals.css/color-scheme:light) - theme="light" statt
+            sonners Standard "system", damit Toasts bei OS-Dark-Mode nicht plötzlich abweichen. */}
+        <Toaster theme="light" position="top-right" richColors />
       </div>
     </MobileHeaderProvider>
+    </TooltipProvider>
   );
 }
