@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
-import type { EventClickArg } from '@fullcalendar/core';
+import type { EventClickArg, EventContentArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import deLocale from '@fullcalendar/core/locales/de';
 import { useRouter } from 'next/navigation';
 import { AddToCalendarLink } from './add-to-calendar-link';
+import { RsvpBadge } from './rsvp-badge';
 
 export interface CalendarEventInput {
   id: string;
@@ -34,6 +35,23 @@ function formatEventTime(event: CalendarEventInput) {
   return `${start} – ${end}`;
 }
 
+/** Only adds the compact RSVP tally in dayGridMonth's small chips - timeGridWeek has different
+ * space/interaction needs the mockup never addressed, so it keeps FullCalendar's plain time+title. */
+function renderEventContent(arg: EventContentArg) {
+  const showRsvp = arg.view.type === 'dayGridMonth' && arg.event.extendedProps.category === 'DROHNENGRUPPE';
+  const rsvpCounts = arg.event.extendedProps.rsvpCounts as CalendarEventInput['rsvpCounts'];
+
+  return (
+    <div className="w-full overflow-hidden px-1 py-0.5 text-white">
+      <div className="truncate text-[11px] font-medium leading-tight">
+        {!arg.event.allDay && `${arg.timeText} `}
+        {arg.event.title}
+      </div>
+      {showRsvp && rsvpCounts && <RsvpBadge counts={rsvpCounts} compact />}
+    </div>
+  );
+}
+
 export function CalendarView({ events }: { events: CalendarEventInput[] }) {
   const router = useRouter();
   const [viewEvent, setViewEvent] = useState<CalendarEventInput | null>(null);
@@ -56,7 +74,12 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
           locale={deLocale}
           headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
           height="auto"
-          events={events.map((event) => ({ ...event, extendedProps: { editable: event.editable } }))}
+          eventDisplay="block"
+          events={events.map((event) => ({
+            ...event,
+            extendedProps: { editable: event.editable, rsvpCounts: event.rsvpCounts, category: event.category },
+          }))}
+          eventContent={renderEventContent}
           eventClick={handleEventClick}
         />
       </div>

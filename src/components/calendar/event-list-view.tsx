@@ -4,6 +4,8 @@ import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CalendarEventInput } from './calendar-view';
 import { AddToCalendarLink } from './add-to-calendar-link';
+import { RsvpBadge } from './rsvp-badge';
+import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
 
 const DOUBLE_CLICK_WINDOW_MS = 220;
 
@@ -11,19 +13,6 @@ function formatStartTime(event: CalendarEventInput): string {
   if (event.allDay) return 'Ganztägig';
   const start = new Date(event.start);
   return start.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-}
-
-function RsvpBadge({ counts }: { counts: NonNullable<CalendarEventInput['rsvpCounts']> }) {
-  if (counts.ZUGESAGT === 0 && counts.ABGESAGT === 0 && counts.UNKLAR === 0) {
-    return <span className="text-neutral-400">–</span>;
-  }
-  return (
-    <span className="inline-flex gap-1 whitespace-nowrap">
-      <span className="rounded bg-green-100 px-1 text-green-800">✓ {counts.ZUGESAGT}</span>
-      <span className="rounded bg-red-100 px-1 text-red-800">✗ {counts.ABGESAGT}</span>
-      <span className="rounded bg-neutral-200 px-1 text-neutral-700">? {counts.UNKLAR}</span>
-    </span>
-  );
 }
 
 /**
@@ -92,31 +81,43 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
   );
 }
 
-/** Kartenansicht für schmale Bildschirme (Handy) - eine 7-spaltige Tabelle passt dort nicht lesbar hin. */
+/** Kartenansicht für schmale Bildschirme (Handy) - eine 7-spaltige Tabelle passt dort nicht lesbar
+ * hin. Die Datums-Badge-Spalte + farbige Akzentleiste (Farbe aus layer-colors.ts, dieselbe Quelle
+ * wie die Termin-Chips im Kalendergitter und die Legende) übernimmt die visuelle Zuordnung, die im
+ * Gitter über die Chip-Farbe passiert - hier gibt es keine Chips, nur die Karte selbst. */
 function EventCard({ event }: { event: CalendarEventInput }) {
   const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable);
   const start = new Date(event.start);
+  const accentColor = LAYER_COLORS[event.layer ?? ''] ?? '#8e8e93';
 
   return (
     <div
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      className="flex cursor-pointer flex-col gap-1.5 border-b border-neutral-100 px-4 py-3 active:bg-neutral-50"
+      className="flex cursor-pointer gap-3 border-b border-neutral-100 py-3 pl-0 pr-4 active:bg-neutral-50"
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm text-neutral-600">
-          {start.toLocaleDateString('de-AT', { weekday: 'short' })}, {start.toLocaleDateString('de-AT')} ·{' '}
-          {formatStartTime(event)}
-        </span>
-        <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
+      <div className="flex shrink-0 items-stretch gap-2 pl-4">
+        <span className="w-1 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
+        <div className="flex w-9 flex-col items-center pt-0.5">
+          <span className="text-lg font-bold leading-none text-neutral-900">{start.getDate()}</span>
+          <span className="text-[10px] uppercase tracking-wide text-neutral-400">
+            {start.toLocaleDateString('de-AT', { weekday: 'short' })}
+          </span>
+        </div>
       </div>
-      <span className="font-medium text-neutral-900">{event.title}</span>
-      <div className="text-sm text-neutral-500">{event.organizationName ?? '–'}</div>
-      <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-        <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
-          Zusage & Details
-        </a>
-        <AddToCalendarLink eventId={event.id} variant="icon" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm text-neutral-600">{formatStartTime(event)}</span>
+          <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
+        </div>
+        <span className="font-medium text-neutral-900">{event.title}</span>
+        <div className="text-sm text-neutral-500">{event.organizationName ?? '–'}</div>
+        <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
+            Zusage & Details
+          </a>
+          <AddToCalendarLink eventId={event.id} variant="icon" />
+        </div>
       </div>
     </div>
   );

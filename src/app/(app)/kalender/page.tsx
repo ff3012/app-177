@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageEventsFor, canViewDroneModule } from '@/lib/auth/permissions';
-import { KalenderWithLayers, type CalendarLayer } from '@/components/calendar/kalender-with-layers';
+import { KalenderWithLayers, type CalendarLayer, type IcsLink } from '@/components/calendar/kalender-with-layers';
 import type { CalendarEventInput } from '@/components/calendar/calendar-view';
-import { CopyLinkButton } from '@/components/ui/copy-link-button';
+import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
 
 function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
@@ -65,7 +65,7 @@ export default async function KalenderPage() {
         end: event.endsAt.toISOString(),
         allDay: event.allDay,
         editable: canManageEventsFor(user, event.organizationId),
-        backgroundColor: layer === 'drohnengruppe' ? '#15803d' : layer === 'abschnitt' ? '#c62828' : undefined,
+        backgroundColor: LAYER_COLORS[layer],
         description: event.description ?? undefined,
         location: event.location ?? undefined,
         organizationName: event.organization.shortName ?? event.organization.name,
@@ -77,6 +77,21 @@ export default async function KalenderPage() {
     });
 
   const combinedIcsToken = process.env.ABSCHNITTS_ICS_TOKEN;
+
+  const icsLinks: IcsLink[] = [
+    {
+      label: 'Kalender abonnieren (.ics)',
+      href: `/kalender/ics/${organization.icsToken}`,
+      copyText: `${baseUrl()}/kalender/ics/${organization.icsToken}`,
+    },
+  ];
+  if (combinedIcsToken) {
+    icsLinks.push({
+      label: 'Abschnitt-Kalender abonnieren (.ics)',
+      href: `/kalender/ics/${combinedIcsToken}`,
+      copyText: `${baseUrl()}/kalender/ics/${combinedIcsToken}`,
+    });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,27 +105,7 @@ export default async function KalenderPage() {
           </Link>
         )}
       </div>
-      <KalenderWithLayers events={calendarEvents} layers={layers} />
-
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">ICS Kalender Import</h2>
-        <div className="flex flex-col gap-2 text-sm">
-          <div className="flex items-center gap-1.5">
-            <a href={`/kalender/ics/${organization.icsToken}`} className="text-brand hover:underline">
-              Kalender abonnieren (.ics)
-            </a>
-            <CopyLinkButton text={`${baseUrl()}/kalender/ics/${organization.icsToken}`} />
-          </div>
-          {combinedIcsToken && (
-            <div className="flex items-center gap-1.5">
-              <a href={`/kalender/ics/${combinedIcsToken}`} className="text-brand hover:underline">
-                Abschnitt-Kalender abonnieren (.ics)
-              </a>
-              <CopyLinkButton text={`${baseUrl()}/kalender/ics/${combinedIcsToken}`} />
-            </div>
-          )}
-        </div>
-      </div>
+      <KalenderWithLayers events={calendarEvents} layers={layers} icsLinks={icsLinks} />
     </div>
   );
 }

@@ -196,21 +196,49 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
 
 `src/app/(app)/kalender/page.tsx` is the single calendar page (an earlier separate `/kalender/abschnitt` page
 was merged in and now just redirects here). It fetches every event the user is allowed to see, tags each
-with a `layer` (`own` / `abschnitt` / `drohnengruppe`) and a `category`, and hands them to
-`components/calendar/kalender-with-layers.tsx`, a client component that renders one `ToggleSwitch` per layer
-(default: all on), filters client-side, and then renders either `CalendarView` (FullCalendar grid) or
-`EventListView` (compact `table-fixed` table: Datum/Start/Tag/Betreff/Organisation/Zusagen-Badge, `text-xs`
-with tight padding so it stays inside the page's `max-w-5xl` column without horizontal scrolling) depending
-on a `viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new
-layer means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and pick
-a `backgroundColor` for it; both `CalendarEventInput` consumers (grid + list) read the same event shape, so
-add new fields there once. Every `EventListView` row is clickable regardless of `event.editable` — a single
-click opens the detail page (RSVP + full info, see below), a double-click on an editable row instead jumps
-straight to the edit form. Since a browser fires two ordinary `click` events before recognizing a
-`dblclick`, the single-click navigation is deferred by `DOUBLE_CLICK_WINDOW_MS` (220ms) in `EventListRow`
-and cancelled if a `dblclick` arrives in that window — don't remove that debounce, a plain `onClick`
-would navigate away before the `dblclick` handler ever fires. Rows also carry an explicit "Zusage" link
-to the same detail page next to the add-to-calendar icon, for discoverability.
+with a `layer` (`own` / `abschnitt` / `drohnengruppe`) and a `category`, and hands them (plus the built
+`icsLinks` array, see below) to `components/calendar/kalender-with-layers.tsx`, a client component that
+renders the layer/legend/ICS sidebar and either `CalendarView` (FullCalendar grid) or `EventListView`
+(compact `table-fixed` table: Datum/Start/Tag/Betreff/Organisation/Zusagen-Badge, `text-xs` with tight
+padding so it stays inside the page's `max-w-5xl` column without horizontal scrolling) depending on a
+`viewMode` toggle — **list is the default view** for all users, not the calendar grid. Adding a new layer
+means: extend the `layer` tagging logic in the page, add it to the `layers` array passed down, and add a
+color to `src/lib/calendar/layer-colors.ts`'s `LAYER_COLORS`/`LAYER_LABELS` (the single source both the
+event `backgroundColor`, `LayerLegend`, and the mobile `EventCard`'s accent bar read from — never hardcode a
+layer color at any of those three call sites again). Every `EventListView` row is clickable regardless of
+`event.editable` — a single click opens the detail page (RSVP + full info, see below), a double-click on an
+editable row instead jumps straight to the edit form. Since a browser fires two ordinary `click` events
+before recognizing a `dblclick`, the single-click navigation is deferred by `DOUBLE_CLICK_WINDOW_MS` (220ms)
+in `EventListRow` and cancelled if a `dblclick` arrives in that window — don't remove that debounce, a plain
+`onClick` would navigate away before the `dblclick` handler ever fires. Rows also carry an explicit "Zusage"
+link to the same detail page next to the add-to-calendar icon, for discoverability. `RsvpBadge`
+(`components/calendar/rsvp-badge.tsx`) is shared by the table row, the mobile card, and the FullCalendar
+month-grid chip (see below) via a `compact` prop (plain colored text instead of pill backgrounds, for the
+tighter chip context) — don't reintroduce a local copy at any of those sites.
+
+**Sidebar layout** (`kalender-with-layers.tsx`): at `lg:` (1024px) and up — the first use of that breakpoint
+anywhere in this codebase, everywhere else only uses `sm:` (640px) — the Ebenen-Toggles, `LayerLegend`, and
+the ICS-subscribe card move into a fixed `lg:w-64` left column next to the calendar/list content. Below
+`lg:` (including tablet width) everything stays in the original stacked order; there's deliberately no third
+in-between layout. `lg:` was chosen specifically because the page's own container is `max-w-5xl` (1024px) —
+the sidebar only gets meaningful room right around where the container hits its own cap anyway, so there's
+no cramped intermediate range to design for. The ICS links themselves moved from `kalender/page.tsx`'s own
+JSX into `KalenderWithLayers` as a plain `icsLinks: {label, href, copyText}[]` prop built server-side in
+`page.tsx` — purely a component-boundary change, not a functional one.
+
+**FullCalendar reskin** (`calendar-view.tsx`, v6.1.21): `eventDisplay="block"` (solid colored chips instead
+of the library's default dot+text) plus a custom `eventContent` render callback that shows `HH:mm Titel` and
+— only when `arg.view.type === 'dayGridMonth'` **and** the event's category is `DROHNENGRUPPE` — a compact
+`RsvpBadge` line underneath. The `view.type` check matters: `eventContent` fires for both `dayGridMonth` and
+`timeGridWeek` (same `<FullCalendar>` instance, switched via the toolbar), and `timeGridWeek`'s taller
+time-block layout was never addressed by the design this followed, so it deliberately keeps the plain
+time+title there. `extendedProps` on each event now also carries `rsvpCounts`/`category` (previously only
+`editable`) specifically so `eventContent` can read them — `EventContentArg.event.extendedProps` is the only
+way in. Weekend-column tinting (`.fc-day-sat`/`.fc-day-sun`) and muted out-of-month-cell text
+(`.fc-day-other`) are plain CSS in `globals.css` targeting FullCalendar's own generated class names
+(confirmed from `@fullcalendar/core`'s source, not guessed) — `!important` for the same reason as the
+pre-existing mobile toolbar override just above them in that file: FullCalendar injects its own stylesheet
+at runtime, so normal bundle cascade order isn't guaranteed to win.
 
 **RSVP ("Zusage")**: `TerminZusage` (`prisma/schema.prisma`) is one row per (eventId, userId) — a
 `ZusageStatus` (ZUGESAGT/ABGESAGT/UNKLAR) plus an optional note (max 200 chars, validated in
@@ -246,8 +274,8 @@ suggested), further Start edits only sync the date, never overwrite a chosen End
 "Drohnengruppe" auto-checks "Abschnitt-weiter Termin" (still manually uncheckable) since Drohnengruppe
 events are cross-org by nature.
 
-The .ics subscription links live in their own "ICS Kalender Import" card below the calendar (not the page
-header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. Separately,
+The .ics subscription links live in their own "ICS Kalender Import" card in the layout described above (not
+the page header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. Separately,
 `src/app/(app)/kalender/[eventId]/ics/route.ts` serves a **single-event** .ics download (session-authenticated,
 same organization/category visibility check as the main Kalender query) so a real file response — not a
 `data:` URI — triggers the native "add to calendar" flow on mobile. `components/calendar/add-to-calendar-link.tsx`

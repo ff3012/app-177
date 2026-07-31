@@ -60,3 +60,21 @@ body {
     font-size: 0.8rem !important;
   }
 }
+
+/* Kalender-Modul Signalrot-Reskin: dieselbe !important-Begründung wie oben (FullCalendars eigenes
+   Stylesheet wird zur Laufzeit injiziert, Cascade-Reihenfolge gegenüber unserem Next-Bundle ist
+   nicht garantiert) gilt auch außerhalb der max-width-Media-Query. Exakte Klassennamen aus
+   FullCalendars eigenem Quellcode bestätigt (getDayClassNames in @fullcalendar/core). */
+.fc .fc-daygrid-day.fc-day-sat,
+.fc .fc-daygrid-day.fc-day-sun {
+  background-color: #fafafb !important;
+}
+.fc .fc-daygrid-day.fc-day-other .fc-daygrid-day-number {
+  color: #c7c7cc !important;
+}
+.fc .fc-col-header-cell-cushion {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  color: #8e8e93;
+}
