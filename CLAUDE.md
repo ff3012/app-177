@@ -570,7 +570,15 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
 ### Email
 
 `src/lib/email/mailjet.ts` is a thin `fetch` wrapper around Mailjet's v3.1 Send API (no SDK dependency), plus
-`checkMailjetConnection()` for the Status-page health check (read-only, sends nothing).
+`checkMailjetConnection()` for the Status-page health check (read-only, sends nothing). `sendEmail()` wraps
+every caller's `htmlPart` in one shared `wrapHtmlPart()` div (`font-family: Arial, Helvetica, sans-serif;
+font-size: 15px; ...`) before sending — added after a real inconsistency shipped: an early version of the
+"bitte nicht antworten" disclaimer line (see below) had its own smaller/grayer inline style, which stood out
+visually against the rest of the same email in a real client. Individual templates can still deliberately
+override this for one element via their own inline `style` (e.g. the large monospace login short-code box in
+`sendLoginTokenEmail`) since a child's inline style wins over the inherited wrapper value — the point is that
+plain paragraphs across a whole email can no longer silently drift apart from each other one template edit
+at a time.
 `src/lib/email/templates.ts` builds the transactional emails (activation, password reset); `AUTH_URL` is the
 base for the links it builds. `src/lib/email/escape-html.ts` (`escapeHtml`) is used wherever free-text or
 user-controlled values (flight location, feedback message) get interpolated into an email's `htmlPart` —
@@ -580,7 +588,11 @@ monitored address, so the three member-facing templates (activation, password re
 with a short "bitte nicht antworten, bei Fragen wende dich an florian.krebs@feuerwehr.gv.at" line — the same
 contact address already hardcoded (by design, see below) for in-app feedback. Admin-facing operational mails
 (drone-flight notification, system-check result) don't need this line; the admin who receives them already
-knows who to contact. `/admin/email` has a manual "send test email" action for verifying the Mailjet API
+knows who to contact. Every template's sign-off reads "Abschnittsfeuerwehrkommando Purkersdorf" — the
+`Organization` row's actual name for the AFKDO org (`prisma/seed.ts`) — not the informal "Feuerwehr Abschnitt
+Purkersdorf" phrase a couple of templates used until this was flagged as inconsistent; the activation email's
+own "Dein AFKDO Purkersdorf" sign-off is a deliberately different, friendlier phrasing and was left alone.
+`/admin/email` has a manual "send test email" action for verifying the Mailjet API
 key/sender config without triggering a real activation or reset flow, plus the `droneFlightNotificationEmail`
 and `systemCheckNotificationEmail` settings (`AppSettings`) editable via `DroneFlightEmailForm` and
 `SystemCheckEmailForm` respectively — two near-identical forms/actions kept separate rather than

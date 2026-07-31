@@ -6,6 +6,18 @@ interface SendEmailParams {
   htmlPart: string;
 }
 
+/** Erzwingt an einer einzigen Stelle dieselbe Schriftart/-größe für den gesamten Inhalt jeder
+ * E-Mail - einzelne Vorlagen setzen sonst leicht inkonsistente Inline-Styles nur an manchen
+ * Absätzen (z. B. eine kleinere Fußnote), was im Mailclient wie ein Stilbruch aussieht. Ein
+ * Web-Font wie das Barlow der App wäre in E-Mail-Clients unzuverlässig (kein @font-face-Support),
+ * daher eine Standard-Sans-Serif-Stack statt der App-Schrift. Absichtliche Ausnahmen (z. B. der
+ * größere, monospaced Anmelde-Code in sendLoginTokenEmail) überschreiben das per eigenem
+ * Inline-Style weiterhin gezielt - das bleibt möglich, da Inline-Styles auf dem Kind-Element
+ * gegenüber dem hier vererbten Wert gewinnen. */
+function wrapHtmlPart(htmlPart: string): string {
+  return `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.5; color: #1c1c1e;">${htmlPart}</div>`;
+}
+
 export async function sendEmail(params: SendEmailParams): Promise<void> {
   const apiKey = process.env.MAILJET_API_KEY;
   const apiSecret = process.env.MAILJET_API_SECRET;
@@ -31,7 +43,7 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
           To: [{ Email: params.to, Name: params.toName ?? params.to }],
           Subject: params.subject,
           TextPart: params.textPart,
-          HTMLPart: params.htmlPart,
+          HTMLPart: wrapHtmlPart(params.htmlPart),
         },
       ],
     }),

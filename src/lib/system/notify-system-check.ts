@@ -40,11 +40,11 @@ export async function notifySystemCheckResult(result: SystemCheckResult): Promis
         '',
         ...rows.map((row) => `${row.ok ? 'OK    ' : 'FEHLER'} - ${row.label}: ${row.detail}`),
         '',
-        'Feuerwehr Abschnitt Purkersdorf',
+        'Abschnittsfeuerwehrkommando Purkersdorf',
       ].join('\n'),
       htmlPart: [
         `<p>Täglicher Systemcheck App-177 - ${escapeHtml(checkedAtFormatted)}</p>`,
-        '<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">',
+        '<table style="border-collapse:collapse;">',
         '<tr>',
         '<th style="padding:6px 12px;border:1px solid #ddd;text-align:left;">Check</th>',
         '<th style="padding:6px 12px;border:1px solid #ddd;text-align:left;">Ergebnis</th>',
@@ -52,7 +52,7 @@ export async function notifySystemCheckResult(result: SystemCheckResult): Promis
         '</tr>',
         htmlRows,
         '</table>',
-        '<p>Feuerwehr Abschnitt Purkersdorf</p>',
+        '<p>Abschnittsfeuerwehrkommando Purkersdorf</p>',
       ].join(''),
     });
   } catch (error) {
