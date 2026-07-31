@@ -1,7 +1,6 @@
 'use client';
 
 import { useTransition } from 'react';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -27,14 +26,16 @@ interface UserRowActionsProps {
   userId: string;
   isActive: boolean;
   isSelf: boolean;
+  onEdit: () => void;
 }
 
 /** Zeilenmenü (Verwaltung-Brief.md 3.3) - ersetzt das bisherige einzelne Stiftsymbol.
- * "Aktivieren/Deaktivieren" ruft den neuen dünnen setUserActive-Wrapper (actions.ts), "Löschen"
- * wiederverwendet die bestehende deleteUser-Action unverändert, nur hinter einem AlertDialog statt
- * der alten eigenen Bestätigungs-Textzeile (delete-user-button.tsx bleibt für den Edit-Seiten-Fall
- * unverändert bestehen, das hier ist eine zweite, gleichwertige Oberfläche für dieselbe Action). */
-export function UserRowActions({ userId, isActive, isSelf }: UserRowActionsProps) {
+ * "Bearbeiten" öffnet jetzt das UserFormSheet (Phase 4) statt zur alten [userId]-Seite zu
+ * navigieren - die alten delete-user-button.tsx/password-reset-email-button.tsx wurden komplett
+ * durch dieses Menü ersetzt, nicht nur ergänzt. "Aktivieren/Deaktivieren" ruft den neuen dünnen
+ * setUserActive-Wrapper (actions.ts), "Löschen" wiederverwendet die bestehende deleteUser-Action
+ * unverändert, nur hinter einem AlertDialog statt der alten eigenen Bestätigungs-Textzeile. */
+export function UserRowActions({ userId, isActive, isSelf, onEdit }: UserRowActionsProps) {
   const [pending, startTransition] = useTransition();
 
   function handleToggleActive() {
@@ -83,9 +84,7 @@ export function UserRowActions({ userId, isActive, isSelf }: UserRowActionsProps
           </svg>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-          <DropdownMenuItem asChild>
-            <Link href={`/admin/benutzer/${userId}`}>Bearbeiten</Link>
-          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onEdit}>Bearbeiten</DropdownMenuItem>
           <DropdownMenuItem disabled={pending} onSelect={handlePasswordReset}>
             Passwort zurücksetzen
           </DropdownMenuItem>

@@ -34,8 +34,11 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
 
   const rows: UserRow[] = users.map((u) => {
     const adminOrgNames = u.memberships.map((m) => m.organization.shortName ?? m.organization.name);
+    const droneRole = !u.droneMembership ? 'NONE' : u.droneMembership.role === 'ADMIN' ? 'ADMIN' : 'PILOT';
     return {
       id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
       // Verwaltung-Brief.md: "Nachname Vorname" statt bisher "Vorname Nachname".
       name: `${u.lastName} ${u.firstName}`,
       email: u.email,
@@ -45,7 +48,9 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       homeOrganizationId: u.homeOrganizationId,
       isAdmin: adminOrgNames.length > 0,
       adminFor: adminOrgNames.length > 0 ? `Admin für: ${adminOrgNames.join(', ')}` : '–',
+      adminOrgIds: u.memberships.map((m) => m.organizationId),
       droneLabel: u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '–',
+      droneRole,
       pushCount: u.pushSubscriptions.length,
       pushDates: u.pushSubscriptions.map((s) => s.createdAt.toISOString()),
       isActive: u.isActive,
@@ -63,6 +68,8 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       initialSort={params.sort ?? 'name'}
       initialDir={params.dir === 'desc' ? 'desc' : 'asc'}
       currentUserId={currentUser.id}
+      initialEditUserId={params.edit}
+      initialCreateOpen={params.new === '1'}
     />
   );
 }

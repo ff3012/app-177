@@ -15,11 +15,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { UserFormSheet, type UserSheetTarget } from '@/components/admin/user-form-sheet';
+import type { DroneRoleOption } from '@/lib/validation/user.schema';
 import { bulkSetActive, bulkSetHomeOrganization } from './actions';
 import { UserRowActions } from './user-row-actions';
 
 export interface UserRow {
   id: string;
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
   stbNr: string;
@@ -28,11 +32,15 @@ export interface UserRow {
   homeOrganizationId: string;
   isAdmin: boolean;
   adminFor: string;
+  adminOrgIds: string[];
   droneLabel: string;
+  droneRole: DroneRoleOption;
   pushCount: number;
   pushDates: string[];
   isActive: boolean;
 }
+
+type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
 
 interface Organization {
   id: string;
@@ -73,9 +81,13 @@ function formatPushTooltip(dates: string[]): string {
 /** Kartenansicht für schmale Bildschirme - Phase 6 (Mobile Verwaltung) verfeinert das noch
  * (Kennzahlkarten, Filter-Sheet, fixierte Aktion); hier vorerst nur an die neuen Feldnamen
  * angepasst, analog zu EventCard in components/calendar/event-list-view.tsx. */
-function UserCard({ user }: { user: UserRow }) {
+function UserCard({ user, onSelect }: { user: UserRow; onSelect: (id: string) => void }) {
   return (
-    <Link href={`/admin/benutzer/${user.id}`} className="block border-b border-line px-4 py-3 last:border-0">
+    <button
+      type="button"
+      onClick={() => onSelect(user.id)}
+      className="block w-full border-b border-line px-4 py-3 text-left last:border-0"
+    >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium text-ink">{user.name}</span>
         <Badge
@@ -89,7 +101,7 @@ function UserCard({ user }: { user: UserRow }) {
       </div>
       <div className="break-words text-sm text-ink-muted">{user.homeOrg}</div>
       <div className="mt-1 text-sm text-ink-faint">{user.adminFor}</div>
-    </Link>
+    </button>
   );
 }
 
@@ -103,6 +115,8 @@ export function UserManagementSection({
   initialSort,
   initialDir,
   currentUserId,
+  initialEditUserId,
+  initialCreateOpen,
 }: {
   users: UserRow[];
   organizations: Organization[];
@@ -113,9 +127,19 @@ export function UserManagementSection({
   initialSort: string;
   initialDir: 'asc' | 'desc';
   currentUserId: string;
+  initialEditUserId?: string;
+  initialCreateOpen: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+
+  const [sheetState, setSheetState] = useState<SheetState | null>(() => {
+    if (initialCreateOpen) return { mode: 'create' };
+    if (initialEditUserId && users.some((u) => u.id === initialEditUserId)) {
+      return { mode: 'edit', userId: initialEditUserId };
+    }
+    return null;
+  });
 
   const [queryInput, setQueryInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
@@ -247,6 +271,26 @@ export function UserManagementSection({
 
   const homeOrgCount = useMemo(() => new Set(users.map((u) => u.homeOrganizationId)).size, [users]);
 
+  function openEdit(id: string) {
+    setSheetState({ mode: 'edit', userId: id });
+  }
+
+  const sheetTargetRow = sheetState?.mode === 'edit' ? users.find((u) => u.id === sheetState.userId) : undefined;
+  const sheetTarget: UserSheetTarget | undefined = sheetTargetRow
+    ? {
+        id: sheetTargetRow.id,
+        firstName: sheetTargetRow.firstName,
+        lastName: sheetTargetRow.lastName,
+        email: sheetTargetRow.email,
+        stbNr: sheetTargetRow.stbNr,
+        phone: sheetTargetRow.phone,
+        isActive: sheetTargetRow.isActive,
+        homeOrganizationId: sheetTargetRow.homeOrganizationId,
+        adminOrgIds: sheetTargetRow.adminOrgIds,
+        droneRole: sheetTargetRow.droneRole,
+      }
+    : undefined;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -269,12 +313,13 @@ export function UserManagementSection({
           >
             Excel Import
           </Link>
-          <Link
-            href="/admin/benutzer/neu"
+          <button
+            type="button"
+            onClick={() => setSheetState({ mode: 'create' })}
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
           >
             Neuer Benutzer
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -452,7 +497,7 @@ export function UserManagementSection({
         <>
           <div className="flex flex-col rounded-lg bg-surface shadow-card sm:hidden">
             {sorted.map((u) => (
-              <UserCard key={u.id} user={u} />
+              <UserCard key={u.id} user={u} onSelect={openEdit} />
             ))}
           </div>
 
@@ -506,7 +551,7 @@ export function UserManagementSection({
                 {sorted.map((u) => (
                   <TableRow
                     key={u.id}
-                    onClick={() => router.push(`/admin/benutzer/${u.id}`)}
+                    onClick={() => openEdit(u.id)}
                     className="h-[52px] cursor-pointer border-line hover:bg-surface-sunken"
                   >
                     <TableCell onClick={(event) => event.stopPropagation()}>
@@ -547,7 +592,12 @@ export function UserManagementSection({
                       )}
                     </TableCell>
                     <TableCell onClick={(event) => event.stopPropagation()}>
-                      <UserRowActions userId={u.id} isActive={u.isActive} isSelf={u.id === currentUserId} />
+                      <UserRowActions
+                        userId={u.id}
+                        isActive={u.isActive}
+                        isSelf={u.id === currentUserId}
+                        onEdit={() => openEdit(u.id)}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -556,6 +606,20 @@ export function UserManagementSection({
           </div>
         </>
       )}
+
+      <UserFormSheet
+        open={sheetState !== null}
+        onOpenChange={(open) => {
+          if (!open) setSheetState(null);
+        }}
+        mode={sheetState?.mode ?? 'create'}
+        organizations={organizations}
+        target={sheetTarget}
+        onSaved={() => {
+          setSheetState(null);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

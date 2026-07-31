@@ -557,27 +557,54 @@ each `PushSubscription.createdAt` (`"Registriert seit ..."` per device) — ther
 schema to show a real "Gerätename" as the brief's wording literally suggests, so the tooltip shows dates only,
 not a fabricated device label.
 
-Verification note: this browser-automation environment hydrates server-rendered pages but a plain
-`onClick`-driven interaction (sort-header clicks, `<Select>`/`<DropdownMenu>` triggers, checkboxes) does not
-register — the same harness-wide gap already documented for Mobile-Brief.md. Directly submitted `<form>`
-elements (e.g. login) still work since those are native browser submissions Next progressively enhances, not
-pure client reactivity. Filtering/sorting/chip/empty-state *logic* was instead verified by navigating directly
-to URLs with `?feuerwehr=...&status=...&sort=...&dir=...` and reading the resulting SSR output against seeded
-test data (6 realistic users, mixed orgs/admin roles/active states/push subscriptions) — this exercises the
-exact same `useState`-initial-value + `useMemo` filter/sort code path a real click would, just without proving
-the `onClick`/`onValueChange` wiring itself fires in this specific harness.
+**Phase 4 (Detail-Sheet)**: `createUser`/`updateUser`'s form moved from two dedicated pages
+(`/admin/benutzer/neu`, `/admin/benutzer/[userId]`) into `components/admin/user-form-sheet.tsx`
+(`UserFormSheet`) — a shadcn `Sheet` (`side="right"`, `sm:max-w-[520px]`) opened directly from the table
+(row click, a row's "Bearbeiten" menu item, or the "Neuer Benutzer" button), with four single-column sections
+(Person/Zugang/Zuordnung/Drohnengruppe) replacing the old two-column grid — "die Feldlängen sind zu
+unterschiedlich" per the brief. Both old routes **still exist and stay valid deep links** (e.g. a bookmarked
+edit URL) but now just `redirect()` to `/admin/benutzer?edit=<id>` / `?new=1`; `UserManagementSection` reads
+those two params once (lazy `useState` initializer) to open the sheet pre-populated, then its existing
+filter-sync effect naturally strips them back out of the URL on the next render (they were never part of that
+effect's own tracked param set). This meant extending `UserRow` with raw fields the display columns didn't
+need (`firstName`/`lastName` separately, `adminOrgIds: string[]`, `droneRole`) so opening the sheet for any
+row never needs a second server round-trip — the table already fetched everything. The old
+`delete-user-button.tsx`/`password-reset-email-button.tsx`/`components/admin/user-form.tsx` are gone entirely
+(superseded by `user-row-actions.tsx` and `UserFormSheet`, not kept as unused fallbacks — unlike `AdminNav`,
+which stays until step 7 specifically because deleting it now would strand three still-unmigrated pages).
+Closing the sheet with unsaved changes shows a shadcn `AlertDialog` ("Änderungen verwerfen?") instead of
+`window.confirm()` — implemented by keeping `open` fully controlled by the parent and simply not propagating
+a close request through when `formState.isDirty` is true, showing the confirm dialog instead; confirming
+sets the real `open=false`. The "no welcome email → show the activation link to copy" flow (unchanged
+behavior, just relocated) now swaps the sheet's body to that panel instead of navigating to a fresh page.
+`createUser`/`updateUser` still call `redirect('/admin/benutzer')` on success internally, unchanged — called
+directly from the client (not a `<form action>`) inside `startTransition`, the same pattern already used
+before this phase and still works identically.
+
+Verification note: this browser-automation environment does not hydrate client-side React on this page at
+all in the current session (confirmed via `__reactFiber$`/`__reactContainer$` lookups on `document.body`
+finding none, even after waiting) — the same harness-wide gap already documented for Mobile-Brief.md, now
+additionally confirmed to block Radix Portal-based content (`Sheet`/`Dialog`/`DropdownMenu`/`Select`) from
+ever mounting in a static DOM snapshot here, regardless of the underlying React state's correctness, since
+portal content only exists post-hydration. Directly submitted `<form>` elements (e.g. login) still work since
+those are native browser submissions Next progressively enhances, not pure client reactivity. What *was*
+verified: both old routes correctly `redirect()` to the new query-param URLs (confirmed via
+`window.location.href` after navigating), the resulting pages return 200 with all JS chunks loading
+successfully and zero console errors, and (Phase 3) filtering/sorting/chip/empty-state logic via direct URL
+query params against seeded data. The `Sheet`'s actual open/close/submit/discard-confirm interaction could
+not be exercised end-to-end in this environment — flagged transparently rather than claimed as tested.
 
 - `/admin/benutzer` — `UserManagementSection` (client) owns free-text search and click-to-sort-any-column
   over a flat `UserRow[]` the server maps the Prisma result into; don't push search/sort server-side, ~200
-  users is small enough to do it in the browser. `/admin/benutzer/neu`'s "Willkommen-E-Mail senden" toggle
-  (default on) still creates the user + activation token either way — turning it off just skips
-  `sendActivationEmail` and instead renders the activation link on the same page (with a copy button) for
-  the admin to hand over manually; there's no way today to retrieve that link again afterward if the admin
-  navigates away without copying it (the admin-triggered password-reset email is a separate, unrelated flow
-  for existing users, not a way to recover this). `User.stbNr`/`User.phone` (Standesbuchnummer, E.164 phone)
-  are plain optional fields with no DB-level uniqueness — `phone` is only format-validated
-  (`E164_PHONE_REGEX` in `lib/validation/user.schema.ts`), and the create form pre-fills `+43` as a starting
-  point (edit mode leaves it untouched).
+  users is small enough to do it in the browser. The "Willkommen-E-Mail senden" toggle (default on, now inside
+  `UserFormSheet`'s create mode) still creates the user + activation token either way — turning it off just
+  skips `sendActivationEmail` and instead swaps the sheet's body to show the activation link (with a copy
+  button) for the admin to hand over manually; there's no way today to retrieve that link again afterward if
+  the admin closes the sheet without copying it (the admin-triggered password-reset email is a separate,
+  unrelated flow for existing users, not a way to recover this). `User.stbNr`/`User.phone` (Standesbuchnummer,
+  E.164 phone) are plain optional fields with no DB-level uniqueness — `phone` is only format-validated
+  (`E164_PHONE_REGEX` in `lib/validation/user.schema.ts`), and create mode pre-fills `+43` as a starting point
+  (edit mode leaves it untouched).
 - **Excel export/import** (`/admin/benutzer/export`, `/admin/benutzer/import`): both read/write the same
   column set from `lib/admin/user-excel-columns.ts` (`USER_EXCEL_COLUMNS`) — the export is deliberately also
   the import template (same header names), so re-uploading an unmodified export works without edits. Export
