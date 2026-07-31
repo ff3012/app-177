@@ -7,7 +7,7 @@ export function LayerLegend({ showDrone }: { showDrone: boolean }) {
   const keys = showDrone ? (['own', 'abschnitt', 'drohnengruppe'] as const) : (['own', 'abschnitt'] as const);
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-white p-3 shadow-sm">
+    <div className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm sm:rounded-lg sm:p-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Legende</span>
       {keys.map((key) => (
         <div key={key} className="flex items-center gap-2 text-sm text-neutral-700">

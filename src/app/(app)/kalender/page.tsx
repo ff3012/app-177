@@ -5,6 +5,7 @@ import { canManageEventsFor, canViewDroneModule } from '@/lib/auth/permissions';
 import { KalenderWithLayers, type CalendarLayer, type IcsLink } from '@/components/calendar/kalender-with-layers';
 import type { CalendarEventInput } from '@/components/calendar/calendar-view';
 import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
+import { CollapsingPageTitle } from '@/components/layout/collapsing-page-title';
 
 function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
@@ -94,11 +95,9 @@ export default async function KalenderPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3 sm:gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-lg font-semibold text-neutral-900">
-          Kalender – {organization.shortName ?? organization.name}
-        </h1>
+        <CollapsingPageTitle title={`Kalender – ${organization.shortName ?? organization.name}`} />
         {canCreateAnyEvent && (
           <Link href="/kalender/neu" className="self-start rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark sm:self-auto">
             Neuer Termin

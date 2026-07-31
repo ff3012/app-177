@@ -11,6 +11,12 @@ const config: Config = {
           DEFAULT: '#e4322b',
           dark: '#c62828',
         },
+        // Grün-Ton, bisher nur als Hex-Literal in layer-colors.ts/NinetyDayRing verwendet - jetzt
+        // auch als Tailwind-Token, seit Mobile-Brief.md aktive Schalter auf Mobile grün statt rot
+        // will ("Rot bleibt der primären Aktion vorbehalten").
+        status: {
+          green: '#22a06b',
+        },
       },
       fontFamily: {
         sans: ['var(--font-barlow)', 'system-ui', 'sans-serif'],

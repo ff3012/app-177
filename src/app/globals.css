@@ -78,3 +78,23 @@ body {
   font-size: 0.75rem;
   color: #8e8e93;
 }
+
+/* Mobile-Brief.md: BottomSheet-Slide-Animation. Als CSS-Keyframe statt Tailwind-Transition, da eine
+   Transition einen Zustandswechsel braucht, um zu triggern (Sheet wird aber komplett neu
+   gemountet/unmountet, kein Vorher-Zustand) - eine Animation läuft dagegen automatisch beim Mounten. */
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-slide-up {
+  animation: sheet-slide-up 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-slide-up {
+    animation: none;
+  }
+}

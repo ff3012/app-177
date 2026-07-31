@@ -8,14 +8,14 @@ interface ToggleSwitchProps {
 
 export function ToggleSwitch({ label, checked, onChange }: ToggleSwitchProps) {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2">
+    <label className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 sm:inline-flex sm:w-auto sm:min-h-0 sm:justify-start">
       <span className="text-sm font-medium text-neutral-700">{label}</span>
       <span
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          checked ? 'bg-brand' : 'bg-neutral-300'
+          checked ? 'bg-status-green sm:bg-brand' : 'bg-neutral-300'
         }`}
       >
         <span

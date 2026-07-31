@@ -15,6 +15,7 @@ interface ProfileMenuProps {
   adminOrganizationNames: string[];
   isDrohnengruppeMember: boolean;
   vapidPublicKey: string | null;
+  logoutAction: () => Promise<void>;
 }
 
 export function ProfileMenu({
@@ -25,6 +26,7 @@ export function ProfileMenu({
   adminOrganizationNames,
   isDrohnengruppeMember,
   vapidPublicKey,
+  logoutAction,
 }: ProfileMenuProps) {
   const [open, setOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanel>(null);
@@ -81,9 +83,20 @@ export function ProfileMenu({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="max-w-[8rem] truncate rounded px-2 py-1 text-sm text-neutral-200 hover:bg-white/10 sm:max-w-none"
+        className="hidden max-w-[8rem] truncate rounded px-2 py-1 text-sm text-neutral-200 hover:bg-white/10 sm:inline-flex sm:max-w-none"
       >
         {name}
+      </button>
+      {/* Mobile-only "Avatar": Initialen-Kreis statt vollem Namenstext, spart Platz in der neuen
+          Ein-Zeilen-Kopfleiste (siehe Mobile-Brief.md). Öffnet dasselbe Dropdown wie der Name-Button. */}
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={`Profilmenü für ${name}`}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white sm:hidden"
+      >
+        {name.charAt(0).toUpperCase()}
       </button>
 
       {open && (
@@ -140,6 +153,19 @@ export function ProfileMenu({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Nur Mobile: Desktop hat "Abmelden" bereits als eigenen Button in der Kopfleiste
+              (siehe (app)/layout.tsx) - hier zusätzlich anzeigen würde es doppeln. */}
+          <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="text-sm font-medium text-neutral-600 hover:text-neutral-900"
+              >
+                Abmelden
+              </button>
+            </form>
           </div>
         </div>
       )}

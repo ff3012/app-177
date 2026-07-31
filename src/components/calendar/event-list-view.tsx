@@ -135,7 +135,7 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
   return (
     <>
       {/* Kartenansicht: unter sm (< 640px), z. B. Smartphones im Hochformat */}
-      <div className="flex flex-col rounded-lg bg-white shadow-sm sm:hidden">
+      <div className="flex flex-col rounded-xl bg-white shadow-sm sm:hidden">
         {events.map((event) => (
           <EventCard key={event.id} event={event} />
         ))}

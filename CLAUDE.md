@@ -224,13 +224,17 @@ earlier in this section); V2 is this mockup-alignment work specifically.
 
 **Sidebar layout** (`kalender-with-layers.tsx`): at `lg:` (1024px) and up — the first use of that breakpoint
 anywhere in this codebase, everywhere else only uses `sm:` (640px) — the Ebenen-Toggles, `LayerLegend`, and
-the ICS-subscribe card move into a fixed `lg:w-64` left column next to the calendar/list content. Below
-`lg:` (including tablet width) everything stays in the original stacked order; there's deliberately no third
-in-between layout. `lg:` was chosen specifically because the page's own container is `max-w-5xl` (1024px) —
-the sidebar only gets meaningful room right around where the container hits its own cap anyway, so there's
-no cramped intermediate range to design for. The ICS links themselves moved from `kalender/page.tsx`'s own
-JSX into `KalenderWithLayers` as a plain `icsLinks: {label, href, copyText}[]` prop built server-side in
-`page.tsx` — purely a component-boundary change, not a functional one.
+the ICS-subscribe card move into a fixed `lg:w-64` left column next to the calendar/list content. Between
+`sm:` and `lg:` (tablet width, 640–1023px) that same content still stacks in the original order — there's
+deliberately no third in-between layout for that range. **Below `sm:` (640px, phone width) this stacked
+fallback no longer applies at all** — see "Kalender V3 (Mobile-Brief.md)" below, which replaced it with a
+Bottom Sheet; the wrapper is `hidden lg:flex` (not just the old stacked-card block), so below `lg:` it's
+either the tablet stack (640–1023px) or fully hidden behind the sheet (<640px). `lg:` was chosen specifically
+because the page's own container is `max-w-5xl` (1024px) — the sidebar only gets meaningful room right around
+where the container hits its own cap anyway, so there's no cramped intermediate range to design for. The ICS
+links themselves moved from `kalender/page.tsx`'s own JSX into `KalenderWithLayers` as a plain
+`icsLinks: {label, href, copyText}[]` prop built server-side in `page.tsx` — purely a component-boundary
+change, not a functional one.
 
 **FullCalendar reskin** (`calendar-view.tsx`, v6.1.21): `eventDisplay="block"` (solid colored chips instead
 of the library's default dot+text) plus a custom `eventContent` render callback that shows `HH:mm Titel` and
@@ -245,6 +249,83 @@ way in. Weekend-column tinting (`.fc-day-sat`/`.fc-day-sun`) and muted out-of-mo
 (confirmed from `@fullcalendar/core`'s source, not guessed) — `!important` for the same reason as the
 pre-existing mobile toolbar override just above them in that file: FullCalendar injects its own stylesheet
 at runtime, so normal bundle cascade order isn't guaranteed to win.
+
+**Kalender V3 (Mobile-Brief.md)** — a follow-up mobile-only pass, done after a real phone screenshot of
+Kalender V2 showed its "stacked sidebar cards above the content" fallback meant a user opened Kalender and
+saw three settings cards before a single event — the mobile view was still a wrapped desktop layout, not
+its own design. Scope: phones only (`sm:`, i.e. <640px — the brief itself said "<768px" but that's treated as
+an approximate figure, not a new breakpoint, to avoid opening a gap in the untouched 640–1023px tablet range
+described above); `sm:` and up is explicitly unchanged, verified via computed-style diffing before/after.
+
+- **Sidebar dissolved into a Bottom Sheet**: the Ebenen/Legende/ICS content (now extracted into
+  `components/calendar/kalender-filters-content.tsx`, `<KalenderFiltersContent>`, reused by both the desktop
+  sidebar and the sheet so the JSX/logic exists exactly once) moved out of the phone-width content flow
+  entirely. A funnel-icon button — registered into the shared mobile header's action slot (see "Shared:
+  Mobile header context" below) only while `KalenderWithLayers` is mounted, with a small red dot when
+  `Object.values(enabled).some(v => v === false)` — opens `components/ui/bottom-sheet.tsx`'s `<BottomSheet>`
+  containing the exact same `<KalenderFiltersContent>`. Content now appears first on phones: title, segmented
+  view toggle, then events — settings are one tap away instead of blocking the scroll.
+- **View toggle recolored + repositioned on mobile**: since the sidebar no longer occupies the phone-width
+  content flow, the Kalenderansicht/Listenansicht segmented control (still the first thing in the content
+  column) is now full-width with equal segments and a **white-on-gray active state** below `sm:` (`bg-white
+  text-neutral-900 shadow-sm` on a `bg-neutral-100` track) — red stays reserved for primary actions/the
+  active tab per the brief. `sm:` and up keeps the original `bg-brand text-white` fill unchanged.
+- **`ToggleSwitch`** (`components/ui/toggle-switch.tsx`) rows are `flex w-full justify-between min-h-11`
+  below `sm:` (label left, switch right-aligned, 44px min tap target) with `sm:inline-flex sm:w-auto
+  sm:min-h-0 sm:justify-start` restoring the exact previous compact desktop look. Its active-track color is
+  now `bg-status-green` (new `status.green` = `#22a06b` Tailwind token, same green as
+  `LAYER_COLORS.drohnengruppe`/`NinetyDayRing`) below `sm:`, `sm:bg-brand` (red, unchanged) above it. This is
+  a genuinely shared component also used by Drohnengruppe's "Alle Flüge einsehen" toggle
+  (`flight-table.tsx`) — its mobile color changed too, deliberately, since the brief's "red only for primary
+  actions + the active tab" rule wasn't scoped to Kalender specifically.
+- **Card density** (mobile only): Ebenen/Legende/ICS cards and the mobile event-card list wrapper went from
+  `rounded-lg p-3` to `rounded-xl p-4` below `sm:` (`sm:rounded-lg sm:p-3` restores the old desktop values) —
+  Kalender-scoped only, matching the module-by-module pattern; Drohnengruppe/News/Verwaltung keep their
+  current card sizing until their own future mobile passes.
+
+### Shared: Mobile header context (Titel-Collapse, Filter-Slot, Bottom Sheet)
+
+Mobile-Brief.md needed two things a page deep inside `<main>` can't otherwise reach: pushing a page-specific
+action icon into the shared mobile header bar, and crossfading that bar's wordmark with a large,
+scroll-collapsing page title. `(app)/layout.tsx` wraps its whole return value (header **and** `<main>`) in
+`<MobileHeaderProvider>` (`components/layout/mobile-header-context.tsx`) — a React Context, not a DOM portal:
+the title crossfade needs a live 0–1 scroll-progress *value* shared between the header (wordmark) and the
+page (large title), which a portal alone (JSX placement only, no shared reactive state) can't give you. The
+header reads `title`/`titleProgress`/`actionSlot` via two tiny client components,
+`mobile-header-title-slot.tsx` and `mobile-header-action-slot.tsx`, both hard-`sm:hidden` regardless of what
+they're given — desktop's always-visible layout never needs either.
+
+- **`CollapsingPageTitle`** (`components/layout/collapsing-page-title.tsx`) renders the large `<h1>` (mobile
+  `text-[28px] font-bold`, `sm:text-lg sm:font-semibold` = the exact previous desktop style) plus a 1px
+  sentinel right below it, watched by an `IntersectionObserver` with 21 thresholds (`0, .05, ..., 1`) and a
+  `rootMargin` offset by the mobile header's own height (56px, `h-14`) so the crossfade threshold lines up
+  with the bar's bottom edge. `intersectionRatio` drives a continuous `progress` (not a hard cut): the
+  `<h1>` fades/shrinks via **imperative `ref.style` writes** (not React state) so the animation doesn't
+  re-render on every threshold step, and `setTitle(title, progress)` mirrors the same value into context for
+  the header's wordmark to crossfade against. Inline styles always beat the `sm:` CSS classes, so the effect
+  explicitly clears them back to `''` (letting classes take over) whenever `matchMedia('(max-width: 639px)')`
+  stops matching — otherwise a title faded out on mobile would still read `opacity:0` if the window were
+  resized to desktop width live. Currently used only by Kalender's `<h1>`; other pages keep a plain
+  non-collapsing title until they get their own mobile pass — the header just keeps showing the static
+  "AFKDO Purkersdorf" wordmark on those pages, since nothing ever calls `setTitle`.
+- **`BottomSheet`** (`components/ui/bottom-sheet.tsx`) — this codebase's first bottom-sheet pattern, generic
+  enough to reuse for a future non-Kalender filter/settings panel: fixed dark overlay, `rounded-t-2xl` panel
+  sliding up from the bottom, grab handle, "Fertig" button. The slide-in is a plain CSS `@keyframes` in
+  `globals.css` (`.sheet-slide-up`, `prefers-reduced-motion`-guarded) rather than a Tailwind transition,
+  since the sheet is fully mounted/unmounted (conditional `if (!open) return null`) with no prior DOM state
+  to transition *from* — only a `@keyframes` animation runs automatically on mount without one.
+- **`MobileTabBar`** (`components/layout/mobile-tab-bar.tsx`) switched from `flex` + `flex-1`-per-item to
+  `grid grid-cols-[repeat(var(--tab-count),1fr)]` with `--tab-count` set via inline `style` from
+  `items.length`, and its icons went from 22px to 24px — makes the column count explicit rather than
+  implicit in flex-grow behavior, per the brief's specific ask.
+- **Header restructure** (`(app)/layout.tsx`): the header is one `flex` row on every width now (previously
+  `flex-col sm:flex-row`, which is what produced two stacked rows below `sm:`); mobile-only and desktop-only
+  children are separated with `sm:hidden`/`hidden sm:*` pairs on individual elements instead. "Abmelden" is
+  no longer in the mobile row at all — `ProfileMenu` now takes a `logoutAction` prop (a Server Action passed
+  down rather than importing the route-group path directly) and renders its own `sm:hidden` `<form>` at the
+  bottom of the dropdown; desktop's separate header `<form>` stays `hidden sm:block` so it isn't duplicated
+  there. `ProfileMenu`'s name-text trigger button is `hidden sm:inline-flex`; a new initials-circle avatar
+  button (first letter of `name`, `sm:hidden`) replaces it below `sm:` to fit the single-row bar.
 
 **RSVP ("Zusage")**: `TerminZusage` (`prisma/schema.prisma`) is one row per (eventId, userId) — a
 `ZusageStatus` (ZUGESAGT/ABGESAGT/UNKLAR) plus an optional note (max 200 chars, validated in
@@ -599,3 +680,17 @@ state the table already used.
 While testing V2, an unrelated pre-existing bug was found and deliberately left unfixed (flagged as a
 separate follow-up instead): the profile dropdown (name/bell icon in the header) doesn't open on click,
 confirmed present on the code from before V2 too — see `profile-menu.tsx` if picking that up.
+
+**V3 (Mobile-Brief.md)**: `MobileTabBar`'s grid-column fix and the header/`ProfileMenu` restructure
+(single-row bar, initials avatar, Abmelden moved into the dropdown) described under "Kalender V3" and
+"Shared: Mobile header context" above are part of this same pass — grouped there since they were driven
+by and shipped together with Kalender's mobile rework, even though `MobileTabBar`/`ProfileMenu`/the header
+are shared app-wide, not Kalender-specific. Verification note: this pass's interactive pieces (the collapsing
+title's `IntersectionObserver`, the filter button's `useEffect`-driven registration into the header, click
+handlers generally) could only be checked via computed-style/DOM-structure inspection of the server-rendered
+HTML, not live interaction — the browser automation tool available at the time attached no React fiber to
+any DOM node on this page (confirmed via `__reactFiber$`/`__reactContainer$` key lookups finding none
+anywhere in the document, and a raw `.click()` on an existing, unrelated, already-working button producing no
+className change), meaning it never hydrates client-side JS in this environment. This matches the same
+click-testing limitation already noted during the V2 mobile-nav work above, now confirmed to be a
+harness-wide gap rather than specific to one component.

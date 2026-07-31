@@ -66,7 +66,7 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
   }
 
   return (
-    <div className="rounded-lg bg-white p-2 shadow-sm sm:p-3">
+    <div className="rounded-xl bg-white p-2 shadow-sm sm:rounded-lg sm:p-3">
       <div className="overflow-x-auto">
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
