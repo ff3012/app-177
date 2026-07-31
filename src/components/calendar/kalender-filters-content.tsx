@@ -9,8 +9,6 @@ interface KalenderFiltersContentProps {
   onToggle: (key: string, checked: boolean) => void;
   showDrone: boolean;
   icsLinks: IcsLink[];
-  showPast: boolean;
-  onTogglePast: (checked: boolean) => void;
 }
 
 /**
@@ -25,17 +23,9 @@ export function KalenderFiltersContent({
   onToggle,
   showDrone,
   icsLinks,
-  showPast,
-  onTogglePast,
 }: KalenderFiltersContentProps) {
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
-      <div className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:rounded-lg sm:p-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Anzeige</span>
-        <ToggleSwitch label="Vergangene Termine anzeigen" checked={showPast} onChange={onTogglePast} />
-        <p className="text-xs text-neutral-400">Gilt nur für die Listenansicht, nicht für das Kalendergitter.</p>
-      </div>
-
       {layers.length > 1 && (
         <div className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:rounded-lg sm:p-3">
           <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Ebenen</span>

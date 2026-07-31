@@ -283,17 +283,14 @@ described above); `sm:` and up is explicitly unchanged, verified via computed-st
   Kalender-scoped only, matching the module-by-module pattern; Drohnengruppe/News/Verwaltung keep their
   current card sizing until their own future mobile passes.
 
-**Vergangene Termine ausblenden (GitHub issue #1)**: `KalenderFiltersContent`'s new "Anzeige"-Karte has a
-single `showPast` toggle (default off), state held in `KalenderWithLayers` alongside `enabled`/`viewMode`.
-It's deliberately scoped to the **list view only** — `sortedEvents` (fed to `EventListView`) drops events
-whose `end` is before `Date.now()` unless `showPast` is on, while `filteredEvents` (fed to `CalendarView`,
-the FullCalendar grid) is untouched and keeps showing every month in full regardless of the toggle. This
-split was an explicit product decision, not an oversight: a month grid with past days/events blanked out
-reads as broken rather than tidy, whereas the list is exactly the "wall of old entries" the issue complained
-about. The hint text under the toggle ("Gilt nur für die Listenansicht...") exists because the same
-`KalenderFiltersContent` renders in both the desktop sidebar and the mobile sheet regardless of which view
-is currently active, so the toggle is visible even when looking at the grid — without the hint a user
-toggling it while on the grid view would reasonably expect something to change and see nothing.
+**Vergangene Termine ausblenden (GitHub issue #1)**: in `KalenderWithLayers`, `sortedEvents` (fed to
+`EventListView`) unconditionally drops events whose `end` is before `Date.now()` — no toggle, always on.
+`filteredEvents` (fed to `CalendarView`, the FullCalendar grid) is untouched and keeps showing every month in
+full. This split is a deliberate product decision, not an oversight: a month grid with past days/events
+blanked out reads as broken rather than tidy, whereas the list is exactly the "wall of old entries" the issue
+complained about. An earlier version of this exposed a "Vergangene Termine anzeigen" toggle in
+`KalenderFiltersContent` to re-enable past events in the list — removed again shortly after, since the list
+view should simply never show them; don't reintroduce that toggle without checking this history first.
 
 ### Shared: Mobile header context (Titel-Collapse, Filter-Slot, Bottom Sheet)
 
