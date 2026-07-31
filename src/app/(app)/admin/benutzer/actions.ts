@@ -171,6 +171,57 @@ export async function sendPasswordResetEmailToUser(userId: string): Promise<Pass
   return { success: true };
 }
 
+export interface BulkActionState {
+  success?: boolean;
+  affectedCount?: number;
+  error?: string;
+}
+
+/** Dünner Wrapper um ein einzelnes Feld statt des vollen updateUser-Formulars - fürs neue
+ * Zeilenmenü "Aktivieren/Deaktivieren" (Verwaltung-Brief.md), das nur isActive umschaltet, ohne
+ * den Rest des Formulars erneut zu validieren/senden. Wird auch von bulkSetActive wiederverwendet. */
+export async function setUserActive(userId: string, isActive: boolean): Promise<BulkActionState> {
+  const currentUser = await requireUser();
+  assertPermission(isSiteAdmin(currentUser));
+
+  if (currentUser.id === userId && !isActive) {
+    return { error: 'Du kannst dein eigenes Konto nicht deaktivieren.' };
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { isActive } });
+  revalidatePath('/admin/benutzer');
+  return { success: true, affectedCount: 1 };
+}
+
+/** Neu für die Mehrfachauswahl-Aktionsleiste (Verwaltung-Brief.md) - gab es vorher nicht. Schließt
+ * beim Deaktivieren das eigene Konto still aus der Auswahl aus (analog zum Einzel-Schutz oben),
+ * statt die ganze Aktion wegen eines einzelnen betroffenen Datensatzes abzubrechen. */
+export async function bulkSetActive(userIds: string[], isActive: boolean): Promise<BulkActionState> {
+  const currentUser = await requireUser();
+  assertPermission(isSiteAdmin(currentUser));
+
+  const targetIds = isActive ? userIds : userIds.filter((id) => id !== currentUser.id);
+  if (targetIds.length === 0) {
+    return { error: 'Keine Änderung möglich (nur das eigene Konto ausgewählt).' };
+  }
+
+  await prisma.user.updateMany({ where: { id: { in: targetIds } }, data: { isActive } });
+  revalidatePath('/admin/benutzer');
+  return { success: true, affectedCount: targetIds.length };
+}
+
+/** Neu für die Mehrfachauswahl-Aktionsleiste ("Feuerwehr ändern", Verwaltung-Brief.md) - gab es
+ * vorher nicht. Ändert nur homeOrganizationId, keine sonstige Validierung nötig (die Ziel-Org-ID
+ * kommt aus einem <Select> mit den tatsächlich existierenden Organisationen). */
+export async function bulkSetHomeOrganization(userIds: string[], organizationId: string): Promise<BulkActionState> {
+  const currentUser = await requireUser();
+  assertPermission(isSiteAdmin(currentUser));
+
+  await prisma.user.updateMany({ where: { id: { in: userIds } }, data: { homeOrganizationId: organizationId } });
+  revalidatePath('/admin/benutzer');
+  return { success: true, affectedCount: userIds.length };
+}
+
 export interface DeleteUserState {
   error?: string;
 }

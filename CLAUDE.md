@@ -530,6 +530,43 @@ trigger a live DB query + Mailjet API call + external NTP fetch just to paint th
 admin page by (1) letting the shared layout's gate cover it (no per-page `isSiteAdmin` check needed), (2)
 adding one entry to `AdminSidebarNav`'s `ITEMS`.
 
+**Phase 3 (Benutzertabelle)**: `user-management-section.tsx` was rewritten on shadcn `Table`/`Badge`/
+`DropdownMenu`/`AlertDialog`/`Checkbox`/`Select`/`Input`. Filter/sort state (`q`/`feuerwehr`/`rolle`/`status`/
+`sort`/`dir`) is mirrored into the URL via `router.replace(..., { scroll: false })` — the **first use of
+URL-synced state in this codebase** — but stays a pure bookmark/share mechanism: filtering/sorting itself is
+still entirely client-side `useMemo` over the one server-fetched `UserRow[]` array (184 rows doesn't justify
+server-side filtering or a network round-trip per keystroke), the URL is just kept in sync with whatever the
+client already computed. The search input debounces 300ms before updating both the filter and the URL;
+selects/sort update immediately. `UserRow` gained `homeOrganizationId`/`isAdmin`/`isActive` (raw values, not
+just their display strings) specifically so filters can match reliably instead of comparing rendered text.
+`name` is now built as `"${lastName} ${firstName}"` (brief's "Nachname Vorname"), a real behavior change from
+the previous "Vorname Nachname" order. Two new, deliberately thin server actions
+(`bulkSetActive`/`bulkSetHomeOrganization` in `actions.ts`) back the new multi-select action bar — the brief's
+own "don't reinvent Server Actions" instruction was about not touching `createUser`/`updateUser`/`deleteUser`,
+not a prohibition on adding new ones the existing UI never needed; both call `prisma.updateMany` directly
+rather than looping the full `userSchema` validation, since a boolean toggle / org reassignment across many
+rows needs no per-row form validation. `setUserActive` (also new) is the same pattern for the single-row
+"Aktivieren/Deaktivieren" menu item — the old UI only ever toggled this via the full edit form's checkbox.
+Row-level actions live in a new `user-row-actions.tsx` (`DropdownMenu` + `AlertDialog`), reusing
+`deleteUser`/`sendPasswordResetEmailToUser` unchanged — `deleteUser` is called directly (not via a
+`<form action>`) inside `startTransition`, same pattern `UserForm` already used for `createUser`/`updateUser`;
+Next's Server Action redirect handling works identically either way. Clicking "Bearbeiten" (or a table row)
+still navigates to the existing `/admin/benutzer/[userId]` page — Phase 4 turns that into a `Sheet` opened
+in place; this phase deliberately didn't touch that yet. Push is now a live count + `title` tooltip listing
+each `PushSubscription.createdAt` (`"Registriert seit ..."` per device) — there's no device-name field in the
+schema to show a real "Gerätename" as the brief's wording literally suggests, so the tooltip shows dates only,
+not a fabricated device label.
+
+Verification note: this browser-automation environment hydrates server-rendered pages but a plain
+`onClick`-driven interaction (sort-header clicks, `<Select>`/`<DropdownMenu>` triggers, checkboxes) does not
+register — the same harness-wide gap already documented for Mobile-Brief.md. Directly submitted `<form>`
+elements (e.g. login) still work since those are native browser submissions Next progressively enhances, not
+pure client reactivity. Filtering/sorting/chip/empty-state *logic* was instead verified by navigating directly
+to URLs with `?feuerwehr=...&status=...&sort=...&dir=...` and reading the resulting SSR output against seeded
+test data (6 realistic users, mixed orgs/admin roles/active states/push subscriptions) — this exercises the
+exact same `useState`-initial-value + `useMemo` filter/sort code path a real click would, just without proving
+the `onClick`/`onValueChange` wiring itself fires in this specific harness.
+
 - `/admin/benutzer` — `UserManagementSection` (client) owns free-text search and click-to-sort-any-column
   over a flat `UserRow[]` the server maps the Prisma result into; don't push search/sort server-side, ~200
   users is small enough to do it in the browser. `/admin/benutzer/neu`'s "Willkommen-E-Mail senden" toggle
