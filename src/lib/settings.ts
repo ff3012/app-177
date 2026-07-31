@@ -52,6 +52,13 @@ export async function getLastBackupAt(): Promise<Date | null> {
   return settings?.lastBackupAt ?? null;
 }
 
+/** Wird nur von docker/backup.sh per rohem psql-UPSERT geschrieben (kein Setter hier nötig, analog
+ * zu lastBackupAt) - der App-Container hat keinen Zugriff auf den Host-Cronjob-Prozess selbst. */
+export async function getLastS3BackupAt(): Promise<Date | null> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
+  return settings?.lastS3BackupAt ?? null;
+}
+
 export async function getSystemCheckNotificationEmail(): Promise<string | null> {
   const settings = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
   return settings?.systemCheckNotificationEmail ?? null;

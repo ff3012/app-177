@@ -110,7 +110,8 @@ bleiben in der Datenbank auf "Ausstehend" stehen.
 ## Täglicher Systemcheck per E-Mail
 
 `docker/system-check-email.sh` ruft `/api/cron/system-check` auf, das denselben Check wie der
-"System Check"-Button auf `/admin/status` ausführt (Server/Docker/Mailjet/Cron/NTP/Backup) und das
+"System Check"-Button auf `/admin/status` ausführt (Server/Docker/Mailjet/Cron/NTP/Backup/S3-Verbindung/
+S3-Backup) und das
 Ergebnis als Tabelle an die unter Verwaltung → E-Mail → "System Check E-Mail" hinterlegte Adresse
 mailt (analog zur "Drohnenflug E-Mail" — ohne hinterlegte Adresse wird keine E-Mail versendet, siehe
 `notifySystemCheckResult` in `src/lib/system/notify-system-check.ts`). Täglich um 09:00

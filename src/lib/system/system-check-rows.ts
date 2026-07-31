@@ -45,5 +45,17 @@ export function buildSystemCheckRows(result: SystemCheckResult): SystemCheckRow[
       ok: result.lastBackup.ok,
       detail: result.lastBackup.lastBackupAt ? formatDate(result.lastBackup.lastBackupAt) : 'Noch kein Backup erfasst',
     },
+    {
+      key: 's3Connection',
+      label: 'S3 Exoscale Verbindung',
+      ok: result.s3Connection,
+      detail: result.s3Connection ? 'OK' : 'Fehler',
+    },
+    {
+      key: 's3Backup',
+      label: 'Letztes S3-Backup',
+      ok: result.s3Backup.ok,
+      detail: result.s3Backup.lastBackupAt ? formatDate(result.s3Backup.lastBackupAt) : 'Noch kein S3-Backup erfasst',
+    },
   ];
 }

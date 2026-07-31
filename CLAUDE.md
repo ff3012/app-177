@@ -64,7 +64,9 @@ remove or "simplify" the `TZ` env var or the `tzdata` install.
 
 **Stack**: Next.js App Router (TypeScript) · PostgreSQL via Prisma · Auth.js v5 (beta) with the Credentials
 provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms · `exceljs` for XLSX export ·
-`ical-generator` for .ics · Mailjet REST API directly via `fetch` (no SDK) for transactional email.
+`ical-generator` for .ics · Mailjet REST API directly via `fetch` (no SDK) for transactional email ·
+`@aws-sdk/client-s3` for the System Check's live S3/Exoscale connectivity probe (the one SDK dependency in
+the codebase, see "System Check" below for why).
 
 ### Route groups
 
@@ -527,7 +529,22 @@ rendered under a plain "Verwaltung" `<h1>` on every page. Add a new admin page b
   can't run a real NTP client check inside the container either (it shares the host's clock, so there's
   nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against the
   `Date` response header of an external HTTPS call (`api.mailjet.com`) as a drift proxy, flagging >10s as
-  out of sync.
+  out of sync. **"S3 Exoscale Verbindung" and "Letztes S3-Backup" (GitHub issue #2)** cover the off-box
+  copy specifically, since the checks above only ever reflected the local `pg_dump` succeeding, not whether
+  the S3 upload did: `src/lib/system/s3-check.ts`'s `checkS3Connection()` is a live, read-only `HeadBucket`
+  call via `@aws-sdk/client-s3` (the one SDK dependency in this codebase — hand-rolling SigV4 request
+  signing over plain `fetch`, the pattern used for Mailjet, was judged too error-prone for something
+  security-sensitive) against `S3_BACKUP_BUCKET`/`S3_ENDPOINT_URL`/`S3_ACCESS_KEY`/`S3_SECRET_KEY`, returning
+  `false` for both "not configured" and "reachable but auth/network failed" — same simple boolean semantics
+  as `checkMailjetConnection`, no third state. The AWS SDK requires a `region`; Exoscale SOS endpoints have
+  the form `https://sos-<zone>.exo.io` and expect that zone as the signing region, so
+  `regionFromEndpoint()` extracts it from `S3_ENDPOINT_URL` rather than hardcoding one. "Letztes S3-Backup"
+  is a staleness check on a new `AppSettings.lastS3BackupAt` column, written by `backup.sh` — but
+  deliberately placed AFTER the `aws s3 cp` of the DB dump succeeds, not alongside the pre-existing
+  `lastBackupAt` write (which happens right after the local `pg_dump`, before the S3 block even runs): the
+  script's `set -e` means a failing upload aborts before that `INSERT` is ever reached, so a stale
+  `lastS3BackupAt` genuinely means "the off-box copy didn't happen," without needing any extra
+  try/catch-style handling in the shell script itself.
 - **Daily system-check email**: the same check that powers the `/admin/status` button also runs unattended
   once a day via `/api/cron/system-check` (secret-gated like `/api/cron/send-scheduled-news`) +
   `docker/system-check-email.sh` on the host crontab, mailing the result as a table to an address

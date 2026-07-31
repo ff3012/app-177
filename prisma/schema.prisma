@@ -84,17 +84,17 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  homeOrganization Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
-  memberships      Membership[]
-  droneMembership  DrohnengruppeMembership?
-  createdEvents    Event[]                  @relation("EventCreatedBy")
-  registeredFlights DroneFlight[]           @relation("FlightRegisteredBy")
-  pilotedFlights   DroneFlight[]            @relation("FlightPilot")
-  passwordTokens   PasswordToken[]
-  pushSubscriptions PushSubscription[]
-  newsMessagesCreated NewsMessage[]         @relation("NewsCreatedBy")
-  terminZusagen    TerminZusage[]
-  droneDocumentsUploaded DroneDocument[]    @relation("DroneDocumentUploadedBy")
+  homeOrganization       Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
+  memberships            Membership[]
+  droneMembership        DrohnengruppeMembership?
+  createdEvents          Event[]                  @relation("EventCreatedBy")
+  registeredFlights      DroneFlight[]            @relation("FlightRegisteredBy")
+  pilotedFlights         DroneFlight[]            @relation("FlightPilot")
+  passwordTokens         PasswordToken[]
+  pushSubscriptions      PushSubscription[]
+  newsMessagesCreated    NewsMessage[]            @relation("NewsCreatedBy")
+  terminZusagen          TerminZusage[]
+  droneDocumentsUploaded DroneDocument[]          @relation("DroneDocumentUploadedBy")
 
   @@index([homeOrganizationId])
 }
@@ -223,7 +223,9 @@ model Drone {
   flights DroneFlight[]
 }
 
-/** Singleton-Tabelle für Einstellungen aus der Verwaltung (immer genau eine Zeile, id="singleton"). */
+/**
+ * Singleton-Tabelle für Einstellungen aus der Verwaltung (immer genau eine Zeile, id="singleton").
+ */
 model AppSettings {
   id                           String    @id @default("singleton")
   droneFlightNotificationEmail String?
@@ -231,6 +233,7 @@ model AppSettings {
   systemCheckNotificationEmail String?
   lastNewsCronRunAt            DateTime?
   lastBackupAt                 DateTime?
+  lastS3BackupAt               DateTime?
   updatedAt                    DateTime  @updatedAt
 }
 
