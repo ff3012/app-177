@@ -216,6 +216,12 @@ link to the same detail page next to the add-to-calendar icon, for discoverabili
 month-grid chip (see below) via a `compact` prop (plain colored text instead of pill backgrounds, for the
 tighter chip context) — don't reintroduce a local copy at any of those sites.
 
+**Kalender V2 (Signalrot-Mockup-Angleichung)** — sidebar layout, color/legend alignment, and the FullCalendar
+reskin below were all one pass, done after the Drohnengruppe module's own equivalent pass ("Drohnengruppe
+V2" in that section) and before News/Verwaltung's still-pending ones. Same relationship as "Signalrot"
+V1 (color/font) → V2 (mobile nav) above: V1 here was the module's original build (everything described
+earlier in this section); V2 is this mockup-alignment work specifically.
+
 **Sidebar layout** (`kalender-with-layers.tsx`): at `lg:` (1024px) and up — the first use of that breakpoint
 anywhere in this codebase, everywhere else only uses `sm:` (640px) — the Ebenen-Toggles, `LayerLegend`, and
 the ICS-subscribe card move into a fixed `lg:w-64` left column next to the calendar/list content. Below
@@ -328,6 +334,11 @@ own-flights query, same as before this toggle existed.
   rule would lapse with no further flights: it's 90 days after the `NINETY_DAY_REQUIRED_FLIGHTS`-th most
   recent flight still inside the window — that's the specific flight whose expiry would drop the count below
   the threshold, not simply the oldest flight in the window.
+
+**Drohnengruppe V2 (Signalrot-Mockup-Angleichung)** — the three items below (`NinetyDayRing`,
+`GroupStatusChart`, `PurposeBadge`) were one pass to bring this module in line with the "Signalrot" design
+mockup, done first among the four modules; Kalender's equivalent pass ("Kalender V2") followed it.
+
 - **`NinetyDayRing`** (`src/components/drone/ninety-day-ring.tsx`) replaced a plain colored `<span>` badge
   that only explained itself via a `title` tooltip — undiscoverable on touch devices, since there's no hover.
   It's a hand-rolled SVG ring (`stroke-dasharray`/`stroke-dashoffset`), not a chart library, matching this
