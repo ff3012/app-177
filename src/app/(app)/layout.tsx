@@ -34,7 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <img
                 src="/wappen-afkdo.png"
                 alt="Wappen AFKDO Purkersdorf"
-                className="h-7 w-7 shrink-0 sm:hidden"
+                className="h-7 w-auto shrink-0 sm:hidden"
               />
               <MobileHeaderTitleSlot fallback="AFKDO Purkersdorf" />
               <span className="hidden text-sm font-semibold text-white sm:inline">AFKDO Purkersdorf</span>
