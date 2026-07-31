@@ -50,6 +50,7 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
   );
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [showPast, setShowPast] = useState(false);
   const { setActionSlot } = useMobileHeader();
 
   const hasHiddenLayers = Object.values(enabled).some((value) => value === false);
@@ -69,15 +70,21 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHiddenLayers]);
 
+  // "Vergangene Termine anzeigen" gilt bewusst nur für die Listenansicht (siehe Issue #1) - die
+  // Kalenderansicht (Gitter) zeigt weiterhin jeden Monat vollständig, unabhängig vom Toggle, da ein
+  // Kalendergitter mit ausgeblendeten vergangenen Tagen/Terminen eher verwirrend als aufgeräumt wirkt.
   const filteredEvents = useMemo(
     () => events.filter((event) => enabled[event.layer ?? ''] !== false),
     [events, enabled],
   );
 
-  const sortedEvents = useMemo(
-    () => [...filteredEvents].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()),
-    [filteredEvents],
-  );
+  const sortedEvents = useMemo(() => {
+    const now = Date.now();
+    const listEvents = showPast
+      ? filteredEvents
+      : filteredEvents.filter((event) => new Date(event.end).getTime() >= now);
+    return [...listEvents].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  }, [filteredEvents, showPast]);
 
   const showDrone = layers.some((layer) => layer.key === 'drohnengruppe');
 
@@ -94,6 +101,8 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
           onToggle={handleToggle}
           showDrone={showDrone}
           icsLinks={icsLinks}
+          showPast={showPast}
+          onTogglePast={setShowPast}
         />
       </div>
 
@@ -104,6 +113,8 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
           onToggle={handleToggle}
           showDrone={showDrone}
           icsLinks={icsLinks}
+          showPast={showPast}
+          onTogglePast={setShowPast}
         />
       </BottomSheet>
 
