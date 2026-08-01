@@ -1,6 +1,14 @@
+import Link from 'next/link';
+import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { canViewAllFlights } from '@/lib/auth/permissions';
 import { getDroneQuickRegisterToken } from '@/lib/settings';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
+import { listDrohnengruppeMembers } from '@/lib/drone/members';
+import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
 import { UploadDocumentForm } from './upload-document-form';
@@ -14,9 +22,16 @@ function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
 }
 
-// Admin-Gate läuft jetzt in admin/layout.tsx per notFound() - siehe Kommentar dort.
+// Admin-Gate (isSiteAdmin) läuft in admin/layout.tsx per notFound() - siehe Kommentar dort. Die
+// neue Mitglieder-/90-Tage-Sektion unten braucht zusätzlich canViewAllFlights (Admin Drohnengruppe)
+// - dieselbe, bewusst separate Berechtigung wie bei GroupStatusChart auf /drohnen (siehe CLAUDE.md
+// "isSiteAdmin und isDroneGroupAdmin sind unabhängige Rechte") - ein Abschnittskommando-Admin, der
+// selbst nicht Admin Drohnengruppe ist, soll diese Compliance-Daten nicht automatisch sehen.
 export default async function DrohnenVerwaltungPage() {
-  const [drones, quickRegisterToken, documents] = await Promise.all([
+  const user = await requireUser();
+  const canSeeMembers = canViewAllFlights(user);
+
+  const [drones, quickRegisterToken, documents, members, flightCounts] = await Promise.all([
     prisma.drone.findMany({ orderBy: { sortOrder: 'asc' } }),
     getDroneQuickRegisterToken(),
     prisma.droneDocument.findMany({
@@ -30,50 +45,142 @@ export default async function DrohnenVerwaltungPage() {
       },
       orderBy: { createdAt: 'desc' },
     }),
+    canSeeMembers ? listDrohnengruppeMembers() : Promise.resolve([]),
+    canSeeMembers
+      ? prisma.droneFlight.groupBy({
+          by: ['pilotUserId'],
+          where: { startsAt: { gte: getNinetyDayCutoff() } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
   const quickRegisterLink = quickRegisterToken ? `${baseUrl()}/drohnen-schnell/${quickRegisterToken}` : null;
+  const countByPilot = new Map(flightCounts.map((c) => [c.pilotUserId, c._count._all]));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
+      <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
 
-      <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-neutral-200 text-neutral-500">
-            <tr>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody>
+      <AdminMobileTabs />
+
+      {canSeeMembers && (
+        <div className="rounded-lg bg-surface p-4 shadow-card">
+          <h2 className="mb-1 text-[15px] font-semibold text-ink">Mitglieder · 90-Tage-Status</h2>
+          <p className="mb-3 text-xs text-ink-faint">
+            Mindestens 3 Flüge in den letzten 90 Tagen. Rolle/Mitgliedschaft ändern über die{' '}
+            <Link href="/admin/benutzer" className="text-brand hover:underline">
+              Benutzerverwaltung
+            </Link>
+            .
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                  Name
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                  Flüge (90 Tage)
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                  Status
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map((member) => {
+                const count = countByPilot.get(member.id) ?? 0;
+                const met = meetsNinetyDayRule(count);
+                return (
+                  <TableRow key={member.id} className="border-line">
+                    <TableCell>
+                      <Link href={`/admin/benutzer?edit=${member.id}`} className="text-ink hover:underline">
+                        {member.lastName} {member.firstName}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-ink-muted">{count}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          met
+                            ? 'border-transparent bg-success-subtle text-success-text'
+                            : 'border-transparent bg-danger-subtle text-danger'
+                        }
+                      >
+                        {met ? 'Erfüllt' : 'Offen'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {members.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-ink-muted">
+                    Keine Mitglieder der Drohnengruppe hinterlegt.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-3 text-[15px] font-semibold text-ink">Drohnen</h2>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Name
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Status
+              </TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {drones.map((drone) => {
               const boundToggle = toggleDroneActive.bind(null, drone.id);
               return (
-                <tr key={drone.id} className="border-b border-neutral-100">
-                  <td className="px-4 py-2">
+                <TableRow key={drone.id} className="border-line">
+                  <TableCell>
                     <RenameDroneForm droneId={drone.id} currentName={drone.name} />
-                  </td>
-                  <td className="px-4 py-2">{drone.isActive ? 'Aktiv' : 'Deaktiviert'}</td>
-                  <td className="px-4 py-2 text-right">
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        drone.isActive
+                          ? 'border-transparent bg-success-subtle text-success-text'
+                          : 'border-transparent bg-danger-subtle text-danger'
+                      }
+                    >
+                      {drone.isActive ? 'Aktiv' : 'Deaktiviert'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
                     <form action={boundToggle}>
-                      <button type="submit" className="text-brand hover:underline">
+                      <button type="submit" className="text-sm text-brand hover:underline">
                         {drone.isActive ? 'Deaktivieren' : 'Aktivieren'}
                       </button>
                     </form>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
+        <div className="mt-3">
+          <AddDroneForm />
+        </div>
       </div>
 
-      <AddDroneForm />
-
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-1 text-sm font-semibold text-neutral-900">QR-Code Schnellerfassung</h2>
-        <p className="mb-3 text-sm text-neutral-500">
-          Dieser Link führt ohne Anmeldung direkt zum Formular „Flug registrieren“ – gedacht, um ihn als QR-Code
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">QR-Code Schnellerfassung</h2>
+        <p className="mb-3 text-sm text-ink-muted">
+          Dieser Link führt ohne Anmeldung direkt zum Formular „Flug registrieren" – gedacht, um ihn als QR-Code
           auszudrucken. Wer den Link/QR-Code kennt, kann damit ausschließlich neue Flüge anlegen; andere Daten
           (bestehende Flüge, Benutzer, …) sind darüber nicht einsehbar. Ein neu erzeugter Link macht den alten QR-Code
           sofort ungültig.
@@ -81,7 +188,7 @@ export default async function DrohnenVerwaltungPage() {
 
         {quickRegisterLink && (
           <div className="mb-3 flex items-start gap-2">
-            <p className="flex-1 break-all rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800">
+            <p className="flex-1 break-all rounded-md border border-line bg-surface-sunken px-3 py-2 text-sm text-ink">
               {quickRegisterLink}
             </p>
             <CopyLinkButton text={quickRegisterLink} />
@@ -91,36 +198,36 @@ export default async function DrohnenVerwaltungPage() {
         <form action={regenerateQuickRegisterLink}>
           <button
             type="submit"
-            className="rounded bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark"
+            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
           >
             {quickRegisterLink ? 'Link neu erzeugen' : 'Link erzeugen'}
           </button>
         </form>
       </div>
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-1 text-sm font-semibold text-neutral-900">Unterlagen für Mitglieder</h2>
-        <p className="mb-3 text-sm text-neutral-500">
-          PDFs, die für alle Mitglieder der Drohnengruppe unter „Unterlagen“ zum Download bereitstehen.
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Unterlagen für Mitglieder</h2>
+        <p className="mb-3 text-sm text-ink-muted">
+          PDFs, die für alle Mitglieder der Drohnengruppe unter „Unterlagen" zum Download bereitstehen.
         </p>
 
         <UploadDocumentForm />
 
         {documents.length > 0 && (
-          <ul className="mt-4 flex flex-col divide-y divide-neutral-100 border-t border-neutral-100">
+          <ul className="mt-4 flex flex-col divide-y divide-line border-t border-line">
             {documents.map((doc) => {
               const boundDelete = deleteDroneDocument.bind(null, doc.id);
               return (
                 <li key={doc.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <div>
-                    <p className="font-medium text-neutral-900">{doc.title}</p>
-                    <p className="text-xs text-neutral-500">
+                    <p className="font-medium text-ink">{doc.title}</p>
+                    <p className="text-xs text-ink-faint">
                       {doc.filename} · {formatBytes(doc.sizeBytes)} · {doc.uploadedBy.firstName} {doc.uploadedBy.lastName} ·{' '}
                       {doc.createdAt.toLocaleDateString('de-AT')}
                     </p>
                   </div>
                   <form action={boundDelete}>
-                    <button type="submit" className="shrink-0 text-red-700 hover:underline">
+                    <button type="submit" className="shrink-0 text-danger hover:underline">
                       Löschen
                     </button>
                   </form>

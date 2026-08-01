@@ -415,7 +415,8 @@ own-flights query, same as before this toggle existed.
   (`/drohnen/unterlagen/[id]/route.ts`) fetches the full row. Upload/delete live on `/admin/drohnen`
   (gated `isSiteAdmin`, same as the rest of that page) rather than a new admin page — the "Flug
   registrieren"/"Drohnen"-style precedent here is to add a section to an existing admin page, not a
-  new `AdminNav` entry, unless the feature needs its own URL. The 1MB default Server Action body
+  new nav entry (`AdminSidebarNav`/`AdminMobileTabs`), unless the feature needs its own URL. The 1MB
+  default Server Action body
   limit was raised app-wide to 10MB (`next.config.mjs`) specifically for this upload, since Server
   Actions have no per-route size config.
 - **90-day/3-flight rule**: constants and the shared cutoff/predicate helpers live in
@@ -517,11 +518,13 @@ App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes au
 page with friendly text. This only protects the page **render**; the pre-existing `assertPermission(
 isSiteAdmin(...))` calls inside every admin Server Action (13 call sites, unchanged) still do the actual
 authorization work, since a layout can't stop a Server Action invoked directly. The old horizontal pill nav
-(`components/layout/admin-nav.tsx`, `AdminNav`) is replaced by a fixed 210px-left-sidebar
+(formerly `components/layout/admin-nav.tsx`, `AdminNav`) is replaced by a fixed 210px-left-sidebar
 (`components/admin/admin-sidebar.tsx` + `admin-sidebar-nav.tsx`, `md:` and up only — mobile gets its own
-tabs-based nav in a later phase) rendered once by the layout, not per-page; `AdminNav` itself is intentionally
-**left in place but unused** until every admin page has been migrated (Verwaltung-Brief.md's own step 7),
-to avoid a half-migrated state where some pages have a sidebar and others still render the old pill row.
+tabs-based nav, see Phase 6/7 below) rendered once by the layout, not per-page. `AdminNav` was intentionally
+**left in place but unused** through Phases 2–6 to avoid a half-migrated state where some pages had a sidebar
+and others still rendered the old pill row; it was deleted for good in Phase 7 once every admin page had its
+own replacement nav (`AdminSidebar`/`AdminMobileTabs`) — `grep -rn "AdminNav"` now returns no functional
+references, only the historical mentions in this file.
 `AdminSidebar` additionally shows a 3-row status summary (Datenbank/Mailjet/Zeitserver, click → `/admin/status`)
 via a new `getAdminSidebarStatus()` in `lib/system/system-check.ts` — a subset of 3 of the 8
 `getSystemCheckResult()` signals, wrapped in `unstable_cache(..., { revalidate: 60 })` since the sidebar
@@ -649,6 +652,44 @@ verified: both old routes correctly `redirect()` to the new query-param URLs (co
 successfully and zero console errors, and (Phase 3) filtering/sorting/chip/empty-state logic via direct URL
 query params against seeded data. The `Sheet`'s actual open/close/submit/discard-confirm interaction could
 not be exercised end-to-end in this environment — flagged transparently rather than claimed as tested.
+
+**Phase 7 (Drohnengruppe/E-Mail/Status + `AdminNav`-Löschung)** — the final phase, bringing the three
+remaining `/admin/*` pages onto the same shadcn/`AdminMobileTabs`/`getComputedStyle`-verified foundation as
+`/admin/benutzer`, and removing the now fully superseded `AdminNav`. Purely a surface rebuild — no Server
+Action logic changed on any of the three pages.
+
+- **`/admin/drohnen`**: gained a page title, `<AdminMobileTabs/>`, and its drone table restyled onto shadcn
+  `Table`/`Badge` (`RenameDroneForm`/`toggleDroneActive` untouched). New: a "Mitglieder · 90-Tage-Status"
+  section reusing `listDrohnengruppeMembers()` + `getNinetyDayCutoff()`/`meetsNinetyDayRule()` +
+  `prisma.droneFlight.groupBy({by:['pilotUserId'], where:{startsAt:{gte:cutoff}}})` — the *exact* query
+  pattern from `/drohnen/90-tage/page.tsx`, not reinvented — rendered as a `Table`/`Badge` (Erfüllt/Offen)
+  with each row linking to `/admin/benutzer?edit=<id>` for editing rather than adding new member-management
+  actions this page never had. This section is gated on `canViewAllFlights(user)` **in addition to** the
+  page's own `isSiteAdmin` gate from `admin/layout.tsx` — the same reasoning as `GroupStatusChart` on
+  `/drohnen` (see Drohnengruppe V2 above): `isSiteAdmin` and `isDroneGroupAdmin`/`canViewAllFlights` are
+  independent rights, so a site admin who isn't also Admin Drohnengruppe must not automatically see
+  pilot-by-pilot compliance data. Verified live: logged in as the seeded site admin (who lacks
+  `canViewAllFlights`), the section is correctly absent from the rendered page — confirming the gate works,
+  not just that it compiles. The QR-code and Unterlagen cards were restyled onto `bg-surface`/`shadow-card`
+  tokens with no functional change.
+- **`/admin/email`**: gained a title + `<AdminMobileTabs/>`; its three cards (`DroneFlightEmailForm`/
+  `SystemCheckEmailForm`/`TestMailjetForm`, internals untouched) now sit in a `max-w-[640px]` single column
+  per the brief's explicit "nicht über die volle Fensterbreite gezogen" — confirmed via
+  `getComputedStyle(...).maxWidth === '640px'` against the live page, deliberately narrower than the
+  full-width table pages since this page is only ever short, one-line forms.
+- **`/admin/status`**: `SystemCheckPanel` rewritten from colored-dot cards to a single bordered list —
+  label left, a small status dot + the same `row.detail` value in `font-mono` right, one "Zuletzt geprüft"
+  timestamp underneath the whole list (not per-row, since several rows' own `detail` text already embeds a
+  timestamp) — and rows are now sorted failing-first (`Number(a.ok) - Number(b.ok)`, stable so same-status
+  rows keep `buildSystemCheckRows`' original order). `runSystemCheck()`/`buildSystemCheckRows()` themselves
+  are unchanged, only the presentation. The "Jetzt prüfen" click itself could not be exercised end-to-end in
+  this browser-automation session — clicking produced no network request, consistent with the
+  already-documented hydration gap above (`onClick` handlers don't fire when React never attaches), not a
+  regression in this phase's code.
+- `AdminNav` (`src/components/layout/admin-nav.tsx`) is **deleted** — confirmed via `grep -rn "AdminNav"`
+  that no functional references remained (only this file's own historical prose mentions it), now that every
+  `/admin/*` page has its own `AdminSidebar`/`AdminMobileTabs` nav. This closes out the Verwaltung-Brief.md
+  7-phase plan.
 
 - `/admin/benutzer` — `UserManagementSection` (client) owns free-text search and click-to-sort-any-column
   over a flat `UserRow[]` the server maps the Prisma result into; don't push search/sort server-side, ~200

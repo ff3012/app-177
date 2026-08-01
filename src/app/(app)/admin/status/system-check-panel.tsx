@@ -15,7 +15,10 @@ export function SystemCheckPanel() {
     });
   }
 
-  const rows = result ? buildSystemCheckRows(result) : [];
+  // Fehlerhafte Zeilen zuerst (Verwaltung-Brief.md) - stabile Sortierung, da Array.prototype.sort
+  // in Node/V8 garantiert stabil ist, die Zeilenreihenfolge innerhalb "ok"/"nicht ok" bleibt also
+  // wie in buildSystemCheckRows definiert.
+  const rows = result ? [...buildSystemCheckRows(result)].sort((a, b) => Number(a.ok) - Number(b.ok)) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -23,23 +26,36 @@ export function SystemCheckPanel() {
         type="button"
         onClick={runCheck}
         disabled={pending}
-        className="self-start rounded bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+        className="self-start rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60"
       >
-        {pending ? 'Prüfe…' : 'System Check'}
+        {pending ? 'Prüfe…' : 'Jetzt prüfen'}
       </button>
 
       {result && (
-        <div className="flex flex-col gap-2">
-          {rows.map((row) => (
-            <div key={row.key} className="flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm">
-              <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full ${row.ok ? 'bg-green-600' : 'bg-red-600'}`} />
-              <span className="text-sm font-medium text-neutral-900">{row.label}</span>
-              <span className={`ml-auto text-sm font-medium ${row.ok ? 'text-green-700' : 'text-red-700'}`}>
-                {row.detail}
-              </span>
-            </div>
-          ))}
-          <p className="text-xs text-neutral-400">Zuletzt geprüft: {new Date(result.checkedAt).toLocaleString('de-AT')}</p>
+        <div className="flex flex-col gap-4">
+          <div className="rounded-lg bg-surface shadow-card">
+            <ul className="divide-y divide-line">
+              {rows.map((row) => (
+                <li key={row.key} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-sm font-medium text-ink">{row.label}</span>
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className={`h-2 w-2 shrink-0 rounded-full ${row.ok ? 'bg-success' : 'bg-danger'}`}
+                    />
+                    <span
+                      className={`font-mono text-xs ${row.ok ? 'text-success-text' : 'text-danger'}`}
+                    >
+                      {row.detail}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="font-mono text-xs text-ink-faint">
+            Zuletzt geprüft: {new Date(result.checkedAt).toLocaleString('de-AT')}
+          </p>
         </div>
       )}
     </div>
