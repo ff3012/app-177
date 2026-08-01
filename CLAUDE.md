@@ -504,6 +504,34 @@ App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes au
   `**:`-Descendant-Variant in `tooltip.tsx`) erzeugen unter v3 einfach keine zusätzliche Regel (kein Build-
   Fehler, nur ein minimal weniger präziser Animations-Ursprung) — bewusst nicht einzeln von Hand gepatcht,
   da der Aufwand den kosmetischen Nutzen nicht rechtfertigt.
+- **Echter Bug aus derselben Ursache, nicht nur kosmetisch (gefunden nach einem Nutzerbericht: "Aktiv"-
+  Switch und Drohnengruppe-RadioGroup in `UserFormSheet` ließen sich optisch nicht auswählen)**: Tailwind v4
+  führt automatisch generierte, klammerlose `data-*:`-Varianten für JEDEN beliebigen Data-Attribut-Namen ein
+  (`data-checked:`, `data-open:`, `data-active:`, …, matcht `[data-x]`-Präsenz) — Tailwind v3.4.19 kennt diese
+  Kurzform nicht (nur die Klammer-Syntax `data-[attr]:`/`data-[attr=wert]:` funktioniert, empirisch mit
+  `npx tailwindcss -i ... --config tailwind.config.ts` gegen ein Test-HTML verifiziert: `data-checked:` und
+  `data-[state=checked]:` sehen im generierten Code gleich harmlos aus, aber nur letzteres erzeugt tatsächlich
+  eine CSS-Regel). Der von `npx shadcn add` generierte Code verwendet diese v4-Kurzform großflächig für
+  Radix' `data-state`/`data-orientation`/`data-disabled`-Attribute — unter v3 blieben dadurch `Switch`,
+  `RadioGroup` und `Checkbox` (`data-checked:bg-primary` etc.) **optisch dauerhaft im "nicht ausgewählt"-
+  Zustand eingefroren**, unabhängig davon, ob der zugrunde liegende Radix-/react-hook-form-Zustand beim Klick
+  korrekt umschaltete — ein Nutzer, der klickt und keine visuelle Reaktion sieht, empfindet das zu Recht als
+  "kann nicht ausgewählt werden". Jede betroffene Datei wurde anhand des tatsächlich von der installierten
+  `@radix-ui/react-*`-Version gesetzten Attributs korrigiert (per `grep` in `node_modules/@radix-ui/react-*/
+  dist/index.mjs` verifiziert, nicht geraten): `switch.tsx` (`data-[state=checked]`/`data-[state=unchecked]`/
+  `data-[disabled]`), `radio-group.tsx`/`checkbox.tsx` (`data-[state=checked]`), `select.tsx`
+  (`data-[placeholder]`/`data-[disabled]`), `separator.tsx`/`tabs.tsx` (`data-[orientation=horizontal|
+  vertical]`, `tabs.tsx` zusätzlich `data-[state=active]` — Tabs selbst wird aktuell nirgends im Code
+  verwendet, aber derselbe Fehler wurde vorsorglich behoben, bevor die Komponente je in Gebrauch kommt).
+  Zusätzlich (rein kosmetisch, keine Funktionseinbuße, da Radix Öffnen/Schließen ohnehin selbst steuert, nur
+  bislang ohne Ein-/Ausblend-Animation): dieselbe Korrektur (`data-open:`/`data-closed:` →
+  `data-[state=open]:`/`data-[state=closed]:`) in `dialog.tsx`, `sheet.tsx`, `alert-dialog.tsx`,
+  `dropdown-menu.tsx` (dort zusätzlich `data-inset:` → `data-[inset=true]:`, ein von der Komponente selbst
+  gesetztes, nicht Radix-generiertes Attribut) und `tooltip.tsx` (`data-open:` entspricht dort dem von Radix
+  Tooltip gesetzten `data-state="instant-open"`, nicht `"open"` — ebenfalls am tatsächlichen Paket-Quellcode
+  verifiziert statt angenommen). Ein `grep -noE "data-[a-z-]+:" src/components/ui/*.tsx | grep -v "data-\["`
+  über den gesamten Ordner findet danach keine bare Variante mehr — die Suche nach zukünftig neu
+  hinzugefügten shadcn-Komponenten sollte denselben Check vor dem Commit wiederholen.
 - `tailwind.config.ts` braucht `import tailwindcssAnimate from 'tailwindcss-animate'` statt
   `require('tailwindcss-animate')` im `plugins`-Array — dieses Next-15-Setup lädt `tailwind.config.ts` in
   einem Kontext, in dem `require` zur Laufzeit nicht definiert ist (`ReferenceError: require is not defined`),
