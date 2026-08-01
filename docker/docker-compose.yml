@@ -26,6 +26,10 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT}
       CRON_SECRET: ${CRON_SECRET}
+      S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
     depends_on:
       postgres:
         condition: service_healthy

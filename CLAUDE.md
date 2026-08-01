@@ -48,8 +48,17 @@ copies the **full** `node_modules` into the runner stage rather than cherry-pick
 
 `docker/docker-compose.yml` lists the `app` service's environment variables **explicitly** (not
 `env_file: .env`) — adding a new variable to `.env`/`.env.example` alone does nothing; it must also be added
-to that `environment:` block or the container never sees it. This has already caused one deploy where the
-News module's `VAPID_*`/`CRON_SECRET` vars were set in `.env` but silently missing at runtime.
+to that `environment:` block or the container never sees it. This has already bitten this project **twice**:
+first the News module's `VAPID_*`/`CRON_SECRET` vars, then again with `S3_BACKUP_BUCKET`/`S3_ENDPOINT_URL`/
+`S3_ACCESS_KEY`/`S3_SECRET_KEY` — set in production `.env` and working fine for `docker/backup.sh` (a host
+cron script that reads `.env` directly, outside the container), but absent from this `environment:` block,
+so `checkS3Connection()` inside the app container always saw `process.env.S3_BACKUP_BUCKET` as `undefined`
+and reported "S3 Exoscale Verbindung: FEHLER" in the daily System Check email even though the actual S3
+upload in `backup.sh` was succeeding every night ("Letztes S3-Backup: OK" right next to it) — a strong tell
+for this exact failure mode: one check that reads env vars via the app container disagreeing with another
+check fed by a script that reads `.env` directly. Now fixed by adding all four to this block; **any future
+env var read by application code (as opposed to only by a host-side script like `backup.sh`/
+`send-scheduled-news.sh`) must be added here too, not just to `.env`/`.env.example`.**
 
 The `app` container's `TZ` is pinned to `Europe/Vienna` in `docker-compose.yml`, and the runner image
 installs `tzdata` (Alpine doesn't ship the IANA timezone database by default, so `TZ` would otherwise be
