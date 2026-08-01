@@ -1,12 +1,14 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canViewAllFlights } from '@/lib/auth/permissions';
+import { canViewAllFlights, isSiteAdmin } from '@/lib/auth/permissions';
 import { getDroneQuickRegisterToken } from '@/lib/settings';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
+import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { listDrohnengruppeMembers } from '@/lib/drone/members';
 import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 import { AddDroneForm } from './add-drone-form';
@@ -22,13 +24,18 @@ function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
 }
 
-// Admin-Gate (isSiteAdmin) läuft in admin/layout.tsx per notFound() - siehe Kommentar dort. Die
-// neue Mitglieder-/90-Tage-Sektion unten braucht zusätzlich canViewAllFlights (Admin Drohnengruppe)
-// - dieselbe, bewusst separate Berechtigung wie bei GroupStatusChart auf /drohnen (siehe CLAUDE.md
-// "isSiteAdmin und isDroneGroupAdmin sind unabhängige Rechte") - ein Abschnittskommando-Admin, der
-// selbst nicht Admin Drohnengruppe ist, soll diese Compliance-Daten nicht automatisch sehen.
+// admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab - diese
+// Seite bleibt Site-Admin-only, daher die eigene Prüfung hier (Sicherheits-Härtung, siehe
+// CLAUDE.md). Die Mitglieder-/90-Tage-Sektion unten braucht zusätzlich canViewAllFlights (Admin
+// Drohnengruppe) - dieselbe, bewusst separate Berechtigung wie bei GroupStatusChart auf /drohnen
+// (siehe CLAUDE.md "isSiteAdmin und isDroneGroupAdmin sind unabhängige Rechte") - ein
+// Abschnittskommando-Admin, der selbst nicht Admin Drohnengruppe ist, soll diese Compliance-Daten
+// nicht automatisch sehen.
 export default async function DrohnenVerwaltungPage() {
   const user = await requireUser();
+  if (!isSiteAdmin(user)) {
+    notFound();
+  }
   const canSeeMembers = canViewAllFlights(user);
 
   const [drones, quickRegisterToken, documents, members, flightCounts] = await Promise.all([
@@ -61,7 +68,7 @@ export default async function DrohnenVerwaltungPage() {
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
 
-      <AdminMobileTabs />
+      <AdminMobileTabs items={getAdminNavItems(user)} />
 
       {canSeeMembers && (
         <div className="rounded-lg bg-surface p-4 shadow-card">

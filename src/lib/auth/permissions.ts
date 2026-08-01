@@ -78,6 +78,32 @@ export function canViewEvent(
   return true;
 }
 
+/**
+ * Admin Heimatfeuerwehr für organizationId (= canManageEventsFor) ODER Abschnittskommando-Admin -
+ * bewusst eine eigene, benannte Funktion statt canManageEventsFor direkt wiederzuverwenden: die
+ * Regel unterscheidet sich (Site-Admin hat hier IMMER Zugriff auf jede Feuerwehr, bei
+ * Terminen bewusst nicht, siehe Kommentar über canManageEventsFor).
+ */
+export function canManageHeimatfeuerwehrFor(user: SessionUser, organizationId: string): boolean {
+  return isSiteAdmin(user) || canManageEventsFor(user, organizationId);
+}
+
+/** Sichtbarkeit des Verwaltungsmenüs "Heimatfeuerwehr" - Site-Admin ODER Admin von mindestens
+ * einer Feuerwehr (auch ohne Abschnittskommando-Admin zu sein). */
+export function canAccessHeimatfeuerwehrAdmin(user: SessionUser): boolean {
+  return isSiteAdmin(user) || user.feuerwehrAdminOrgIds.length > 0;
+}
+
+/** Fahrzeug-Buchung stornieren/verwalten: die eigene Buchung, oder Admin der Feuerwehr, der das
+ * gebuchte Fahrzeug gehört. */
+export function canManageVehicleBooking(
+  user: SessionUser,
+  booking: { userId: string },
+  vehicleOrganizationId: string,
+): boolean {
+  return booking.userId === user.id || canManageHeimatfeuerwehrFor(user, vehicleOrganizationId);
+}
+
 export class ForbiddenError extends Error {
   constructor(message = 'Keine Berechtigung für diese Aktion.') {
     super(message);

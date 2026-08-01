@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { UserFormSheet, type UserSheetTarget } from '@/components/admin/user-form-sheet';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
+import type { AdminNavItem } from '@/lib/admin/nav-items';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
 import { bulkSetActive, bulkSetHomeOrganization } from './actions';
@@ -131,6 +132,7 @@ export function UserManagementSection({
   currentUserId,
   initialEditUserId,
   initialCreateOpen,
+  adminNavItems,
 }: {
   users: UserRow[];
   organizations: Organization[];
@@ -143,6 +145,7 @@ export function UserManagementSection({
   currentUserId: string;
   initialEditUserId?: string;
   initialCreateOpen: boolean;
+  adminNavItems: AdminNavItem[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -440,7 +443,7 @@ export function UserManagementSection({
         </div>
       </div>
 
-      <AdminMobileTabs />
+      <AdminMobileTabs items={adminNavItems} />
 
       {/* Verwaltung-Brief.md 5: zwei Kennzahlkarten nebeneinander über der mobilen Kartenliste. */}
       <div className="flex gap-3 md:hidden">

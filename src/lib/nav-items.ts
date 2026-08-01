@@ -7,9 +7,13 @@ export interface NavItem {
 }
 
 /** Shared by the desktop <Nav> and the mobile <MobileTabBar> so the permission-filtered item list
- * (and its 1-4 item count) can never drift between the two. */
+ * (up to 5 items now that "Meine Feuerwehr" is unconditional like Kalender) can never drift
+ * between the two - MobileTabBar's --tab-count grid is dynamic, not hardcoded to 4. */
 export function getNavItems(user: SessionUser): NavItem[] {
-  const items: NavItem[] = [{ href: '/kalender', label: 'Kalender' }];
+  const items: NavItem[] = [
+    { href: '/kalender', label: 'Kalender' },
+    { href: '/meine-feuerwehr', label: 'Meine Feuerwehr' },
+  ];
 
   if (canViewDroneModule(user)) {
     items.push({ href: '/drohnen', label: 'Drohnengruppe' });

@@ -1,11 +1,15 @@
+import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { MembershipRole } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
+import { isSiteAdmin } from '@/lib/auth/permissions';
+import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
-// Admin-Gate (isSiteAdmin) läuft jetzt in admin/layout.tsx per notFound() - kein eigener Check
-// mehr nötig, Server Actions bleiben trotzdem unverändert eigenständig durch assertPermission
-// abgesichert (ein Layout schützt nur den Seiten-Render, keine direkten Server-Action-Aufrufe).
+// admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab - diese
+// Seite bleibt aber wie zuvor Site-Admin-only, daher die eigene Prüfung hier (Sicherheits-Härtung,
+// siehe CLAUDE.md). Server Actions bleiben unverändert eigenständig durch assertPermission
+// abgesichert (ein Layout/eine Seiten-Prüfung schützt keine direkten Server-Action-Aufrufe).
 //
 // searchParams speist nur die Anfangswerte der clientseitigen Filter/Sortierung (siehe
 // user-management-section.tsx) - die Prisma-Abfrage bleibt unverändert ungefiltert (184
@@ -18,6 +22,9 @@ interface BenutzerverwaltungPageProps {
 export default async function BenutzerverwaltungPage({ searchParams }: BenutzerverwaltungPageProps) {
   const params = await searchParams;
   const currentUser = await requireUser();
+  if (!isSiteAdmin(currentUser)) {
+    notFound();
+  }
 
   const [users, organizations] = await Promise.all([
     prisma.user.findMany({
@@ -70,6 +77,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       currentUserId={currentUser.id}
       initialEditUserId={params.edit}
       initialCreateOpen={params.new === '1'}
+      adminNavItems={getAdminNavItems(currentUser)}
     />
   );
 }

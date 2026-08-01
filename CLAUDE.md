@@ -582,9 +582,14 @@ references, only the historical mentions in this file.
 via a new `getAdminSidebarStatus()` in `lib/system/system-check.ts` — a subset of 3 of the 8
 `getSystemCheckResult()` signals, wrapped in `unstable_cache(..., { revalidate: 60 })` since the sidebar
 renders on every single admin page navigation; without the cache, every click within Verwaltung would
-trigger a live DB query + Mailjet API call + external NTP fetch just to paint three status dots. Add a new
-admin page by (1) letting the shared layout's gate cover it (no per-page `isSiteAdmin` check needed), (2)
-adding one entry to `AdminSidebarNav`'s `ITEMS`.
+trigger a live DB query + Mailjet API call + external NTP fetch just to paint three status dots.
+**Updated since "Meine Feuerwehr" (Module 4, see below)**: the shared layout's gate is no longer
+`isSiteAdmin`-only — it also lets in any Feuerwehr-Admin — so a new Site-Admin-only page can no longer rely
+solely on that gate and must add its own `if (!isSiteAdmin(user)) notFound()`, same as the four original
+pages now do. `AdminSidebarNav`/`AdminMobileTabs`'s `ITEMS` are also no longer a static array — add a new
+page by (1) adding the explicit `isSiteAdmin` check (or the relevant permission check, if it should also be
+reachable by Feuerwehr-Admins) to the page itself, (2) adding one entry to `getAdminNavItems()` in
+`src/lib/admin/nav-items.ts`, gated by whichever permission function fits.
 
 **Phase 3 (Benutzertabelle)**: `user-management-section.tsx` was rewritten on shadcn `Table`/`Badge`/
 `DropdownMenu`/`AlertDialog`/`Checkbox`/`Select`/`Input`. Filter/sort state (`q`/`feuerwehr`/`rolle`/`status`/
@@ -942,6 +947,74 @@ infrastructure already in place:
 - `public/sw.js` handles `push` (shows the notification) and `notificationclick` (focuses an existing tab or
   opens `/kalender`) — both required for anything to actually appear on screen; the manifest/offline-cache
   parts of the service worker are unrelated and untouched by this.
+
+### Module 4: Meine Feuerwehr
+
+`/meine-feuerwehr` ("Meine Feuerwehr" = the user's own `homeOrganizationId`) is unconditionally visible to
+every logged-in user (added to `getNavItems` right after Kalender, same as Kalender itself — no permission
+check needed since every user has a home org) and shows two things: their own Atemschutz status, and their
+home Feuerwehr's vehicle fleet ("Fuhrpark") for borrowing.
+
+- **Atemschutz** (`User.istAtemschutzgeraeteTraeger`/`atemschutzUntersuchungAm`/`atemschutzGueltigBis`/
+  `atemschutzFinnentestAm`, plain nullable fields on `User` — same pattern as `stbNr`/`phone`, not a separate
+  1:1 table, since they're single-valued not historical) is **read-only** on this page — members only have
+  "Einsicht" (view), all editing happens in Verwaltung → Heimatfeuerwehr (see below), by design decision
+  confirmed with the app owner. `atemschutzGueltigBis` is a genuinely separate, explicitly-stored field from
+  `atemschutzUntersuchungAm` — **not** computed as "+5 years" on read — because a doctor can set a shorter
+  validity than the 5-year default; `src/lib/heimatfeuerwehr/atemschutz-status.ts`'s `isUntersuchungActive()`
+  just compares the stored `atemschutzGueltigBis` against now. `atemschutzFinnentestAm` by contrast has no
+  override field at all: the Finnentest's 1-year validity is a fixed, non-negotiable rule per the brief, so
+  `isFinnentestActive()`/`getFinnentestCutoff()` compute it the same way `ninety-day-rule.ts` computes drone
+  compliance (today minus a fixed window) — this file is deliberately modeled on that existing pattern.
+- **Fuhrpark / vehicle booking**: `Vehicle` (per-organization fleet, `taktischeBezeichnung`/`kennzeichen`
+  `@unique`/`marke`/`typ`/`isActive`) and `VehicleBooking` (`vehicleId`/`userId`/`startsAt`/`endsAt`) are new
+  models. The member page lists the home org's active vehicles, each with its own upcoming bookings shown
+  inline (date/time + borrower's name) *before* the user books — this is what satisfies "zeige an wenn es
+  bereits gebucht ist und von wem". `/meine-feuerwehr/buchen` is the booking form (own page, matching the
+  `/drohnen/neu`-style convention rather than an inline card): one shared `<input type="date">` plus two
+  independent `Time15MinSelect` dropdowns (Start/Ende) — a **new** component
+  (`src/components/ui/time-15min-select.tsx`) factored out of `DateTime15MinInput`'s existing
+  `TIME_OPTIONS` generation, since here two time selects share one date instead of each field bundling its
+  own date+time. `createVehicleBooking` (`meine-feuerwehr/actions.ts`) re-validates the overlap server-side
+  via `src/lib/heimatfeuerwehr/vehicle-availability.ts`'s `findOverlappingBooking()` — a plain interval
+  overlap query (`existingStart < newEnd AND existingEnd > newStart`, verified with six manual overlap/
+  adjacent/separate-day cases against real seeded data before shipping) — a Postgres exclusion constraint
+  can't be expressed through Prisma, so this is enforced in application code only, same recheck-at-write-time
+  philosophy as `isEligiblePilot`/`isActiveDrone` in the Drohnengruppe module. Cancelling a booking
+  (`cancelVehicleBooking`) is allowed for the booking's own `userId` or anyone who can manage that vehicle's
+  organization (`canManageVehicleBooking`) — mirrors `canManageFlight`'s "own record or module admin" shape.
+
+**Verwaltung → Heimatfeuerwehr** (`/admin/heimatfeuerwehr`) is where the Fuhrpark and Atemschutz data actually
+get edited — a new admin page inside the existing `/admin/*` Verwaltung shell, using the same shadcn
+Table/Badge/Dialog toolkit as the other admin pages (this is Verwaltung, not a member page, so it follows
+that philosophy, not the hand-rolled one `/meine-feuerwehr` itself uses).
+
+- **New permission tier**: unlike every other admin page, this one must be visible to *both*
+  Abschnittskommando-Admins *and* plain Feuerwehr-Admins (an org-level `Membership` with role `ADMIN`, no
+  Abschnittskommando admin membership required) — the brief explicitly asked for this. `canManageHeimatfeuerwehrFor(user, organizationId)` (`lib/auth/permissions.ts`) is `isSiteAdmin(user) ||
+  canManageEventsFor(user, organizationId)` — deliberately a **new**, separately-named function rather than
+  reusing `canManageEventsFor` directly, because the rule genuinely differs: `canManageEventsFor` was written
+  so a site admin *without* an explicit per-org `Membership` cannot manage that org's events (see its own
+  comment), but here a site admin must always have access regardless. `canAccessHeimatfeuerwehrAdmin(user)`
+  (`isSiteAdmin(user) || user.feuerwehrAdminOrgIds.length > 0`) gates module/nav visibility. The page itself
+  resolves which org(s) the current user may manage into an `?org=<id>`-driven selector (site admins choose
+  from every Feuerwehr; a plain Feuerwehr-Admin only ever sees their own).
+- **Security hardening this required**: `admin/layout.tsx`'s gate was previously `isSiteAdmin`-only for *all*
+  of `/admin/*`; it's now `canAccessHeimatfeuerwehrAdmin` (which already includes `isSiteAdmin`), so a plain
+  Feuerwehr-Admin can get past the layout. Since the four pre-existing admin pages
+  (`benutzer`/`drohnen`/`email`/`status`) had never needed their own guard — they relied entirely on that
+  layout — each of them now has an explicit `if (!isSiteAdmin(user)) notFound()` of its own, a small but
+  real security-hardening side effect of adding this module, not an incidental cleanup. `getAdminNavItems(user)` (new, `src/lib/admin/nav-items.ts`, mirrors `getNavItems` in the app-wide
+  `lib/nav-items.ts`) replaces the previously-hardcoded `ITEMS` array in both `AdminSidebarNav` and
+  `AdminMobileTabs` — Benutzerverwaltung/Drohnengruppe/E-Mail/Status stay `isSiteAdmin`-only, Heimatfeuerwehr
+  is additionally shown to any `canAccessHeimatfeuerwehrAdmin`. Verified directly (not just type-checked):
+  a synthetic Feuerwehr-only-admin `SessionUser` object run through `getAdminNavItems` returns **only**
+  `['Heimatfeuerwehr']`, and `canManageHeimatfeuerwehrFor` correctly returns `false` for an org that admin
+  doesn't manage — confirming the scoping isn't just theoretically correct but actually behaves as designed.
+- Editing Atemschutz status uses the same "auto-suggest but don't overwrite a manually-touched value" pattern
+  as `event-form.tsx`'s Start→Ende sync: changing "Untersuchung am" pre-fills "Gültig bis" as +5 years, but
+  only until the admin edits "Gültig bis" directly — after that, further "Untersuchung am" changes never
+  clobber it again (`AtemschutzEditDialog`'s `gueltigBisTouchedRef`).
 
 ### PWA
 

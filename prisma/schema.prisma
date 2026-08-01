@@ -68,6 +68,7 @@ model Organization {
   memberships  Membership[]
   events       Event[]
   newsMessages NewsMessage[]
+  vehicles     Vehicle[]
 
   @@index([type])
 }
@@ -85,6 +86,17 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // Atemschutz (Modul "Meine Feuerwehr") - gepflegt ausschließlich über Verwaltung/Heimatfeuerwehr,
+  // Mitglieder haben dort nur Einsicht. atemschutzGueltigBis ist bewusst ein eigenes, explizit
+  // gesetztes Feld statt "atemschutzUntersuchungAm + 5 Jahre" errechnet, da die Gültigkeit laut
+  // Arzt auch kürzer sein kann. atemschutzFinnentestAm hat keine eigene Gültig-bis-Spalte, da der
+  // Finnentest laut Vorgabe eine fixe, nicht verhandelbare Jahresfrist hat (siehe
+  // lib/heimatfeuerwehr/atemschutz-status.ts).
+  istAtemschutzgeraeteTraeger Boolean   @default(false)
+  atemschutzUntersuchungAm    DateTime?
+  atemschutzGueltigBis        DateTime?
+  atemschutzFinnentestAm      DateTime?
+
   homeOrganization       Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
   memberships            Membership[]
   droneMembership        DrohnengruppeMembership?
@@ -96,6 +108,7 @@ model User {
   newsMessagesCreated    NewsMessage[]            @relation("NewsCreatedBy")
   terminZusagen          TerminZusage[]
   droneDocumentsUploaded DroneDocument[]          @relation("DroneDocumentUploadedBy")
+  vehicleBookings        VehicleBooking[]
 
   @@index([homeOrganizationId])
 }
@@ -313,4 +326,42 @@ model NewsMessage {
   createdBy   User          @relation("NewsCreatedBy", fields: [createdById], references: [id])
 
   @@index([scheduledAt])
+}
+
+// ---------- Module 4: Meine Feuerwehr (Fuhrpark) ----------
+
+// Ein Fahrzeug im Fuhrpark einer Heimatfeuerwehr, ausborgbar von deren Mitgliedern.
+// kennzeichen ist @unique, weil ein österreichisches Kennzeichen real eindeutig ist.
+model Vehicle {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  taktischeBezeichnung String
+  kennzeichen          String   @unique
+  marke                String
+  typ                  String
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  bookings     VehicleBooking[]
+
+  @@index([organizationId])
+}
+
+// Eine Ausborg-Buchung für ein Fahrzeug. Überlappende Buchungen für dasselbe vehicleId werden
+// serverseitig verhindert (siehe lib/heimatfeuerwehr/vehicle-availability.ts), nicht per
+// DB-Constraint - Postgres-Exclusion-Constraints sind über Prisma nicht abbildbar.
+model VehicleBooking {
+  id        String   @id @default(cuid())
+  vehicleId String
+  userId    String
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, startsAt])
 }
