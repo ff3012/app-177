@@ -160,7 +160,9 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
   return (
     <>
       <Sheet open={open} onOpenChange={requestClose}>
-        <SheetContent className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-[520px]">
+        <SheetContent
+          className="flex h-full flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-none data-[side=right]:md:w-[520px] data-[side=right]:md:max-w-[520px]"
+        >
           <SheetHeader className="border-b border-line px-5 py-4">
             <SheetTitle className="text-lg font-semibold text-ink">
               {mode === 'create' ? 'Neuer Benutzer' : `${target?.firstName} ${target?.lastName} bearbeiten`}

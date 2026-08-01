@@ -15,7 +15,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { UserFormSheet, type UserSheetTarget } from '@/components/admin/user-form-sheet';
+import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
+import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
 import { bulkSetActive, bulkSetHomeOrganization } from './actions';
 import { UserRowActions } from './user-row-actions';
@@ -78,18 +81,17 @@ function formatPushTooltip(dates: string[]): string {
   return dates.map((d) => `Registriert seit ${new Date(d).toLocaleDateString('de-AT')}`).join('\n');
 }
 
-/** Kartenansicht für schmale Bildschirme - Phase 6 (Mobile Verwaltung) verfeinert das noch
- * (Kennzahlkarten, Filter-Sheet, fixierte Aktion); hier vorerst nur an die neuen Feldnamen
- * angepasst, analog zu EventCard in components/calendar/event-list-view.tsx. */
+/** Kartenansicht für schmale Bildschirme (Verwaltung-Brief.md 5): "Name fett, darunter
+ * 'Feuerwehr · Rolle' 13px, rechts der Status-Badge" - min-h-11 (44px) für die Trefferfläche. */
 function UserCard({ user, onSelect }: { user: UserRow; onSelect: (id: string) => void }) {
   return (
     <button
       type="button"
       onClick={() => onSelect(user.id)}
-      className="block w-full border-b border-line px-4 py-3 text-left last:border-0"
+      className="flex min-h-11 w-full flex-col gap-0.5 border-b border-line px-4 py-3 text-left last:border-0"
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-medium text-ink">{user.name}</span>
+        <span className="font-semibold text-ink">{user.name}</span>
         <Badge
           variant="outline"
           className={
@@ -99,9 +101,21 @@ function UserCard({ user, onSelect }: { user: UserRow; onSelect: (id: string) =>
           {user.isActive ? 'Aktiv' : 'Inaktiv'}
         </Badge>
       </div>
-      <div className="break-words text-sm text-ink-muted">{user.homeOrg}</div>
-      <div className="mt-1 text-sm text-ink-faint">{user.adminFor}</div>
+      <span className="text-[13px] text-ink-muted">
+        {user.homeOrg} · {user.isAdmin ? 'Admin' : 'Mitglied'}
+      </span>
     </button>
+  );
+}
+
+/** Verwaltung-Brief.md 5: zwei Kennzahlkarten nebeneinander über der mobilen Kartenliste. Zahlen in
+ * Barlow Condensed (font-condensed, Phase 1) - laut Brief ausschließlich für Kennzahlen gedacht. */
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex-1 rounded-lg bg-surface p-4 shadow-card">
+      <div className="font-condensed text-3xl font-bold text-ink">{value}</div>
+      <div className="text-xs text-ink-muted">{label}</div>
+    </div>
   );
 }
 
@@ -132,6 +146,8 @@ export function UserManagementSection({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { setActionSlot } = useMobileHeader();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const [sheetState, setSheetState] = useState<SheetState | null>(() => {
     if (initialCreateOpen) return { mode: 'create' };
@@ -237,6 +253,29 @@ export function UserManagementSection({
 
   const activeFilterCount = [feuerwehr !== 'ALLE', rolle !== 'ALLE', status !== 'ALLE'].filter(Boolean).length;
 
+  // Verwaltung-Brief.md 5: Filter auf Mobile hinter einem Symbol in der Kopfzeile statt inline -
+  // registriert über denselben MobileHeaderContext-Actionslot, den Kalender für sein Filter-Icon
+  // nutzt (Mobile-Brief.md), da immer nur eine Seite gleichzeitig gemountet ist.
+  useEffect(() => {
+    setActionSlot(
+      <button
+        type="button"
+        onClick={() => setMobileFiltersOpen(true)}
+        aria-label="Filter"
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded p-1.5 hover:bg-white/10"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M4 5h16l-6 7v6l-4 2v-8L4 5Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {activeFilterCount > 0 && (
+          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-brand" aria-hidden />
+        )}
+      </button>,
+    );
+    return () => setActionSlot(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilterCount]);
+
   function resetFilters() {
     setFeuerwehr('ALLE');
     setRolle('ALLE');
@@ -275,6 +314,84 @@ export function UserManagementSection({
     setSheetState({ mode: 'edit', userId: id });
   }
 
+  // Select-Filter + Chips als gemeinsamer JSX-Ausdruck (nicht als eigene Komponente mit
+  // Props) - läuft sowohl in der Desktop-Inline-Zeile als auch im mobilen Bottom Sheet
+  // unverändert über denselben Closure-Zustand (feuerwehr/rolle/status/...), keine doppelte Logik.
+  const filterControls = (
+    <>
+      <Select value={feuerwehr} onValueChange={setFeuerwehr}>
+        <SelectTrigger className="w-full md:w-auto">
+          <SelectValue placeholder="Feuerwehr" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALLE">Alle Feuerwehren</SelectItem>
+          {organizations.map((org) => (
+            <SelectItem key={org.id} value={org.id}>
+              {org.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={rolle} onValueChange={(value) => setRolle(value as SimpleFilter)}>
+        <SelectTrigger className="w-full md:w-auto">
+          <SelectValue placeholder="Rolle" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALLE">Alle Rollen</SelectItem>
+          <SelectItem value="JA">Admin</SelectItem>
+          <SelectItem value="NEIN">Mitglied</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={status} onValueChange={(value) => setStatus(value as SimpleFilter)}>
+        <SelectTrigger className="w-full md:w-auto">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALLE">Alle Status</SelectItem>
+          <SelectItem value="JA">Aktiv</SelectItem>
+          <SelectItem value="NEIN">Inaktiv</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <div className="flex flex-wrap items-center gap-2.5">
+        {feuerwehr !== 'ALLE' && (
+          <button
+            type="button"
+            onClick={() => setFeuerwehr('ALLE')}
+            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
+          >
+            {organizations.find((o) => o.id === feuerwehr)?.name ?? 'Feuerwehr'} ✕
+          </button>
+        )}
+        {rolle !== 'ALLE' && (
+          <button
+            type="button"
+            onClick={() => setRolle('ALLE')}
+            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
+          >
+            {rolle === 'JA' ? 'Admin' : 'Mitglied'} ✕
+          </button>
+        )}
+        {status !== 'ALLE' && (
+          <button
+            type="button"
+            onClick={() => setStatus('ALLE')}
+            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
+          >
+            {status === 'JA' ? 'Aktiv' : 'Inaktiv'} ✕
+          </button>
+        )}
+        {activeFilterCount > 1 && (
+          <button type="button" onClick={resetFilters} className="text-xs font-medium text-brand hover:underline">
+            Alle zurücksetzen
+          </button>
+        )}
+      </div>
+    </>
+  );
+
   const sheetTargetRow = sheetState?.mode === 'edit' ? users.find((u) => u.id === sheetState.userId) : undefined;
   const sheetTarget: UserSheetTarget | undefined = sheetTargetRow
     ? {
@@ -293,7 +410,7 @@ export function UserManagementSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-[28px] font-bold text-ink">Benutzer</h1>
           <p className="text-sm text-ink-faint">
@@ -316,37 +433,48 @@ export function UserManagementSection({
           <button
             type="button"
             onClick={() => setSheetState({ mode: 'create' })}
-            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+            className="hidden rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover md:inline-flex"
           >
             Neuer Benutzer
           </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <div className="relative w-full max-w-[320px]">
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
-            aria-hidden
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" strokeLinecap="round" />
-          </svg>
-          <Input
-            type="search"
-            value={queryInput}
-            onChange={(event) => setQueryInput(event.target.value)}
-            placeholder="Benutzer suchen…"
-            className="pl-8"
-          />
-        </div>
+      <AdminMobileTabs />
 
+      {/* Verwaltung-Brief.md 5: zwei Kennzahlkarten nebeneinander über der mobilen Kartenliste. */}
+      <div className="flex gap-3 md:hidden">
+        <StatCard label="Mitglieder gesamt" value={users.length} />
+        <StatCard label="Davon inaktiv" value={users.filter((u) => !u.isActive).length} />
+      </div>
+
+      {/* Suchfeld bleibt auf Mobile inline sichtbar (primärer, meistgenutzter Filter) - nur die
+          drei Select-Filter + Chips wandern hinter das Kopfzeilen-Symbol ins Bottom Sheet, analog
+          zu "Inhalt zuerst, Einstellungen dahinter" aus Mobile-Brief.md/Kalender. */}
+      <div className="relative w-full md:max-w-[320px]">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
+          aria-hidden
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+        </svg>
+        <Input
+          type="search"
+          value={queryInput}
+          onChange={(event) => setQueryInput(event.target.value)}
+          placeholder="Benutzer suchen…"
+          className="pl-8"
+        />
+      </div>
+
+      <div className="hidden flex-wrap items-center gap-2.5 md:flex">
         <Select value={feuerwehr} onValueChange={setFeuerwehr}>
           <SelectTrigger>
             <SelectValue placeholder="Feuerwehr" />
@@ -454,7 +582,7 @@ export function UserManagementSection({
       )}
 
       {/* Sortier-Steuerung nur für die Kartenansicht - siehe COLUMNS-Kommentar in der Vorversion. */}
-      <div className="flex gap-2 sm:hidden">
+      <div className="flex gap-2 md:hidden">
         <select
           value={sortKey}
           onChange={(event) => toggleSort(event.target.value as SortKey)}
@@ -507,13 +635,13 @@ export function UserManagementSection({
         </div>
       ) : (
         <>
-          <div className="flex flex-col rounded-lg bg-surface shadow-card sm:hidden">
+          <div className="flex flex-col rounded-lg bg-surface shadow-card md:hidden">
             {sorted.map((u) => (
               <UserCard key={u.id} user={u} onSelect={openEdit} />
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-lg bg-surface shadow-card sm:block">
+          <div className="hidden overflow-x-auto rounded-lg bg-surface shadow-card md:block">
             <Table>
               <TableHeader>
                 <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
@@ -632,6 +760,29 @@ export function UserManagementSection({
           router.refresh();
         }}
       />
+
+      {/* Verwaltung-Brief.md 5: Filter hinter einem Symbol in der Kopfzeile (siehe setActionSlot
+          oben), Bottom Sheet statt Karten im Scrollfluss - derselbe filterControls-Ausdruck wie in
+          der Desktop-Zeile, kein zweiter Satz Logik. */}
+      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl md:hidden">
+          <SheetHeader>
+            <SheetTitle>Filter</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-3 px-4 pb-6">{filterControls}</div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Verwaltung-Brief.md 5: primäre Aktion als fixierte Schaltfläche über der App-weiten
+          MobileTabBar (z-30) - z-20 reicht, da beide sich nur vertikal berühren, nicht überlappen. */}
+      <button
+        type="button"
+        onClick={() => setSheetState({ mode: 'create' })}
+        className="fixed inset-x-5 z-20 flex h-[52px] items-center justify-center rounded-lg bg-brand text-sm font-medium text-white shadow-lg md:hidden"
+        style={{ bottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+      >
+        Neuer Benutzer
+      </button>
     </div>
   );
 }

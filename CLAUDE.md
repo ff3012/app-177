@@ -597,6 +597,46 @@ next to its "Speichern…" text while pending — the brief's "kein Spinner" rul
 list's own loading state (a static skeleton reads calmer for a whole-page wait), not the save button, which
 it explicitly asks to show one for.
 
+**Phase 6 (Mobile Verwaltung)** — introduced a **second breakpoint reconciliation** within this module:
+Phases 2's sidebar already switched at `md:` (768px, matching the brief's own "< 768px" heading literally,
+unlike Kalender/Drohnengruppe's `sm:`/`lg:` elsewhere in the app), but Phase 3's table/card switch had been
+built at the app-wide `sm:` (640px) default — leaving an inconsistent 640–767px gap where the sidebar was
+already gone (`md:`-gated) but the desktop table was still showing (`sm:`-gated), with no navigation at all
+in that range. Fixed by moving every "mobile shell vs desktop shell" class in
+`user-management-section.tsx` from `sm:` to `md:` (a plain find/replace, confirmed by grep beforehand that
+no other `sm:` usage in that file needed to stay — the column-density `xl:` breakpoint for
+email/Drohnengruppe/Push is untouched, that's a separate concern). `components/admin/admin-mobile-tabs.tsx`
+(new) is a horizontal-scroll pill nav, deliberately a **separate component** from `AdminSidebarNav` rather
+than a shared one — same `ITEMS` list duplicated once, but the visual language (pills vs. sidebar rows) is
+different enough that sharing would need conditional rendering internally; rendered directly inside
+`UserManagementSection` right after its own title (not in `admin/layout.tsx`) since "unter dem Titel" only
+makes structural sense from inside the page that owns that title — Phase 7 adds the same one-line call to
+the other three pages once they get real titles.
+
+The desktop-only Select filter row (`hidden md:flex`) and the search `Input` (always visible - "Inhalt
+zuerst" the same way Kalender's mobile filter sheet keeps its segmented control inline) were split apart;
+the row's JSX became a `filterControls` local variable (not a separate component with props - it closes over
+the same `feuerwehr`/`rolle`/`status`/`organizations` state already in scope) reused verbatim inside a new
+`Sheet side="bottom"` triggered by a filter icon registered into `MobileHeaderContext`'s action slot via
+`useEffect` — the exact same slot Kalender's own mobile filter button already uses (only one page is ever
+mounted at a time, so there's no conflict). `UserFormSheet`'s width override needed the same
+`data-[side=right]:` variant prefix as shadcn's own generated classes (`data-[side=right]:w-full
+data-[side=right]:sm:max-w-none data-[side=right]:md:w-[520px] data-[side=right]:md:max-w-[520px]`) to
+reliably win the `cn()`/tailwind-merge conflict resolution against the component's built-in `w-3/4`/`sm:max-w-sm`
+— a bare `sm:max-w-[520px]` (what Phase 4 originally shipped) left the sheet at 75% width below `sm:` and a
+384px cap in the 640–767 gap, neither of which is the "Vollbild-Sheet" the brief asks for on mobile.
+
+Verification note: unlike Phases 3-5, this phase's core claim (responsive layout switching four different
+`hidden md:*`/`md:hidden` pairs correctly) is CSS-driven and doesn't depend on the hydration that's confirmed
+broken in this browser-automation environment — verified directly via `getComputedStyle(...).display` at
+390px and 1024px viewports against a real logged-in session, confirming all of: sidebar ↔ tabs,
+table ↔ card-list, desktop filter row ↔ hidden, stat cards ↔ hidden, fixed CTA ↔ header button, each showing
+the correct side at the correct width, plus the card's exact rendered text ("Admin Abschnitt" · "Aktiv" ·
+"Purkersdorf · Admin") and its `min-height: 44px` tap target. What remains unverifiable for the same
+already-documented reason: the mobile header's filter-icon `useEffect` registration never fires (confirmed
+absent from the DOM at 390px), and the Sheet/bottom-sheet's actual open/close interaction — both depend on
+client-side effects that don't run when hydration doesn't attach, exactly like Phase 4's detail sheet.
+
 Verification note: this browser-automation environment does not hydrate client-side React on this page at
 all in the current session (confirmed via `__reactFiber$`/`__reactContainer$` lookups on `document.body`
 finding none, even after waiting) — the same harness-wide gap already documented for Mobile-Brief.md, now
