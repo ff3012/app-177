@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -74,6 +74,26 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-1 text-xs text-danger">{message}</p>;
 }
 
+function buildDefaultValues(
+  target: UserSheetTarget | undefined,
+  mode: 'create' | 'edit',
+  organizations: OrganizationOption[],
+): UserInput {
+  return {
+    firstName: target?.firstName ?? '',
+    lastName: target?.lastName ?? '',
+    email: target?.email ?? '',
+    stbNr: target?.stbNr ?? '',
+    phone: target?.phone ?? (mode === 'create' ? '+43' : ''),
+    isActive: target ? target.isActive : mode === 'create' ? false : true,
+    homeOrganizationId: target?.homeOrganizationId ?? organizations[0]?.id ?? '',
+    adminOrgIds: target?.adminOrgIds ?? [],
+    droneRole: target?.droneRole ?? 'NONE',
+    password: '',
+    sendWelcomeEmail: true,
+  };
+}
+
 /**
  * Verwaltung-Brief.md 3.5: Anlegen/Bearbeiten als 520px-Sheet von rechts statt eigener Seiten
  * (neu/page.tsx und [userId]/page.tsx leiten jetzt nur noch hierher um). Vier einspaltige
@@ -98,20 +118,21 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
   } = useForm<UserInput>({
     resolver: zodResolver(userSchema),
     mode: 'onBlur',
-    defaultValues: {
-      firstName: target?.firstName ?? '',
-      lastName: target?.lastName ?? '',
-      email: target?.email ?? '',
-      stbNr: target?.stbNr ?? '',
-      phone: target?.phone ?? (mode === 'create' ? '+43' : ''),
-      isActive: target?.isActive ?? mode === 'create' ? false : true,
-      homeOrganizationId: target?.homeOrganizationId ?? organizations[0]?.id ?? '',
-      adminOrgIds: target?.adminOrgIds ?? [],
-      droneRole: target?.droneRole ?? 'NONE',
-      password: '',
-      sendWelcomeEmail: true,
-    },
+    defaultValues: buildDefaultValues(target, mode, organizations),
   });
+
+  // UserFormSheet ist eine einzige, dauerhaft gemountete Instanz (anders als die frühere
+  // UserForm-Seite, die bei jeder Bearbeitung frisch neu gemountet wurde) - react-hook-form liest
+  // defaultValues aber nur einmal beim allerersten useForm()-Aufruf. Ohne dieses reset() beim
+  // Öffnen bleiben die Feldwerte für immer auf dem Stand des ersten je geöffneten Benutzers eingefroren,
+  // egal welche Zeile danach angeklickt wird (GitHub issue #7).
+  useEffect(() => {
+    if (!open) return;
+    reset(buildDefaultValues(target, mode, organizations));
+    setServerError(undefined);
+    setActivationLink(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, target?.id, mode]);
 
   const sendWelcomeEmail = watch('sendWelcomeEmail');
   const adminOrgIds = watch('adminOrgIds');

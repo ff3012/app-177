@@ -584,6 +584,23 @@ behavior, just relocated) now swaps the sheet's body to that panel instead of na
 directly from the client (not a `<form action>`) inside `startTransition`, the same pattern already used
 before this phase and still works identically.
 
+**Bugfix (GitHub issue #7, found after Phase 7)**: this single-shared-Sheet design had a real regression
+Phase 4 introduced and never caught — `UserFormSheet` is one always-mounted component instance (unlike the
+old `UserForm`, which got a fresh page mount, and therefore a fresh `useForm()` call, on every single edit).
+`react-hook-form`'s `defaultValues` are only read once, on the very first `useForm()` call for a given
+component instance; changing the `target` prop on later renders does **not** update the already-registered
+input values. In practice this meant every row you clicked after the first one opened a Sheet still showing
+whichever user's data happened to populate it first — reported as "only admin@abschnitt-purkersdorf.at is
+showing, can't select another user to edit." Fixed by extracting `buildDefaultValues(target, mode,
+organizations)` and calling `reset(buildDefaultValues(...))` in a `useEffect` keyed on
+`[open, target?.id, mode]` — i.e. every time the sheet is freshly opened for a (possibly different) target,
+not just once at mount. While fixing this, also caught and fixed a real `isActive` default bug in the same
+object literal: `target?.isActive ?? mode === 'create' ? false : true` — `??` binds tighter than `? :`, so
+this parsed as `(target?.isActive ?? (mode === 'create')) ? false : true`, which inverted the "Zugang aktiv"
+toggle's default for every edit (a deactivated user's edit sheet defaulted the toggle to *on*, and vice
+versa) regardless of the stale-defaultValues bug above. Fixed with explicit precedence:
+`target ? target.isActive : mode === 'create' ? false : true`.
+
 **Phase 5 (Lade-/Leer-/Fehlerzustände)**: most of this phase's asks were already satisfied incidentally by
 earlier phases (the "leer nach Filterung" message + "Filter zurücksetzen" button from Phase 3; specific,
 non-generic `toast.error(...)` text throughout Phase 3/4's row/bulk/sheet actions, never a bare "Fehler").
