@@ -1016,6 +1016,71 @@ that philosophy, not the hand-rolled one `/meine-feuerwehr` itself uses).
   only until the admin edits "Gültig bis" directly — after that, further "Untersuchung am" changes never
   clobber it again (`AtemschutzEditDialog`'s `gueltigBisTouchedRef`).
 
+**Heimatfeuerwehr V3** — a follow-up expansion (Excel export/import, an expiry-warning email, booking
+history, and vehicle deletion), all requested and scoped in separate rounds after the base module shipped.
+
+- **Unified 3-state expiry status**: the original `isUntersuchungActive`/`isFinnentestActive` booleans were
+  replaced by a single `getExpiryStatus(expiryDate: Date | null): 'aktiv' | 'laeuft_bald_ab' | 'abgelaufen' |
+  'keine_angabe'` (`ATEMSCHUTZ_WARNING_DAYS = 30`) — both Untersuchung (passing `atemschutzGueltigBis`
+  directly) and Finnentest (passing a computed `getFinnentestExpiryDate(atemschutzFinnentestAm)` = that date
+  + `FINNENTEST_WINDOW_DAYS`) now go through the same function, so the "läuft bald ab" rule can't drift
+  between the two. Both `/meine-feuerwehr` and `/admin/heimatfeuerwehr`'s badges show all three colors
+  (green/amber/red) — no new report page, per the app owner's explicit choice, just a third badge state in
+  the tables that already existed.
+- **Sachbearbeiter-scoped warning email, not global**: unlike every other notification in this codebase
+  (`notifySystemCheckResult`, `notifyDroneFlightCreated` — one global `AppSettings` recipient each),
+  the Atemschutz warning's recipient is a **per-organization** contact:
+  `Organization.atemschutzSachbearbeiterEmail` (nullable, edited via a small form directly on
+  `/admin/heimatfeuerwehr`, `setAtemschutzSachbearbeiter` in that page's `actions.ts` — a plain
+  `prisma.organization.update`, not routed through `lib/settings.ts`, since that file is only for the
+  singleton `AppSettings` row). This was a deliberate, explicit choice by the app owner over a global address
+  or "send to every Feuerwehr-Admin" — each Feuerwehr designates its own Atemschutz contact person, who may
+  not be an app admin at all. `checkAndNotifyAtemschutzWarnungen()`
+  (`lib/heimatfeuerwehr/notify-atemschutz-warnung.ts`) therefore loops every `FEUERWEHR` org with a
+  configured address (silently skipping the rest), builds one email per org listing only members with a
+  `laeuft_bald_ab` Untersuchung or Finnentest, and wraps each org's send in its **own** try/catch — one
+  Feuerwehr's Mailjet failure must not block the others' emails. `/api/cron/atemschutz-warnung` (GET,
+  `CRON_SECRET`-gated — `/api/cron` is already a public prefix in `middleware.ts`, no change needed there) +
+  `docker/atemschutz-warnung-email.sh` (daily 08:00 Vienna, documented in `docker/README.md`) mirror
+  `/api/cron/system-check`'s exact wrapper-script shape. Verified live: seeded a member with a
+  `laeuft_bald_ab` Untersuchung and a configured Sachbearbeiter address, hit the cron route directly, and
+  confirmed via server logs that it correctly identified the org and attempted the send — the send itself
+  failed on a local-network TLS issue (this dev machine, unrelated to the code — the same failure would hit
+  any of this app's other Mailjet calls tested the same way here) and was caught exactly as designed, with
+  the route still returning success.
+- **Excel export/import — Fuhrpark gets both, Atemschutz export-only**: `lib/heimatfeuerwehr/
+  vehicle-excel-columns.ts` and `.../atemschutz-excel-columns.ts` mirror `lib/admin/user-excel-columns.ts`'s
+  shape exactly (shared header/key/width list; the vehicle one also splits out `VEHICLE_IMPORT_COLUMN_KEYS`
+  the same way `USER_IMPORT_COLUMN_KEYS` does, so a re-uploaded export works as an import template
+  unmodified). Both export routes (`fuhrpark-export`, `atemschutz-export`) are `?org=<id>`-scoped and
+  `canManageHeimatfeuerwehrFor`-checked, unlike `/admin/benutzer/export` which has no such scoping since
+  users aren't per-org data in the same way. The Atemschutz export has **no import counterpart** — a
+  deliberate choice, confirmed with the app owner: bulk-editing safety-critical medical/compliance data via
+  spreadsheet upload was judged too risky, so that data stays editable only one member at a time through
+  `AtemschutzEditDialog`. Fuhrpark import (`fuhrpark-import/actions.ts`) duplicate-detects by `kennzeichen`
+  alone (already `@unique`, simpler than the User importer's composite `stbNr`+`homeOrganizationId` key) and
+  targets whichever org is selected on the page (unlike User import, which reads the destination org from a
+  column per row, since a vehicle export is already single-org-scoped).
+- **Buchungshistorie**: `admin/heimatfeuerwehr/fahrzeug/[vehicleId]/page.tsx` (linked from each Fuhrpark row's
+  new "Historie" action) shows **every** booking for that vehicle, past and future — `/meine-feuerwehr`
+  deliberately only ever queries upcoming ones (`endsAt: { gte: now }`), so this is a genuinely separate,
+  admin-only query, not a filter toggle on the same data. It also shows a simple utilization figure: total
+  booked hours in the last 90 days (`endsAt - startsAt` summed across bookings in that window) — verified
+  live against a real 3-hour booking.
+- **Fahrzeug löschen, blocked by any booking**: `deleteVehicle` (new) proactively counts
+  `prisma.vehicleBooking.count({ where: { vehicleId } })` and refuses with a friendly, count-specific message
+  if it's non-zero — checked explicitly *before* attempting the delete, rather than catching Prisma's FK
+  constraint error the way `deleteUser` does, since Vehicle→VehicleBooking is a single simple 1:n relation
+  and a proactive check guarantees the friendly message every time. This protects the booking-history feature
+  above: deleting a vehicle would otherwise cascade-delete (`onDelete: Cascade`) its entire history. Verified
+  live with a real vehicle pair — one with a booking (blocked, exact count in the message) and one without
+  (deleted successfully). The three former inline row actions (Bearbeiten/Aktivieren-Deaktivieren) plus the
+  two new ones (Historie/Löschen) are now a `DropdownMenu` in `vehicle-row-actions.tsx`, 1:1 the
+  `user-row-actions.tsx` composition pattern from the Benutzerverwaltung — "Bearbeiten" passes a
+  `DropdownMenuItem` (with `onSelect={(e) => e.preventDefault()}`) straight in as `VehicleFormDialog`'s
+  `trigger` prop rather than duplicating its edit form, the same trigger-survives-a-closing-menu technique
+  already used there for the "Löschen" `AlertDialogTrigger`.
+
 ### PWA
 
 `src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (cropped from `public/wappen-afkdo.png`

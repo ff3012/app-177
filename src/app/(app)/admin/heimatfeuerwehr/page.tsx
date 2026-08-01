@@ -3,18 +3,45 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canAccessHeimatfeuerwehrAdmin, isSiteAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
-import { isFinnentestActive, isUntersuchungActive } from '@/lib/heimatfeuerwehr/atemschutz-status';
+import {
+  getExpiryStatus,
+  getFinnentestExpiryDate,
+  type AtemschutzExpiryStatus,
+} from '@/lib/heimatfeuerwehr/atemschutz-status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { OrgSelect } from './org-select';
 import { VehicleFormDialog } from './vehicle-form-dialog';
+import { VehicleRowActions } from './vehicle-row-actions';
 import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
-import { toggleVehicleActive } from './actions';
+import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
 
 function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : '';
+}
+
+const EXPIRY_BADGE_LABEL: Record<AtemschutzExpiryStatus, string> = {
+  aktiv: 'Aktiv',
+  laeuft_bald_ab: 'Läuft bald ab',
+  abgelaufen: 'Abgelaufen',
+  keine_angabe: '–',
+};
+
+const EXPIRY_BADGE_CLASS: Record<AtemschutzExpiryStatus, string> = {
+  aktiv: 'border-transparent bg-success-subtle text-success-text',
+  laeuft_bald_ab: 'border-transparent bg-warning-subtle text-warning-text',
+  abgelaufen: 'border-transparent bg-danger-subtle text-danger',
+  keine_angabe: 'border-transparent bg-surface-sunken text-ink-faint',
+};
+
+function ExpiryBadge({ status }: { status: AtemschutzExpiryStatus }) {
+  return (
+    <Badge variant="outline" className={EXPIRY_BADGE_CLASS[status]}>
+      {EXPIRY_BADGE_LABEL[status]}
+    </Badge>
+  );
 }
 
 // Admin-Gate läuft in admin/layout.tsx (isSiteAdmin ODER canAccessHeimatfeuerwehrAdmin) - diese
@@ -44,6 +71,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   }
 
   const selectedOrgId = org && allowedOrgs.some((o) => o.id === org) ? org : allowedOrgs[0].id;
+  const selectedOrg = allowedOrgs.find((o) => o.id === selectedOrgId)!;
 
   const [vehicles, members] = await Promise.all([
     prisma.vehicle.findMany({
@@ -74,9 +102,23 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       {allowedOrgs.length > 1 && <OrgSelect organizations={allowedOrgs} selectedId={selectedOrgId} />}
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold text-ink">Fuhrpark</h2>
-          <VehicleFormDialog mode="create" organizationId={selectedOrgId} trigger={<Button size="sm">Neues Fahrzeug</Button>} />
+          <div className="flex items-center gap-3">
+            <a
+              href={`/admin/heimatfeuerwehr/fuhrpark-export?org=${selectedOrgId}`}
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Excel Export
+            </a>
+            <a
+              href={`/admin/heimatfeuerwehr/fuhrpark-import?org=${selectedOrgId}`}
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Excel Import
+            </a>
+            <VehicleFormDialog mode="create" organizationId={selectedOrgId} trigger={<Button size="sm">Neues Fahrzeug</Button>} />
+          </div>
         </div>
         <Table>
           <TableHeader>
@@ -99,7 +141,6 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           </TableHeader>
           <TableBody>
             {vehicles.map((vehicle) => {
-              const boundToggle = toggleVehicleActive.bind(null, vehicle.id);
               return (
                 <TableRow key={vehicle.id} className="border-line">
                   <TableCell className="font-medium text-ink">{vehicle.taktischeBezeichnung}</TableCell>
@@ -119,22 +160,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-3">
-                      <VehicleFormDialog
-                        mode="edit"
-                        target={vehicle}
-                        trigger={
-                          <button type="button" className="text-sm text-brand hover:underline">
-                            Bearbeiten
-                          </button>
-                        }
-                      />
-                      <form action={boundToggle}>
-                        <button type="submit" className="text-sm text-brand hover:underline">
-                          {vehicle.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                        </button>
-                      </form>
-                    </div>
+                    <VehicleRowActions vehicle={vehicle} />
                   </TableCell>
                 </TableRow>
               );
@@ -151,7 +177,22 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
-        <h2 className="mb-3 text-[15px] font-semibold text-ink">Atemschutz</h2>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[15px] font-semibold text-ink">Atemschutz</h2>
+          <a
+            href={`/admin/heimatfeuerwehr/atemschutz-export?org=${selectedOrgId}`}
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            Excel Export
+          </a>
+        </div>
+        <p className="mb-3 text-xs text-ink-faint">
+          "Läuft bald ab" bedeutet: Untersuchung oder Finnentest laufen innerhalb der nächsten 30 Tage ab.
+        </p>
+        <AtemschutzSachbearbeiterForm
+          organizationId={selectedOrgId}
+          initialEmail={selectedOrg.atemschutzSachbearbeiterEmail ?? ''}
+        />
         <Table>
           <TableHeader>
             <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
@@ -170,8 +211,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           </TableHeader>
           <TableBody>
             {members.map((member) => {
-              const untersuchungActive = isUntersuchungActive(member.atemschutzGueltigBis);
-              const finnentestActive = isFinnentestActive(member.atemschutzFinnentestAm);
+              const untersuchungStatus = getExpiryStatus(member.atemschutzGueltigBis);
+              const finnentestStatus = getExpiryStatus(getFinnentestExpiryDate(member.atemschutzFinnentestAm));
               return (
                 <TableRow key={member.id} className="border-line">
                   <TableCell className="font-medium text-ink">
@@ -180,32 +221,14 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                   <TableCell className="text-ink-muted">{member.istAtemschutzgeraeteTraeger ? 'Ja' : 'Nein'}</TableCell>
                   <TableCell>
                     {member.istAtemschutzgeraeteTraeger ? (
-                      <Badge
-                        variant="outline"
-                        className={
-                          untersuchungActive
-                            ? 'border-transparent bg-success-subtle text-success-text'
-                            : 'border-transparent bg-danger-subtle text-danger'
-                        }
-                      >
-                        {untersuchungActive ? 'Aktiv' : 'Abgelaufen'}
-                      </Badge>
+                      <ExpiryBadge status={untersuchungStatus} />
                     ) : (
                       <span className="text-ink-faint">–</span>
                     )}
                   </TableCell>
                   <TableCell>
                     {member.istAtemschutzgeraeteTraeger ? (
-                      <Badge
-                        variant="outline"
-                        className={
-                          finnentestActive
-                            ? 'border-transparent bg-success-subtle text-success-text'
-                            : 'border-transparent bg-danger-subtle text-danger'
-                        }
-                      >
-                        {finnentestActive ? 'Aktiv' : 'Abgelaufen'}
-                      </Badge>
+                      <ExpiryBadge status={finnentestStatus} />
                     ) : (
                       <span className="text-ink-faint">–</span>
                     )}

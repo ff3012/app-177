@@ -64,6 +64,11 @@ model Organization {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
+  // Kontaktadresse für die tägliche Atemschutz-Fristen-Warnung (nur FEUERWEHR-Orgs relevant) -
+  // bewusst ein eigenes Feld hier statt eines globalen AppSettings-Eintrags, da jede Heimatfeuerwehr
+  // ihre eigene Kontaktperson hinterlegen können soll (siehe lib/heimatfeuerwehr/notify-atemschutz-warnung.ts).
+  atemschutzSachbearbeiterEmail String?
+
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
   events       Event[]

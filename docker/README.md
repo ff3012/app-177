@@ -129,6 +129,23 @@ Falls `CRON_TZ` auf dem jeweiligen System nicht greift (mit `date` bzw. am tats�
 Zustellzeitpunkt der ersten Test-Mail prüfen), stattdessen die Stunde direkt auf die
 Host-Systemzeit umrechnen (`timedatectl` zeigt die aktuell konfigurierte Host-Zeitzone).
 
+## Tägliche Atemschutz-Fristen-Warnung per E-Mail
+
+`docker/atemschutz-warnung-email.sh` ruft `/api/cron/atemschutz-warnung` auf, das prüft, ob bei
+Atemschutzgeräteträgern einer Feuerwehr die Untersuchungs- oder Finnentest-Gültigkeit innerhalb der
+nächsten 30 Tage abläuft, und - falls ja - eine Sammel-E-Mail an die unter Verwaltung →
+Heimatfeuerwehr je Feuerwehr hinterlegte Adresse "Sachbearbeiter Atemschutz" schickt (siehe
+`checkAndNotifyAtemschutzWarnungen` in `src/lib/heimatfeuerwehr/notify-atemschutz-warnung.ts`) -
+anders als die übrigen Cron-E-Mails hier **pro Feuerwehr**, nicht eine einzige globale Adresse.
+Ohne hinterlegte Adresse oder ohne bald ablaufende Fristen wird für diese Feuerwehr keine E-Mail
+versendet. Täglich um 08:00 österreichischer Zeit einrichten:
+
+```bash
+crontab -e
+CRON_TZ=Europe/Vienna
+0 8 * * * /opt/app-177/docker/atemschutz-warnung-email.sh >> /var/log/ffapp-atemschutz-warnung.log 2>&1
+```
+
 ## Restore-Test
 
 DB-Restore (auf einem bereits laufenden Stack mit leerer/vorhandener DB):

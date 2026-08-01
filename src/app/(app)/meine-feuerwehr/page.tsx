@@ -1,17 +1,27 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { isFinnentestActive, isUntersuchungActive } from '@/lib/heimatfeuerwehr/atemschutz-status';
+import { getExpiryStatus, getFinnentestExpiryDate, type AtemschutzExpiryStatus } from '@/lib/heimatfeuerwehr/atemschutz-status';
 import { cancelVehicleBooking } from './actions';
 
-function StatusBadge({ active }: { active: boolean }) {
+const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
+  aktiv: 'Aktiv',
+  laeuft_bald_ab: 'Läuft bald ab',
+  abgelaufen: 'Abgelaufen',
+  keine_angabe: 'Keine Angabe',
+};
+
+const STATUS_CLASS: Record<AtemschutzExpiryStatus, string> = {
+  aktiv: 'bg-green-100 text-green-800',
+  laeuft_bald_ab: 'bg-amber-100 text-amber-800',
+  abgelaufen: 'bg-red-100 text-red-800',
+  keine_angabe: 'bg-neutral-100 text-neutral-600',
+};
+
+function StatusBadge({ status }: { status: AtemschutzExpiryStatus }) {
   return (
-    <span
-      className={`rounded px-1.5 py-0.5 text-xs font-medium ${
-        active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-      }`}
-    >
-      {active ? 'Aktiv' : 'Abgelaufen'}
+    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_CLASS[status]}`}>
+      {STATUS_LABEL[status]}
     </span>
   );
 }
@@ -55,8 +65,8 @@ export default async function MeineFeuerwehrPage() {
     }),
   ]);
 
-  const untersuchungActive = isUntersuchungActive(me.atemschutzGueltigBis);
-  const finnentestActive = isFinnentestActive(me.atemschutzFinnentestAm);
+  const untersuchungStatus = getExpiryStatus(me.atemschutzGueltigBis);
+  const finnentestStatus = getExpiryStatus(getFinnentestExpiryDate(me.atemschutzFinnentestAm));
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,7 +81,7 @@ export default async function MeineFeuerwehrPage() {
         {me.istAtemschutzgeraeteTraeger && (
           <div className="mt-3 flex flex-col gap-2 text-sm text-neutral-700">
             <p className="flex flex-wrap items-center gap-2">
-              Untersuchung <StatusBadge active={untersuchungActive} />
+              Untersuchung <StatusBadge status={untersuchungStatus} />
               <span className="text-neutral-500">
                 {me.atemschutzUntersuchungAm
                   ? `zuletzt am ${me.atemschutzUntersuchungAm.toLocaleDateString('de-AT')}`
@@ -80,7 +90,7 @@ export default async function MeineFeuerwehrPage() {
               </span>
             </p>
             <p className="flex flex-wrap items-center gap-2">
-              Finnentest <StatusBadge active={finnentestActive} />
+              Finnentest <StatusBadge status={finnentestStatus} />
               <span className="text-neutral-500">
                 {me.atemschutzFinnentestAm
                   ? `zuletzt am ${me.atemschutzFinnentestAm.toLocaleDateString('de-AT')}`
