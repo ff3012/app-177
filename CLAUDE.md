@@ -182,6 +182,22 @@ the codebase, see "System Check" below for why).
 
 - `Organization` is one table for both Feuerwehren and the Abschnittskommando (`type` enum), not two tables —
   keeps every FK (`Membership`, `Event.organizationId`) pointing at a single target.
+- `Organization.nummer` is the official Niederösterreichische Landesfeuerwehr-Nummer (`String`, required,
+  `@unique`) — added specifically so future modules have a stable, human-meaningful identifier to reference a
+  Feuerwehr/das AFKDO by, instead of the opaque `cuid()` `id`. Values: AFKDO Purkersdorf `17700`, Gablitz
+  `17701`, Mauerbach `17702`, Pressbaum `17703`, Purkersdorf `17704`, Rekawinkel `17706`, Steinbach `17707`,
+  Tullnerbach `17708`, Tullnerbach-Irenental `17709`, Wolfsgraben `17711` — note the gaps at `17705`/`17710`
+  (numbers assigned to Feuerwehren outside this Abschnitt, not a data-entry omission). `prisma/seed.ts`'s
+  `FEUERWEHR_NAMEN` carries `{name, nummer}` pairs (not just names) and its `upsert`s now actually set
+  `nummer` (and `shortName`) in the `update` branch too, not just `create` — unlike the original seed, which
+  used `update: {}` everywhere since it only ever needed to be idempotent, not to backfill a newly added
+  field into already-existing rows. `seed.ts` remains the only code path that creates an `Organization` (no
+  admin UI for it yet), so `nummer` being required doesn't need any other call site touched. Migration
+  `20260810090000_organization_nummer` adds the column nullable, backfills the 10 existing rows by matching
+  `name` (not `shortName` — `name` is the `@unique` column and the one guaranteed stable, e.g. `'FF Gablitz'`
+  not `'Gablitz'`), then tightens to `NOT NULL` + `UNIQUE` in the same migration file — the standard safe
+  sequence for adding a required column to a non-empty table, so `prisma migrate deploy` can run it
+  unattended in one shot on both a fresh database and the existing production one.
 - `Membership` (user, org, role=ADMIN) is per-org admin rights. `DrohnengruppeMembership` (role
   PILOT/ADMIN) is a separate, flat, cross-org table — Drohnengruppe membership has nothing to do with which
   Feuerwehr someone belongs to.

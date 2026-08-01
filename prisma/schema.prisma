@@ -58,6 +58,7 @@ model Organization {
   id        String           @id @default(cuid())
   name      String           @unique
   shortName String?
+  nummer    String           @unique
   type      OrganizationType
   icsToken  String           @unique @default(cuid())
   createdAt DateTime         @default(now())
