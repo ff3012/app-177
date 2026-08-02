@@ -90,7 +90,14 @@ export async function GET() {
       update: { data, mimeType: fresh.mimeType, fetchedAt: new Date() },
     });
     return new NextResponse(new Uint8Array(data), {
-      headers: { 'Content-Type': fresh.mimeType, 'Cache-Control': 's-maxage=120' },
+      // 'no-cache' statt 's-maxage=120': s-maxage gilt nur für Shared/CDN-Caches, von denen es vor
+      // dieser App keinen gibt (Caddy ist ein reiner Reverse-Proxy, kein Cache) - es sagte dem
+      // Kiosk-Browser selbst (einem Private Cache) nichts über Frische, und ohne max-age/Expires/
+      // Last-Modified griff dessen eigene Heuristik, die das Bild über Tage hinweg im HTTP-Cache
+      // des Kiosk-Tabs festfrieren konnte ("Karte aktualisiert sich nicht" - reales Nutzer-Feedback).
+      // Die eigentliche 120s-Drosselung gegen zu häufige Abrufe der echten WASTL-Quelle passiert
+      // bereits serverseitig über unstable_cache, unabhängig von diesem Header.
+      headers: { 'Content-Type': fresh.mimeType, 'Cache-Control': 'no-cache' },
     });
   }
 
@@ -101,7 +108,7 @@ export async function GET() {
   return new NextResponse(new Uint8Array(cached.data), {
     headers: {
       'Content-Type': cached.mimeType,
-      'Cache-Control': 's-maxage=120',
+      'Cache-Control': 'no-cache',
       'X-Wastl-Stale-Since': cached.fetchedAt.toISOString(),
     },
   });

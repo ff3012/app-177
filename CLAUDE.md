@@ -1249,7 +1249,17 @@ mockup), not derived from scratch — the spec at
   `{type:'Buffer', data:[...]}` object, not a real `Buffer` — this crashed Prisma's `upsert` ("Expected
   Bytes, provided Object") on every cache-hit request until fixed by passing a base64 **string** across the
   `unstable_cache` boundary and reconstituting the `Buffer` only in the route handler, uniformly on both
-  cold and warm paths. **Known, accepted limitation**: the real WASTL page's per-district alert-level
+  cold and warm paths. **Bugfix (real user report: "die Karte aktualisiert sich nicht")**: the route
+  originally sent `Cache-Control: s-maxage=120` — `s-maxage` only constrains shared/CDN caches, of which
+  there are none in front of this app (Caddy is a plain reverse proxy, not a cache); it says nothing to a
+  private cache (the kiosk browser itself), which — with no `max-age`/`Expires`/`Last-Modified` to bound
+  it — fell back to its own heuristic freshness rules and could keep serving the same cached image for a
+  long time across the kiosk's 5-minute reloads, regardless of how often the server actually re-fetched.
+  Fixed by sending `Cache-Control: no-cache` instead (forces the browser to revalidate with the server on
+  every load — with no ETag/Last-Modified set, that means always re-fetching), on both the fresh and
+  cached-fallback response branches. The 120s throttle against hammering the real upstream WASTL site is
+  unaffected — that protection lives entirely in the server-side `unstable_cache` call, not in this header.
+  **Known, accepted limitation**: the real WASTL page's per-district alert-level
   coloring (Normal/Erhöht/Stark) is populated client-side via JavaScript/AJAX polling (`createAJAXconnection()`
   in the page's own script), not present in the static HTML/image this route can scrape — so this proxy can
   only ever serve the static Niederösterreich basemap, never live per-district alert status, without a much
