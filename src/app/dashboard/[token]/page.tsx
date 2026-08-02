@@ -291,11 +291,17 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
             )}
           </div>
 
-          <div className="flex flex-none items-center gap-5 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
-            <div className="flex h-[clamp(96px,7vw,180px)] w-[clamp(96px,7vw,180px)] flex-none items-center justify-center rounded-lg bg-white p-2">
+          <div className="flex flex-none items-center gap-4 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
+            {/* QR-Box ist jetzt der nachgiebige Teil dieser Zeile (shrink statt flex-none, kein
+                fixes h-[...] mehr - aspect-square hält sie quadratisch während sie schrumpft):
+                die URL darf nie umbrechen oder abgeschnitten werden (siehe FitText unten), also
+                muss bei zu wenig Platz zuerst der QR-Code kleiner werden, nicht der Text
+                unter seine 14px-Mindestgröße fallen - genau umgekehrt zur alten, fixen
+                QR-Box-Größe, die den Text bei mittleren Fensterbreiten in die Ecke gedrängt hat. */}
+            <div className="flex aspect-square w-[clamp(56px,7vw,180px)] shrink items-center justify-center rounded-lg bg-white p-2">
               <img src={qrCodeDataUri} alt="QR-Code zum App-Download" className="h-full w-full" />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-[220px] flex-1">
               <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
               <div className="dash-secondary mb-3 leading-snug text-[#c9c9ce]">Termine, Fahrzeuge und Atemschutz am Handy.</div>
               <FitText
