@@ -205,6 +205,13 @@ model Event {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  // Gesetzt, wenn dieser Termin automatisch aus einer Fahrzeug-Buchung erzeugt wurde (siehe
+  // meine-feuerwehr/actions.ts) - sein bloßes Vorhandensein markiert den Termin als
+  // "buchungsverwaltet" und schützt ihn vor normaler Bearbeitung/Löschung im Kalender
+  // (kalender/[eventId]/bearbeiten/page.tsx, kalender/actions.ts).
+  vehicleBookingId String?         @unique
+  vehicleBooking   VehicleBooking? @relation(fields: [vehicleBookingId], references: [id], onDelete: SetNull)
+
   organization Organization   @relation(fields: [organizationId], references: [id])
   createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])
   zusagen      TerminZusage[]
@@ -367,6 +374,7 @@ model VehicleBooking {
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event   Event?
 
   @@index([vehicleId, startsAt])
 }
