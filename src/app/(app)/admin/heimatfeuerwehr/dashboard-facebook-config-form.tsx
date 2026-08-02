@@ -8,14 +8,19 @@ const initialState: FacebookConfigState = {};
 interface DashboardFacebookConfigFormProps {
   organizationId: string;
   initialPageId: string;
-  initialAccessToken: string;
+  /** NUR ob ein Token hinterlegt ist, NIEMALS der Token-Wert selbst - der Access Token darf nicht
+   * an den Client zurückgegeben werden, nicht einmal an den Admin der eigenen Organisation (siehe
+   * page.tsx: selectedOrgFull.facebookPageAccessToken wird bewusst nicht als Prop durchgereicht). */
+  hasAccessToken: boolean;
 }
 
 /** Zwei Felder für die Facebook-Seite dieser Heimatfeuerwehr - analog zu AtemschutzSachbearbeiterForm
  * (leeres Feld ist gültig = "Facebook nicht verbunden" auf dem Dashboard). Das Access-Token-Feld ist
  * type="password", damit es beim Betrachten des Bildschirms (z. B. während einer Bildschirmfreigabe)
- * nicht im Klartext sichtbar ist. */
-export function DashboardFacebookConfigForm({ organizationId, initialPageId, initialAccessToken }: DashboardFacebookConfigFormProps) {
+ * nicht im Klartext sichtbar ist - und hat bewusst NIE einen defaultValue: leer lassen + absenden
+ * bedeutet "unverändert lassen" (siehe setFacebookConfig), ein separates Checkbox-Feld
+ * "removeAccessToken" ist der einzige Weg, den Token wieder zu entfernen. */
+export function DashboardFacebookConfigForm({ organizationId, initialPageId, hasAccessToken }: DashboardFacebookConfigFormProps) {
   const boundAction = setFacebookConfig.bind(null, organizationId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
   const [dirty, setDirty] = useState(false);
@@ -50,11 +55,16 @@ export function DashboardFacebookConfigForm({ organizationId, initialPageId, ini
           id="facebookPageAccessToken"
           name="facebookPageAccessToken"
           type="password"
-          defaultValue={initialAccessToken}
           onChange={() => setDirty(true)}
-          placeholder="Long-Lived Page Access Token"
+          placeholder={
+            hasAccessToken ? 'Hinterlegt — leer lassen, um unverändert zu lassen' : 'Long-Lived Page Access Token'
+          }
           className="rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-ink"
         />
+        <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <input type="checkbox" name="removeAccessToken" onChange={() => setDirty(true)} />
+          Access Token entfernen
+        </label>
       </div>
       <button
         type="submit"

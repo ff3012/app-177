@@ -61,8 +61,17 @@ export interface FacebookConfigState {
   error?: string;
 }
 
-/** Leere Eingabe für beide Felder ist gültig (= "Facebook nicht verbunden" auf dem Dashboard), analog
- * zu setAtemschutzSachbearbeiter's optionalem E-Mail-Feld. */
+/** Leere Eingabe für die Page-ID ist gültig (= "Facebook nicht verbunden" auf dem Dashboard), analog
+ * zu setAtemschutzSachbearbeiter's optionalem E-Mail-Feld.
+ *
+ * Der Access Token wird NIE an den Client zurückgegeben (siehe DashboardFacebookConfigForm -
+ * kein defaultValue, nur ein hasAccessToken-Boolean), das Feld startet im Formular deshalb
+ * immer leer. Eine leere Übermittlung darf den bestehenden, gespeicherten Token daher NICHT
+ * stillschweigend löschen - das wäre sonst bei jedem Speichern der Page-ID der Fall, ohne dass
+ * der Admin das Token überhaupt anfassen wollte. Nur zwei Wege ändern den gespeicherten Wert:
+ * (1) die "Access Token entfernen"-Checkbox setzt ihn explizit auf null, (2) ein nicht-leerer
+ * Wert im Textfeld überschreibt ihn. Ansonsten bleibt data.facebookPageAccessToken schlicht
+ * unangetastet (kein Feld im update()-Objekt), statt es unconditionally auf null/'' zu setzen. */
 export async function setFacebookConfig(
   organizationId: string,
   _prevState: FacebookConfigState,
@@ -73,13 +82,22 @@ export async function setFacebookConfig(
 
   const pageId = formData.get('facebookPageId');
   const accessToken = formData.get('facebookPageAccessToken');
+  const removeAccessToken = Boolean(formData.get('removeAccessToken'));
+
+  const data: { facebookPageId: string | null; facebookPageAccessToken?: string | null } = {
+    facebookPageId: typeof pageId === 'string' && pageId.trim() ? pageId.trim() : null,
+  };
+
+  if (removeAccessToken) {
+    data.facebookPageAccessToken = null;
+  } else if (typeof accessToken === 'string' && accessToken.trim()) {
+    data.facebookPageAccessToken = accessToken.trim();
+  }
+  // Sonst: Feld weder in `data` noch sonst wo gesetzt - der gespeicherte Wert bleibt unverändert.
 
   await prisma.organization.update({
     where: { id: organizationId },
-    data: {
-      facebookPageId: typeof pageId === 'string' && pageId.trim() ? pageId.trim() : null,
-      facebookPageAccessToken: typeof accessToken === 'string' && accessToken.trim() ? accessToken.trim() : null,
-    },
+    data,
   });
 
   revalidatePath('/admin/heimatfeuerwehr');

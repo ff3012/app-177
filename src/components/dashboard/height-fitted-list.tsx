@@ -36,11 +36,19 @@ export function HeightFittedList({ minVisible, maxVisible, children }: HeightFit
     function measure() {
       if (!container) return;
       const available = container.clientHeight;
+      // Der Container hat gap-[11px] zwischen den Flex-Kindern - ohne den Gap in die Summe
+      // einzurechnen, würde cumulative den tatsächlich verbrauchten Platz um 11px × (n-1)
+      // unterschätzen und ein Element durchlassen, das eigentlich nicht mehr passt (vom
+      // Container-eigenen overflow-hidden dann lautlos abgeschnitten). Gap wird aus dem
+      // computed style gelesen statt hardcodiert, damit ein künftiger className-Wechsel hier
+      // nicht wieder stillschweigend auseinanderdriftet.
+      const gap = parseFloat(getComputedStyle(container).rowGap) || 0;
       const items = Array.from(container.children) as HTMLElement[];
       let cumulative = 0;
       let fitCount = 0;
       for (const item of items) {
-        cumulative += item.offsetHeight;
+        const itemHeight = item.offsetHeight + (fitCount > 0 ? gap : 0);
+        cumulative += itemHeight;
         if (cumulative > available) break;
         fitCount++;
       }

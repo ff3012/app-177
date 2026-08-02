@@ -19,7 +19,7 @@ import { VehicleRowActions } from './vehicle-row-actions';
 import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
 import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
 import { listDashboardTokens } from '@/lib/dashboard/token';
-import { generateAppQrCodeDataUri } from '@/lib/dashboard/qr-code';
+import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { createDashboardToken, setTokenExpiry, revokeToken, setFacebookConfig } from './dashboard-token-actions';
 import { DashboardTokenExpiryForm } from './dashboard-token-expiry-form';
@@ -80,11 +80,20 @@ export default async function HeimatfeuerwehrVerwaltungPage({
 
   const { org } = await searchParams;
 
+  // Nur id/name - diese Liste dient ausschließlich dem OrgSelect-Dropdown und wird für JEDE
+  // Feuerwehr geladen (nicht nur die aktuell ausgewählte), daher NIE mit select-less findMany
+  // fetchen - sonst landen z. B. facebookPageAccessToken-Werte fremder Feuerwehren im RSC-Payload
+  // dieser Seite (siehe CLAUDE.md "Dashboard Feuerwehrhaus" Sicherheits-Fix).
   const allowedOrgs = isSiteAdmin(user)
-    ? await prisma.organization.findMany({ where: { type: 'FEUERWEHR' }, orderBy: { name: 'asc' } })
+    ? await prisma.organization.findMany({
+        where: { type: 'FEUERWEHR' },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      })
     : await prisma.organization.findMany({
         where: { id: { in: user.feuerwehrAdminOrgIds } },
         orderBy: { name: 'asc' },
+        select: { id: true, name: true },
       });
 
   if (allowedOrgs.length === 0) {
@@ -92,9 +101,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   }
 
   const selectedOrgId = org && allowedOrgs.some((o) => o.id === org) ? org : allowedOrgs[0].id;
-  const selectedOrg = allowedOrgs.find((o) => o.id === selectedOrgId)!;
 
-  const [vehicles, members, allBookings, dashboardTokens, qrCodeDataUri] = await Promise.all([
+  const [vehicles, members, allBookings, dashboardTokens, selectedOrgFull] = await Promise.all([
     prisma.vehicle.findMany({
       where: { organizationId: selectedOrgId },
       orderBy: { taktischeBezeichnung: 'asc' },
@@ -121,8 +129,20 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       },
     }),
     listDashboardTokens(selectedOrgId),
-    generateAppQrCodeDataUri(),
+    // Nur für die AUSGEWÄHLTE Organisation geladen (nie über allowedOrgs), damit
+    // facebookPageAccessToken niemals für eine andere Feuerwehr ins RSC-Payload gelangt.
+    prisma.organization.findUnique({
+      where: { id: selectedOrgId },
+      select: { atemschutzSachbearbeiterEmail: true, facebookPageId: true, facebookPageAccessToken: true },
+    }),
   ]);
+  if (!selectedOrgFull) {
+    notFound();
+  }
+
+  const tokenQrCodeDataUris = await Promise.all(
+    dashboardTokens.map((token) => generateQrCodeDataUri(buildDashboardLink(token.token))),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,7 +242,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         </p>
         <AtemschutzSachbearbeiterForm
           organizationId={selectedOrgId}
-          initialEmail={selectedOrg.atemschutzSachbearbeiterEmail ?? ''}
+          initialEmail={selectedOrgFull.atemschutzSachbearbeiterEmail ?? ''}
         />
         <Table>
           <TableHeader>
@@ -365,13 +385,14 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           Öffentlicher, token-geschützter Kiosk-Screen für einen PC im Feuerwehrhaus - zeigt kommende
           Termine, ausgeborgte Fahrzeuge, die WASTL-Lagekarte und den Facebook-Feed. Kein Login nötig, wer
           den Link/QR-Code kennt, kann ausschließlich diese Ansicht lesen (keine Zu-/Absagen, keine
-          Atemschutzdaten). Ein widerrufener Link ist sofort ungültig.
+          Atemschutzdaten) - die vollen Namen der Fahrzeug-Ausborger werden dabei jedoch angezeigt. Ein
+          widerrufener Link ist sofort ungültig.
         </p>
 
         <DashboardFacebookConfigForm
           organizationId={selectedOrgId}
-          initialPageId={selectedOrg.facebookPageId ?? ''}
-          initialAccessToken={selectedOrg.facebookPageAccessToken ?? ''}
+          initialPageId={selectedOrgFull.facebookPageId ?? ''}
+          hasAccessToken={Boolean(selectedOrgFull.facebookPageAccessToken)}
         />
 
         <Table>
@@ -393,9 +414,10 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {dashboardTokens.map((token) => {
+            {dashboardTokens.map((token, index) => {
               const boundRevoke = revokeToken.bind(null, token.id, selectedOrgId);
               const link = buildDashboardLink(token.token);
+              const tokenQrCodeDataUri = tokenQrCodeDataUris[index];
               return (
                 <TableRow key={token.id} className="border-line">
                   <TableCell className="text-ink-muted">{token.createdAt.toLocaleDateString('de-AT')}</TableCell>
@@ -433,7 +455,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                         <details>
                           <summary className="inline-block cursor-pointer text-sm text-brand hover:underline">QR anzeigen</summary>
                           <div className="mt-2 flex items-start gap-2">
-                            <img src={qrCodeDataUri} alt={`QR-Code für ${link}`} className="h-24 w-24" />
+                            <img src={tokenQrCodeDataUri} alt={`QR-Code für ${link}`} className="h-24 w-24" />
                             <div className="flex flex-col gap-1">
                               <p className="max-w-xs break-all rounded-md border border-line bg-surface-sunken px-2 py-1 text-xs text-ink">
                                 {link}

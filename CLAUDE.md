@@ -1200,21 +1200,34 @@ mockup), not derived from scratch — the spec at
   `clamp(14px, 0.8vw, 19px)`, resolving the self-contradiction in the brief's favor of its own explicit,
   repeated "14px is bindend" rule.
 - **`HeightFittedList`** (`src/components/dashboard/height-fitted-list.tsx`) is the "mehr Einträge auf
-  einem großen Display, nicht größere Schrift" mechanism: the server always sends the full capped list
-  (Termine ≤10, Fahrzeugbuchungen ≤8, Facebook ≤6), and this client component renders every item once on
-  mount (so their real heights can be measured), then uses `useLayoutEffect` + `ResizeObserver` to compute
-  how many actually fit the container and re-renders showing only that many — the initial "show everything,
-  then clip" pass happens inside `useLayoutEffect`, which runs synchronously before the browser paints, so
-  the momentarily-full state is never actually visible. Deliberate limitation: once clipped, hidden items
-  are no longer in the DOM at all (not just `display:none`), so a *later* growth of the container can't
-  reveal more items without a fresh full render — acceptable here because the kiosk never live-resizes
-  (§ Betrieb below), only hard-reloads.
+  einem großen Display, nicht größere Schrift" mechanism: for Termine (≤10) and Fahrzeugbuchungen (≤8) the
+  server itself already caps what it sends; for Facebook, the server actually sends every cached post
+  within the 90-day window uncapped, and the ≤6 figure is purely this component's own `maxVisible` prop —
+  a client-side display limit, not a query limit. In all three cases this client component renders every
+  item it's handed once on mount (so their real heights can be measured), then uses `useLayoutEffect` +
+  `ResizeObserver` to compute how many actually fit the container and re-renders showing only that many —
+  the initial "show everything, then clip" pass happens inside `useLayoutEffect`, which runs synchronously
+  before the browser paints, so the momentarily-full state is never actually visible. The fit calculation
+  reads the container's actual `gap` (via `getComputedStyle`) and adds it between measured items — the flex
+  container uses `gap-[11px]`, and summing only `offsetHeight` without that gap would undercount used space
+  and let one row through that doesn't actually fit, silently clipped by the container's own
+  `overflow-hidden`. Deliberate limitation: once clipped, hidden items are no longer in the DOM at all (not
+  just `display:none`), so a *later* growth of the container can't reveal more items without a fresh full
+  render — acceptable here because the kiosk never live-resizes (§ Betrieb below), only hard-reloads.
 - **QR code, generated server-side, not hand-drawn or externally hosted**: `src/lib/dashboard/qr-code.ts`'s
-  `generateAppQrCodeDataUri()` uses the `qrcode` npm package (new dependency — this is the app's own
-  QR-code generation ever added; the Drohnengruppe's QR-Schnellerfassung link has never rendered an actual
-  QR image in-app, only shown the raw link/copy button) to build an SVG, base64-encoded as a `data:` URI —
-  no extra route handler needed since it's generated directly inside the Server Component. Reused
-  identically on the admin page's per-token "QR anzeigen" `<details>` disclosure (native HTML, no JS).
+  `generateQrCodeDataUri(url)` uses the `qrcode` npm package (new dependency — this is the first QR-code
+  generation ever added to this app; the Drohnengruppe's QR-Schnellerfassung link has never rendered an
+  actual QR image in-app, only shown the raw link/copy button) to build an SVG, base64-encoded as a `data:`
+  URI — no extra route handler needed since it's generated directly inside the Server Component.
+  `generateAppQrCodeDataUri()` is a thin wrapper around it for the app-install URL (`APP_URL`, read from
+  `process.env.AUTH_URL` the same way `buildDashboardLink` in `admin/heimatfeuerwehr/page.tsx` does, falling
+  back to the literal production URL if unset), used only by the public dashboard page's own QR card. The
+  admin page's per-token "QR anzeigen" `<details>` disclosure does **not** reuse that same code for every
+  row — each dashboard token gets its own QR code encoding that token's actual dashboard link
+  (`generateQrCodeDataUri(buildDashboardLink(token.token))`, precomputed per token before the JSX return),
+  since printing the app-install QR next to a specific token's "QR anzeigen" control would send whoever
+  scans it to the login page instead of that token's kiosk dashboard — a real bug caught in final review,
+  not a hypothetical.
 - **WASTL proxy** (`src/app/api/wastl/overview/route.ts`), `unstable_cache`-wrapped exactly like
   `getAdminSidebarStatus()` in `lib/system/system-check.ts` (120s `revalidate`), with a `WastlImageCache`
   (Bytes-in-Postgres, singleton row) fallback so a live-fetch failure never blanks the card — it serves the
@@ -1253,7 +1266,7 @@ mockup), not derived from scratch — the spec at
   the newest post **with an image** is shown large (or the most recent one with an image within the last
   30 days, if the newest post itself has none); everything else renders as a compact date+headline list
   through `HeightFittedList`. No `facebookPageId` configured → "Facebook nicht verbunden", never an error.
-- **Admin section** (`/admin/heimatfeuerwehr`'s "Dashboard Feuerwehrhaus" — a fourth/fifth section on the
+- **Admin section** (`/admin/heimatfeuerwehr`'s "Dashboard Feuerwehrhaus" — a fourth section on the
   same page, not a new route, matching this page's established single-page-multi-section shape): token
   create/list/expire/revoke plus the Facebook Page-ID/Access-Token form. `dashboard-token-actions.ts`'s
   `setTokenExpiry`/`revokeToken` take the token id plus a *claimed* organizationId from the client, but
@@ -1261,6 +1274,20 @@ mockup), not derived from scratch — the spec at
   `canManageHeimatfeuerwehrFor` against THAT value before writing — closing the obvious cross-org attempt
   (a Feuerwehr-admin of org A calling the action with org B's token id and org A's own id as the "claimed"
   org) that trusting the claimed id alone would have allowed.
+- **`facebookPageAccessToken` never round-trips to the client (final-review fix)**: the page's own
+  `allowedOrgs` query (feeding the `OrgSelect` dropdown) only ever `select`s `id`/`name` — it originally had
+  no `select` at all, which meant every scalar column, including `facebookPageAccessToken`, was fetched and
+  serialized into the RSC payload for **every** Feuerwehr, not just the one currently selected (confirmed
+  live: viewing one org's page leaked another org's stored token into the HTML). A separate
+  `selectedOrgFull` query (`select: { atemschutzSachbearbeiterEmail, facebookPageId,
+  facebookPageAccessToken }`) now fetches those three fields for the currently-selected org only. Beyond
+  that cross-org leak, the token isn't sent to the client at all anymore, even for the org's own admin:
+  `DashboardFacebookConfigForm` takes a `hasAccessToken: boolean` prop (never the token value), the password
+  input has no `defaultValue` and always starts empty, and a "Access Token entfernen" checkbox is the only
+  way to clear a stored token. `setFacebookConfig` builds its Prisma `update` `data` object conditionally:
+  the checkbox sets `facebookPageAccessToken: null`; a non-empty submitted value overwrites it; an empty
+  submission with the checkbox unchecked omits the field from `data` entirely, leaving the stored value
+  unchanged — an empty password field must never be misread as "clear the token."
 - **Betrieb als Kiosk**: `<meta http-equiv="refresh" content="300">` for a full hard reload every 5
   minutes (deliberately a reload, not polling — clears memory leaks/hung connections on a screen meant to
   run unattended for weeks), with the clock/date updating independently every 15s via a small

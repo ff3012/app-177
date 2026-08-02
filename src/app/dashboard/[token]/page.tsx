@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { prisma } from '@/lib/db/prisma';
 import { getValidDashboardToken, touchDashboardTokenUsage } from '@/lib/dashboard/token';
 import { getDashboardEvents, getDashboardVehicleBookings, getUpcomingVehicleBookingsCount } from '@/lib/dashboard/data';
-import { generateAppQrCodeDataUri } from '@/lib/dashboard/qr-code';
+import { generateAppQrCodeDataUri, APP_URL } from '@/lib/dashboard/qr-code';
 import { ClockDisplay } from './clock-display';
 import { HeightFittedList } from '@/components/dashboard/height-fitted-list';
 import type { CachedFacebookPost } from '@/lib/facebook/fetch-posts';
@@ -67,6 +67,10 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
 
   const now = new Date();
   const monthLabel = now.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
+  // Einzige Quelle für die angezeigte App-URL (Footer + QR-Karte) - APP_URL selbst kommt aus
+  // qr-code.ts (process.env.AUTH_URL, mit Literal-Fallback), hier nur für die reine Anzeige
+  // (ohne Protokoll/abschließenden Slash) aufbereitet.
+  const appUrlDisplay = APP_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
   const posts = (facebookCache?.posts as CachedFacebookPost[] | undefined) ?? [];
   const newestPost = posts[0];
@@ -282,7 +286,6 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
             )}
           </div>
 
-          {/* QR-Platzhalter - wird in Task 6 durch den echten QR-Code ersetzt */}
           <div className="flex flex-none items-center gap-5 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
             <div className="flex h-[clamp(96px,7vw,180px)] w-[clamp(96px,7vw,180px)] flex-none items-center justify-center rounded-lg bg-white p-2">
               <img src={qrCodeDataUri} alt="QR-Code zum App-Download" className="h-full w-full" />
@@ -291,7 +294,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
               <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
               <div className="dash-secondary mb-3 leading-snug text-[#c9c9ce]">Termine, Fahrzeuge und Atemschutz am Handy.</div>
               <div className="dash-secondary break-all font-semibold text-white" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                app-177.ff-wolfsgraben.at
+                {appUrlDisplay}
               </div>
             </div>
           </div>

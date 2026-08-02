@@ -66,6 +66,20 @@ export async function fetchAndCacheFacebookPosts(organizationId: string): Promis
     update: { posts: postsJson, fetchedAt: new Date() },
   });
 
+  // FacebookPostImage hat KEINE organizationId-Spalte - eine naive "lösche alles, was nicht in
+  // recentPosts steht" würde bei mehreren Organisationen im selben Cron-Lauf versehentlich das
+  // Bild einer ANDEREN, noch gültigen Organisation löschen. Graph-API-Post-IDs haben immer die
+  // Form `{page-id}_{story-id}`, also wird zusätzlich auf das eigene facebookPageId-Präfix
+  // gescoped, um nur Bilder dieser Organisation zu treffen. Läuft vor dem Bild-Download-Loop,
+  // damit ein gerade erst wieder als "recent" erkannter Post hier nicht gelöscht und im selben
+  // Aufruf neu heruntergeladen werden müsste.
+  const recentPostIds = recentPosts.map((post) => post.id);
+  await prisma.facebookPostImage.deleteMany({
+    where: {
+      AND: [{ postId: { startsWith: `${org.facebookPageId}_` } }, { postId: { notIn: recentPostIds } }],
+    },
+  });
+
   const postsWithImage = recentPosts.filter((post) => post.full_picture);
   for (const post of postsWithImage) {
     const alreadyCached = await prisma.facebookPostImage.findUnique({ where: { postId: post.id } });
