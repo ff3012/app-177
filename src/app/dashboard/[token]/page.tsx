@@ -6,6 +6,7 @@ import { getDashboardEvents, getDashboardVehicleBookings, getUpcomingVehicleBook
 import { generateAppQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { ClockDisplay } from './clock-display';
 import { HeightFittedList } from '@/components/dashboard/height-fitted-list';
+import type { CachedFacebookPost } from '@/lib/facebook/fetch-posts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -52,23 +53,29 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
 
   await touchDashboardTokenUsage(valid.id);
 
-  const organization = await prisma.organization.findUnique({
-    where: { id: valid.organizationId },
-    select: { name: true, shortName: true },
-  });
-  if (!organization) {
-    notFound();
-  }
-
-  const [events, vehicleBookings, totalBookingsCount, qrCodeDataUri] = await Promise.all([
+  const [events, vehicleBookings, totalBookingsCount, qrCodeDataUri, organizationFull, facebookCache] = await Promise.all([
     getDashboardEvents(valid.organizationId),
     getDashboardVehicleBookings(valid.organizationId),
     getUpcomingVehicleBookingsCount(valid.organizationId),
     generateAppQrCodeDataUri(),
+    prisma.organization.findUnique({ where: { id: valid.organizationId }, select: { name: true, facebookPageId: true } }),
+    prisma.facebookPostCache.findUnique({ where: { organizationId: valid.organizationId } }),
   ]);
+  if (!organizationFull) {
+    notFound();
+  }
 
   const now = new Date();
   const monthLabel = now.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
+
+  const posts = (facebookCache?.posts as CachedFacebookPost[] | undefined) ?? [];
+  const newestPost = posts[0];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const featuredPost =
+    newestPost?.hasImage
+      ? newestPost
+      : posts.find((post) => post.hasImage && new Date(post.createdTime) >= thirtyDaysAgo);
+  const compactPosts = posts.filter((post) => post.id !== featuredPost?.id);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#f4f4f6] text-[#1c1c1e]" style={{ fontFamily: "'Barlow', system-ui, sans-serif" }}>
@@ -80,9 +87,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
         style={{ height: 'clamp(84px, 9vh, 132px)', borderBottom: '4px solid #e4322b' }}
       >
         <div className="flex items-center gap-[22px]">
-          <img src="/wappen-afkdo.png" alt={`Wappen ${organization.name}`} className="h-[62px] w-[62px] object-contain" />
+          <img src="/wappen-afkdo.png" alt={`Wappen ${organizationFull.name}`} className="h-[62px] w-[62px] object-contain" />
           <div className="flex flex-col gap-[5px]">
-            <span className="text-[30px] font-bold leading-none tracking-[-0.01em]">{organization.name}</span>
+            <span className="text-[30px] font-bold leading-none tracking-[-0.01em]">{organizationFull.name}</span>
             <span className="dash-section-label font-semibold uppercase leading-none tracking-[0.06em] text-[#6c6c70]">
               Abschnittsfeuerwehrkommando Purkersdorf
             </span>
@@ -213,14 +220,66 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
 
         {/* ---------- Spalte 3: Facebook + QR ---------- */}
         <div className="flex min-h-0 flex-col gap-5 overflow-hidden">
-          {/* Facebook-Platzhalter - wird in Task 11 durch den echten Feed ersetzt */}
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
             <div className="flex flex-none items-baseline justify-between">
               <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Aus unserer Feuerwehr</span>
+              {organizationFull.facebookPageId && (
+                <span className="dash-secondary text-[#6c6c70]">facebook.com/{organizationFull.facebookPageId}</span>
+              )}
             </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl bg-white p-[22px] shadow-sm">
-              <span className="dash-secondary text-[#6c6c70]">Wird geladen …</span>
-            </div>
+
+            {!organizationFull.facebookPageId ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl bg-white p-[22px] shadow-sm">
+                <span className="dash-secondary text-[#6c6c70]">Facebook nicht verbunden</span>
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-hidden rounded-xl bg-white p-[22px] shadow-sm">
+                {featuredPost && (
+                  <div className="flex-none">
+                    <div className="mb-3.5 aspect-video w-full overflow-hidden rounded-lg">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- served from our own /api/facebook/image proxy */}
+                      <img
+                        src={`/api/facebook/image/${featuredPost.id}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="dash-secondary mb-2 text-[#6c6c70]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {new Date(featuredPost.createdTime).toLocaleDateString('de-AT')}
+                    </div>
+                    {featuredPost.message && (
+                      <div className="text-[23px] font-semibold leading-snug" style={{ textWrap: 'pretty' }}>
+                        {featuredPost.message.split('\n')[0]}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {compactPosts.length > 0 && (
+                  <HeightFittedList minVisible={2} maxVisible={6}>
+                    {compactPosts.map((post) => (
+                      <div key={post.id} className="flex items-baseline gap-4 border-t border-[#f0f0f2] pt-3.5 first:border-t-0 first:pt-0">
+                        <span
+                          className="dash-secondary w-[100px] flex-none text-[#6c6c70]"
+                          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                        >
+                          {new Date(post.createdTime).toLocaleDateString('de-AT')}
+                        </span>
+                        <span className="dash-table-cell flex-1 font-semibold" style={{ textWrap: 'pretty' }}>
+                          {post.message?.split('\n')[0] ?? ''}
+                        </span>
+                      </div>
+                    ))}
+                  </HeightFittedList>
+                )}
+
+                {!featuredPost && compactPosts.length === 0 && (
+                  <div className="flex min-h-0 flex-1 items-center justify-center">
+                    <span className="dash-secondary text-[#6c6c70]">Noch keine Beiträge.</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* QR-Platzhalter - wird in Task 6 durch den echten QR-Code ersetzt */}
