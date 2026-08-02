@@ -69,11 +69,20 @@ model Organization {
   // ihre eigene Kontaktperson hinterlegen können soll (siehe lib/heimatfeuerwehr/notify-atemschutz-warnung.ts).
   atemschutzSachbearbeiterEmail String?
 
+  // Facebook-Seite für den Feed-Block auf dem Dashboard Feuerwehrhaus (Issue #8) - pro Feuerwehr statt
+  // global, aus demselben Grund wie atemschutzSachbearbeiterEmail: jede Heimatfeuerwehr kann ihre eigene
+  // Seite hinterlegen. Leer = "Facebook nicht verbunden" auf dem Dashboard.
+  facebookPageId          String?
+  facebookPageAccessToken String?
+
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
   events       Event[]
   newsMessages NewsMessage[]
   vehicles     Vehicle[]
+
+  dashboardTokens   DashboardToken[]
+  facebookPostCache FacebookPostCache?
 
   @@index([type])
 }
@@ -114,6 +123,7 @@ model User {
   terminZusagen          TerminZusage[]
   droneDocumentsUploaded DroneDocument[]          @relation("DroneDocumentUploadedBy")
   vehicleBookings        VehicleBooking[]
+  dashboardTokensCreated DashboardToken[]
 
   @@index([homeOrganizationId])
 }
@@ -377,4 +387,57 @@ model VehicleBooking {
   event   Event?
 
   @@index([vehicleId, startsAt])
+}
+
+// Token für den öffentlichen, session-losen Kiosk-Dashboard-Screen im Feuerwehrhaus (Issue #8) - analog
+// zum QR-Code-Schnellerfassungs-Token der Drohnengruppe (AppSettings.droneQuickRegisterToken), aber als
+// eigene Tabelle statt eines Singleton-Felds, da mehrere Tokens pro Feuerwehr mit individuellem
+// Ablauf/Widerruf möglich sein müssen.
+model DashboardToken {
+  id             String    @id @default(cuid())
+  token          String    @unique
+  organizationId String
+  createdById    String
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId])
+}
+
+// Stündlich vom Cron-Job (api/cron/facebook-fetch) befüllter Cache der letzten Facebook-Beiträge einer
+// Feuerwehr-Seite - ein Eintrag pro Organisation, damit ein Neustart oder ein Graph-API-Ausfall den
+// Dashboard-Feed nicht leert (siehe Design-Spec §6).
+model FacebookPostCache {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  posts          Json
+  fetchedAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+// Heruntergeladene Beitragsbilder, Bytes in Postgres statt Dateisystem - analog zu DroneDocument (PDFs):
+// kein zusätzliches Docker-Volume, läuft automatisch im bestehenden pg_dump-Backup mit. Eigene Tabelle
+// statt eines Felds auf FacebookPostCache, damit beim stündlichen Refresh nur tatsächlich neue Bilder
+// geschrieben werden (Abgleich über postId), nicht das gesamte Cache-JSON samt alter Bilder neu.
+model FacebookPostImage {
+  id        String   @id @default(cuid())
+  postId    String   @unique
+  data      Bytes
+  mimeType  String
+  createdAt DateTime @default(now())
+}
+
+// Letztes erfolgreich abgerufenes WASTL-Übersichtsbild, gleiches Bytes-in-Postgres-Muster wie
+// FacebookPostImage - ein einzelner Datensatz reicht, da die Karte nicht org-spezifisch ist (ganz NÖ).
+model WastlImageCache {
+  id        String   @id @default("singleton")
+  data      Bytes
+  mimeType  String
+  fetchedAt DateTime @default(now())
 }
