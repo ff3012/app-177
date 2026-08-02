@@ -13,6 +13,11 @@ export interface VehicleBookingFormState {
   fieldErrors?: Record<string, string[] | undefined>;
 }
 
+// Legt neben der VehicleBooking zusätzlich einen normalen Kalender-Termin an (Titel "Fahrzeug: X
+// (Vorname Nachname)", in der eigenen Heimatfeuerwehr, category ALLGEMEIN) - verknüpft über
+// Event.vehicleBookingId. Der Termin ist ab dann ein STANDARD-Termin im Hauptkalender (sichtbar,
+// mit RSVP), aber vor normaler Bearbeitung/Löschung geschützt (siehe kalender/actions.ts und
+// kalender/[eventId]/bearbeiten/page.tsx).
 export async function createVehicleBooking(
   _prevState: VehicleBookingFormState,
   formData: FormData,
@@ -40,15 +45,32 @@ export async function createVehicleBooking(
     };
   }
 
-  await prisma.vehicleBooking.create({
+  const booking = await prisma.vehicleBooking.create({
     data: { vehicleId: data.vehicleId, userId: user.id, startsAt, endsAt },
   });
 
+  await prisma.event.create({
+    data: {
+      title: `Fahrzeug: ${vehicle.taktischeBezeichnung} (${user.name})`,
+      startsAt,
+      endsAt,
+      organizationId: user.homeOrganizationId,
+      isSectionWide: false,
+      category: 'ALLGEMEIN',
+      createdById: user.id,
+      vehicleBookingId: booking.id,
+    },
+  });
+
   revalidatePath('/meine-feuerwehr');
+  revalidatePath('/kalender');
   redirect('/meine-feuerwehr');
 }
 
-export async function cancelVehicleBooking(bookingId: string): Promise<void> {
+// redirectTo lässt admin/heimatfeuerwehr/page.tsx diese exakte Funktion wiederverwenden (statt
+// sie zu duplizieren), ohne einen Admin nach dem Löschen fremder Buchungen auf /meine-feuerwehr
+// statt zurück auf die Verwaltungsseite zu schicken.
+export async function cancelVehicleBooking(bookingId: string, redirectTo = '/meine-feuerwehr'): Promise<void> {
   const user = await requireUser();
 
   const booking = await prisma.vehicleBooking.findUnique({
@@ -56,11 +78,21 @@ export async function cancelVehicleBooking(bookingId: string): Promise<void> {
     include: { vehicle: { select: { organizationId: true } } },
   });
   if (!booking) {
-    redirect('/meine-feuerwehr');
+    redirect(redirectTo);
   }
   assertPermission(canManageVehicleBooking(user, booking, booking.vehicle.organizationId));
 
+  // Der verknüpfte Termin könnte theoretisch schon unabhängig gelöscht worden sein (z. B. direkt
+  // über Prisma Studio, am eigentlich vorgesehenen Schutz vorbei) - daher erst nachsehen statt
+  // blind zu löschen.
+  const linkedEvent = await prisma.event.findUnique({ where: { vehicleBookingId: bookingId } });
+  if (linkedEvent) {
+    await prisma.event.delete({ where: { id: linkedEvent.id } });
+  }
+
   await prisma.vehicleBooking.delete({ where: { id: bookingId } });
   revalidatePath('/meine-feuerwehr');
-  redirect('/meine-feuerwehr');
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/kalender');
+  redirect(redirectTo);
 }
