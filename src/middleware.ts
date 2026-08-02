@@ -12,6 +12,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/drohnen-schnell',
   '/api/cron',
   '/dashboard',
+  '/api/wastl',
 ];
 
 export default auth((req) => {
