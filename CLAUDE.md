@@ -1157,6 +1157,116 @@ report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all
   selected Feuerwehr; and deleting it from there removes both the `VehicleBooking` and its linked `Event`
   while redirecting back to the admin page (not `/meine-feuerwehr`) with the selected org preserved.
 
+### Module 5: Dashboard Feuerwehrhaus (GitHub Issue #8)
+
+A public, token-authenticated, TV/kiosk dashboard screen (`src/app/dashboard/[token]/page.tsx`) meant to be
+displayed on a Windows PC in the firehouse, Chrome in fullscreen: kommende Termine, ausgeborgte Fahrzeuge
+(30 Tage), the WASTL Niederösterreich fire-status map, a Facebook feed, and a QR code linking to the app.
+Built from a fully-specified external design brief (Claude Design `Dashboard-Brief.md` + a `.dc.html`
+mockup), not derived from scratch — the spec at
+`docs/superpowers/specs/2026-08-02-dashboard-feuerwehrhaus-design.md` and the plan at
+`docs/superpowers/plans/2026-08-02-dashboard-feuerwehrhaus-plan.md` carry the full rationale.
+
+- **Route + token model, deliberately NOT the `drohnen-schnell` pattern**: `DashboardToken` (new model:
+  `token` unique, `organizationId`, `createdById`, `expiresAt`/`lastUsedAt`/`revokedAt` all nullable) is a
+  genuinely separate model from the Drohnengruppe QR-Schnellerfassung's single `AppSettings.droneQuickRegisterToken`
+  field, because multiple tokens per Feuerwehr with independent expiry/revocation don't fit that
+  singleton's shape. `src/app/dashboard/[token]/page.tsx` (`dynamic = 'force-dynamic'`, `revalidate = 0`,
+  outside the `(app)` route group, `'/dashboard'` added to `middleware.ts`'s `PUBLIC_PATH_PREFIXES`) calls
+  `getValidDashboardToken()` (`src/lib/dashboard/token.ts`) and — unlike `drohnen-schnell`, which always
+  returns 200 even for an invalid token — calls `notFound()` on anything invalid/expired/revoked, per this
+  feature's explicit requirement ("kein Hinweis auf die Existenz der Seite"). A valid visit calls
+  `touchDashboardTokenUsage()` to update `lastUsedAt` — the one write this otherwise strictly read-only
+  route performs, tracked separately from the read-only validity check so a read (e.g. from the admin
+  page) never falsifies "zuletzt verwendet".
+- **Deliberately minimal data exposure**: `src/lib/dashboard/data.ts`'s `getDashboardEvents()` and
+  `getDashboardVehicleBookings()` select only display fields — no RSVP status, no phone numbers, no
+  Atemschutz data — matching the explicit privacy requirement for a screen anyone who knows the link/QR
+  can view. `getDashboardEvents()` deliberately does NOT filter out the Drohnengruppe category the way the
+  real Kalender query does (`canViewDroneModule`) — there is no per-viewer session on this public screen,
+  so it shows every category for the org/Abschnitt uniformly.
+- **Fluid layout, no fixed pixel sizing anywhere**: the whole page is `clamp()` + CSS grid, drawn against a
+  1920×1080 reference but built to reflow correctly from 1366×768 up through 4K and portrait — no
+  `transform: scale()`, no fixed px width/height on the root. Six shared typography roles live as
+  `.dash-*` utility classes in `globals.css` (`.dash-clock`, `.dash-section-label`, etc.) rather than
+  repeating long `clamp()` values at every call site. Three custom Tailwind breakpoints
+  (`dash-sm: 1200px`, `dash-md: 1600px`, `dash-lg: 2400px`, added to `tailwind.config.ts`'s `theme.extend.screens`)
+  drive the column-count changes the `clamp()` values alone can't express. **A real defect was caught and
+  fixed during this build**: the original design brief's own typography table specified
+  `.dash-section-label` as `clamp(12px, 0.8vw, 19px)` while ALSO stating elsewhere, unconditionally, that no
+  text may render under 14px on this screen — a live check at 1600×900/1680×1050 (ordinary, common
+  resolutions, not an edge case) showed every section label actually rendering at exactly 12px. The 12px
+  value was simply wrong (an arithmetic slip in the source brief); the fix was raising the floor to
+  `clamp(14px, 0.8vw, 19px)`, resolving the self-contradiction in the brief's favor of its own explicit,
+  repeated "14px is bindend" rule.
+- **`HeightFittedList`** (`src/components/dashboard/height-fitted-list.tsx`) is the "mehr Einträge auf
+  einem großen Display, nicht größere Schrift" mechanism: the server always sends the full capped list
+  (Termine ≤10, Fahrzeugbuchungen ≤8, Facebook ≤6), and this client component renders every item once on
+  mount (so their real heights can be measured), then uses `useLayoutEffect` + `ResizeObserver` to compute
+  how many actually fit the container and re-renders showing only that many — the initial "show everything,
+  then clip" pass happens inside `useLayoutEffect`, which runs synchronously before the browser paints, so
+  the momentarily-full state is never actually visible. Deliberate limitation: once clipped, hidden items
+  are no longer in the DOM at all (not just `display:none`), so a *later* growth of the container can't
+  reveal more items without a fresh full render — acceptable here because the kiosk never live-resizes
+  (§ Betrieb below), only hard-reloads.
+- **QR code, generated server-side, not hand-drawn or externally hosted**: `src/lib/dashboard/qr-code.ts`'s
+  `generateAppQrCodeDataUri()` uses the `qrcode` npm package (new dependency — this is the app's own
+  QR-code generation ever added; the Drohnengruppe's QR-Schnellerfassung link has never rendered an actual
+  QR image in-app, only shown the raw link/copy button) to build an SVG, base64-encoded as a `data:` URI —
+  no extra route handler needed since it's generated directly inside the Server Component. Reused
+  identically on the admin page's per-token "QR anzeigen" `<details>` disclosure (native HTML, no JS).
+- **WASTL proxy** (`src/app/api/wastl/overview/route.ts`), `unstable_cache`-wrapped exactly like
+  `getAdminSidebarStatus()` in `lib/system/system-check.ts` (120s `revalidate`), with a `WastlImageCache`
+  (Bytes-in-Postgres, singleton row) fallback so a live-fetch failure never blanks the card — it serves the
+  last successful image plus an `X-Wastl-Stale-Since` header instead. Two real things were only discoverable
+  by actually fetching the live page during this build (not guessable in advance): (1) the real page has
+  **two** `<img>` tags per overview image — a stale, commented-out S3-mirror copy first, the real
+  relative-URL one second — so the scrape targets the specific `id="IMGB_ALL"` element, comments stripped
+  first, rather than a naive first-match; (2) `unstable_cache`'s return value is JSON-serialized internally,
+  so a raw `Buffer` returned from the cached function deserializes on a cache-hit as a plain
+  `{type:'Buffer', data:[...]}` object, not a real `Buffer` — this crashed Prisma's `upsert` ("Expected
+  Bytes, provided Object") on every cache-hit request until fixed by passing a base64 **string** across the
+  `unstable_cache` boundary and reconstituting the `Buffer` only in the route handler, uniformly on both
+  cold and warm paths. **Known, accepted limitation**: the real WASTL page's per-district alert-level
+  coloring (Normal/Erhöht/Stark) is populated client-side via JavaScript/AJAX polling (`createAJAXconnection()`
+  in the page's own script), not present in the static HTML/image this route can scrape — so this proxy can
+  only ever serve the static Niederösterreich basemap, never live per-district alert status, without a much
+  larger effort (headless browser or reverse-engineered AJAX endpoint). Documented directly in the route's
+  own code comments rather than silently pretending to deliver live status.
+- **Facebook feed, hourly cron-fed cache, never a live fetch on page load**: `Organization.facebookPageId`/
+  `facebookPageAccessToken` (new, nullable, per-org — analogous to `atemschutzSachbearbeiterEmail` — so
+  each Feuerwehr can eventually configure its own page, not just Wolfsgraben). `src/lib/facebook/fetch-posts.ts`'s
+  `fetchAndCacheFacebookPosts()` is called only by `src/app/api/cron/facebook-fetch/route.ts`
+  (`CRON_SECRET`-gated, `docker/facebook-fetch.sh` hourly wrapper, same shape as the other host-cron
+  scripts — the `SCRIPT_DIR`/`REPO_ROOT`/`set -a`/`.env`/`set +a` pattern and crontab-header-comment
+  convention, not a hardcoded in-script log path, matching `system-check-email.sh`/`atemschutz-warnung-email.sh`),
+  never triggered by a dashboard page visit — a real post roughly once a day doesn't justify a live Graph
+  API round-trip on every kiosk reload. Posts (≤90 days old) are cached as `FacebookPostCache.posts` (Json);
+  matching images are downloaded once and stored as `Bytes` in a separate `FacebookPostImage` table (same
+  Bytes-in-Postgres rationale as `DroneDocument`'s PDFs — no extra Docker volume, rides along in the
+  existing `pg_dump` backup), served back via `/api/facebook/image/[postId]/route.ts` rather than
+  `next/image` against Facebook's own CDN (whose signed URLs expire — a locally-cached copy is the robust
+  choice for a screen running unattended for weeks). `CachedFacebookPost[]` being written into a Prisma
+  `Json` column needed an explicit `as unknown as Prisma.InputJsonValue` cast — the first `Json`-typed
+  field in this schema, and TypeScript can't structurally prove a named interface (no index signature)
+  matches Prisma's recursive JSON value type even when the actual runtime data is fully JSON-safe. Display:
+  the newest post **with an image** is shown large (or the most recent one with an image within the last
+  30 days, if the newest post itself has none); everything else renders as a compact date+headline list
+  through `HeightFittedList`. No `facebookPageId` configured → "Facebook nicht verbunden", never an error.
+- **Admin section** (`/admin/heimatfeuerwehr`'s "Dashboard Feuerwehrhaus" — a fourth/fifth section on the
+  same page, not a new route, matching this page's established single-page-multi-section shape): token
+  create/list/expire/revoke plus the Facebook Page-ID/Access-Token form. `dashboard-token-actions.ts`'s
+  `setTokenExpiry`/`revokeToken` take the token id plus a *claimed* organizationId from the client, but
+  re-fetch the token's actual stored `organizationId` from the DB and re-check
+  `canManageHeimatfeuerwehrFor` against THAT value before writing — closing the obvious cross-org attempt
+  (a Feuerwehr-admin of org A calling the action with org B's token id and org A's own id as the "claimed"
+  org) that trusting the claimed id alone would have allowed.
+- **Betrieb als Kiosk**: `<meta http-equiv="refresh" content="300">` for a full hard reload every 5
+  minutes (deliberately a reload, not polling — clears memory leaks/hung connections on a screen meant to
+  run unattended for weeks), with the clock/date updating independently every 15s via a small
+  `'use client'` island (`clock-display.tsx`) so the whole page doesn't re-render for that. Chrome launch
+  flags and the crontab entry are documented in `docker/README.md`.
+
 ### PWA
 
 `src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (cropped from `public/wappen-afkdo.png`
