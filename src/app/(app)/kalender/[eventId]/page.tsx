@@ -93,45 +93,49 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
         </div>
       )}
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Meine Zusage</h2>
-        <EventRsvpButtons
-          eventId={event.id}
-          initialStatus={ownZusage?.status ?? null}
-          initialNote={ownZusage?.note ?? ''}
-          withNote
-        />
-      </div>
+      {!event.vehicleBookingId && (
+        <div className="rounded-lg bg-white p-4 shadow-sm">
+          <h2 className="mb-2 text-sm font-semibold text-neutral-900">Meine Zusage</h2>
+          <EventRsvpButtons
+            eventId={event.id}
+            initialStatus={ownZusage?.status ?? null}
+            initialNote={ownZusage?.note ?? ''}
+            withNote
+          />
+        </div>
+      )}
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-neutral-900">
-          Teilnehmerliste
-          <span className="flex gap-1.5 text-xs font-normal">
-            {(Object.keys(STATUS_LABEL) as RsvpStatusOption[]).map((status) => (
-              <span key={status} className={`rounded px-1.5 py-0.5 ${STATUS_BADGE_CLASS[status]}`}>
-                {STATUS_LABEL[status]}: {counts[status]}
-              </span>
-            ))}
-          </span>
-        </h2>
-        {zusagen.length === 0 ? (
-          <p className="text-sm text-neutral-500">Noch keine Zusagen.</p>
-        ) : (
-          <ul className="flex flex-col gap-1.5 text-sm">
-            {zusagen.map((zusage) => (
-              <li key={zusage.id} className="flex flex-wrap items-baseline gap-2">
-                <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS_BADGE_CLASS[zusage.status]}`}>
-                  {STATUS_LABEL[zusage.status]}
+      {!event.vehicleBookingId && (
+        <div className="rounded-lg bg-white p-4 shadow-sm">
+          <h2 className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-neutral-900">
+            Teilnehmerliste
+            <span className="flex gap-1.5 text-xs font-normal">
+              {(Object.keys(STATUS_LABEL) as RsvpStatusOption[]).map((status) => (
+                <span key={status} className={`rounded px-1.5 py-0.5 ${STATUS_BADGE_CLASS[status]}`}>
+                  {STATUS_LABEL[status]}: {counts[status]}
                 </span>
-                <span className="text-neutral-800">
-                  {zusage.user.firstName} {zusage.user.lastName}
-                </span>
-                {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}“</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              ))}
+            </span>
+          </h2>
+          {zusagen.length === 0 ? (
+            <p className="text-sm text-neutral-500">Noch keine Zusagen.</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {zusagen.map((zusage) => (
+                <li key={zusage.id} className="flex flex-wrap items-baseline gap-2">
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS_BADGE_CLASS[zusage.status]}`}>
+                    {STATUS_LABEL[zusage.status]}
+                  </span>
+                  <span className="text-neutral-800">
+                    {zusage.user.firstName} {zusage.user.lastName}
+                  </span>
+                  {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}“</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

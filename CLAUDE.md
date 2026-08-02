@@ -1123,9 +1123,18 @@ report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all
   `canManageEventsFor` check, so a user without edit rights still sees the generic permission message first.
   `updateEvent`/`deleteEvent` (`kalender/actions.ts`) got the identical guard server-side, consistent with
   this codebase's "every Server Action re-checks its own permissions" rule — a direct action call can't
-  bypass the page-level block. RSVP ("Zusage") stays intentionally open on booking-managed events — only
-  editing/deleting the event itself is blocked, per the design spec's explicit decision, not an oversight.
-  Vehicle-booking events also flow into the same per-organization `.ics` calendar feed as any other event,
+  bypass the page-level block. **Reversed since V4 shipped**: RSVP ("Zusage") was originally left
+  intentionally open on booking-managed events (only editing/deleting the event itself was blocked) — the
+  app owner later asked for this to change after seeing it live: a vehicle-booking entry has no real
+  concept of "Zugesagt/Abgesagt/Unklar", so `/kalender/[eventId]/page.tsx` now hides both the "Meine
+  Zusage" widget (`EventRsvpButtons`) and the "Teilnehmerliste" section entirely when
+  `event.vehicleBookingId` is set — not just visually de-emphasized, the whole `<div>` block for each is
+  conditionally omitted. The rest of the detail page (Zeit/Organisation/Ort/Beschreibung, the vehicle icon
+  elsewhere in the app) is unaffected. `setRsvp`/`sendEventPushNow` themselves were not touched — this is a
+  page-level display change only, not a new permission guard (nothing stops a booking event's RSVP from
+  being set via a direct action call, but the UI never offers it, matching this event type's actual
+  semantics rather than adding a redundant server-side block for a path nothing in the UI reaches).
+  Vehicle-booking events still flow into the same per-organization `.ics` calendar feed as any other event,
   with no special exclusion — there was never a reason to treat them differently there.
 - **Visible icon on booking-managed events**: a new, small, shared `VehicleBookingIcon`
   (`components/calendar/vehicle-booking-icon.tsx`, hand-rolled inline SVG car silhouette, matching this
