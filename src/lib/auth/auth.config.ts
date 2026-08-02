@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { TokenPurpose } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { getDummyPasswordHash, verifyPassword } from '@/lib/password';
 import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsById } from '@/lib/auth/build-session-user';
 import { consumeToken, consumeLoginTokenByShortCode } from '@/lib/auth/tokens';
@@ -82,6 +83,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         Object.assign(token, user as SessionUser);
+        // Nur bei einem frischen Login gesetzt (user ist bei jedem weiteren Request-Refresh
+        // undefined) - Benutzerverwaltung-Brief.md §2: "Zuletzt angemeldet" im Sheet-Kopf/der
+        // Tabelle. updateMany ohne select, damit der Login-Pfad nicht durch einen zusätzlichen
+        // Roundtrip länger wird; ein Fehler hier darf die Anmeldung nie blockieren.
+        prisma.user
+          .updateMany({ where: { id: (user as SessionUser).id }, data: { lastLoginAt: new Date() } })
+          .catch((error) => console.error('lastLoginAt konnte nicht aktualisiert werden:', error));
         return token;
       }
 

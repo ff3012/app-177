@@ -28,7 +28,10 @@ export async function activateAccount(
   }
 
   const passwordHash = await hashPassword(parsed.data.newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, isActive: true } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, isActive: true, passwordChangedAt: new Date() },
+  });
 
   try {
     await signIn('credentials', {

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { passwordPolicySchema } from './password-policy';
 
 export const DRONE_ROLE_OPTIONS = ['NONE', 'PILOT', 'ADMIN'] as const;
 export type DroneRoleOption = (typeof DRONE_ROLE_OPTIONS)[number];
@@ -25,7 +24,6 @@ export const userSchema = z.object({
   homeOrganizationId: z.string().min(1, 'Feuerwehr/Organisation ist erforderlich.'),
   adminOrgIds: z.array(z.string()),
   droneRole: z.enum(DRONE_ROLE_OPTIONS),
-  password: passwordPolicySchema.optional().or(z.literal('')),
   sendWelcomeEmail: z.boolean(),
 });
 
@@ -46,7 +44,6 @@ export function parseUserFormData(formData: FormData) {
     droneRole: (DRONE_ROLE_OPTIONS as readonly string[]).includes(rawDroneRole)
       ? (rawDroneRole as DroneRoleOption)
       : 'NONE',
-    password: String(formData.get('password') ?? ''),
     sendWelcomeEmail: formData.get('sendWelcomeEmail') === 'on',
   };
 }

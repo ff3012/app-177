@@ -163,7 +163,6 @@ export async function updateUser(
       isActive: data.isActive,
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       homeOrganizationId: data.homeOrganizationId,
-      ...(data.password ? { passwordHash: await hashPassword(data.password) } : {}),
     },
   });
 
@@ -179,6 +178,9 @@ export interface PasswordResetEmailState {
   error?: string;
 }
 
+const RESET_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RESET_RATE_LIMIT_MAX = 3;
+
 export async function sendPasswordResetEmailToUser(userId: string): Promise<PasswordResetEmailState> {
   const currentUser = await requireUser();
 
@@ -188,6 +190,22 @@ export async function sendPasswordResetEmailToUser(userId: string): Promise<Pass
   }
   assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
 
+  // Benutzerverwaltung-Brief.md §3: höchstens drei Reset-Mails je Benutzer und Stunde. Zählt jede
+  // in der letzten Stunde erzeugte PASSWORD_RESET-Token-Zeile für diesen Benutzer - unabhängig
+  // davon, ob sie von hier (Admin-Button) oder über die separate Self-Service-"Passwort
+  // vergessen"-Seite ausgelöst wurde (die ihr eigenes, unabhängiges Throttling hat); ein
+  // gemeinsames Budget ist hier bewusst strenger, nicht lockerer, als zwei getrennte Zähler.
+  const recentResets = await prisma.passwordToken.count({
+    where: {
+      userId: targetUser.id,
+      purpose: TokenPurpose.PASSWORD_RESET,
+      createdAt: { gte: new Date(Date.now() - RESET_RATE_LIMIT_WINDOW_MS) },
+    },
+  });
+  if (recentResets >= RESET_RATE_LIMIT_MAX) {
+    return { error: 'Zu viele Reset-Mails in der letzten Stunde für diesen Benutzer. Bitte später erneut versuchen.' };
+  }
+
   try {
     const token = await createToken(targetUser.id, TokenPurpose.PASSWORD_RESET);
     await sendPasswordResetEmail(targetUser, token);
@@ -195,6 +213,12 @@ export async function sendPasswordResetEmailToUser(userId: string): Promise<Pass
     console.error('Passwort-Reset-E-Mail fehlgeschlagen:', error);
     return { error: 'E-Mail konnte nicht gesendet werden. Bitte Mailjet-Konfiguration prüfen.' };
   }
+
+  // Protokollierung "wer wann ausgelöst hat" (Benutzerverwaltung-Brief.md §3) als reines
+  // Server-Log, kein persistiertes Audit-Feld.
+  console.log(
+    `Passwort-Reset für ${targetUser.email} ausgelöst von ${currentUser.email} (${currentUser.id}) um ${new Date().toISOString()}`,
+  );
 
   return { success: true };
 }

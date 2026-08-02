@@ -28,7 +28,10 @@ export async function resetPassword(
   }
 
   const passwordHash = await hashPassword(parsed.data.newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, passwordChangedAt: new Date() },
+  });
 
   try {
     await signIn('credentials', {

@@ -74,6 +74,8 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       pushDates: u.pushSubscriptions.map((s) => s.createdAt.toISOString()),
       isActive: u.isActive,
       istAtemschutzgeraeteTraeger: u.istAtemschutzgeraeteTraeger,
+      lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+      passwordChangedAt: u.passwordChangedAt ? u.passwordChangedAt.toISOString() : null,
     };
   });
 

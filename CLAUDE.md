@@ -77,7 +77,8 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
 `@aws-sdk/client-s3` for the System Check's live S3/Exoscale connectivity probe (the one SDK dependency in
 the codebase, see "System Check" below for why) · `qrcode` for server-side dashboard/token QR generation ·
 `sharp` for compositing the WASTL district-status overlay GIFs onto the basemap (see "WASTL proxy" under
-Dashboard Feuerwehrhaus below).
+Dashboard Feuerwehrhaus below) · `cmdk` (via shadcn's `command` component) for the "Admin für"
+searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md under Verwaltung below).
 
 ### Route groups
 
@@ -556,7 +557,19 @@ App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes au
   nur `import`/ESM funktioniert.
 - shadcn-Komponenten installiert (in `src/components/ui/`, eigene Dateinamen, keine Kollision mit den
   bestehenden Handbau-Dateien dort): `table`, `badge`, `button`, `input`, `select`, `switch`, `dialog`,
-  `sheet`, `dropdown-menu`, `tabs`, `tooltip`, `skeleton`, `alert-dialog`, `separator`, `checkbox`.
+  `sheet`, `dropdown-menu`, `tabs`, `tooltip`, `skeleton`, `alert-dialog`, `separator`, `checkbox`,
+  `popover`, `command` (+ dessen Abhängigkeiten `input-group`/`textarea`, aktuell ungenutzt aber von der
+  CLI mitgeneriert). `command` bringt `cmdk` als neue Abhängigkeit mit - für "Admin für" in
+  `UserFormSheet` (siehe Benutzerverwaltung-Brief.md unten). Dieselbe v3-Inkompatibilität wie beim
+  ursprünglichen Verwaltung-Umbau trat erneut auf (`data-open:`/`data-closed:` in `popover.tsx`,
+  `data-selected:` in `command.tsx` - jeweils per `grep` gegen `node_modules/@radix-ui/react-popover`/
+  `node_modules/cmdk` auf den tatsächlich gesetzten Attributwert verifiziert, nicht geraten - Radix setzt
+  `data-state="open"|"closed"`, cmdk setzt `data-selected="true"|"false"` als String, nicht als reine
+  Präsenz), auf dieselbe Art gefixt (`data-[state=open]:` etc., `data-[selected=true]:`). Ein paar weitere
+  rein kosmetische v4-only-Utility-Klassen in diesen beiden neuen Dateien (`rounded-xl!`,
+  `*:data-[slot=...]:pl-2!`, `**:[[cmdk-group-heading]]:...`) wurden bewusst NICHT gepatcht - exakt
+  dieselbe Abwägung wie beim ursprünglichen `tooltip.tsx`-Fall: sie erzeugen unter v3 einfach keine
+  zusätzliche Regel, kein Build-Fehler, nur eine minimal weniger präzise Ecke/Innenabstand.
   `sonner` (Toast) wurde bewusst NICHT über `npx shadcn add sonner` (das nur einen dünnen
   Wrapper generiert) hinzugefügt, sondern das rohe `sonner`-Package direkt in `(app)/layout.tsx` als
   `<Toaster theme="light" position="top-right" richColors />` eingehängt. `TooltipProvider`
@@ -830,6 +843,109 @@ Action logic changed on any of the three pages.
   Verified directly (not just type-checked): synthetic Feuerwehr-only-admin/site-admin/plain-member
   `SessionUser` objects run through `canManageUsersFor`/`canAccessUserManagementAdmin` produced exactly the
   expected true/false matrix (own org yes, other org no, site admin always yes, plain member never).
+
+**Benutzerverwaltung-Brief.md ("Benutzer bearbeiten"-Sheet, Claude Design)** — a follow-up mockup-driven
+rework of `UserFormSheet` specifically (the table/filters/bulk-actions from Verwaltung-Brief.md Phase 3-6
+are untouched), imported the same way as the Dashboard Feuerwehrhaus brief earlier in this file: a
+Claude Design project read via the `DesignSync` MCP tool's `list_files`/`get_file` methods (works for any
+project the user can read, not only ones under the tool's own "design-system" writable-project model its
+description emphasizes) rather than a browser/WebFetch flow.
+
+- **Zwei neue Zeitstempel**: `User.lastLoginAt`/`User.passwordChangedAt` (both nullable, additive
+  migration `20260802190718_user_last_login_password_changed_at`) - deliberately **not** backfilled from
+  `createdAt` for existing users; an invented value is worse than "unknown". `lastLoginAt` is written in
+  `auth.config.ts`'s `jwt` callback's `if (user)` branch (this branch, per Auth.js's own convention, only
+  runs on an actual fresh sign-in - every other request hits the "no fresh login" branch just below it that
+  re-fetches permissions instead) via a fire-and-forget `prisma.user.updateMany(...).catch(...)` - no
+  `select`, no `await`, so a slow/failed write can never add latency to or block a login, matching the
+  brief's explicit "darf die Anmeldung nie blockieren." `passwordChangedAt` is set in all three places a
+  password can actually change: `aktivieren/[token]/actions.ts` (first-time setup),
+  `passwort-zuruecksetzen/[token]/actions.ts` (reset-link), and `profile/actions.ts`'s `changePassword`
+  (self-service). `src/lib/format.ts`'s new `formatRelativeDate(date, {fallback})` is the single formatter
+  for both - always computed server-side pinned to `Europe/Vienna` (`Intl`/`toLocaleDateString` with an
+  explicit `timeZone`, never a bare client-side `toLocaleDateString`, which would produce a hydration
+  warning if server/browser clocks ever ran in different zones) - returns `{label, title}`: `label` is the
+  short "heute HH:mm"/"gestern HH:mm"/"vor N Tagen"(≤7)/`DD.MM.YYYY`(older)/fallback(null) string for
+  display, `title` the full `DD.MM.YYYY, HH:mm` for a tooltip. A same-file `isOlderThanMonths(date, n)`
+  helper mutes the new "Zuletzt aktiv" table column once a login is >12 months stale. Both were verified
+  with a standalone script against several offsets (today/yesterday/3d/7d/8d/60d, and the 12-month-mute
+  boundary) rather than only type-checked, since neither depends on any harness-blocked client interaction.
+- **Kein Admin-gesetztes Klartext-Passwort mehr**: `userSchema`/`parseUserFormData` lost their `password`
+  field entirely, and `updateUser` no longer has the `...(data.password ? {passwordHash: ...} : {})`
+  branch - satisfies the brief's own acceptance criterion "kein Weg mehr, über den ein Admin ein Passwort im
+  Klartext setzen kann." In its place, edit mode's Zugang section shows a "Passwort" row with a
+  "Reset-Mail senden" button (`variant="outline"`) instead of an input, behind an `AlertDialog` confirm,
+  reusing the **existing** `sendPasswordResetEmailToUser` action unchanged in its core (already
+  `canManageUsersFor`-scoped from the earlier Feuerwehr-Admin-Scoping round above) - two things were added
+  to that action for this brief specifically: a rate limit (`prisma.passwordToken.count` of
+  `PASSWORD_RESET`-purpose rows created in the last hour for that user, ≥3 blocks - deliberately a **shared**
+  budget with the separate self-service "Passwort vergessen" flow rather than a second, independent counter,
+  since both ultimately just create the same kind of token/email; verified against 0/2/3-tokens-in-window
+  and an out-of-window old token via a direct script against the local DB, not just read for correctness) and
+  a `console.log` line recording who triggered it and when - a deliberate, explicit choice over adding a
+  persisted audit column (`PasswordToken.triggeredByUserId` or similar), confirmed with the app owner rather
+  than assumed. The button is disabled (with a `Tooltip` explaining why - "Zugang ist deaktiviert" /
+  "Keine E-Mail-Adresse hinterlegt") when the live, not-yet-saved `isActive`/`email` form values say so, and
+  goes into a 60-second client-only "Gesendet" cooldown after a successful send (against
+  double-click-spam; the server-side hourly count is the real protection, this is just UX). The row's own
+  "Zuletzt geändert"-line reads `passwordChangedAt` through the same `formatRelativeDate`.
+- **Sheet-Geometrie**: the "Zugang aktiv" toggle moved out of the Zugang section into its own
+  `bg-surface-sunken` strip directly under the header (edit mode only, matching its previous
+  edit-mode-only visibility) - deliberately placed **outside** the scrolling `<form>` element entirely; this
+  works because `handleSubmit` reads from react-hook-form's shared `control` state, not from native DOM
+  form-traversal, so a `Controller`-registered field doesn't need to be a DOM descendant of `<form>` to be
+  included in submission. The header itself dropped the old "X bearbeiten" title suffix (now just the
+  person's name) and gained a subtitle line, edit mode only: `"{Heimat-Feuerwehr} · zuletzt angemeldet
+  {formatRelativeDate(lastLoginAt).label}"`.
+- **Feldpaarung (Person)**: Vorname/Nachname and Telefonnummer/Standesbuchnummer are now each a
+  `grid-cols-1 sm:grid-cols-2` pair (stacking below the app's usual `sm:` breakpoint, matching the brief's
+  own explicit "<640px" reference) instead of four full-width rows.
+- **"Admin für" Mehrfachauswahl**: `src/components/admin/admin-org-multiselect.tsx`
+  (`AdminOrgMultiSelect`) replaces the checkbox list with a `Popover`+`Command` combobox - closed state is a
+  button styled as an input showing removable chips (`bg-brand-subtle` pills with an `×`) or a
+  "Keine Adminrechte" placeholder; open state adds a search input, a "N von M ausgewählt"/"Auswahl leeren"
+  status row, and a scrollable, keyboard-navigable list. Deliberately renders its own left-aligned checkbox
+  square per row instead of relying on `CommandItem`'s built-in right-side checkmark
+  (`group-data-[checked=true]/command-item:opacity-100`, which needs a consumer-set `data-checked` this
+  component never sets and stays permanently hidden) - cmdk's own `data-selected` tracks keyboard-hover
+  highlighting only, not "is this org chosen," so the actual chosen-state visual has to come from this
+  component's own `value` prop, not cmdk's internal state. `Command`'s `shouldFilter={false}` disables
+  cmdk's built-in fuzzy filter in favor of a plain `.includes()` substring match against the search text,
+  since the brief's own "Feuerwehr suchen" is a simple filter, not fuzzy search. Backspace on an empty
+  search input removes the last chip (checked via the search state, not a DOM query). Keyboard/Escape
+  behavior (tab to the trigger, Enter/Space opens, Escape closes and returns focus) all comes for free from
+  Radix `Popover`'s own default behavior - no custom focus-management code was added for this, and none of
+  Popover's defaults were overridden.
+- **"Funktionen und Ausbildung"**: a new bordered block replacing the old standalone "Drohnengruppe"
+  section - the Atemschutzgeräteträger toggle moved here from Person (a qualification, not a stable
+  identity fact, per the brief), and Drohnengruppe itself is now a `SegmentedControl`
+  (`src/components/ui/segmented-control.tsx`, "Kein · Mitglied · Admin") instead of a `RadioGroup` column.
+  `SegmentedControl` deliberately builds directly on the raw `radix-ui` `RadioGroup` primitive rather than
+  restyling the existing pre-styled `components/ui/radio-group.tsx` (whose round-dot look doesn't
+  reasonably restyle into segments) - still a real ARIA radiogroup underneath (arrow-key navigation, one tab
+  stop), just with fully custom segment markup instead of `radio-group.tsx`'s dot/label layout.
+- **Footer "Benutzer löschen"**: a new red text-button on the footer's left (edit mode only), behind an
+  `AlertDialog`, reusing `deleteUser` unchanged - previously this action only existed in the table's own
+  row-menu (`user-row-actions.tsx`); the brief explicitly asked for it inside the sheet too, "den Weg gibt
+  es im Sheet bisher gar nicht." Closes the sheet and refreshes the table on success, same as the row-menu's
+  own delete flow.
+- **Tabelle "Zuletzt aktiv"**: a new sortable column, `xl:`-visible like `E-Mail`/`Drohnengruppe`/`Push`
+  next to it, reading `lastLoginAt` through `formatRelativeDate` (fallback `"–"`, per the brief's own
+  wording for this specific spot - the Sheet header uses a different fallback, "noch nie angemeldet", for
+  the same underlying field) and muted (`text-ink-faint`) via `isOlderThanMonths(…, 12)`.
+- **Verification note, same harness-wide gap as every previous Verwaltung phase**: this browser-automation
+  environment still doesn't hydrate client-side React on this page (`__reactFiber$` lookup on `document.body`
+  found none after navigating with `?edit=<id>`, and the Sheet's own Portal-rendered content is correctly
+  absent from the raw server HTML for the same reason - Radix Portals need a live client to mount, so a
+  static SSR snapshot never includes them regardless of whether `initialEditUserId` seeded the right initial
+  React state). This blocks any interactive check of the Popover/Command combobox, the segmented control,
+  or either `AlertDialog`. What *was* verified directly against the live app instead: logging out and back
+  in via the real (non-hydration-dependent, native-form) login flow and confirming `lastLoginAt` actually
+  updates and renders correctly ("heute HH:mm") in the "Zuletzt aktiv" column; the reset-rate-limit's exact
+  DB query logic (0/2/3-in-window counts, and that an out-of-window token is correctly excluded) against the
+  real local database; and `formatRelativeDate`/`isOlderThanMonths`'s date math against several concrete
+  offsets - plus a clean `tsc`/production build across the whole change.
+
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,

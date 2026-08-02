@@ -100,6 +100,12 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // Additiv, beide nullable - für Bestandsbenutzer ist unbekannt, wann sie sich zuletzt
+  // angemeldet oder ihr Passwort geändert haben (siehe Benutzerverwaltung-Brief.md §2). Bewusst
+  // NICHT rückwirkend mit createdAt befüllt - ein erfundener Wert ist schlechter als "unbekannt".
+  lastLoginAt        DateTime?
+  passwordChangedAt  DateTime?
+
   // Atemschutz (Modul "Meine Feuerwehr") - gepflegt ausschließlich über Verwaltung/Heimatfeuerwehr,
   // Mitglieder haben dort nur Einsicht. atemschutzGueltigBis ist bewusst ein eigenes, explizit
   // gesetztes Feld statt "atemschutzUntersuchungAm + 5 Jahre" errechnet, da die Gültigkeit laut

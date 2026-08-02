@@ -21,6 +21,7 @@ import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import type { AdminNavItem } from '@/lib/admin/nav-items';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
+import { formatRelativeDate, isOlderThanMonths } from '@/lib/format';
 import { bulkSetActive, bulkSetHomeOrganization } from './actions';
 import { UserRowActions } from './user-row-actions';
 
@@ -43,6 +44,8 @@ export interface UserRow {
   pushDates: string[];
   isActive: boolean;
   istAtemschutzgeraeteTraeger: boolean;
+  lastLoginAt: string | null;
+  passwordChangedAt: string | null;
 }
 
 type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
@@ -52,7 +55,17 @@ interface Organization {
   name: string;
 }
 
-type SortKey = 'name' | 'email' | 'stbNr' | 'phone' | 'homeOrg' | 'adminFor' | 'droneLabel' | 'pushCount' | 'status';
+type SortKey =
+  | 'name'
+  | 'email'
+  | 'stbNr'
+  | 'phone'
+  | 'homeOrg'
+  | 'adminFor'
+  | 'droneLabel'
+  | 'pushCount'
+  | 'status'
+  | 'lastActive';
 type SimpleFilter = 'ALLE' | 'JA' | 'NEIN';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -65,6 +78,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'droneLabel', label: 'Drohnengruppe' },
   { key: 'pushCount', label: 'Push' },
   { key: 'status', label: 'Status' },
+  { key: 'lastActive', label: 'Zuletzt aktiv' },
 ];
 
 function compareRows(a: UserRow, b: UserRow, key: SortKey): number {
@@ -73,6 +87,8 @@ function compareRows(a: UserRow, b: UserRow, key: SortKey): number {
       return a.pushCount - b.pushCount;
     case 'status':
       return Number(a.isActive) - Number(b.isActive);
+    case 'lastActive':
+      return (a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0) - (b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0);
     default:
       return a[key].localeCompare(b[key], 'de');
   }
@@ -410,8 +426,11 @@ export function UserManagementSection({
         isActive: sheetTargetRow.isActive,
         istAtemschutzgeraeteTraeger: sheetTargetRow.istAtemschutzgeraeteTraeger,
         homeOrganizationId: sheetTargetRow.homeOrganizationId,
+        homeOrgName: sheetTargetRow.homeOrg,
         adminOrgIds: sheetTargetRow.adminOrgIds,
         droneRole: sheetTargetRow.droneRole,
+        lastLoginAt: sheetTargetRow.lastLoginAt,
+        passwordChangedAt: sheetTargetRow.passwordChangedAt,
       }
     : undefined;
 
@@ -689,7 +708,7 @@ export function UserManagementSection({
                       </TableHead>
                     );
                   })}
-                  {(['email', 'droneLabel', 'pushCount'] as SortKey[]).map((key) => {
+                  {(['email', 'droneLabel', 'pushCount', 'lastActive'] as SortKey[]).map((key) => {
                     const option = SORT_OPTIONS.find((o) => o.key === key)!;
                     const active = key === sortKey;
                     return (
@@ -752,6 +771,18 @@ export function UserManagementSection({
                         <span className="text-ink-faint">–</span>
                       )}
                     </TableCell>
+                    {(() => {
+                      const lastLoginDate = u.lastLoginAt ? new Date(u.lastLoginAt) : null;
+                      const relative = formatRelativeDate(lastLoginDate, { fallback: '–' });
+                      return (
+                        <TableCell
+                          className={`hidden xl:table-cell ${isOlderThanMonths(lastLoginDate, 12) ? 'text-ink-faint' : 'text-ink-muted'}`}
+                          title={relative.title}
+                        >
+                          {relative.label}
+                        </TableCell>
+                      );
+                    })()}
                     <TableCell onClick={(event) => event.stopPropagation()}>
                       <UserRowActions
                         userId={u.id}

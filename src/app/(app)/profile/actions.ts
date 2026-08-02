@@ -39,7 +39,10 @@ export async function changePassword(
   }
 
   const passwordHash = await hashPassword(data.newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, passwordChangedAt: new Date() },
+  });
 
   return { success: true };
 }
