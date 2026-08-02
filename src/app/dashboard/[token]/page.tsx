@@ -6,6 +6,7 @@ import { getDashboardEvents, getDashboardVehicleBookings, getUpcomingVehicleBook
 import { generateAppQrCodeDataUri, APP_URL } from '@/lib/dashboard/qr-code';
 import { ClockDisplay } from './clock-display';
 import { HeightFittedList } from '@/components/dashboard/height-fitted-list';
+import { FitText } from '@/components/dashboard/fit-text';
 import type { CachedFacebookPost } from '@/lib/facebook/fetch-posts';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,10 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
   // qr-code.ts (process.env.AUTH_URL, mit Literal-Fallback), hier nur für die reine Anzeige
   // (ohne Protokoll/abschließenden Slash) aufbereitet.
   const appUrlDisplay = APP_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  // Nur für die Dashboard-Kopfzeile ausgeschrieben ("Feuerwehr Wolfsgraben" statt "FF Wolfsgraben") -
+  // Organization.name selbst bleibt unverändert (wird an vielen anderen Stellen der App als "FF ..."
+  // erwartet/angezeigt, z. B. Verwaltung-Dropdowns), das ist eine reine Anzeige-Transformation hier.
+  const organizationDisplayName = organizationFull.name.replace(/^FF /, 'Feuerwehr ');
 
   const posts = (facebookCache?.posts as CachedFacebookPost[] | undefined) ?? [];
   const newestPost = posts[0];
@@ -91,9 +96,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
         style={{ height: 'clamp(84px, 9vh, 132px)', borderBottom: '4px solid #e4322b' }}
       >
         <div className="flex items-center gap-[22px]">
-          <img src="/wappen-afkdo.png" alt={`Wappen ${organizationFull.name}`} className="h-[62px] w-[62px] object-contain" />
+          <img src="/wappen-afkdo.png" alt={`Wappen ${organizationDisplayName}`} className="h-[62px] w-[62px] object-contain" />
           <div className="flex flex-col gap-[5px]">
-            <span className="text-[30px] font-bold leading-none tracking-[-0.01em]">{organizationFull.name}</span>
+            <span className="text-[30px] font-bold leading-none tracking-[-0.01em]">{organizationDisplayName}</span>
             <span className="dash-section-label font-semibold uppercase leading-none tracking-[0.06em] text-[#6c6c70]">
               Abschnittsfeuerwehrkommando Purkersdorf
             </span>
@@ -293,9 +298,13 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
             <div className="min-w-0 flex-1">
               <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
               <div className="dash-secondary mb-3 leading-snug text-[#c9c9ce]">Termine, Fahrzeuge und Atemschutz am Handy.</div>
-              <div className="dash-secondary break-all font-semibold text-white" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <FitText
+                minFontSizePx={14}
+                className="dash-secondary font-semibold text-white"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+              >
                 {appUrlDisplay}
-              </div>
+              </FitText>
             </div>
           </div>
         </div>
