@@ -147,5 +147,5 @@ body {
   font-size: clamp(14px, 0.95vw, 23px);
 }
 .dash-section-label {
-  font-size: clamp(12px, 0.8vw, 19px);
+  font-size: clamp(14px, 0.8vw, 19px);
 }
