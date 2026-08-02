@@ -1081,6 +1081,76 @@ history, and vehicle deletion), all requested and scoped in separate rounds afte
   `trigger` prop rather than duplicating its edit form, the same trigger-survives-a-closing-menu technique
   already used there for the "Löschen" `AlertDialogTrigger`.
 
+**Heimatfeuerwehr V4** — a follow-up round driven by direct user feedback on the shipped V3 module (a
+screenshot of `/meine-feuerwehr` marking the Fuhrpark section for removal, plus a live-tested, confirmed
+report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all).
+
+- **Compact Fuhrpark widget**: `/meine-feuerwehr`'s Fuhrpark section no longer renders every vehicle as its
+  own card with an embedded upcoming-bookings list — it's now a single native `<select>` of the home org's
+  active vehicles plus an "Ausborgen" submit button, `<form action="/meine-feuerwehr/buchen" method="get">`.
+  A plain GET form was chosen deliberately over a client-side `<select>`-driven link: it needs no JS at all
+  (works identically in this session's documented non-hydrating browser-automation environment) and the
+  browser's own querystring-building does exactly what a client `onChange` handler would otherwise need to
+  do by hand. `/meine-feuerwehr/buchen` now accepts `searchParams: Promise<{ vehicleId?: string }>`,
+  validates the incoming id against the actually-fetched vehicle list (an invalid/foreign id is silently
+  ignored, not trusted), and passes it to `BookingForm` as a new optional `initialVehicleId` prop that only
+  overrides the form's default vehicle selection — Datum/Start/Ende are unaffected.
+- **Vehicle bookings sync into the main Kalender as protected events**: `Event.vehicleBookingId` (nullable,
+  `@unique`, `onDelete: SetNull`) links an `Event` 1:1 to the `VehicleBooking` it represents — its mere
+  presence is the "this event is booking-managed" marker, no separate boolean needed.
+  `createVehicleBooking` (`meine-feuerwehr/actions.ts`) now also creates a plain `ALLGEMEIN`,
+  non-section-wide `Event` (title `"Fahrzeug: {taktischeBezeichnung} ({Name})"`, in the booking's own
+  Feuerwehr) tagged with that id; `cancelVehicleBooking` looks the linked `Event` up via
+  `vehicleBookingId` and deletes it first (only `if` it still exists — an accepted edge case in case an
+  `Event` was ever removed independently of its booking, e.g. via Prisma Studio) before deleting the
+  booking itself. This was a deliberate product decision, not an incidental side effect: the user explicitly
+  asked for bookings to show up as ordinary calendar entries rather than a separate widget.
+  `cancelVehicleBooking` gained a second, optional `redirectTo = '/meine-feuerwehr'` parameter specifically
+  so `/admin/heimatfeuerwehr`'s own "all bookings" section (below) could reuse this exact function without
+  being redirected to the member overview page after deleting someone *else's* booking — it passes
+  `` `/admin/heimatfeuerwehr?org=${selectedOrgId}` `` instead, preserving which Feuerwehr was selected.
+- **Booking-managed events are protected from normal editing** — the user explicitly overrode the simpler
+  alternative (leave them freely editable like any other event) in favor of this stricter behavior.
+  `kalender/page.tsx`'s `editable` flag gains `&& !event.vehicleBookingId`, which — since that one computed
+  value already drives both `EventListView`'s double-click-to-edit shortcut and the FullCalendar
+  `eventClick` handler's edit-vs-view branch — suppresses the dead-end edit navigation everywhere at once.
+  `/kalender/[eventId]/bearbeiten` additionally checks `event.vehicleBookingId` directly and, if set, renders
+  a blocking message ("Dieser Termin gehört zu einer Fahrzeug-Buchung...") with a link back to
+  "Meine Feuerwehr" instead of `EventForm`/the delete button — placed *after* the existing
+  `canManageEventsFor` check, so a user without edit rights still sees the generic permission message first.
+  `updateEvent`/`deleteEvent` (`kalender/actions.ts`) got the identical guard server-side, consistent with
+  this codebase's "every Server Action re-checks its own permissions" rule — a direct action call can't
+  bypass the page-level block.
+- **Visible icon on booking-managed events**: a new, small, shared `VehicleBookingIcon`
+  (`components/calendar/vehicle-booking-icon.tsx`, hand-rolled inline SVG car silhouette, matching this
+  codebase's "no icon library" convention) renders next to the title at all three places events are ever
+  displayed — the FullCalendar month-grid chip (`renderEventContent` in `calendar-view.tsx`), `EventListView`'s
+  desktop table row, and its mobile card — all three reading from one new `CalendarEventInput.isVehicleBooking`
+  boolean so the three views can't drift apart, the same principle already established for `RsvpBadge`.
+- **Admin: all vehicle bookings for a Feuerwehr in one place**: a third section on `/admin/heimatfeuerwehr`
+  (alongside Fuhrpark and Atemschutz, not a separate sub-page — matching this page's existing single-page,
+  multi-section shape) lists every `VehicleBooking` for the selected org, past and future, with vehicle,
+  formatted date range, borrower's name, a Kommend/Vergangen status badge, and a "Löschen" action that
+  reuses `cancelVehicleBooking` directly (imported via `@/app/(app)/meine-feuerwehr/actions`, the same
+  cross-route-group Server-Action-import pattern already used elsewhere in this codebase, e.g.
+  `admin/benutzer/actions` from `user-form-sheet.tsx`) rather than duplicating it — Heimatfeuerwehr-admins
+  already have the right permission via `canManageVehicleBooking` inside that same function.
+- **Bugfix, confirmed via live testing with a real account**: `src/lib/nav-items.ts`'s `getNavItems()`
+  previously gated the whole "Verwaltung" nav entry on `isSiteAdmin(user)` alone, even though
+  `lib/admin/nav-items.ts`'s *internal* Verwaltung sidebar/tabs had already been made correctly
+  permission-aware for Feuerwehr-only admins in an earlier round — meaning a Feuerwehr-only admin could
+  never even discover `/admin/heimatfeuerwehr` existed, despite already being allowed to use it once there.
+  Fixed to `if (isSiteAdmin(user)) push /admin/benutzer; else if (canAccessHeimatfeuerwehrAdmin(user)) push
+  /admin/heimatfeuerwehr` — site admins keep landing on the Benutzerverwaltung as before, Feuerwehr-only
+  admins now land directly on the one Verwaltung page they're actually allowed to see. Verified against
+  three synthetic `SessionUser` shapes (site admin / Feuerwehr-only admin / neither), not just type-checked.
+- Verified live end-to-end against a real seeded vehicle/booking: the compact widget renders and its
+  "Ausborgen" link carries the vehicle id through to the booking form; a booking created directly (mirroring
+  what `createVehicleBooking` produces) appears in `/kalender`'s list view with the vehicle icon; its edit
+  page shows the blocking message; `/admin/heimatfeuerwehr`'s new section lists it correctly scoped to the
+  selected Feuerwehr; and deleting it from there removes both the `VehicleBooking` and its linked `Event`
+  while redirecting back to the admin page (not `/meine-feuerwehr`) with the selected org preserved.
+
 ### PWA
 
 `src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (cropped from `public/wappen-afkdo.png`
