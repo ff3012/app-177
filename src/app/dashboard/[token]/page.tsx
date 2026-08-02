@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { prisma } from '@/lib/db/prisma';
 import { getValidDashboardToken, touchDashboardTokenUsage } from '@/lib/dashboard/token';
 import { getDashboardEvents, getDashboardVehicleBookings, getUpcomingVehicleBookingsCount } from '@/lib/dashboard/data';
+import { generateAppQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { ClockDisplay } from './clock-display';
 import { HeightFittedList } from '@/components/dashboard/height-fitted-list';
 
@@ -59,10 +60,11 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
     notFound();
   }
 
-  const [events, vehicleBookings, totalBookingsCount] = await Promise.all([
+  const [events, vehicleBookings, totalBookingsCount, qrCodeDataUri] = await Promise.all([
     getDashboardEvents(valid.organizationId),
     getDashboardVehicleBookings(valid.organizationId),
     getUpcomingVehicleBookingsCount(valid.organizationId),
+    generateAppQrCodeDataUri(),
   ]);
 
   const now = new Date();
@@ -203,12 +205,8 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
 
           {/* QR-Platzhalter - wird in Task 6 durch den echten QR-Code ersetzt */}
           <div className="flex flex-none items-center gap-5 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
-            <div className="flex h-[118px] w-[118px] flex-none items-center justify-center rounded-lg bg-white">
-              <span className="dash-secondary text-center text-[#6c6c70]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                QR-Code
-                <br />
-                wird generiert
-              </span>
+            <div className="flex h-[clamp(96px,7vw,180px)] w-[clamp(96px,7vw,180px)] flex-none items-center justify-center rounded-lg bg-white p-2">
+              <img src={qrCodeDataUri} alt="QR-Code zum App-Download" className="h-full w-full" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
