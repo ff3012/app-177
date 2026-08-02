@@ -13,6 +13,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/cron',
   '/dashboard',
   '/api/wastl',
+  '/api/facebook/image',
 ];
 
 export default auth((req) => {
