@@ -18,9 +18,22 @@ import { VehicleFormDialog } from './vehicle-form-dialog';
 import { VehicleRowActions } from './vehicle-row-actions';
 import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
 import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
+import { listDashboardTokens } from '@/lib/dashboard/token';
+import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
+import { CopyLinkButton } from '@/components/ui/copy-link-button';
+import { createDashboardToken, setTokenExpiry, revokeToken, setFacebookConfig } from './dashboard-token-actions';
+import { DashboardTokenExpiryForm } from './dashboard-token-expiry-form';
+import { DashboardFacebookConfigForm } from './dashboard-facebook-config-form';
 
 function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : '';
+}
+
+/** Reuses the exact same env var / trailing-slash-stripping pattern as baseUrl() in
+ * src/lib/email/templates.ts, rather than introducing a new NEXT_PUBLIC_APP_URL. */
+function buildDashboardLink(token: string): string {
+  const baseUrl = process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
+  return `${baseUrl}/dashboard/${token}`;
 }
 
 function formatBookingRange(startsAt: Date, endsAt: Date): string {
@@ -67,11 +80,20 @@ export default async function HeimatfeuerwehrVerwaltungPage({
 
   const { org } = await searchParams;
 
+  // Nur id/name - diese Liste dient ausschließlich dem OrgSelect-Dropdown und wird für JEDE
+  // Feuerwehr geladen (nicht nur die aktuell ausgewählte), daher NIE mit select-less findMany
+  // fetchen - sonst landen z. B. facebookPageAccessToken-Werte fremder Feuerwehren im RSC-Payload
+  // dieser Seite (siehe CLAUDE.md "Dashboard Feuerwehrhaus" Sicherheits-Fix).
   const allowedOrgs = isSiteAdmin(user)
-    ? await prisma.organization.findMany({ where: { type: 'FEUERWEHR' }, orderBy: { name: 'asc' } })
+    ? await prisma.organization.findMany({
+        where: { type: 'FEUERWEHR' },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      })
     : await prisma.organization.findMany({
         where: { id: { in: user.feuerwehrAdminOrgIds } },
         orderBy: { name: 'asc' },
+        select: { id: true, name: true },
       });
 
   if (allowedOrgs.length === 0) {
@@ -79,9 +101,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   }
 
   const selectedOrgId = org && allowedOrgs.some((o) => o.id === org) ? org : allowedOrgs[0].id;
-  const selectedOrg = allowedOrgs.find((o) => o.id === selectedOrgId)!;
 
-  const [vehicles, members, allBookings] = await Promise.all([
+  const [vehicles, members, allBookings, dashboardTokens, selectedOrgFull] = await Promise.all([
     prisma.vehicle.findMany({
       where: { organizationId: selectedOrgId },
       orderBy: { taktischeBezeichnung: 'asc' },
@@ -107,7 +128,21 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         user: { select: { firstName: true, lastName: true } },
       },
     }),
+    listDashboardTokens(selectedOrgId),
+    // Nur für die AUSGEWÄHLTE Organisation geladen (nie über allowedOrgs), damit
+    // facebookPageAccessToken niemals für eine andere Feuerwehr ins RSC-Payload gelangt.
+    prisma.organization.findUnique({
+      where: { id: selectedOrgId },
+      select: { atemschutzSachbearbeiterEmail: true, facebookPageId: true, facebookPageAccessToken: true },
+    }),
   ]);
+  if (!selectedOrgFull) {
+    notFound();
+  }
+
+  const tokenQrCodeDataUris = await Promise.all(
+    dashboardTokens.map((token) => generateQrCodeDataUri(buildDashboardLink(token.token))),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -207,7 +242,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         </p>
         <AtemschutzSachbearbeiterForm
           organizationId={selectedOrgId}
-          initialEmail={selectedOrg.atemschutzSachbearbeiterEmail ?? ''}
+          initialEmail={selectedOrgFull.atemschutzSachbearbeiterEmail ?? ''}
         />
         <Table>
           <TableHeader>
@@ -342,6 +377,119 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-3 text-[15px] font-semibold text-ink">Dashboard Feuerwehrhaus</h2>
+        <p className="mb-3 text-sm text-ink-muted">
+          Öffentlicher, token-geschützter Kiosk-Screen für einen PC im Feuerwehrhaus - zeigt kommende
+          Termine, ausgeborgte Fahrzeuge, die WASTL-Lagekarte und den Facebook-Feed. Kein Login nötig, wer
+          den Link/QR-Code kennt, kann ausschließlich diese Ansicht lesen (keine Zu-/Absagen, keine
+          Atemschutzdaten) - die vollen Namen der Fahrzeug-Ausborger werden dabei jedoch angezeigt. Ein
+          widerrufener Link ist sofort ungültig.
+        </p>
+
+        <DashboardFacebookConfigForm
+          organizationId={selectedOrgId}
+          initialPageId={selectedOrgFull.facebookPageId ?? ''}
+          hasAccessToken={Boolean(selectedOrgFull.facebookPageAccessToken)}
+        />
+
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Erstellt am
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Ablaufdatum
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Zuletzt verwendet
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Status
+              </TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {dashboardTokens.map((token, index) => {
+              const boundRevoke = revokeToken.bind(null, token.id, selectedOrgId);
+              const link = buildDashboardLink(token.token);
+              const tokenQrCodeDataUri = tokenQrCodeDataUris[index];
+              return (
+                <TableRow key={token.id} className="border-line">
+                  <TableCell className="text-ink-muted">{token.createdAt.toLocaleDateString('de-AT')}</TableCell>
+                  <TableCell>
+                    {token.revokedAt ? (
+                      <span className="text-ink-faint">–</span>
+                    ) : (
+                      <DashboardTokenExpiryForm
+                        tokenId={token.id}
+                        organizationId={selectedOrgId}
+                        initialExpiresAt={toDateInputValue(token.expiresAt)}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell className="text-ink-muted">
+                    {token.lastUsedAt ? token.lastUsedAt.toLocaleString('de-AT') : 'noch nie'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        token.revokedAt
+                          ? 'border-transparent bg-surface-sunken text-ink-faint'
+                          : token.expiresAt && token.expiresAt.getTime() < Date.now()
+                            ? 'border-transparent bg-danger-subtle text-danger'
+                            : 'border-transparent bg-success-subtle text-success-text'
+                      }
+                    >
+                      {token.revokedAt ? 'Widerrufen' : token.expiresAt && token.expiresAt.getTime() < Date.now() ? 'Abgelaufen' : 'Aktiv'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {!token.revokedAt && (
+                      <div className="flex items-center justify-end gap-3">
+                        <details>
+                          <summary className="inline-block cursor-pointer text-sm text-brand hover:underline">QR anzeigen</summary>
+                          <div className="mt-2 flex items-start gap-2">
+                            <img src={tokenQrCodeDataUri} alt={`QR-Code für ${link}`} className="h-24 w-24" />
+                            <div className="flex flex-col gap-1">
+                              <p className="max-w-xs break-all rounded-md border border-line bg-surface-sunken px-2 py-1 text-xs text-ink">
+                                {link}
+                              </p>
+                              <CopyLinkButton text={link} />
+                            </div>
+                          </div>
+                        </details>
+                        <form action={boundRevoke}>
+                          <button type="submit" className="text-sm text-danger hover:underline">
+                            Widerrufen
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {dashboardTokens.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-ink-muted">
+                  Noch kein Dashboard-Link erzeugt.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <form action={createDashboardToken.bind(null, selectedOrgId)} className="mt-3">
+          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover">
+            Neuen Link erzeugen
+          </button>
+        </form>
       </div>
     </div>
   );

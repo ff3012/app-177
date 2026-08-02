@@ -128,3 +128,24 @@ body {
     animation: none;
   }
 }
+
+/* Dashboard Feuerwehrhaus (Issue #8) - Typografie-Rollen aus dem Design-Brief §4, gegen 1920px
+   berechnet. Untergrenzen sind bindend (kein Fließtext unter 14px auf keiner Auflösung). */
+.dash-clock {
+  font-size: clamp(38px, 2.9vw, 76px);
+}
+.dash-weekday {
+  font-size: clamp(20px, 1.4vw, 34px);
+}
+.dash-event-title {
+  font-size: clamp(20px, 1.35vw, 34px);
+}
+.dash-table-cell {
+  font-size: clamp(16px, 1.05vw, 26px);
+}
+.dash-secondary {
+  font-size: clamp(14px, 0.95vw, 23px);
+}
+.dash-section-label {
+  font-size: clamp(14px, 0.8vw, 19px);
+}

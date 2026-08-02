@@ -10,6 +10,11 @@ const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
+      screens: {
+        'dash-sm': '1200px',
+        'dash-md': '1600px',
+        'dash-lg': '2400px',
+      },
       colors: {
         // "Signalrot" palette (design pass, 2026-08) — DEFAULT tightened from the previous #f44336
         // to #e4322b; dark was already an exact match and is unchanged. hover/subtle ergänzt für
