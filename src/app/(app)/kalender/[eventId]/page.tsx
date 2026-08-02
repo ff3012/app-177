@@ -55,7 +55,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
         <h1 className="text-lg font-semibold text-neutral-900">{event.title}</h1>
         <div className="flex items-center gap-3">
           <AddToCalendarLink eventId={event.id} />
-          {canManageEventsFor(user, event.organizationId) && (
+          {canManageEventsFor(user, event.organizationId) && !event.vehicleBookingId && (
             <Link href={`/kalender/${event.id}/bearbeiten`} className="text-sm text-brand hover:underline">
               Bearbeiten
             </Link>

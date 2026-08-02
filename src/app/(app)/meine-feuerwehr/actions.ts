@@ -73,12 +73,17 @@ export async function createVehicleBooking(
 export async function cancelVehicleBooking(bookingId: string, redirectTo = '/meine-feuerwehr'): Promise<void> {
   const user = await requireUser();
 
+  // redirectTo kommt bei einem direkten Server-Action-Aufruf potenziell von außerhalb dieser
+  // Codebase (die Action ist über ihre Action-ID mit beliebigen Argumenten erreichbar) - ein
+  // führender "/" stellt sicher, dass redirect() niemals auf eine absolute/externe URL zeigt.
+  const safeRedirectTo = redirectTo.startsWith('/') ? redirectTo : '/meine-feuerwehr';
+
   const booking = await prisma.vehicleBooking.findUnique({
     where: { id: bookingId },
     include: { vehicle: { select: { organizationId: true } } },
   });
   if (!booking) {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
   assertPermission(canManageVehicleBooking(user, booking, booking.vehicle.organizationId));
 
@@ -94,5 +99,5 @@ export async function cancelVehicleBooking(bookingId: string, redirectTo = '/mei
   revalidatePath('/meine-feuerwehr');
   revalidatePath('/admin/heimatfeuerwehr');
   revalidatePath('/kalender');
-  redirect(redirectTo);
+  redirect(safeRedirectTo);
 }

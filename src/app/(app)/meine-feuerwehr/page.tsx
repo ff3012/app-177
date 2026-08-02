@@ -124,7 +124,7 @@ export default async function MeineFeuerwehrPage() {
         ) : (
           <ul className="flex flex-col divide-y divide-neutral-200">
             {myBookings.map((booking) => {
-              const boundCancel = async () => cancelVehicleBooking(booking.id);
+              const boundCancel = cancelVehicleBooking.bind(null, booking.id, '/meine-feuerwehr');
               return (
                 <li key={booking.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span>

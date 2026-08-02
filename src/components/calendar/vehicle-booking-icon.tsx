@@ -13,6 +13,7 @@ export function VehicleBookingIcon({ className }: { className?: string }) {
       stroke="currentColor"
       strokeWidth="2"
       className={className}
+      role="img"
       aria-label="Fahrzeug-Buchung"
     >
       <path d="M3 13l1.5-4.5A2 2 0 0 1 6.4 7h11.2a2 2 0 0 1 1.9 1.5L21 13" strokeLinecap="round" strokeLinejoin="round" />

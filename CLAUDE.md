@@ -1113,14 +1113,20 @@ report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all
   alternative (leave them freely editable like any other event) in favor of this stricter behavior.
   `kalender/page.tsx`'s `editable` flag gains `&& !event.vehicleBookingId`, which — since that one computed
   value already drives both `EventListView`'s double-click-to-edit shortcut and the FullCalendar
-  `eventClick` handler's edit-vs-view branch — suppresses the dead-end edit navigation everywhere at once.
+  `eventClick` handler's edit-vs-view branch — suppresses the dead-end edit navigation from `/kalender`
+  itself. The event detail page (`kalender/[eventId]/page.tsx`) has its own, separate "Bearbeiten" link that
+  needs the identical `!event.vehicleBookingId` condition alongside its `canManageEventsFor` check — it isn't
+  fed by `kalender/page.tsx`'s `editable` flag, so it doesn't inherit that guard for free and must repeat it.
   `/kalender/[eventId]/bearbeiten` additionally checks `event.vehicleBookingId` directly and, if set, renders
   a blocking message ("Dieser Termin gehört zu einer Fahrzeug-Buchung...") with a link back to
   "Meine Feuerwehr" instead of `EventForm`/the delete button — placed *after* the existing
   `canManageEventsFor` check, so a user without edit rights still sees the generic permission message first.
   `updateEvent`/`deleteEvent` (`kalender/actions.ts`) got the identical guard server-side, consistent with
   this codebase's "every Server Action re-checks its own permissions" rule — a direct action call can't
-  bypass the page-level block.
+  bypass the page-level block. RSVP ("Zusage") stays intentionally open on booking-managed events — only
+  editing/deleting the event itself is blocked, per the design spec's explicit decision, not an oversight.
+  Vehicle-booking events also flow into the same per-organization `.ics` calendar feed as any other event,
+  with no special exclusion — there was never a reason to treat them differently there.
 - **Visible icon on booking-managed events**: a new, small, shared `VehicleBookingIcon`
   (`components/calendar/vehicle-booking-icon.tsx`, hand-rolled inline SVG car silhouette, matching this
   codebase's "no icon library" convention) renders next to the title at all three places events are ever
