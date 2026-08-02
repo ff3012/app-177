@@ -64,6 +64,9 @@ export async function updateEvent(
   if (existing.isSectionWide && !canCreateSectionWideEvent(user)) {
     return { error: 'Keine Berechtigung, diesen Abschnitt-weiten Termin zu bearbeiten.' };
   }
+  if (existing.vehicleBookingId) {
+    return { error: 'Dieser Termin gehört zu einer Fahrzeug-Buchung und kann hier nicht bearbeitet werden.' };
+  }
 
   const parsed = eventSchema.safeParse(parseEventFormData(formData));
   if (!parsed.success) {
@@ -107,6 +110,10 @@ export async function deleteEvent(eventId: string): Promise<void> {
   if (existing.isSectionWide) {
     assertPermission(canCreateSectionWideEvent(user));
   }
+  assertPermission(
+    !existing.vehicleBookingId,
+    'Dieser Termin gehört zu einer Fahrzeug-Buchung und kann hier nicht gelöscht werden.',
+  );
 
   await prisma.event.delete({ where: { id: eventId } });
   revalidateCalendars();
