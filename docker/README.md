@@ -166,3 +166,30 @@ tar -xzf config-2026-01-01_0300.tar.gz
 Das legt `.env` und `docker/Caddyfile` an der richtigen Stelle im frisch geklonten Repo ab. Danach
 wie im Setup oben `docker compose ... up -d --build`, Seed **weglassen** (die Datenbank wird stattdessen
 aus dem DB-Backup wiederhergestellt, nicht neu geseedet), und den DB-Restore-Befehl von oben ausführen.
+
+## Stündlicher Facebook-Feed-Abruf für Dashboard Feuerwehrhaus
+
+`docker/facebook-fetch.sh` ruft `/api/cron/facebook-fetch` auf, das die neuesten Einträge des
+Facebook-Feeds für das öffentliche Dashboard Feuerwehrhaus abruft (Issue #8). Stündlich ausführen:
+
+```bash
+crontab -e
+CRON_TZ=Europe/Vienna
+0 * * * * /opt/app-177/docker/facebook-fetch.sh >> /var/log/ffapp-facebook-fetch.log 2>&1
+```
+
+## Dashboard Feuerwehrhaus (Kiosk-Screen)
+
+Der öffentliche Kiosk-Screen (`/dashboard/[token]`, Issue #8) läuft auf einem gewöhnlichen Windows-PC im
+Feuerwehrhaus, Chrome im Vollbild. Den Link/QR-Code erzeugt ein Feuerwehr-Admin unter Verwaltung →
+Heimatfeuerwehr → "Dashboard Feuerwehrhaus".
+
+Empfohlener Chrome-Start (Verknüpfung im Autostart-Ordner):
+
+```
+chrome.exe --kiosk --noerrdialogs --disable-session-crashed-bubble "https://<domain>/dashboard/<token>"
+```
+
+Die Seite lädt sich selbst alle 5 Minuten neu (`<meta http-equiv="refresh">`) - kein zusätzlicher
+Neustart-Mechanismus nötig. Kein Zoom/Skalierung erforderlich, das Layout passt sich der tatsächlichen
+Displayauflösung automatisch an.
