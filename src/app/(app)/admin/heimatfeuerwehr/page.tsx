@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canAccessHeimatfeuerwehrAdmin, isSiteAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
+import { cancelVehicleBooking } from '@/app/(app)/meine-feuerwehr/actions';
 import {
   getExpiryStatus,
   getFinnentestExpiryDate,
@@ -20,6 +21,13 @@ import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
 
 function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : '';
+}
+
+function formatBookingRange(startsAt: Date, endsAt: Date): string {
+  const day = startsAt.toLocaleDateString('de-AT');
+  const start = startsAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+  const end = endsAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+  return `${day}, ${start}–${end}`;
 }
 
 const EXPIRY_BADGE_LABEL: Record<AtemschutzExpiryStatus, string> = {
@@ -73,7 +81,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   const selectedOrgId = org && allowedOrgs.some((o) => o.id === org) ? org : allowedOrgs[0].id;
   const selectedOrg = allowedOrgs.find((o) => o.id === selectedOrgId)!;
 
-  const [vehicles, members] = await Promise.all([
+  const [vehicles, members, allBookings] = await Promise.all([
     prisma.vehicle.findMany({
       where: { organizationId: selectedOrgId },
       orderBy: { taktischeBezeichnung: 'asc' },
@@ -89,6 +97,14 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         atemschutzUntersuchungAm: true,
         atemschutzGueltigBis: true,
         atemschutzFinnentestAm: true,
+      },
+    }),
+    prisma.vehicleBooking.findMany({
+      where: { vehicle: { organizationId: selectedOrgId } },
+      orderBy: { startsAt: 'desc' },
+      include: {
+        vehicle: { select: { taktischeBezeichnung: true } },
+        user: { select: { firstName: true, lastName: true } },
       },
     }),
   ]);
@@ -257,6 +273,70 @@ export default async function HeimatfeuerwehrVerwaltungPage({
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-ink-muted">
                   Keine Mitglieder in dieser Feuerwehr.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-3 text-[15px] font-semibold text-ink">Fahrzeug-Buchungen</h2>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Fahrzeug
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Zeitraum
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Gebucht von
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Status
+              </TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {allBookings.map((booking) => {
+              const past = booking.endsAt.getTime() < Date.now();
+              const boundCancel = cancelVehicleBooking.bind(null, booking.id, `/admin/heimatfeuerwehr?org=${selectedOrgId}`);
+              return (
+                <TableRow key={booking.id} className="border-line">
+                  <TableCell className="font-medium text-ink">{booking.vehicle.taktischeBezeichnung}</TableCell>
+                  <TableCell className="text-ink-muted">{formatBookingRange(booking.startsAt, booking.endsAt)}</TableCell>
+                  <TableCell className="text-ink-muted">
+                    {booking.user.firstName} {booking.user.lastName}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        past
+                          ? 'border-transparent bg-surface-sunken text-ink-faint'
+                          : 'border-transparent bg-success-subtle text-success-text'
+                      }
+                    >
+                      {past ? 'Vergangen' : 'Kommend'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <form action={boundCancel}>
+                      <button type="submit" className="text-sm text-danger hover:underline">
+                        Löschen
+                      </button>
+                    </form>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {allBookings.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-ink-muted">
+                  Keine Fahrzeug-Buchungen für diese Feuerwehr.
                 </TableCell>
               </TableRow>
             )}
