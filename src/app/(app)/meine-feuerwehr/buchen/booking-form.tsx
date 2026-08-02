@@ -22,9 +22,10 @@ interface BookingFormValues {
 interface BookingFormProps {
   vehicles: VehicleOption[];
   action: (prevState: VehicleBookingFormState, formData: FormData) => Promise<VehicleBookingFormState>;
+  initialVehicleId?: string;
 }
 
-export function BookingForm({ vehicles, action }: BookingFormProps) {
+export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -34,7 +35,7 @@ export function BookingForm({ vehicles, action }: BookingFormProps) {
     handleSubmit,
     formState: { errors },
   } = useForm<BookingFormValues>({
-    defaultValues: { vehicleId: vehicles[0]?.id ?? '', date: '', startTime: '', endTime: '' },
+    defaultValues: { vehicleId: initialVehicleId ?? vehicles[0]?.id ?? '', date: '', startTime: '', endTime: '' },
   });
 
   function onSubmit(values: BookingFormValues) {
