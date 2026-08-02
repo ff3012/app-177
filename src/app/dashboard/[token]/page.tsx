@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getValidDashboardToken, touchDashboardTokenUsage } from '@/lib/dashboard/token';
 import { getDashboardEvents, getDashboardVehicleBookings, getUpcomingVehicleBookingsCount } from '@/lib/dashboard/data';
 import { ClockDisplay } from './clock-display';
+import { HeightFittedList } from '@/components/dashboard/height-fitted-list';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -98,39 +99,40 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
             <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Kommende Termine</span>
             <span className="dash-secondary text-[#6c6c70]">{monthLabel}</span>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-[11px] overflow-hidden">
-            {events.length === 0 && (
-              <div className="rounded-xl bg-white p-5 text-[#6c6c70] shadow-sm">Keine kommenden Termine.</div>
-            )}
-            {events.map((event) => {
-              const color = event.isSectionWide && event.category === 'ALLGEMEIN' ? SECTION_WIDE_COLOR : CATEGORY_COLOR[event.category];
-              const time = formatEventTime(event.startsAt, event.endsAt, event.allDay);
-              return (
-                <div
-                  key={event.id}
-                  className="flex items-center gap-[22px] rounded-xl bg-white p-[19px_22px] shadow-sm"
-                  style={{ borderLeft: `5px solid ${color}` }}
-                >
-                  <div className="w-[74px] flex-none text-center">
-                    <div className="text-[40px] font-bold leading-none" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                      {String(event.startsAt.getDate()).padStart(2, '0')}
+          {events.length === 0 ? (
+            <div className="rounded-xl bg-white p-5 text-[#6c6c70] shadow-sm">Keine kommenden Termine.</div>
+          ) : (
+            <HeightFittedList minVisible={4} maxVisible={10}>
+              {events.map((event) => {
+                const color = event.isSectionWide && event.category === 'ALLGEMEIN' ? SECTION_WIDE_COLOR : CATEGORY_COLOR[event.category];
+                const time = formatEventTime(event.startsAt, event.endsAt, event.allDay);
+                return (
+                  <div
+                    key={event.id}
+                    className="flex items-center gap-[22px] rounded-xl bg-white p-[19px_22px] shadow-sm"
+                    style={{ borderLeft: `5px solid ${color}` }}
+                  >
+                    <div className="w-[74px] flex-none text-center">
+                      <div className="text-[40px] font-bold leading-none" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {String(event.startsAt.getDate()).padStart(2, '0')}
+                      </div>
+                      <div className="dash-section-label mt-1 font-semibold uppercase tracking-[0.09em] text-[#6c6c70]">
+                        {WEEKDAY_SHORT[event.startsAt.getDay()]}
+                      </div>
                     </div>
-                    <div className="dash-section-label mt-1 font-semibold uppercase tracking-[0.09em] text-[#6c6c70]">
-                      {WEEKDAY_SHORT[event.startsAt.getDay()]}
+                    <div className="min-w-0 flex-1">
+                      <div className="dash-event-title mb-1.5 font-semibold">{event.title}</div>
+                      {event.location && <div className="dash-secondary text-[#6c6c70]">{event.location}</div>}
+                    </div>
+                    <div className="flex-none text-right">
+                      <div className="dash-table-cell font-semibold leading-none">{time.top}</div>
+                      <div className="dash-secondary mt-2 leading-none text-[#6c6c70]">{time.bottom}</div>
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="dash-event-title mb-1.5 font-semibold">{event.title}</div>
-                    {event.location && <div className="dash-secondary text-[#6c6c70]">{event.location}</div>}
-                  </div>
-                  <div className="flex-none text-right">
-                    <div className="dash-table-cell font-semibold leading-none">{time.top}</div>
-                    <div className="dash-secondary mt-2 leading-none text-[#6c6c70]">{time.bottom}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </HeightFittedList>
+          )}
         </div>
 
         {/* ---------- Spalte 2: Fahrzeuge + WASTL ---------- */}
@@ -146,25 +148,28 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
               <span className="dash-section-label font-semibold uppercase tracking-[0.1em]">Zeit</span>
               <span className="dash-section-label font-semibold uppercase tracking-[0.1em]">Ausgeborgt von</span>
             </div>
-            {vehicleBookings.map((booking) => (
-              <div
-                key={booking.id}
-                className="grid grid-cols-[clamp(70px,4.5vw,110px)_minmax(160px,1.6fr)_clamp(104px,6.5vw,150px)_minmax(120px,1.4fr)] items-center gap-x-[18px] border-b border-[#f0f0f2] px-6 py-3"
-              >
-                <span className="dash-table-cell font-semibold">{formatBookingDate(booking.startsAt)}</span>
-                <span className="dash-table-cell overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
-                  {booking.vehicleTaktischeBezeichnung}
-                </span>
-                <span className="dash-table-cell" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                  {formatBookingTimeRange(booking.startsAt, booking.endsAt)}
-                </span>
-                <span className="dash-secondary overflow-hidden text-ellipsis whitespace-nowrap text-[#48484c]">
-                  {booking.borrowerName}
-                </span>
-              </div>
-            ))}
-            {vehicleBookings.length === 0 && (
+            {vehicleBookings.length === 0 ? (
               <div className="dash-secondary px-6 py-4 text-[#6c6c70]">Keine Fahrzeug-Buchungen in den nächsten 30 Tagen.</div>
+            ) : (
+              <HeightFittedList minVisible={3} maxVisible={8}>
+                {vehicleBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="grid grid-cols-[clamp(70px,4.5vw,110px)_minmax(160px,1.6fr)_clamp(104px,6.5vw,150px)_minmax(120px,1.4fr)] items-center gap-x-[18px] border-b border-[#f0f0f2] px-6 py-3"
+                  >
+                    <span className="dash-table-cell font-semibold">{formatBookingDate(booking.startsAt)}</span>
+                    <span className="dash-table-cell overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
+                      {booking.vehicleTaktischeBezeichnung}
+                    </span>
+                    <span className="dash-table-cell" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {formatBookingTimeRange(booking.startsAt, booking.endsAt)}
+                    </span>
+                    <span className="dash-secondary overflow-hidden text-ellipsis whitespace-nowrap text-[#48484c]">
+                      {booking.borrowerName}
+                    </span>
+                  </div>
+                ))}
+              </HeightFittedList>
             )}
             <div className="dash-secondary flex-none px-6 py-3 text-[#6c6c70]">
               Buchung über die App unter „Meine Feuerwehr" · {totalBookingsCount}{' '}
