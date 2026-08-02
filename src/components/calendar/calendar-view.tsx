@@ -10,6 +10,7 @@ import deLocale from '@fullcalendar/core/locales/de';
 import { useRouter } from 'next/navigation';
 import { AddToCalendarLink } from './add-to-calendar-link';
 import { RsvpBadge } from './rsvp-badge';
+import { VehicleBookingIcon } from './vehicle-booking-icon';
 
 export interface CalendarEventInput {
   id: string;
@@ -26,6 +27,7 @@ export interface CalendarEventInput {
   layer?: string;
   myRsvpStatus?: 'ZUGESAGT' | 'ABGESAGT' | 'UNKLAR' | null;
   rsvpCounts?: { ZUGESAGT: number; ABGESAGT: number; UNKLAR: number };
+  isVehicleBooking?: boolean;
 }
 
 function formatEventTime(event: CalendarEventInput) {
@@ -40,11 +42,13 @@ function formatEventTime(event: CalendarEventInput) {
 function renderEventContent(arg: EventContentArg) {
   const showRsvp = arg.view.type === 'dayGridMonth' && arg.event.extendedProps.category === 'DROHNENGRUPPE';
   const rsvpCounts = arg.event.extendedProps.rsvpCounts as CalendarEventInput['rsvpCounts'];
+  const isVehicleBooking = arg.event.extendedProps.isVehicleBooking as boolean | undefined;
 
   return (
     <div className="w-full overflow-hidden px-1 py-0.5 text-white">
       <div className="truncate text-[11px] font-medium leading-tight">
         {!arg.event.allDay && `${arg.timeText} `}
+        {isVehicleBooking && <VehicleBookingIcon className="mr-0.5 inline-block align-[-1px]" />}
         {arg.event.title}
       </div>
       {showRsvp && rsvpCounts && <RsvpBadge counts={rsvpCounts} compact />}
@@ -77,7 +81,12 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
           eventDisplay="block"
           events={events.map((event) => ({
             ...event,
-            extendedProps: { editable: event.editable, rsvpCounts: event.rsvpCounts, category: event.category },
+            extendedProps: {
+              editable: event.editable,
+              rsvpCounts: event.rsvpCounts,
+              category: event.category,
+              isVehicleBooking: event.isVehicleBooking,
+            },
           }))}
           eventContent={renderEventContent}
           eventClick={handleEventClick}

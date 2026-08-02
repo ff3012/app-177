@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { CalendarEventInput } from './calendar-view';
 import { AddToCalendarLink } from './add-to-calendar-link';
 import { RsvpBadge } from './rsvp-badge';
+import { VehicleBookingIcon } from './vehicle-booking-icon';
 import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
 
 const DOUBLE_CLICK_WINDOW_MS = 220;
@@ -60,7 +61,10 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
       <td className="whitespace-nowrap px-3 py-1">{start.toLocaleDateString('de-AT')}</td>
       <td className="whitespace-nowrap px-3 py-1">{formatStartTime(event)}</td>
       <td className="whitespace-nowrap px-3 py-1">{start.toLocaleDateString('de-AT', { weekday: 'long' })}</td>
-      <td className="break-words px-3 py-1">{event.title}</td>
+      <td className="break-words px-3 py-1">
+        {event.isVehicleBooking && <VehicleBookingIcon className="mr-1 inline-block align-[-2px] text-neutral-500" />}
+        {event.title}
+      </td>
       <td className="break-words px-3 py-1">{event.organizationName ?? '–'}</td>
       <td className="px-3 py-1">
         <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
@@ -110,7 +114,10 @@ function EventCard({ event }: { event: CalendarEventInput }) {
           <span className="text-sm text-neutral-600">{formatStartTime(event)}</span>
           <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
         </div>
-        <span className="font-medium text-neutral-900">{event.title}</span>
+        <span className="font-medium text-neutral-900">
+          {event.isVehicleBooking && <VehicleBookingIcon className="mr-1 inline-block align-[-2px] text-neutral-500" />}
+          {event.title}
+        </span>
         <div className="text-sm text-neutral-500">{event.organizationName ?? '–'}</div>
         <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
           <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
