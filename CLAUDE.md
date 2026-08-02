@@ -75,7 +75,9 @@ remove or "simplify" the `TZ` env var or the `tzdata` install.
 provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms · `exceljs` for XLSX export ·
 `ical-generator` for .ics · Mailjet REST API directly via `fetch` (no SDK) for transactional email ·
 `@aws-sdk/client-s3` for the System Check's live S3/Exoscale connectivity probe (the one SDK dependency in
-the codebase, see "System Check" below for why).
+the codebase, see "System Check" below for why) · `qrcode` for server-side dashboard/token QR generation ·
+`sharp` for compositing the WASTL district-status overlay GIFs onto the basemap (see "WASTL proxy" under
+Dashboard Feuerwehrhaus below).
 
 ### Route groups
 
@@ -790,6 +792,44 @@ Action logic changed on any of the three pages.
   `sendActivationEmail` and instead collects `{name, email, link}` per created user, returned to the client
   and rendered as a list of activation links with copy buttons (same `CopyLinkButton`/link-expiry pattern as
   the single-user form's own Nein path) — there's no per-row toggle, only one setting for the entire upload.
+- **Atemschutzgeräteträger-Zuweisung** (`UserFormSheet`, Person section, next to `phone`): a plain
+  `istAtemschutzgeraeteTraeger` `Switch`, mirroring `isActive`'s row styling — this is where the boolean
+  "IS this person an Atemschutzgeräteträger" gets set now (moved out of Heimatfeuerwehr, see Module 4 above);
+  `userSchema`/`parseUserFormData` carry it, `createUser`/`updateUser` persist it directly on `User`. The
+  three Untersuchung/Gültig-bis/Finnentest date fields and the AKTIV/expiry overview remain exclusively in
+  `/admin/heimatfeuerwehr` (`AtemschutzEditDialog` no longer has a traeger toggle at all — it only shows/edits
+  the three dates, and that page's members-Query now filters to `istAtemschutzgeraeteTraeger: true`, so a
+  non-Träger member simply doesn't appear in that table anymore, instead of showing dashes).
+- **Benutzerverwaltung: Feuerwehr-Admin-Scoping** — a later round opened this page up to plain Feuerwehr-Admins
+  (previously `isSiteAdmin`-only, see the "Security hardening" note in Module 4 above), so a Feuerwehr-Admin
+  can see/edit/create users of their **own** Heimat-Feuerwehr/Feuerwehren without needing the
+  Abschnittskommando-Admin right — mirroring how `/admin/heimatfeuerwehr` already worked. New permission
+  functions in `lib/auth/permissions.ts`: `canManageUsersFor(user, organizationId)` (identical rule to
+  `canManageHeimatfeuerwehrFor` — Site-Admin or Admin of that org — given its own name for readability at
+  Benutzerverwaltung call sites, since the rule could diverge later) and `canAccessUserManagementAdmin(user)`
+  (nav/page visibility, same shape as `canAccessHeimatfeuerwehrAdmin`). `admin/benutzer/page.tsx`'s own gate
+  changed from `isSiteAdmin` to `canAccessUserManagementAdmin`, and for a non-site-admin both the `users`
+  query (`homeOrganizationId: { in: user.feuerwehrAdminOrgIds }`) and the `organizations` list passed down
+  (same `{ in: ... }` filter) are scoped — the latter is what actually enforces "a Feuerwehr-Admin can only
+  create/move users into their own Feuerwehr and can only grant 'Admin für' on their own Feuerwehr", since
+  `UserFormSheet`'s Heimat-Feuerwehr `<Select>` and "Admin für" checkboxes are built directly from that array,
+  offering no other org as an option in the first place. Every Server Action in `admin/benutzer/actions.ts`
+  (`createUser`/`updateUser`/`deleteUser`/`setUserActive`/`sendPasswordResetEmailToUser`/`bulkSetActive`/
+  `bulkSetHomeOrganization`) independently re-checks `canManageUsersFor` against every affected user's (and,
+  for create/update/bulk-move, the target) `homeOrganizationId` — the scoped UI is a convenience, not the
+  security boundary, same "never trust that the page-level check ran" philosophy already used elsewhere in
+  this codebase (e.g. the QR quick-register token). A new `canGrantAdminFor` helper additionally guards
+  `adminOrgIds` so a Feuerwehr-Admin can't grant "Admin für" on a Feuerwehr they don't manage via a direct
+  Server Action call, even though the UI checkbox list already excludes that option. **Only a full
+  Abschnittskommando-Admin (`isSiteAdmin`) still sees/manages every Feuerwehr's users** — this is enforced by
+  `canManageUsersFor`/`canManageHeimatfeuerwehrFor` unconditionally returning `true` for a site admin
+  regardless of `feuerwehrAdminOrgIds`. The Excel Export/Import links and routes
+  (`/admin/benutzer/export`/`/admin/benutzer/import`) stayed **`isSiteAdmin`-only** — not scoped, hidden
+  entirely from a plain Feuerwehr-Admin's UI (`UserManagementSection`'s new `isFullAdmin` prop) rather than
+  built out to a per-org export, since a bulk cross-Feuerwehr spreadsheet feature wasn't part of this ask.
+  Verified directly (not just type-checked): synthetic Feuerwehr-only-admin/site-admin/plain-member
+  `SessionUser` objects run through `canManageUsersFor`/`canAccessUserManagementAdmin` produced exactly the
+  expected true/false matrix (own org yes, other org no, site admin always yes, plain member never).
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,
@@ -958,8 +998,13 @@ home Feuerwehr's vehicle fleet ("Fuhrpark") for borrowing.
 - **Atemschutz** (`User.istAtemschutzgeraeteTraeger`/`atemschutzUntersuchungAm`/`atemschutzGueltigBis`/
   `atemschutzFinnentestAm`, plain nullable fields on `User` — same pattern as `stbNr`/`phone`, not a separate
   1:1 table, since they're single-valued not historical) is **read-only** on this page — members only have
-  "Einsicht" (view), all editing happens in Verwaltung → Heimatfeuerwehr (see below), by design decision
-  confirmed with the app owner. `atemschutzGueltigBis` is a genuinely separate, explicitly-stored field from
+  "Einsicht" (view). Editing is split across two places by data-ownership, not by page (a later, deliberate
+  restructuring of the original single-dialog design): **whether** someone is an Atemschutzgeräteträger at
+  all (`istAtemschutzgeraeteTraeger`) is now a plain toggle in Benutzerverwaltung's `UserFormSheet` (Person
+  section, alongside `isActive`) — it's a basic user attribute, like `stbNr`, not Heimatfeuerwehr-specific
+  data — while the three **date** fields (Untersuchung/Gültig-bis/Finnentest) plus the AKTIV/expiry overview
+  stay in Verwaltung → Heimatfeuerwehr (see below), since that's operational compliance data a Feuerwehr's
+  own Atemschutz-Sachbearbeiter manages. `atemschutzGueltigBis` is a genuinely separate, explicitly-stored field from
   `atemschutzUntersuchungAm` — **not** computed as "+5 years" on read — because a doctor can set a shorter
   validity than the 5-year default; `src/lib/heimatfeuerwehr/atemschutz-status.ts`'s `isUntersuchungActive()`
   just compares the stored `atemschutzGueltigBis` against now. `atemschutzFinnentestAm` by contrast has no
@@ -1006,11 +1051,16 @@ that philosophy, not the hand-rolled one `/meine-feuerwehr` itself uses).
   layout — each of them now has an explicit `if (!isSiteAdmin(user)) notFound()` of its own, a small but
   real security-hardening side effect of adding this module, not an incidental cleanup. `getAdminNavItems(user)` (new, `src/lib/admin/nav-items.ts`, mirrors `getNavItems` in the app-wide
   `lib/nav-items.ts`) replaces the previously-hardcoded `ITEMS` array in both `AdminSidebarNav` and
-  `AdminMobileTabs` — Benutzerverwaltung/Drohnengruppe/E-Mail/Status stay `isSiteAdmin`-only, Heimatfeuerwehr
-  is additionally shown to any `canAccessHeimatfeuerwehrAdmin`. Verified directly (not just type-checked):
-  a synthetic Feuerwehr-only-admin `SessionUser` object run through `getAdminNavItems` returns **only**
-  `['Heimatfeuerwehr']`, and `canManageHeimatfeuerwehrFor` correctly returns `false` for an org that admin
-  doesn't manage — confirming the scoping isn't just theoretically correct but actually behaves as designed.
+  `AdminMobileTabs` — at the time this module shipped, Benutzerverwaltung/Drohnengruppe/E-Mail/Status all
+  stayed `isSiteAdmin`-only, Heimatfeuerwehr was the only one additionally shown to any
+  `canAccessHeimatfeuerwehrAdmin`. Verified directly (not just type-checked): a synthetic Feuerwehr-only-admin
+  `SessionUser` object run through `getAdminNavItems` returned **only** `['Heimatfeuerwehr']`, and
+  `canManageHeimatfeuerwehrFor` correctly returned `false` for an org that admin didn't manage — confirming
+  the scoping wasn't just theoretically correct but actually behaved as designed. **Benutzerverwaltung was
+  opened up to Feuerwehr-Admins in a later round** (see "Benutzerverwaltung: Feuerwehr-Admin-Scoping" under
+  the Benutzerverwaltung section below) — its own explicit gate changed from `isSiteAdmin` to a new
+  `canAccessUserManagementAdmin`, and `getAdminNavItems` now shows it to any Feuerwehr-Admin too;
+  Drohnengruppe/E-Mail/Status remain `isSiteAdmin`-only as described here.
 - Editing Atemschutz status uses the same "auto-suggest but don't overwrite a manually-touched value" pattern
   as `event-form.tsx`'s Start→Ende sync: changing "Untersuchung am" pre-fills "Gültig bis" as +5 years, but
   only until the admin edits "Gültig bis" directly — after that, further "Untersuchung am" changes never
@@ -1259,12 +1309,22 @@ mockup), not derived from scratch — the spec at
   every load — with no ETag/Last-Modified set, that means always re-fetching), on both the fresh and
   cached-fallback response branches. The 120s throttle against hammering the real upstream WASTL site is
   unaffected — that protection lives entirely in the server-side `unstable_cache` call, not in this header.
-  **Known, accepted limitation**: the real WASTL page's per-district alert-level
-  coloring (Normal/Erhöht/Stark) is populated client-side via JavaScript/AJAX polling (`createAJAXconnection()`
-  in the page's own script), not present in the static HTML/image this route can scrape — so this proxy can
-  only ever serve the static Niederösterreich basemap, never live per-district alert status, without a much
-  larger effort (headless browser or reverse-engineered AJAX endpoint). Documented directly in the route's
-  own code comments rather than silently pretending to deliver live status.
+  **Per-district alert-level coloring (fixed, no longer a limitation)**: the real WASTL page's colored
+  districts (Normal/Erhöht/Stark) are populated client-side via JavaScript/AJAX polling
+  (`createAJAXconnection()`), initially assumed to require a headless browser to reproduce — a targeted
+  investigation of that client JS found the AJAX endpoint itself
+  (`GetDaten/GetWastlMain.asp?Time=<cache-buster>`, no auth/cookie needed, plain public XML) returns, per
+  `<aBAZID>` (district) block, an `<nLayer>` filename pointing at a **pre-rendered, already-colored,
+  same-canvas-size transparent GIF** for that district (empty `nLayer` = no incident = no overlay) — the
+  real page's own trick is nothing more than stacking these at `position:absolute;top:0;left:0` over the
+  static basemap (`<cBackground>`), so no pixel-coordinate guesswork or canvas rendering is needed on our
+  side either. The route now: fetches that XML, fetches the basemap + every district's active overlay GIF
+  (a single failed overlay fetch is dropped, not fatal to the rest), and composites them at (0,0) via
+  `sharp` (new dependency — the second image-processing library in this codebase alongside `qrcode`, added
+  specifically because there is no dependency-free way to alpha-composite GIFs in Node) into one PNG, which
+  then flows through the exact same `unstable_cache`/`WastlImageCache`-fallback/base64-boundary machinery
+  described above unchanged. Verified end-to-end with a standalone script producing a correctly
+  color-coded map matching the live page.
 - **Facebook feed, hourly cron-fed cache, never a live fetch on page load**: `Organization.facebookPageId`/
   `facebookPageAccessToken` (new, nullable, per-org — analogous to `atemschutzSachbearbeiterEmail` — so
   each Feuerwehr can eventually configure its own page, not just Wolfsgraben). `src/lib/facebook/fetch-posts.ts`'s

@@ -37,6 +37,7 @@ export interface UserSheetTarget {
   stbNr: string;
   phone: string;
   isActive: boolean;
+  istAtemschutzgeraeteTraeger: boolean;
   homeOrganizationId: string;
   adminOrgIds: string[];
   droneRole: DroneRoleOption;
@@ -86,6 +87,7 @@ function buildDefaultValues(
     stbNr: target?.stbNr ?? '',
     phone: target?.phone ?? (mode === 'create' ? '+43' : ''),
     isActive: target ? target.isActive : mode === 'create' ? false : true,
+    istAtemschutzgeraeteTraeger: target?.istAtemschutzgeraeteTraeger ?? false,
     homeOrganizationId: target?.homeOrganizationId ?? organizations[0]?.id ?? '',
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
@@ -153,6 +155,7 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
     formData.set('stbNr', values.stbNr ?? '');
     formData.set('phone', values.phone ?? '');
     if (values.isActive) formData.set('isActive', 'on');
+    if (values.istAtemschutzgeraeteTraeger) formData.set('istAtemschutzgeraeteTraeger', 'on');
     formData.set('homeOrganizationId', values.homeOrganizationId);
     for (const orgId of values.adminOrgIds) formData.append('adminOrgIds', orgId);
     formData.set('droneRole', values.droneRole);
@@ -258,6 +261,16 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
                       <Input id="phone" placeholder="+436601234567" {...register('phone')} />
                       <p className="mt-1 text-xs text-ink-faint">E.164-Format, z. B. +436601234567.</p>
                       <FieldError message={errors.phone?.message} />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-3 py-2.5">
+                      <span className="text-[13px] font-medium text-ink">Atemschutzgeräteträger</span>
+                      <Controller
+                        control={control}
+                        name="istAtemschutzgeraeteTraeger"
+                        render={({ field }) => (
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        )}
+                      />
                     </div>
                   </div>
                 </section>

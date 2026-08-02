@@ -21,6 +21,7 @@ export const userSchema = z.object({
     .optional()
     .or(z.literal('')),
   isActive: z.boolean(),
+  istAtemschutzgeraeteTraeger: z.boolean(),
   homeOrganizationId: z.string().min(1, 'Feuerwehr/Organisation ist erforderlich.'),
   adminOrgIds: z.array(z.string()),
   droneRole: z.enum(DRONE_ROLE_OPTIONS),
@@ -39,6 +40,7 @@ export function parseUserFormData(formData: FormData) {
     stbNr: String(formData.get('stbNr') ?? ''),
     phone: String(formData.get('phone') ?? ''),
     isActive: formData.get('isActive') === 'on',
+    istAtemschutzgeraeteTraeger: formData.get('istAtemschutzgeraeteTraeger') === 'on',
     homeOrganizationId: String(formData.get('homeOrganizationId') ?? ''),
     adminOrgIds: formData.getAll('adminOrgIds').map(String),
     droneRole: (DRONE_ROLE_OPTIONS as readonly string[]).includes(rawDroneRole)

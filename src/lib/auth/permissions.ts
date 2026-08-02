@@ -94,6 +94,25 @@ export function canAccessHeimatfeuerwehrAdmin(user: SessionUser): boolean {
   return isSiteAdmin(user) || user.feuerwehrAdminOrgIds.length > 0;
 }
 
+/**
+ * Benutzerverwaltung (Ansicht/Bearbeiten/Anlegen) für organizationId - identische Regel wie
+ * canManageHeimatfeuerwehrFor (Site-Admin ODER Admin dieser Feuerwehr). Eigene, benannte Funktion
+ * statt canManageHeimatfeuerwehrFor direkt an den Benutzerverwaltungs-Aufrufstellen
+ * wiederzuverwenden - nur für Lesbarkeit dort, die Regel könnte künftig divergieren. Ein
+ * Feuerwehr-Admin darf damit nur Benutzer DIESER Feuerwehr sehen/bearbeiten und neue Benutzer nur
+ * MIT dieser Feuerwehr als Heimat-Feuerwehr anlegen; nur ein Abschnittskommando-Admin
+ * (isSiteAdmin) darf Benutzer jeder Feuerwehr verwalten.
+ */
+export function canManageUsersFor(user: SessionUser, organizationId: string): boolean {
+  return canManageHeimatfeuerwehrFor(user, organizationId);
+}
+
+/** Sichtbarkeit des Verwaltungsmenüs "Benutzer" - Site-Admin ODER Admin von mindestens einer
+ * Feuerwehr (analog canAccessHeimatfeuerwehrAdmin). */
+export function canAccessUserManagementAdmin(user: SessionUser): boolean {
+  return canAccessHeimatfeuerwehrAdmin(user);
+}
+
 /** Fahrzeug-Buchung stornieren/verwalten: die eigene Buchung, oder Admin der Feuerwehr, der das
  * gebuchte Fahrzeug gehört. */
 export function canManageVehicleBooking(

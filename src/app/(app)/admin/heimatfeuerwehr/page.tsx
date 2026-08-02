@@ -107,14 +107,17 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       where: { organizationId: selectedOrgId },
       orderBy: { taktischeBezeichnung: 'asc' },
     }),
+    // Wer ÜBERHAUPT Atemschutzgeräteträger ist, wird seit der Aufteilung Benutzerverwaltung/
+    // Heimatfeuerwehr in der Benutzerverwaltung gepflegt (UserFormSheet) - diese Seite verwaltet
+    // nur noch die Untersuchungs-/Finnentest-Details und zeigt daher ausschließlich bereits als
+    // Träger markierte Mitglieder (istAtemschutzgeraeteTraeger: true im where).
     prisma.user.findMany({
-      where: { homeOrganizationId: selectedOrgId, isActive: true },
+      where: { homeOrganizationId: selectedOrgId, isActive: true, istAtemschutzgeraeteTraeger: true },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       select: {
         id: true,
         firstName: true,
         lastName: true,
-        istAtemschutzgeraeteTraeger: true,
         atemschutzUntersuchungAm: true,
         atemschutzGueltigBis: true,
         atemschutzFinnentestAm: true,
@@ -238,6 +241,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           </a>
         </div>
         <p className="mb-3 text-xs text-ink-faint">
+          Zeigt nur Mitglieder, die in der Benutzerverwaltung als Atemschutzgeräteträger markiert sind.
           "Läuft bald ab" bedeutet: Untersuchung oder Finnentest laufen innerhalb der nächsten 30 Tage ab.
         </p>
         <AtemschutzSachbearbeiterForm
@@ -248,9 +252,6 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           <TableHeader>
             <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Atemschutzgeräteträger
-              </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Untersuchung
               </TableHead>
@@ -269,27 +270,17 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                   <TableCell className="font-medium text-ink">
                     {member.lastName} {member.firstName}
                   </TableCell>
-                  <TableCell className="text-ink-muted">{member.istAtemschutzgeraeteTraeger ? 'Ja' : 'Nein'}</TableCell>
                   <TableCell>
-                    {member.istAtemschutzgeraeteTraeger ? (
-                      <ExpiryBadge status={untersuchungStatus} />
-                    ) : (
-                      <span className="text-ink-faint">–</span>
-                    )}
+                    <ExpiryBadge status={untersuchungStatus} />
                   </TableCell>
                   <TableCell>
-                    {member.istAtemschutzgeraeteTraeger ? (
-                      <ExpiryBadge status={finnentestStatus} />
-                    ) : (
-                      <span className="text-ink-faint">–</span>
-                    )}
+                    <ExpiryBadge status={finnentestStatus} />
                   </TableCell>
                   <TableCell className="text-right">
                     <AtemschutzEditDialog
                       target={{
                         userId: member.id,
                         name: `${member.firstName} ${member.lastName}`,
-                        istAtemschutzgeraeteTraeger: member.istAtemschutzgeraeteTraeger,
                         atemschutzUntersuchungAm: toDateInputValue(member.atemschutzUntersuchungAm),
                         atemschutzGueltigBis: toDateInputValue(member.atemschutzGueltigBis),
                         atemschutzFinnentestAm: toDateInputValue(member.atemschutzFinnentestAm),
@@ -306,8 +297,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             })}
             {members.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-ink-muted">
-                  Keine Mitglieder in dieser Feuerwehr.
+                <TableCell colSpan={4} className="text-center text-ink-muted">
+                  Keine Atemschutzgeräteträger in dieser Feuerwehr.
                 </TableCell>
               </TableRow>
             )}

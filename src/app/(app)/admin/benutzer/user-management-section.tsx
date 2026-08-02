@@ -42,6 +42,7 @@ export interface UserRow {
   pushCount: number;
   pushDates: string[];
   isActive: boolean;
+  istAtemschutzgeraeteTraeger: boolean;
 }
 
 type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
@@ -133,6 +134,7 @@ export function UserManagementSection({
   initialEditUserId,
   initialCreateOpen,
   adminNavItems,
+  isFullAdmin,
 }: {
   users: UserRow[];
   organizations: Organization[];
@@ -146,6 +148,7 @@ export function UserManagementSection({
   initialEditUserId?: string;
   initialCreateOpen: boolean;
   adminNavItems: AdminNavItem[];
+  isFullAdmin: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -405,6 +408,7 @@ export function UserManagementSection({
         stbNr: sheetTargetRow.stbNr,
         phone: sheetTargetRow.phone,
         isActive: sheetTargetRow.isActive,
+        istAtemschutzgeraeteTraeger: sheetTargetRow.istAtemschutzgeraeteTraeger,
         homeOrganizationId: sheetTargetRow.homeOrganizationId,
         adminOrgIds: sheetTargetRow.adminOrgIds,
         droneRole: sheetTargetRow.droneRole,
@@ -421,18 +425,22 @@ export function UserManagementSection({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <a
-            href="/admin/benutzer/export"
-            className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
-          >
-            Excel Export
-          </a>
-          <Link
-            href="/admin/benutzer/import"
-            className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
-          >
-            Excel Import
-          </Link>
+          {isFullAdmin && (
+            <>
+              <a
+                href="/admin/benutzer/export"
+                className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+              >
+                Excel Export
+              </a>
+              <Link
+                href="/admin/benutzer/import"
+                className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+              >
+                Excel Import
+              </Link>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setSheetState({ mode: 'create' })}
@@ -613,12 +621,22 @@ export function UserManagementSection({
         // "leer nach Filterung" unten - primäre Aktion ist hier der Import, nicht "zurücksetzen".
         <div className="flex flex-col items-center gap-3 rounded-lg bg-surface p-8 text-center shadow-card">
           <p className="text-[15px] text-ink-muted">Noch keine Benutzer angelegt.</p>
-          <Link
-            href="/admin/benutzer/import"
-            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-          >
-            Excel Import
-          </Link>
+          {isFullAdmin ? (
+            <Link
+              href="/admin/benutzer/import"
+              className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+            >
+              Excel Import
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSheetState({ mode: 'create' })}
+              className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+            >
+              Neuer Benutzer
+            </button>
+          )}
         </div>
       ) : sorted.length === 0 ? (
         <div className="rounded-lg bg-surface p-6 text-center text-[15px] text-ink-muted shadow-card">

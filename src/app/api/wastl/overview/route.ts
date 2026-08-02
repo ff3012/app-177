@@ -1,59 +1,78 @@
 import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
+import sharp from 'sharp';
 import { prisma } from '@/lib/db/prisma';
 
-const WASTL_PAGE_URL = 'https://www.feuerwehr-krems.at/CodePages/Wastl/wastlmain/ShowOverview.asp';
+const WASTL_DATA_URL = 'https://www.feuerwehr-krems.at/CodePages/Wastl/GetDaten/GetWastlMain.asp';
 const FETCH_TIMEOUT_MS = 8000;
 
 /**
- * Task-7-Rechercheergebnis (live per curl geprüft, siehe Implementierungsbericht):
- * ShowOverview.asp liefert HTML (kein direktes Bild), 200 OK, ~52KB. Die Seite enthält für praktisch
- * jedes <img> ZWEI Kopien im Quelltext - zuerst eine in einem <!-- ... --> HTML-Kommentar mit einer alten,
- * absoluten S3-Mirror-URL (`https://s3-eu-west-1.amazonaws.com/florian10/...`), danach die echte, aktuell
- * verwendete relative URL (`/CodePages/Wastl/Images/...`). Ein naiver "erstes <img src="..."> im Rohtext"-
- * Regex würde deshalb versehentlich die auskommentierte S3-Kopie treffen statt der echten - Kommentare
- * werden daher vor dem Regex-Match entfernt. Das eigentliche Übersichtsbild trägt `id="IMGB_ALL"`
- * (`bezirke.gif`, die statische Bezirks-Kartengrundlage); das wird gezielt gesucht, mit Fallback auf das
- * erste verbleibende <img>, falls sich das Markup künftig ändert.
- *
- * Wichtige Einschränkung (für Task 8 / den Seitenbetreiber, nicht Teil dieses Tasks): die farbcodierten
- * Alarmstufen-Overlays pro Bezirk (<img id="IMGB0".."IMGB23">, <img id="but1000".."but1028">) sind im
- * initialen HTML nur Platzhalter (`Unsichtbar.gif`/`ledgray.gif`) und werden erst clientseitig per
- * AJAX-Polling (`createAJAXconnection()`) eingefärbt. Ein serverseitiger Scrape wie hier liefert daher nur
- * die statische Kartengrundlage, nicht den Live-Status - das reicht für "irgendein Bild von der
- * Übersichtsseite anzeigen", aber nicht für farbcodierte Live-Alarmstufen ohne echte Browser-Ausführung.
+ * Live-Recherche (Subagent, per curl gegen die echte Quelle verifiziert): die farbcodierten
+ * Bezirks-Overlays, die auf ShowOverview.asp per Client-JS eingeblendet werden (siehe die ältere,
+ * unten noch stehende Einschränkung "nur die statische Kartengrundlage"), kommen NICHT aus
+ * client-seitig gerendertem Canvas, sondern sind selbst fertige, transparente GIFs - der Browser
+ * stapelt sie per `position:absolute;top:0;left:0` exakt über der Kartengrundlage. Die Seite pollt
+ * dafür `GetWastlMain.asp?Time=<beliebiger Cache-Buster>` per AJAX (kein Auth/Cookie nötig, reines
+ * öffentliches XML). Jeder `<aBAZID>`-Block (ein Bezirk) trägt ein `<nLayer>`-Element mit dem
+ * Dateinamen des jeweiligen Overlay-GIFs (leer = kein Vorfall = kein Overlay für diesen Bezirk),
+ * abrufbar unter `<cLayP>` (Basis-URL) + Dateiname. Wir reproduzieren serverseitig exakt dieselbe
+ * Stapelung: Kartengrundlage (`<cBackground>`) + alle aktiven Overlays werden geladen und per
+ * sharp (einzige Bildverarbeitungs-Abhängigkeit dieser Codebase) an Position (0,0) übereinander
+ * zu einem einzigen PNG zusammengesetzt - kein Puppeteer/Headless-Browser nötig, da die Quelle
+ * selbst nur öffentliche, fertig eingefärbte Bild-Dateien liefert.
  */
+function extractCData(xml: string, tag: string): string | null {
+  const match = xml.match(new RegExp(`<${tag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`));
+  const value = match?.[1]?.trim();
+  return value ? value : null;
+}
+
+async function fetchBuffer(url: string, signal: AbortSignal): Promise<Buffer | null> {
+  try {
+    const response = await fetch(url, { signal });
+    if (!response.ok) return null;
+    return Buffer.from(await response.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 async function fetchWastlImage(): Promise<{ dataBase64: string; mimeType: string } | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const pageResponse = await fetch(WASTL_PAGE_URL, { signal: controller.signal });
-    if (!pageResponse.ok) return null;
+    const xmlResponse = await fetch(`${WASTL_DATA_URL}?Time=${Date.now()}`, { signal: controller.signal });
+    if (!xmlResponse.ok) return null;
+    const xml = await xmlResponse.text();
 
-    const contentType = pageResponse.headers.get('content-type') ?? '';
-    if (contentType.startsWith('image/')) {
-      // Quelle liefert direkt ein Bild - kein HTML-Wrapper zu parsen (siehe Task-7-Rechercheergebnis).
-      const buffer = Buffer.from(await pageResponse.arrayBuffer());
-      return { dataBase64: buffer.toString('base64'), mimeType: contentType };
-    }
+    const backgroundUrl = extractCData(xml, 'cBackground');
+    const layerBasePath = extractCData(xml, 'cLayP');
+    if (!backgroundUrl) return null;
 
-    const html = await pageResponse.text();
-    // HTML-Kommentare zuerst entfernen (siehe Rechercheergebnis oben), sonst matcht der Regex die
-    // auskommentierte alte S3-Kopie statt der echten, aktuell verwendeten Bild-URL.
-    const withoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
-    const overviewImgMatch = withoutComments.match(/<img[^>]+id="IMGB_ALL"[^>]+src="([^"]+)"/i);
-    const anyImgMatch = withoutComments.match(/<img[^>]+src="([^"]+)"/i);
-    const match = overviewImgMatch ?? anyImgMatch;
-    if (!match) return null;
-    const imageUrl = new URL(match[1], WASTL_PAGE_URL).toString();
+    const overlayFilenames = layerBasePath
+      ? Array.from(xml.matchAll(/<aBAZID\b[^>]*>([\s\S]*?)<\/aBAZID>/g))
+          .map((match) => extractCData(match[1], 'nLayer'))
+          .filter((name): name is string => Boolean(name))
+      : [];
 
-    const imageResponse = await fetch(imageUrl, { signal: controller.signal });
-    if (!imageResponse.ok) return null;
-    const imageMimeType = imageResponse.headers.get('content-type') ?? 'image/png';
-    const buffer = Buffer.from(await imageResponse.arrayBuffer());
-    return { dataBase64: buffer.toString('base64'), mimeType: imageMimeType };
-  } catch {
+    const backgroundBuffer = await fetchBuffer(backgroundUrl, controller.signal);
+    if (!backgroundBuffer) return null;
+
+    // Ein einzelnes fehlgeschlagenes Overlay (z. B. ein Bezirk mit ungewöhnlichem Dateinamen) darf
+    // die restliche Karte nicht verhindern - fehlgeschlagene Overlays werden einfach weggelassen.
+    const overlayBuffers = (
+      await Promise.all(overlayFilenames.map((name) => fetchBuffer(`${layerBasePath}${name}`, controller.signal)))
+    ).filter((buffer): buffer is Buffer => buffer !== null);
+
+    const composited = await sharp(backgroundBuffer)
+      .composite(overlayBuffers.map((input) => ({ input, top: 0, left: 0 })))
+      .png()
+      .toBuffer();
+
+    return { dataBase64: composited.toString('base64'), mimeType: 'image/png' };
+  } catch (error) {
+    console.error('WASTL-Abruf fehlgeschlagen:', error);
     return null;
   } finally {
     clearTimeout(timeout);

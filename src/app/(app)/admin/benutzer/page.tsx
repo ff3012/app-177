@@ -2,14 +2,21 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { MembershipRole } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
-import { isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessUserManagementAdmin, isSiteAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
-// admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab - diese
-// Seite bleibt aber wie zuvor Site-Admin-only, daher die eigene Prüfung hier (Sicherheits-Härtung,
-// siehe CLAUDE.md). Server Actions bleiben unverändert eigenständig durch assertPermission
-// abgesichert (ein Layout/eine Seiten-Prüfung schützt keine direkten Server-Action-Aufrufe).
+// admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab; diese Seite
+// ist seit der Öffnung für Feuerwehr-Admins (siehe canManageUsersFor) ebenfalls für sie sichtbar -
+// eigene Prüfung hier trotzdem, wie bei jeder /admin/*-Seite (Sicherheits-Härtung, siehe
+// CLAUDE.md). Ein Feuerwehr-Admin sieht/bearbeitet dabei NUR Benutzer seiner eigenen
+// Heimat-Feuerwehr(en) - sowohl die users-Query als auch die organizations-Liste (die
+// UserFormSheet's "Heimat-Feuerwehr"-Auswahl und "Admin für"-Checkboxen speist) werden für ihn auf
+// user.feuerwehrAdminOrgIds eingeschränkt, damit er weder fremde Benutzer sieht noch neue Benutzer
+// für eine fremde Feuerwehr anlegen oder Admin-Rechte für eine fremde Feuerwehr vergeben kann. Nur
+// ein Abschnittskommando-Admin (isSiteAdmin) sieht/verwaltet weiterhin alle Benutzer aller
+// Feuerwehren. Server Actions bleiben unverändert eigenständig durch assertPermission abgesichert
+// (ein Layout/eine Seiten-Prüfung schützt keine direkten Server-Action-Aufrufe).
 //
 // searchParams speist nur die Anfangswerte der clientseitigen Filter/Sortierung (siehe
 // user-management-section.tsx) - die Prisma-Abfrage bleibt unverändert ungefiltert (184
@@ -22,12 +29,14 @@ interface BenutzerverwaltungPageProps {
 export default async function BenutzerverwaltungPage({ searchParams }: BenutzerverwaltungPageProps) {
   const params = await searchParams;
   const currentUser = await requireUser();
-  if (!isSiteAdmin(currentUser)) {
+  if (!canAccessUserManagementAdmin(currentUser)) {
     notFound();
   }
+  const fullAdmin = isSiteAdmin(currentUser);
 
   const [users, organizations] = await Promise.all([
     prisma.user.findMany({
+      where: fullAdmin ? undefined : { homeOrganizationId: { in: currentUser.feuerwehrAdminOrgIds } },
       include: {
         homeOrganization: true,
         memberships: { where: { role: MembershipRole.ADMIN }, include: { organization: true } },
@@ -36,7 +45,10 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     }),
-    prisma.organization.findMany({ orderBy: { name: 'asc' } }),
+    prisma.organization.findMany({
+      where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
+      orderBy: { name: 'asc' },
+    }),
   ]);
 
   const rows: UserRow[] = users.map((u) => {
@@ -61,6 +73,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       pushCount: u.pushSubscriptions.length,
       pushDates: u.pushSubscriptions.map((s) => s.createdAt.toISOString()),
       isActive: u.isActive,
+      istAtemschutzgeraeteTraeger: u.istAtemschutzgeraeteTraeger,
     };
   });
 
@@ -78,6 +91,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       initialEditUserId={params.edit}
       initialCreateOpen={params.new === '1'}
       adminNavItems={getAdminNavItems(currentUser)}
+      isFullAdmin={fullAdmin}
     />
   );
 }

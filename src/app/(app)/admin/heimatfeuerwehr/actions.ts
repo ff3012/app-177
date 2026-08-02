@@ -134,7 +134,6 @@ export async function updateAtemschutzStatus(
   await prisma.user.update({
     where: { id: userId },
     data: {
-      istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       atemschutzUntersuchungAm: data.atemschutzUntersuchungAm ? new Date(data.atemschutzUntersuchungAm) : null,
       atemschutzGueltigBis: data.atemschutzGueltigBis ? new Date(data.atemschutzGueltigBis) : null,
       atemschutzFinnentestAm: data.atemschutzFinnentestAm ? new Date(data.atemschutzFinnentestAm) : null,

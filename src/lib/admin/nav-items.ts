@@ -1,5 +1,5 @@
 import type { SessionUser } from '@/types/next-auth';
-import { canAccessHeimatfeuerwehrAdmin, isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessHeimatfeuerwehrAdmin, canAccessUserManagementAdmin, isSiteAdmin } from '@/lib/auth/permissions';
 
 export interface AdminNavItem {
   href: string;
@@ -7,18 +7,20 @@ export interface AdminNavItem {
 }
 
 /** Shared by AdminSidebarNav (Server-Component-Aufrufer AdminSidebar) und AdminMobileTabs (von
- * jeder /admin/*-Seite selbst aufgerufen) - analog zu getNavItems in lib/nav-items.ts. Die vier
- * ursprünglichen Verwaltung-Seiten bleiben Site-Admin-only; "Heimatfeuerwehr" ist zusätzlich für
- * reine Feuerwehr-Admins sichtbar (siehe canAccessHeimatfeuerwehrAdmin) - seit admin/layout.tsx's
- * Gate dafür aufgeweitet wurde, siehe CLAUDE.md "Sicherheits-Härtung". */
+ * jeder /admin/*-Seite selbst aufgerufen) - analog zu getNavItems in lib/nav-items.ts.
+ * "Benutzerverwaltung" und "Heimatfeuerwehr" sind zusätzlich für reine Feuerwehr-Admins sichtbar
+ * (siehe canAccessUserManagementAdmin/canAccessHeimatfeuerwehrAdmin, jeweils auf ihre eigene(n)
+ * Feuerwehr(en) skaliert) - Drohnengruppe/E-Mail/Status bleiben Site-Admin-only, siehe CLAUDE.md
+ * "Sicherheits-Härtung". */
 export function getAdminNavItems(user: SessionUser): AdminNavItem[] {
   const items: AdminNavItem[] = [];
 
+  if (canAccessUserManagementAdmin(user)) {
+    items.push({ href: '/admin/benutzer', label: 'Benutzerverwaltung' });
+  }
+
   if (isSiteAdmin(user)) {
-    items.push(
-      { href: '/admin/benutzer', label: 'Benutzerverwaltung' },
-      { href: '/admin/drohnen', label: 'Drohnengruppe' },
-    );
+    items.push({ href: '/admin/drohnen', label: 'Drohnengruppe' });
   }
 
   if (canAccessHeimatfeuerwehrAdmin(user)) {

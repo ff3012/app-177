@@ -6,11 +6,12 @@ import { redirect } from 'next/navigation';
 import { DroneRole, MembershipRole, Prisma, TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
+import { assertPermission, canManageUsersFor } from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
 import { type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
+import type { SessionUser } from '@/types/next-auth';
 
 export interface UserFormState {
   error?: string;
@@ -21,6 +22,15 @@ export interface UserFormState {
 
 function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
+}
+
+/** Ein Feuerwehr-Admin darf "Admin für" nur für Feuerwehren vergeben, die er selbst verwaltet -
+ * sonst könnte er über die Benutzerverwaltung Admin-Rechte für fremde Feuerwehren verteilen. Die
+ * UI (organizations-Prop in page.tsx) bietet einem Feuerwehr-Admin ohnehin nur die eigene(n)
+ * Feuerwehr(en) als Checkbox-Optionen an - dies ist die serverseitige Absicherung gegen einen
+ * direkten Server-Action-Aufruf, der diese UI-Einschränkung umgeht. */
+function canGrantAdminFor(currentUser: SessionUser, adminOrgIds: string[]): boolean {
+  return adminOrgIds.every((organizationId) => canManageUsersFor(currentUser, organizationId));
 }
 
 async function syncAdminMemberships(userId: string, adminOrgIds: string[]) {
@@ -51,7 +61,6 @@ async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
 
 export async function createUser(_prevState: UserFormState, formData: FormData): Promise<UserFormState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
 
   const raw = parseUserFormData(formData);
   const parsed = userSchema.safeParse(raw);
@@ -59,6 +68,12 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const data = parsed.data;
+
+  // Ein Feuerwehr-Admin darf neue Benutzer NUR mit seiner eigenen Feuerwehr als Heimat-Feuerwehr
+  // anlegen (siehe canManageUsersFor-Kommentar) - und Admin-Rechte nur für Feuerwehren vergeben,
+  // die er selbst verwaltet.
+  assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
+  assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) {
@@ -75,6 +90,7 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
       stbNr: data.stbNr || null,
       phone: data.phone || null,
       isActive: false,
+      istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       homeOrganizationId: data.homeOrganizationId,
       passwordHash,
     },
@@ -111,7 +127,15 @@ export async function updateUser(
   formData: FormData,
 ): Promise<UserFormState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
+
+  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!targetUser) {
+    return { error: 'Benutzer wurde nicht gefunden.' };
+  }
+  // Berechtigung gilt sowohl für die BISHERIGE als auch (falls geändert) die NEUE Heimat-Feuerwehr -
+  // ein Feuerwehr-Admin darf einen Benutzer weder verwalten, der nicht zu seiner Feuerwehr gehört,
+  // noch ihn zu einer fremden Feuerwehr verschieben.
+  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
 
   const raw = parseUserFormData(formData);
   const parsed = userSchema.safeParse(raw);
@@ -119,6 +143,9 @@ export async function updateUser(
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const data = parsed.data;
+
+  assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
+  assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing && existing.id !== userId) {
@@ -134,6 +161,7 @@ export async function updateUser(
       stbNr: data.stbNr || null,
       phone: data.phone || null,
       isActive: data.isActive,
+      istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       homeOrganizationId: data.homeOrganizationId,
       ...(data.password ? { passwordHash: await hashPassword(data.password) } : {}),
     },
@@ -153,12 +181,12 @@ export interface PasswordResetEmailState {
 
 export async function sendPasswordResetEmailToUser(userId: string): Promise<PasswordResetEmailState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
 
   const targetUser = await prisma.user.findUnique({ where: { id: userId } });
   if (!targetUser) {
     return { error: 'Benutzer wurde nicht gefunden.' };
   }
+  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
 
   try {
     const token = await createToken(targetUser.id, TokenPurpose.PASSWORD_RESET);
@@ -182,7 +210,12 @@ export interface BulkActionState {
  * den Rest des Formulars erneut zu validieren/senden. Wird auch von bulkSetActive wiederverwendet. */
 export async function setUserActive(userId: string, isActive: boolean): Promise<BulkActionState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
+
+  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!targetUser) {
+    return { error: 'Benutzer wurde nicht gefunden.' };
+  }
+  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
 
   if (currentUser.id === userId && !isActive) {
     return { error: 'Du kannst dein eigenes Konto nicht deaktivieren.' };
@@ -195,10 +228,18 @@ export async function setUserActive(userId: string, isActive: boolean): Promise<
 
 /** Neu für die Mehrfachauswahl-Aktionsleiste (Verwaltung-Brief.md) - gab es vorher nicht. Schließt
  * beim Deaktivieren das eigene Konto still aus der Auswahl aus (analog zum Einzel-Schutz oben),
- * statt die ganze Aktion wegen eines einzelnen betroffenen Datensatzes abzubrechen. */
+ * statt die ganze Aktion wegen eines einzelnen betroffenen Datensatzes abzubrechen. Prüft für
+ * einen Feuerwehr-Admin zusätzlich, dass JEDER ausgewählte Benutzer zu einer seiner Feuerwehren
+ * gehört - die Tabelle zeigt ihm zwar ohnehin nur diese Benutzer an, aber die Server Action muss
+ * das unabhängig von der (clientseitig bereits vorgefilterten) UI selbst absichern. */
 export async function bulkSetActive(userIds: string[], isActive: boolean): Promise<BulkActionState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
+
+  const targetUsers = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, homeOrganizationId: true },
+  });
+  assertPermission(targetUsers.every((u) => canManageUsersFor(currentUser, u.homeOrganizationId)));
 
   const targetIds = isActive ? userIds : userIds.filter((id) => id !== currentUser.id);
   if (targetIds.length === 0) {
@@ -211,11 +252,22 @@ export async function bulkSetActive(userIds: string[], isActive: boolean): Promi
 }
 
 /** Neu für die Mehrfachauswahl-Aktionsleiste ("Feuerwehr ändern", Verwaltung-Brief.md) - gab es
- * vorher nicht. Ändert nur homeOrganizationId, keine sonstige Validierung nötig (die Ziel-Org-ID
- * kommt aus einem <Select> mit den tatsächlich existierenden Organisationen). */
+ * vorher nicht. Ändert nur homeOrganizationId. Für einen Feuerwehr-Admin müssen sowohl die
+ * bisherige Feuerwehr JEDES ausgewählten Benutzers als auch die neue Ziel-Feuerwehr in seinem
+ * eigenen Verwaltungsbereich liegen - sonst könnte er Benutzer aus einer fremden Feuerwehr
+ * abziehen oder in eine hinein verschieben, die er nicht verwaltet. Die Ziel-Org-ID kommt zwar aus
+ * einem <Select> mit nur den ihm erlaubten Organisationen, aber auch das ist nur eine
+ * UI-Einschränkung, keine Absicherung gegen einen direkten Aufruf. */
 export async function bulkSetHomeOrganization(userIds: string[], organizationId: string): Promise<BulkActionState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
+
+  assertPermission(canManageUsersFor(currentUser, organizationId));
+
+  const targetUsers = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, homeOrganizationId: true },
+  });
+  assertPermission(targetUsers.every((u) => canManageUsersFor(currentUser, u.homeOrganizationId)));
 
   await prisma.user.updateMany({ where: { id: { in: userIds } }, data: { homeOrganizationId: organizationId } });
   revalidatePath('/admin/benutzer');
@@ -232,11 +284,16 @@ export async function deleteUser(
   _formData: FormData,
 ): Promise<DeleteUserState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
 
   if (currentUser.id === userId) {
     return { error: 'Du kannst dein eigenes Konto nicht löschen.' };
   }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!targetUser) {
+    return { error: 'Benutzer wurde nicht gefunden.' };
+  }
+  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
 
   try {
     await prisma.user.delete({ where: { id: userId } });

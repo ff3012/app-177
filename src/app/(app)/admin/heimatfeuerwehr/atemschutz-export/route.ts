@@ -21,12 +21,11 @@ export async function GET(request: Request) {
   }
 
   const members = await prisma.user.findMany({
-    where: { homeOrganizationId: organizationId, isActive: true },
+    where: { homeOrganizationId: organizationId, isActive: true, istAtemschutzgeraeteTraeger: true },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     select: {
       firstName: true,
       lastName: true,
-      istAtemschutzgeraeteTraeger: true,
       atemschutzUntersuchungAm: true,
       atemschutzGueltigBis: true,
       atemschutzFinnentestAm: true,
@@ -41,16 +40,11 @@ export async function GET(request: Request) {
   for (const member of members) {
     sheet.addRow({
       name: `${member.lastName} ${member.firstName}`,
-      istAtemschutzgeraeteTraeger: member.istAtemschutzgeraeteTraeger ? 'Ja' : 'Nein',
       untersuchungAm: member.atemschutzUntersuchungAm?.toLocaleDateString('de-AT') ?? '',
       gueltigBis: member.atemschutzGueltigBis?.toLocaleDateString('de-AT') ?? '',
       finnentestAm: member.atemschutzFinnentestAm?.toLocaleDateString('de-AT') ?? '',
-      statusUntersuchung: member.istAtemschutzgeraeteTraeger
-        ? STATUS_LABEL[getExpiryStatus(member.atemschutzGueltigBis)]
-        : '',
-      statusFinnentest: member.istAtemschutzgeraeteTraeger
-        ? STATUS_LABEL[getExpiryStatus(getFinnentestExpiryDate(member.atemschutzFinnentestAm))]
-        : '',
+      statusUntersuchung: STATUS_LABEL[getExpiryStatus(member.atemschutzGueltigBis)],
+      statusFinnentest: STATUS_LABEL[getExpiryStatus(getFinnentestExpiryDate(member.atemschutzFinnentestAm))],
     });
   }
 
