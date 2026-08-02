@@ -11,6 +11,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/passwort-zuruecksetzen',
   '/drohnen-schnell',
   '/api/cron',
+  '/dashboard',
 ];
 
 export default auth((req) => {
