@@ -1572,6 +1572,19 @@ entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emaile
   afterward. Email delivery itself was not verified live (Mailjet isn't configured in this dev
   environment) - the send call sites are try/catch-wrapped for exactly this kind of failure, and the
   booking/decision logic was confirmed correct independent of whether the email actually goes out.
+- **Bugfix (real user report: "E-Mail wird immer doppelt geschickt - sowohl bei Genehmigt als auch bei
+  Abgelehnt")**: the initial version read the booking (`status !== 'OFFEN'` check) and wrote the new
+  status as two separate steps. Two near-simultaneous invocations of the same link - a doubled tap on
+  the confirm button is the obvious real-world trigger, nothing exotic - could both pass the read-check
+  before either write landed, so both created an `Event` (approve) and both sent the result email; the
+  action itself has no client-side "disable after first click" since it's a plain, JS-free `<form>` by
+  design (see above). Fixed with the exact TOCTOU guard `consumeToken()` (`lib/auth/tokens.ts`) already
+  established for one-time tokens: `prisma.vehicleBooking.updateMany({ where: { approvalToken, status:
+  'OFFEN' }, data: { status: newStatus } })`, checking `count === 1` before doing anything further - a
+  `count` of `0` (already decided, invalid token, or lost the race to a concurrent call) is a silent
+  no-op. Verified directly: firing two `updateMany` calls at the identical row via `Promise.all` (the
+  same race the bug report described) resolves to exactly one `count: 1` and one `count: 0`, never two
+  `1`s - confirming only one `Event`/one email can ever result from a doubled click.
 
 ### Startbildschirm & mobile Navigation (Startbildschirm-Brief.md)
 

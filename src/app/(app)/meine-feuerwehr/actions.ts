@@ -155,17 +155,30 @@ function buildEmailContext(booking: BookingForDecision, approvalToken: string) {
  * Genehmigt eine OFFENE Fahrzeug-Reservierung über den Link aus der Freigabe-Mail - session-los,
  * der Approval-Token selbst ist die Berechtigung (siehe schema.prisma-Kommentar auf
  * VehicleBooking.approvalToken). Legt erst jetzt den verknüpften Kalender-Termin an, damit die
- * Reservierung ab diesem Moment für die ganze Feuerwehr im Kalender sichtbar wird. Bereits
- * entschiedene Reservierungen (status !== OFFEN) werden ignoriert (kein Fehler, kein erneutes
- * Versenden) - der Redirect zurück auf dieselbe Seite zeigt dann die "bereits entschieden"-Ansicht.
+ * Reservierung ab diesem Moment für die ganze Feuerwehr im Kalender sichtbar wird.
+ *
+ * Der Statuswechsel muss atomar (per updateMany mit status: 'OFFEN' in der WHERE-Klausel) erfolgen,
+ * nicht als "erst lesen, dann schreiben" - sonst gewinnen zwei nahezu gleichzeitige Aufrufe (z. B.
+ * ein Doppelklick/Doppel-Tap auf den Bestätigen-Button) beide den Status-Check, bevor einer von
+ * beiden schreibt, und beide legen einen Termin an UND verschicken die Ergebnis-Mail - genau der
+ * gemeldete Bug ("E-Mail wird immer doppelt geschickt"). Dasselbe TOCTOU-Muster wie consumeToken()
+ * in lib/auth/tokens.ts, hier auf den Reservierungs-Status übertragen. Ein count von 0 (ungültiger
+ * Token ODER bereits entschieden, auch durch die gleichzeitige zweite Anfrage) ist ein stiller
+ * No-op - der Redirect zurück auf dieselbe Seite zeigt dann die "bereits entschieden"-Ansicht.
  */
 export async function approveVehicleBooking(token: string): Promise<void> {
-  const booking = await loadBookingForDecision(token);
-  if (!booking || booking.status !== 'OFFEN') {
+  const claimed = await prisma.vehicleBooking.updateMany({
+    where: { approvalToken: token, status: 'OFFEN' },
+    data: { status: 'GENEHMIGT' },
+  });
+  if (claimed.count === 0) {
     redirect(`/fahrzeug-reservierung/genehmigen/${token}`);
   }
 
-  await prisma.vehicleBooking.update({ where: { id: booking.id }, data: { status: 'GENEHMIGT' } });
+  const booking = await loadBookingForDecision(token);
+  if (!booking) {
+    redirect(`/fahrzeug-reservierung/genehmigen/${token}`);
+  }
 
   await prisma.event.create({
     data: {
@@ -196,14 +209,21 @@ export async function approveVehicleBooking(token: string): Promise<void> {
   redirect(`/fahrzeug-reservierung/genehmigen/${token}`);
 }
 
-/** Wie approveVehicleBooking, aber ohne Termin-Erstellung - das Fahrzeug bleibt für den Zeitraum frei. */
+/** Wie approveVehicleBooking (inkl. derselben atomaren updateMany-Absicherung gegen doppelte
+ * Aufrufe), aber ohne Termin-Erstellung - das Fahrzeug bleibt für den Zeitraum frei. */
 export async function rejectVehicleBooking(token: string): Promise<void> {
-  const booking = await loadBookingForDecision(token);
-  if (!booking || booking.status !== 'OFFEN') {
+  const claimed = await prisma.vehicleBooking.updateMany({
+    where: { approvalToken: token, status: 'OFFEN' },
+    data: { status: 'ABGELEHNT' },
+  });
+  if (claimed.count === 0) {
     redirect(`/fahrzeug-reservierung/ablehnen/${token}`);
   }
 
-  await prisma.vehicleBooking.update({ where: { id: booking.id }, data: { status: 'ABGELEHNT' } });
+  const booking = await loadBookingForDecision(token);
+  if (!booking) {
+    redirect(`/fahrzeug-reservierung/ablehnen/${token}`);
+  }
 
   try {
     await sendVehicleBookingDecisionEmail(
