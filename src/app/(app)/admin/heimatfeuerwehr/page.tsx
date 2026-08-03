@@ -344,6 +344,9 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                 Gebucht von
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Details
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Status
               </TableHead>
               <TableHead />
@@ -359,6 +362,9 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                   <TableCell className="text-ink-muted">{formatBookingRange(booking.startsAt, booking.endsAt)}</TableCell>
                   <TableCell className="text-ink-muted">
                     {booking.user.firstName} {booking.user.lastName}
+                  </TableCell>
+                  <TableCell className="max-w-[240px] whitespace-pre-wrap text-ink-muted">
+                    {booking.details || <span className="text-ink-faint">–</span>}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -384,7 +390,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             })}
             {allBookings.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-ink-muted">
+                <TableCell colSpan={6} className="text-center text-ink-muted">
                   Keine Fahrzeug-Buchungen für diese Feuerwehr.
                 </TableCell>
               </TableRow>

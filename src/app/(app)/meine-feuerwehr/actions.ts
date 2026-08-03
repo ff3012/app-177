@@ -46,7 +46,7 @@ export async function createVehicleBooking(
   }
 
   const booking = await prisma.vehicleBooking.create({
-    data: { vehicleId: data.vehicleId, userId: user.id, startsAt, endsAt },
+    data: { vehicleId: data.vehicleId, userId: user.id, startsAt, endsAt, details: data.details },
   });
 
   await prisma.event.create({

@@ -71,6 +71,9 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
                 Gebucht von
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Details
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Status
               </TableHead>
             </TableRow>
@@ -83,6 +86,9 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
                   <TableCell className="text-ink">{formatRange(booking.startsAt, booking.endsAt)}</TableCell>
                   <TableCell className="text-ink-muted">
                     {booking.user.firstName} {booking.user.lastName}
+                  </TableCell>
+                  <TableCell className="max-w-[240px] whitespace-pre-wrap text-ink-muted">
+                    {booking.details || <span className="text-ink-faint">–</span>}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -101,7 +107,7 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
             })}
             {bookings.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-ink-muted">
+                <TableCell colSpan={4} className="text-center text-ink-muted">
                   Noch keine Buchungen für dieses Fahrzeug.
                 </TableCell>
               </TableRow>

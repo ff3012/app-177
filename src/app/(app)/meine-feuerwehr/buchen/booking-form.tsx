@@ -17,6 +17,7 @@ interface BookingFormValues {
   date: string;
   startTime: string;
   endTime: string;
+  details: string;
 }
 
 interface BookingFormProps {
@@ -35,7 +36,7 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
     handleSubmit,
     formState: { errors },
   } = useForm<BookingFormValues>({
-    defaultValues: { vehicleId: initialVehicleId ?? vehicles[0]?.id ?? '', date: '', startTime: '', endTime: '' },
+    defaultValues: { vehicleId: initialVehicleId ?? vehicles[0]?.id ?? '', date: '', startTime: '', endTime: '', details: '' },
   });
 
   function onSubmit(values: BookingFormValues) {
@@ -47,11 +48,16 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
       setServerError('Ende muss nach dem Start liegen.');
       return;
     }
+    if (!values.details.trim()) {
+      setServerError('Details sind erforderlich.');
+      return;
+    }
 
     const formData = new FormData();
     formData.set('vehicleId', values.vehicleId);
     formData.set('startsAt', `${values.date}T${values.startTime}`);
     formData.set('endsAt', `${values.date}T${values.endTime}`);
+    formData.set('details', values.details);
 
     startTransition(async () => {
       const result = await action({}, formData);
@@ -104,6 +110,19 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
             )}
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-neutral-700">Details</label>
+        <textarea
+          {...register('details', { required: true })}
+          required
+          rows={3}
+          maxLength={500}
+          placeholder="z. B. Zweck der Ausborgung"
+          className="rounded border border-neutral-300 px-3 py-2"
+        />
+        {errors.details && <p className="text-sm text-red-700">Details sind erforderlich.</p>}
       </div>
 
       {serverError && <p className="text-sm text-red-700">{serverError}</p>}

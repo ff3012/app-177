@@ -448,6 +448,13 @@ model VehicleBooking {
   endsAt    DateTime
   createdAt DateTime @default(now())
 
+  // Pflichtfeld im Buchungsformular (jeder Ausborger füllt es aus), aber NUR für
+  // Heimatfeuerwehr-Admins sichtbar - weder auf /meine-feuerwehr ("Meine Buchungen") noch im
+  // öffentlichen Dashboard-Kiosk noch im erzeugten Kalender-Termin (Titel/Beschreibung bleiben
+  // unverändert). Nullable in der DB, da bereits bestehende Buchungen keinen Wert haben können -
+  // die Pflicht wird ausschließlich im Formular/Zod-Schema erzwungen, nicht per DB-Constraint.
+  details String?
+
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   event   Event?

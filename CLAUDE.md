@@ -1268,6 +1268,22 @@ home Feuerwehr's vehicle fleet ("Fuhrpark") for borrowing.
   philosophy as `isEligiblePilot`/`isActiveDrone` in the Drohnengruppe module. Cancelling a booking
   (`cancelVehicleBooking`) is allowed for the booking's own `userId` or anyone who can manage that vehicle's
   organization (`canManageVehicleBooking`) — mirrors `canManageFlight`'s "own record or module admin" shape.
+- **`VehicleBooking.details`** (added later, nullable `String`): a free-text field the borrower must fill in
+  (`vehicleBookingSchema` requires it, 1–500 chars) describing the purpose of the booking, but **admin-only
+  to read back** — it's deliberately absent from `/meine-feuerwehr`'s own "Meine Buchungen" list (the
+  borrower themselves never sees it again after submitting) and from the public dashboard kiosk
+  (`lib/dashboard/data.ts`'s query only ever `select`s vehicle name/borrower name, never `details`) and from
+  the linked `Event`'s title/description (still just `"Fahrzeug: {taktischeBezeichnung} ({Name})"`, unchanged
+  — putting it there would leak it to every Kalender viewer). Only shown as a "Details" column on the two
+  genuinely admin-only surfaces: `/admin/heimatfeuerwehr`'s "Fahrzeug-Buchungen" table (all bookings for the
+  selected org) and `/admin/heimatfeuerwehr/fahrzeug/[vehicleId]`'s Buchungshistorie — both already
+  `canManageHeimatfeuerwehrFor`-gated pages, so no new permission check was needed, just a new column.
+  Nullable at the DB level (existing bookings have no value) with the "required" rule enforced only in
+  `vehicleBookingSchema`/`BookingForm`, the same nullable-but-form-required pattern used elsewhere in this
+  codebase rather than a DB `NOT NULL` that would need a backfill value for old rows. Verified live: a
+  booking inserted with a distinctive `details` string appears verbatim on both admin surfaces, while
+  `/meine-feuerwehr`'s own booking list (viewed as the same user who created it) shows the booking but never
+  that string.
 
 **Verwaltung → Heimatfeuerwehr** (`/admin/heimatfeuerwehr`) is where the Fuhrpark and Atemschutz data actually
 get edited — a new admin page inside the existing `/admin/*` Verwaltung shell, using the same shadcn
