@@ -20,6 +20,7 @@ import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
 import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
 import { IcsImportForm } from './ics-import-form';
 import { WappenUploadForm } from './wappen-upload-form';
+import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
@@ -43,6 +44,26 @@ function formatBookingRange(startsAt: Date, endsAt: Date): string {
   const start = startsAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
   const end = endsAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
   return `${day}, ${start}–${end}`;
+}
+
+const RESERVIERUNG_STATUS_LABEL: Record<string, string> = {
+  OFFEN: 'Offen',
+  GENEHMIGT: 'Genehmigt',
+  ABGELEHNT: 'Abgelehnt',
+};
+
+const RESERVIERUNG_STATUS_CLASS: Record<string, string> = {
+  OFFEN: 'border-transparent bg-warning-subtle text-warning-text',
+  GENEHMIGT: 'border-transparent bg-success-subtle text-success-text',
+  ABGELEHNT: 'border-transparent bg-danger-subtle text-danger',
+};
+
+function ReservierungStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge variant="outline" className={RESERVIERUNG_STATUS_CLASS[status] ?? 'border-transparent bg-surface-sunken text-ink-faint'}>
+      {RESERVIERUNG_STATUS_LABEL[status] ?? status}
+    </Badge>
+  );
 }
 
 const EXPIRY_BADGE_LABEL: Record<AtemschutzExpiryStatus, string> = {
@@ -146,6 +167,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         icsImportLastSyncAt: true,
         icsImportLastSyncError: true,
         wappenImageMimeType: true,
+        fahrzeugReservierungEmail: true,
       },
     }),
   ]);
@@ -330,7 +352,15 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
-        <h2 className="mb-3 text-[15px] font-semibold text-ink">Fahrzeug-Buchungen</h2>
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Fahrzeug-Reservierungen</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Ist eine Freigabe-Adresse hinterlegt, starten neue Reservierungen als "Offen" und erscheinen erst nach
+          Genehmigung im Kalender der Feuerwehr.
+        </p>
+        <FahrzeugReservierungEmailForm
+          organizationId={selectedOrgId}
+          initialEmail={selectedOrgFull.fahrzeugReservierungEmail ?? ''}
+        />
         <Table>
           <TableHeader>
             <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
@@ -341,7 +371,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                 Zeitraum
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Gebucht von
+                Reserviert von
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Details
@@ -367,16 +397,10 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                     {booking.details || <span className="text-ink-faint">–</span>}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        past
-                          ? 'border-transparent bg-surface-sunken text-ink-faint'
-                          : 'border-transparent bg-success-subtle text-success-text'
-                      }
-                    >
-                      {past ? 'Vergangen' : 'Kommend'}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <ReservierungStatusBadge status={booking.status} />
+                      {booking.status === 'GENEHMIGT' && past && <span className="text-xs text-ink-faint">Vergangen</span>}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <form action={boundCancel}>
@@ -391,7 +415,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             {allBookings.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-ink-muted">
-                  Keine Fahrzeug-Buchungen für diese Feuerwehr.
+                  Keine Fahrzeug-Reservierungen für diese Feuerwehr.
                 </TableCell>
               </TableRow>
             )}

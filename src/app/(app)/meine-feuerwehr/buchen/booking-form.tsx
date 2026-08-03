@@ -119,7 +119,7 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
           required
           rows={3}
           maxLength={500}
-          placeholder="z. B. Zweck der Ausborgung"
+          placeholder="z. B. Zweck der Reservierung"
           className="rounded border border-neutral-300 px-3 py-2"
         />
         {errors.details && <p className="text-sm text-red-700">Details sind erforderlich.</p>}
@@ -133,7 +133,7 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
           disabled={pending}
           className="rounded bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark disabled:opacity-60"
         >
-          {pending ? 'Speichern…' : 'Fahrzeug ausborgen'}
+          {pending ? 'Speichern…' : 'Reservieren'}
         </button>
         <Link href="/meine-feuerwehr" className="text-sm text-neutral-600 hover:underline">
           Abbrechen

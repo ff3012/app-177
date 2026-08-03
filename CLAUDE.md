@@ -1498,6 +1498,81 @@ report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all
   selected Feuerwehr; and deleting it from there removes both the `VehicleBooking` and its linked `Event`
   while redirecting back to the admin page (not `/meine-feuerwehr`) with the selected org preserved.
 
+### Fahrzeug-Reservierungen: Freigabe-Workflow per E-Mail
+
+A follow-up request renamed the borrowing flow ("Fahrzeug ausborgen" → "Fahrzeug Reservierungen",
+"Ausborgen" buttons → "Reservieren") and added an optional per-Feuerwehr approval step: if
+`Organization.fahrzeugReservierungEmail` is set, a new reservation no longer creates its calendar
+entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emailed to that address.
+
+- **`VehicleBookingStatus` enum** (`OFFEN`/`GENEHMIGT`/`ABGELEHNT`) + `VehicleBooking.status`
+  (`@default(GENEHMIGT)` at the DB level, so pre-existing rows stay valid and behaviorally unchanged)
+  + `VehicleBooking.approvalToken` (nullable, `@unique`, a **raw** capability token like
+  `DashboardToken.token` - not hashed like `PasswordToken`, since this is a low-stakes one-time action
+  link, not an auth credential). `createVehicleBooking` (`meine-feuerwehr/actions.ts`) branches on
+  whether the vehicle's organization has `fahrzeugReservierungEmail` set: unset → **unchanged legacy
+  behavior**, immediately `GENEHMIGT` + linked `Event` created, no email; set → the booking is created
+  `OFFEN` with a fresh `approvalToken`, **no `Event` yet**, and an approval-request email goes out
+  instead (see below). This means an `OFFEN` (or `ABGELEHNT`) reservation simply has no `Event` row at
+  all - it's automatically invisible everywhere the Kalender/Dashboard already only ever query `Event`,
+  no extra filtering needed there.
+- **Overlap check still blocks on `OFFEN`, only frees up on `ABGELEHNT`**:
+  `findOverlappingBooking` (`lib/heimatfeuerwehr/vehicle-availability.ts`) gained `status: { not:
+  'ABGELEHNT' }` - a still-pending reservation must keep blocking the same time slot for other members,
+  or two people could get their overlapping requests approved independently before either approval
+  resolves the conflict. Only a rejected reservation frees the vehicle back up. Verified directly (not
+  just read for correctness): a real overlap query against a `GENEHMIGT` slot found it, the same query
+  against an `ABGELEHNT` slot at a different time found nothing.
+- **Two public, session-less routes** — `/fahrzeug-reservierung/genehmigen/[token]` and
+  `/fahrzeug-reservierung/ablehnen/[token]` (new top-level segment, added to `middleware.ts`'s
+  `PUBLIC_PATH_PREFIXES`, same reasoning as `/drohnen-schnell`/`/dashboard`: no session exists when a
+  clicked email link opens on any device) - both render via one shared server component,
+  `booking-decision-view.tsx`, parameterized by `mode`. A **plain `<form action={...}>`** with no
+  client JS (no `useTransition`/`useActionState`) - Next's Server Actions progressively enhance a bare
+  HTML form submission, so this works even where React never hydrates (this session's own
+  browser-automation sandbox is a real example: confirmed live that a plain `computer` click on the
+  submit button correctly flipped the booking's status and created the linked `Event`, with zero
+  client-side JS attached). This also matches the same "explicit click, not auto-consumed on GET"
+  security pattern already established for `/login/token/[token]`/activation/password-reset links - an
+  email link-scanner's automatic GET can't burn the decision before a human actually clicks the button,
+  since the GET only renders the confirm page, never performs the mutation itself.
+  `approveVehicleBooking`/`rejectVehicleBooking` (`meine-feuerwehr/actions.ts`) are plain
+  `(token: string) => Promise<void>` Server Actions with no `requireUser()` call at all - the token
+  itself is the authorization, exactly like the QR quick-registration flow. A booking that's no longer
+  `OFFEN` (already decided, or an invalid token) is a silent no-op that redirects back to the same page,
+  which then renders a "bereits entschieden" message instead of the action button - clicking a link
+  twice, or the "other" link after a decision was already made, is harmless.
+- **`lib/heimatfeuerwehr/notify-vehicle-booking.ts`**: `sendVehicleBookingApprovalRequest()` (to the
+  configured Freigabe-Adresse, two literal `<a>` buttons styled inline, labelled exactly `GENEHMIGT` /
+  `NICHT GENEHMIGT` per the request) and `sendVehicleBookingDecisionEmail()` (to the requester, **Cc**
+  the Freigabe-Adresse so it also sees the outcome) - `sendEmail()` (`lib/email/mailjet.ts`) gained an
+  optional `cc?: string[]` param for this, the first caller to need Cc at all. Both email sends are
+  wrapped in try/catch at the call site (same "a Mailjet outage must never block the actual state
+  change" precedent as `notify-flight-created.ts`) - the reservation itself, and the approve/reject
+  decision, always succeed even if the email fails to send.
+- **UI renames**: the Schnellzugriff-Kachel and `/meine-feuerwehr/buchen` heading read "Fahrzeug
+  Reservierungen"; every "Ausborgen"/"Fahrzeug ausborgen" submit button reads "Reservieren"; "Meine
+  Buchungen" → "Meine Reservierungen" (now also showing a status badge per row, and hiding the
+  "Stornieren" button for `ABGELEHNT` rows - nothing left to cancel); the admin table and the
+  per-vehicle history page read "Fahrzeug-Reservierungen"/"Reservierungshistorie" with "Reserviert von"
+  instead of "Gebucht von", plus a real status badge (`Offen`/`Genehmigt`/`Abgelehnt`) alongside the
+  existing Kommend/Vergangen distinction (shown together as e.g. "Genehmigt" + a small "Vergangen"
+  label, only for already-`GENEHMIGT` rows in the past). The Kalender module's own edit-blocked
+  messages ("Dieser Termin gehört zu einer Fahrzeug-Buchung...") and the shared `VehicleBookingIcon`'s
+  `aria-label` were updated to "Fahrzeug-Reservierung" for consistency, since they describe the exact
+  same underlying concept. `Vehicle`/`VehicleBooking` themselves keep their original Prisma model names
+  unchanged - this was a user-facing copy change only, not a schema/identifier rename, to avoid an
+  unnecessary migration and touching far more files for zero user-visible benefit.
+- **Verified end-to-end live** (not just type-checked): inserted two real `OFFEN` `VehicleBooking` rows
+  with known tokens, opened both decision pages in the actual browser, and used a real `computer` click
+  (not a simulated call) on each - the genehmigen click flipped status to `GENEHMIGT` and created the
+  correctly-titled linked `Event`; the ablehnen click flipped status to `ABGELEHNT` and created no
+  `Event`. Both pages then correctly showed "bereits entschieden" with the right status label on reload.
+  The overlap-exclusion query was verified directly against this same test data. Test rows cleaned up
+  afterward. Email delivery itself was not verified live (Mailjet isn't configured in this dev
+  environment) - the send call sites are try/catch-wrapped for exactly this kind of failure, and the
+  booking/decision logic was confirmed correct independent of whether the email actually goes out.
+
 ### Startbildschirm & mobile Navigation (Startbildschirm-Brief.md)
 
 A follow-up mobile-only rework (imported via the same Claude Design `DesignSync`-MCP flow as the earlier

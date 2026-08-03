@@ -52,7 +52,9 @@ export interface DashboardVehicleBooking {
 }
 
 /** Ausgeborgte Fahrzeuge der nächsten 30 Tage (Design-Spec §3), Limit 8 für die Tabelle - die
- * Gesamtzahl (ohne Limit) liefert getUpcomingVehicleBookingsCount() separat für die Fußzeile. */
+ * Gesamtzahl (ohne Limit) liefert getUpcomingVehicleBookingsCount() separat für die Fußzeile. Nur
+ * GENEHMIGT: eine noch nicht (oder nicht mehr) freigegebene Reservierung ist für den öffentlichen
+ * Kiosk-Screen nicht "die Wahrheit" - sie könnte noch abgelehnt werden. */
 export async function getDashboardVehicleBookings(organizationId: string): Promise<DashboardVehicleBooking[]> {
   const now = new Date();
   const windowEnd = new Date(now.getTime() + VEHICLE_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -60,6 +62,7 @@ export async function getDashboardVehicleBookings(organizationId: string): Promi
   const bookings = await prisma.vehicleBooking.findMany({
     where: {
       vehicle: { organizationId },
+      status: 'GENEHMIGT',
       startsAt: { gte: now, lte: windowEnd },
     },
     orderBy: { startsAt: 'asc' },
@@ -85,6 +88,7 @@ export async function getUpcomingVehicleBookingsCount(organizationId: string): P
   return prisma.vehicleBooking.count({
     where: {
       vehicle: { organizationId },
+      status: 'GENEHMIGT',
       startsAt: { gte: now, lte: windowEnd },
     },
   });

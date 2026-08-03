@@ -8,6 +8,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const UTILIZATION_WINDOW_DAYS = 90;
 
+const RESERVIERUNG_STATUS_LABEL: Record<string, string> = {
+  OFFEN: 'Offen',
+  GENEHMIGT: 'Genehmigt',
+  ABGELEHNT: 'Abgelehnt',
+};
+
+const RESERVIERUNG_STATUS_CLASS: Record<string, string> = {
+  OFFEN: 'border-transparent bg-warning-subtle text-warning-text',
+  GENEHMIGT: 'border-transparent bg-success-subtle text-success-text',
+  ABGELEHNT: 'border-transparent bg-danger-subtle text-danger',
+};
+
 function formatRange(startsAt: Date, endsAt: Date): string {
   const day = startsAt.toLocaleDateString('de-AT');
   const start = startsAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
@@ -60,7 +72,7 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
-        <h2 className="mb-3 text-[15px] font-semibold text-ink">Buchungshistorie</h2>
+        <h2 className="mb-3 text-[15px] font-semibold text-ink">Reservierungshistorie</h2>
         <Table>
           <TableHeader>
             <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
@@ -68,7 +80,7 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
                 Zeitraum
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Gebucht von
+                Reserviert von
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Details
@@ -91,16 +103,15 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
                     {booking.details || <span className="text-ink-faint">–</span>}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        past
-                          ? 'border-transparent bg-surface-sunken text-ink-faint'
-                          : 'border-transparent bg-success-subtle text-success-text'
-                      }
-                    >
-                      {past ? 'Vergangen' : 'Kommend'}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge
+                        variant="outline"
+                        className={RESERVIERUNG_STATUS_CLASS[booking.status] ?? 'border-transparent bg-surface-sunken text-ink-faint'}
+                      >
+                        {RESERVIERUNG_STATUS_LABEL[booking.status] ?? booking.status}
+                      </Badge>
+                      {booking.status === 'GENEHMIGT' && past && <span className="text-xs text-ink-faint">Vergangen</span>}
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -108,7 +119,7 @@ export default async function FahrzeugHistoriePage({ params }: { params: Promise
             {bookings.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-ink-muted">
-                  Noch keine Buchungen für dieses Fahrzeug.
+                  Noch keine Reservierungen für dieses Fahrzeug.
                 </TableCell>
               </TableRow>
             )}

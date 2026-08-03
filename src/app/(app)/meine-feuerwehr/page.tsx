@@ -32,6 +32,26 @@ function StatusBadge({ status }: { status: AtemschutzExpiryStatus }) {
   );
 }
 
+const RESERVIERUNG_STATUS_LABEL: Record<string, string> = {
+  OFFEN: 'Offen zur Genehmigung',
+  GENEHMIGT: 'Genehmigt',
+  ABGELEHNT: 'Abgelehnt',
+};
+
+const RESERVIERUNG_STATUS_CLASS: Record<string, string> = {
+  OFFEN: 'bg-amber-100 text-amber-800',
+  GENEHMIGT: 'bg-green-100 text-green-800',
+  ABGELEHNT: 'bg-red-100 text-red-800',
+};
+
+function ReservierungStatusBadge({ status }: { status: string }) {
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${RESERVIERUNG_STATUS_CLASS[status] ?? 'bg-neutral-100 text-neutral-600'}`}>
+      {RESERVIERUNG_STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
 function formatRange(startsAt: Date, endsAt: Date): string {
   const day = startsAt.toLocaleDateString('de-AT');
   const start = startsAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
@@ -259,7 +279,7 @@ export default async function MeineFeuerwehrPage() {
 
       <div className={droneMember ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
         <Link href="/meine-feuerwehr/buchen" className="flex min-h-[74px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
-          <span className="text-[15px] font-semibold text-[#1c1c1e]">Fahrzeug ausborgen</span>
+          <span className="text-[15px] font-semibold text-[#1c1c1e]">Fahrzeug Reservierungen</span>
           <span className="text-[13px] text-[#6c6c70]">{vehicleStatusLabel}</span>
         </Link>
         {droneMember && (
@@ -350,31 +370,34 @@ export default async function MeineFeuerwehrPage() {
               ))}
             </select>
             <button type="submit" className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark">
-              Ausborgen
+              Reservieren
             </button>
           </form>
         )}
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Meine Buchungen</h2>
+        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Meine Reservierungen</h2>
         {myBookings.length === 0 ? (
-          <p className="text-sm text-neutral-500">Keine kommenden Buchungen.</p>
+          <p className="text-sm text-neutral-500">Keine kommenden Reservierungen.</p>
         ) : (
           <ul className="flex flex-col divide-y divide-neutral-200">
             {myBookings.map((booking) => {
               const boundCancel = cancelVehicleBooking.bind(null, booking.id, '/meine-feuerwehr');
               return (
-                <li key={booking.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <li key={booking.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                   <span>
                     <span className="font-medium text-neutral-900">{booking.vehicle.taktischeBezeichnung}</span>{' '}
-                    <span className="text-neutral-500">{formatRange(booking.startsAt, booking.endsAt)}</span>
+                    <span className="text-neutral-500">{formatRange(booking.startsAt, booking.endsAt)}</span>{' '}
+                    <ReservierungStatusBadge status={booking.status} />
                   </span>
-                  <form action={boundCancel}>
-                    <button type="submit" className="text-red-700 hover:underline">
-                      Stornieren
-                    </button>
-                  </form>
+                  {booking.status !== 'ABGELEHNT' && (
+                    <form action={boundCancel}>
+                      <button type="submit" className="text-red-700 hover:underline">
+                        Stornieren
+                      </button>
+                    </form>
+                  )}
                 </li>
               );
             })}

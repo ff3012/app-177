@@ -228,6 +228,37 @@ export async function removeOrganizationWappen(organizationId: string): Promise<
   revalidatePath('/meine-feuerwehr');
 }
 
+export interface FahrzeugReservierungEmailState {
+  success?: boolean;
+  error?: string;
+}
+
+const fahrzeugReservierungEmailSchema = z.union([z.literal(''), z.string().trim().email('Ungültige E-Mail-Adresse.')]);
+
+/** Leere Eingabe ist gültig (= keine Freigabe nötig, neue Reservierungen werden sofort genehmigt -
+ * siehe createVehicleBooking). Gleiches Muster wie setAtemschutzSachbearbeiter. */
+export async function setFahrzeugReservierungEmail(
+  organizationId: string,
+  _prevState: FahrzeugReservierungEmailState,
+  formData: FormData,
+): Promise<FahrzeugReservierungEmailState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const parsed = fahrzeugReservierungEmailSchema.safeParse(formData.get('email'));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { fahrzeugReservierungEmail: parsed.data || null },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  return { success: true };
+}
+
 export interface IcsImportUrlState {
   success?: boolean;
   error?: string;

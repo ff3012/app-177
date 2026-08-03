@@ -21,7 +21,7 @@ export default async function FahrzeugBuchenPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-neutral-900">Fahrzeug ausborgen</h1>
+      <h1 className="text-lg font-semibold text-neutral-900">Fahrzeug Reservierungen</h1>
       {vehicles.length === 0 ? (
         <p className="text-sm text-neutral-500">Für deine Feuerwehr sind noch keine Fahrzeuge hinterlegt.</p>
       ) : (

@@ -1,6 +1,9 @@
 interface SendEmailParams {
   to: string;
   toName?: string;
+  /** Bislang nur von der Fahrzeug-Reservierungs-Ergebnis-Mail genutzt (An: Ausborger, Cc: die
+   * hinterlegte Freigabe-Adresse, damit sie die Entscheidung ebenfalls im Blick hat). */
+  cc?: string[];
   subject: string;
   textPart: string;
   htmlPart: string;
@@ -41,6 +44,7 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
         {
           From: { Email: fromEmail, Name: fromName },
           To: [{ Email: params.to, Name: params.toName ?? params.to }],
+          ...(params.cc && params.cc.length > 0 ? { Cc: params.cc.map((email) => ({ Email: email })) } : {}),
           Subject: params.subject,
           TextPart: params.textPart,
           HTMLPart: wrapHtmlPart(params.htmlPart),

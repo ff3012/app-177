@@ -52,6 +52,16 @@ enum NewsAudienceType {
   DROHNENGRUPPE
 }
 
+// Freigabe-Status einer Fahrzeug-Reservierung (Fahrzeug-Reservierung-Freigabe) - OFFEN ist der
+// Startzustand einer neuen Reservierung, wenn die Feuerwehr eine Freigabe-E-Mail hinterlegt hat;
+// ohne hinterlegte Adresse wird eine Reservierung sofort mit GENEHMIGT angelegt (Rückwärtskompatibilität,
+// siehe meine-feuerwehr/actions.ts).
+enum VehicleBookingStatus {
+  OFFEN
+  GENEHMIGT
+  ABGELEHNT
+}
+
 // Kategorien der NÖ-Feuerwehr-Dienstgradordnung (NÖ Landesfeuerwehrverband) - rein informativ zur
 // Gruppierung im Dropdown, keine Berechtigungslogik hängt daran.
 enum DienstgradKategorie {
@@ -101,6 +111,11 @@ model Organization {
   // Ersatzsymbol statt eines fremden Wappens.
   wappenImageData     Bytes?
   wappenImageMimeType String?
+
+  // Kontaktadresse für die Freigabe-Anfrage-E-Mail neuer Fahrzeug-Reservierungen (siehe
+  // lib/heimatfeuerwehr/notify-vehicle-booking.ts) - analog zu atemschutzSachbearbeiterEmail, pro
+  // Feuerwehr statt global. Leer = Reservierungen werden ohne Freigabe sofort genehmigt.
+  fahrzeugReservierungEmail String?
 
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
@@ -454,6 +469,19 @@ model VehicleBooking {
   // unverändert). Nullable in der DB, da bereits bestehende Buchungen keinen Wert haben können -
   // die Pflicht wird ausschließlich im Formular/Zod-Schema erzwungen, nicht per DB-Constraint.
   details String?
+
+  // Freigabe-Workflow: neue Reservierungen starten OFFEN, wenn die Feuerwehr eine
+  // fahrzeugReservierungEmail hinterlegt hat (sonst sofort GENEHMIGT, siehe Enum-Kommentar). Der
+  // verknüpfte Kalender-Termin (event) wird erst bei GENEHMIGT angelegt - solange eine Reservierung
+  // OFFEN ist, existiert dafür noch kein Event, sie ist also für niemanden außer dem Ausborger
+  // selbst sichtbar. approvalToken ist ein roher (nicht gehashter) Capability-Token für die beiden
+  // Genehmigen/Ablehnen-Links in der Freigabe-Mail - analog zu DashboardToken.token, nicht wie
+  // PasswordToken gehasht, da es kein Auth-Credential ist, sondern ein einmaliger Aktions-Link mit
+  // geringem Schadenspotenzial. Bleibt nach der Entscheidung stehen (nicht genullt) - die
+  // Genehmigen/Ablehnen-Seite prüft stattdessen status !== OFFEN, um einen bereits verwendeten Link
+  // freundlich als "schon entschieden" statt als kaputt anzuzeigen.
+  status        VehicleBookingStatus @default(GENEHMIGT)
+  approvalToken String?              @unique
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

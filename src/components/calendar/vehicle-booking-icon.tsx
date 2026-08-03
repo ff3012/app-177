@@ -14,7 +14,7 @@ export function VehicleBookingIcon({ className }: { className?: string }) {
       strokeWidth="2"
       className={className}
       role="img"
-      aria-label="Fahrzeug-Buchung"
+      aria-label="Fahrzeug-Reservierung"
     >
       <path d="M3 13l1.5-4.5A2 2 0 0 1 6.4 7h11.2a2 2 0 0 1 1.9 1.5L21 13" strokeLinecap="round" strokeLinejoin="round" />
       <rect x="2" y="13" width="20" height="5" rx="1" strokeLinecap="round" strokeLinejoin="round" />

@@ -65,7 +65,7 @@ export async function updateEvent(
     return { error: 'Keine Berechtigung, diesen Abschnitt-weiten Termin zu bearbeiten.' };
   }
   if (existing.vehicleBookingId) {
-    return { error: 'Dieser Termin gehört zu einer Fahrzeug-Buchung und kann hier nicht bearbeitet werden.' };
+    return { error: 'Dieser Termin gehört zu einer Fahrzeug-Reservierung und kann hier nicht bearbeitet werden.' };
   }
   if (existing.icsUid) {
     return { error: 'Dieser Termin stammt aus einem importierten Kalender und kann hier nicht bearbeitet werden.' };
@@ -115,7 +115,7 @@ export async function deleteEvent(eventId: string): Promise<void> {
   }
   assertPermission(
     !existing.vehicleBookingId,
-    'Dieser Termin gehört zu einer Fahrzeug-Buchung und kann hier nicht gelöscht werden.',
+    'Dieser Termin gehört zu einer Fahrzeug-Reservierung und kann hier nicht gelöscht werden.',
   );
   assertPermission(
     !existing.icsUid,

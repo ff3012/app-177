@@ -23,7 +23,7 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
       <div className="flex flex-col gap-3">
         <h1 className="text-lg font-semibold text-neutral-900">Termin bearbeiten</h1>
         <p className="text-neutral-700">
-          Dieser Termin gehört zu einer Fahrzeug-Buchung. Um ihn zu ändern oder zu stornieren, gehe zu{' '}
+          Dieser Termin gehört zu einer Fahrzeug-Reservierung. Um ihn zu ändern oder zu stornieren, gehe zu{' '}
           <Link href="/meine-feuerwehr" className="text-brand hover:underline">
             Meine Feuerwehr
           </Link>

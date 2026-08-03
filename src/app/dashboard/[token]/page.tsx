@@ -167,7 +167,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
               <span className="dash-section-label font-semibold uppercase tracking-[0.1em]">Ausgeborgt von</span>
             </div>
             {vehicleBookings.length === 0 ? (
-              <div className="dash-secondary px-6 py-4 text-[#6c6c70]">Keine Fahrzeug-Buchungen in den nächsten 30 Tagen.</div>
+              <div className="dash-secondary px-6 py-4 text-[#6c6c70]">Keine Fahrzeug-Reservierungen in den nächsten 30 Tagen.</div>
             ) : (
               <HeightFittedList minVisible={3} maxVisible={8}>
                 {vehicleBookings.map((booking) => (
