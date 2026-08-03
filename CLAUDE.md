@@ -1456,6 +1456,116 @@ report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all
   selected Feuerwehr; and deleting it from there removes both the `VehicleBooking` and its linked `Event`
   while redirecting back to the admin page (not `/meine-feuerwehr`) with the selected org preserved.
 
+### Startbildschirm & mobile Navigation (Startbildschirm-Brief.md)
+
+A follow-up mobile-only rework (imported via the same Claude Design `DesignSync`-MCP flow as the earlier
+Benutzerverwaltung/Dashboard briefs): `/meine-feuerwehr` becomes the post-login landing page and a real
+"does anything need my attention" dashboard, and the mobile bottom nav shrinks to a fixed 3-tab bar with the
+home org's crest as the center "home" button. Scoped to `< 640px` (this app's only breakpoint, `sm:` - the
+brief itself said "< 768px" but that's treated the same "approximate figure, not a new breakpoint" way
+Kalender V3 already established); desktop is untouched except where a server-side redirect target had no
+way to vary by viewport (see "Login-Redirect" below).
+
+- **Post-login landing page**: all six hardcoded `/kalender` redirect targets (`login/actions.ts` ×2,
+  `login/page.tsx` ×2, `aktivieren/[token]/actions.ts`, `passwort-zuruecksetzen/[token]/actions.ts`) plus
+  the root `src/app/page.tsx` and the email-token "Anmeldung erfolgreich" link changed to `/meine-feuerwehr`.
+  This is a **universal** change (desktop lands there too) since a Server Action can't branch a redirect by
+  viewport width - there is no separate "old desktop /meine-feuerwehr" preserved; the new dashboard content
+  below renders at every width (it degrades fine into the app's usual `max-w-5xl` column), only the
+  nav/header work described next is genuinely mobile-only.
+- **"Zu erledigen" / "Als Nächstes"** (`src/components/home/home-todo-list.tsx`, `HomeTodoList`, a Client
+  Component): three todo sources, exactly as the brief's own table specifies - (1) an own-org-or-abschnittsweit
+  event within the next 14 days with no `TerminZusage` row yet ("Offene Rückmeldung"), (2) Atemschutz
+  Untersuchung/Finnentest expiring within a **60-day** window (a new, separate, more lenient threshold than
+  the existing `ATEMSCHUTZ_WARNING_DAYS = 30` that drives the amber badges everywhere else in
+  Heimatfeuerwehr - computed inline in `meine-feuerwehr/page.tsx`'s `buildAtemschutzTodo`, deliberately not
+  folded into `atemschutz-status.ts`'s shared 30-day constant), (3) the 90-Tage-Regel not yet met for a
+  Drohnengruppe member (reusing `getNinetyDayCutoff`/`meetsNinetyDayRule` unchanged). If none apply, the
+  whole "Zu erledigen" block is omitted entirely (no placeholder) and the page starts at "Als Nächstes" -
+  verified live against a freshly-reseeded dev DB with zero events/flights.
+  - **Inline Zusagen/Absagen, no page reload**: the RSVP-type todo card calls the existing `setRsvp` Server
+    Action directly (no note field, no "Unklar" - just the two buttons the brief's mockup shows, 44px each,
+    1:1 grid) and **optimistically** moves the card into "Als Nächstes" the instant a button is tapped;
+    `HomeTodoList` keeps a local `responded` map that overrides the server-provided event's status purely
+    client-side, merges it back into the upcoming pool (re-sorted by date, sliced to 2), and rolls the
+    override back out + shows a `sonner` toast if `setRsvp` returns an error. The server only ever sends the
+    RSVP-eligible events already split into `rsvpTodos` (needs a response) vs. `upcomingPool` (top-4 buffer,
+    not just top-2, so a moved card always has enough real data to merge against) - a todo event never
+    appears in both arrays from the server, only the client's optimistic override can move one across.
+  - **Kommandant-Variante**: for any candidate event whose organization the viewer manages
+    (`canManageEventsFor`), the card shows the team's RSVP tally (`{n} zugesagt · {n} offen`, "offen" = active
+    home-org member count minus zugesagt, not tracking Abgesagt/Unklar separately - matches the brief
+    mockup's own two-figure "14 zugesagt · 9 offen") plus a "Details" link, instead of the Zusagen/Absagen
+    buttons - applies uniformly whether the card would otherwise be in "Zu erledigen" or "Als Nächstes",
+    since the brief's own wording ("die Terminkarte...statt der eigenen Zu-/Absage-Buttons") reads as one
+    shared card variant, not two different rules for the two sections.
+- **Schnellzugriffe**: two link-tiles, "Fahrzeug ausborgen" (→ `/meine-feuerwehr/buchen`, status line "N von
+  M heute frei" from a single batched `VehicleBooking` query against today's date range - no per-vehicle
+  N+1) and, only for Drohnengruppe members, "Flug registrieren" (→ `/drohnen/neu`, status either "90 Tage
+  erfüllt" or "N von 3 Flügen"). One tile only (no empty second grid cell) for non-drone members.
+- **"Stand der Wehr"**: gated on `canManageHeimatfeuerwehrFor(user, user.homeOrganizationId)` specifically -
+  i.e. an admin (site or Feuerwehr) of their **own** home org, not any org they happen to administer. Shows
+  active member count, an Atemschutz-expiring count (reusing the existing 30-day `getExpiryStatus` - the
+  same figure the Heimatfeuerwehr admin table's amber badges already use, not a new threshold), and a
+  Fuhrpark line (vehicles booked today / bookings this calendar month) linking to `/admin/heimatfeuerwehr`.
+  Absent entirely (not shown-but-empty) for a plain member.
+- **Wappen (Organization crest)**: new nullable `Organization.wappenImageData`/`wappenImageMimeType`
+  (`Bytes`/`String`, Bytes-in-Postgres like `DroneDocument`/`FacebookPostImage` - a handful of small logo
+  images, no reason for a Docker volume), uploaded per-Feuerwehr on `/admin/heimatfeuerwehr` (new
+  "Wappen (Startbildschirm)" card, `WappenUploadForm` + `setOrganizationWappen`/`removeOrganizationWappen` in
+  that page's `actions.ts`, same upload-Server-Action shape as `admin/drohnen`'s PDF upload). Served via a
+  new session-gated (not in `middleware.ts`'s public prefixes, but no extra permission check beyond being
+  logged in - a crest is not sensitive) `GET /api/organization/[organizationId]/wappen` route, 404 if unset.
+  `(app)/layout.tsx`'s `homeOrganization` query was narrowed to an explicit `select` (previously a
+  select-less `findUnique`) specifically so the potentially-large `wappenImageData` blob is never pulled
+  into every single page navigation just to read `wappenImageMimeType`'s presence. No wappen set → the
+  mobile tab bar's center button shows a neutral hand-rolled fallback shield icon
+  (`components/layout/wappen-fallback-icon.tsx`) - never another Feuerwehr's crest, never the old blanket
+  `/wappen-afkdo.png` (which stays exactly where it already was: login page, desktop header, dashboard kiosk,
+  drohnen-schnell - all untouched, this per-org crest is additive, not a replacement of that AFKDO mark).
+- **Mobile tab bar rebuilt from scratch** (`components/layout/mobile-tab-bar.tsx`): no longer built from the
+  shared, permission-driven `getNavItems()`/`nav-items.ts` list that desktop `<Nav>` still uses unchanged -
+  a hardcoded, fixed 3-column grid (`grid-cols-3`, `h-[86px]`) instead: Kalender (left) · Wappen-Home (center,
+  a 46px white circle floated `-mt-4` above the bar, `Meine Feuerwehr` label, links to `/meine-feuerwehr`) ·
+  Drohnengruppe (right, only rendered when `canViewDroneModule`, otherwise an empty `aria-hidden` cell so the
+  center button stays visually centered rather than the grid collapsing to 2 columns). News and Verwaltung -
+  previously riding along in the same permission-driven list on mobile too - needed new homes since the
+  brief's tab bar has no room for them: Verwaltung moved into a new header pill (see below); News moved into
+  `ProfileMenu`'s dropdown as a plain `sm:hidden` link (`canManageNews`-gated, new prop) alongside the
+  existing mobile-only Abmelden - desktop keeps reaching both exactly as before, through the unchanged `<Nav>`.
+- **Header restructure** (`(app)/layout.tsx`): the mobile-only small AFKDO crest `<img>` that used to sit at
+  the far left is gone entirely (the brief: "Das Wappen ist hier nicht mehr - es sitzt in der Tab-Bar").
+  `MobileHeaderTitleSlot`'s `fallback` prop is now a per-user computed label - `"Feuerwehr {shortName}"` for
+  a Feuerwehr home org (e.g. "Feuerwehr Wolfsgraben", never the org's full `name` with "Freiwillige
+  Feuerwehr..."), or just the shortName/name as-is for an AFKDO home org (a "Feuerwehr AFKDO Purkersdorf"
+  label would have read wrong) - the slot's own crossfade-with-the-page's-CollapsingPageTitle mechanism
+  (Kalender V3) is completely unchanged, only what it shows before a page pushes its own title. Bumped that
+  slot's font size from `text-sm` (14px) to the brief's explicit `text-[17px]` - a shared value, so this
+  also affects the crossfaded page-title text, not just the fallback. A new `Verwaltung` pill
+  (`sm:hidden`, 30px tall, `border-[#4a4a4e]`, links to `/admin/benutzer` for a site admin or
+  `/admin/heimatfeuerwehr` otherwise - same target resolution `getNavItems()` already used) sits in the
+  header's right-hand cluster, gated on `canAccessHeimatfeuerwehrAdmin(user)`, matching the brief's own
+  "sichtbar nur wenn Adminrechte, serverseitig geprüft" requirement exactly (no client-side hiding).
+- **Verified live** against the running dev server (not just `tsc`/`build`, which were also both clean):
+  `/meine-feuerwehr` renders the full greeting/todo/quick-access/Stand-der-Wehr stack correctly for the
+  seeded site admin (whose home org is the AFKDO, hence the un-prefixed header label and the empty third tab
+  slot since that account isn't a Drohnengruppe member); the 3-column tab bar's exact `grid-template-columns`
+  (three equal 125px columns at 375px width), `86px` height, and `46px`/`-16px margin-top` center circle were
+  all confirmed via `getComputedStyle`; the new wappen route was round-tripped end-to-end (upload a real PNG
+  directly into `Organization.wappenImageData` via `psql`, fetch `/api/organization/.../wappen` from the
+  live authenticated tab and confirm 200 + correct `Content-Type` + correct byte count, then confirm the
+  admin page's "Entfernen" button appears, then clean the test row back to `NULL`); and the responsive
+  cross-over itself was confirmed both directions via `getBoundingClientRect()` (not `getComputedStyle`
+  alone, which - as a bare check - doesn't reflect an invisible ancestor collapsing a `display:flex` child to
+  zero width) at 375px vs. 1280px: the new header pill and mobile tab bar render at mobile width and
+  collapse to zero width at desktop width, while desktop `<Nav>`'s own separate "Verwaltung" link and the
+  footer do the exact opposite. What remains unverifiable for the same already-documented, harness-wide
+  reason as every earlier Verwaltung/Kalender mobile pass: the RSVP buttons' actual optimistic-move-on-click
+  interaction, the wappen upload form's real file-input submit, and the ProfileMenu dropdown's News link
+  (React state never attaches in this browser-automation session, so `useState`-gated JSX - the dropdown's
+  `{open && (...)}`, `HomeTodoList`'s `responded` map - never mounts in a static DOM snapshot regardless of
+  the underlying logic's correctness).
+
 ### Module 5: Dashboard Feuerwehrhaus (GitHub Issue #8)
 
 A public, token-authenticated, TV/kiosk dashboard screen (`src/app/dashboard/[token]/page.tsx`) meant to be

@@ -176,6 +176,58 @@ export async function setAtemschutzSachbearbeiter(
   return { success: true };
 }
 
+export interface WappenUploadState {
+  error?: string;
+  success?: boolean;
+}
+
+const MAX_WAPPEN_SIZE_BYTES = 2 * 1024 * 1024;
+
+/** Wappen-Bild für die mobile Tab-Bar/Startbildschirm (Startbildschirm-Brief.md §3) - Bytes in
+ * Postgres, analog zum PDF-Upload in admin/drohnen/actions.ts (uploadDroneDocument). */
+export async function setOrganizationWappen(
+  organizationId: string,
+  _prevState: WappenUploadState,
+  formData: FormData,
+): Promise<WappenUploadState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: 'Bitte eine Bilddatei auswählen.' };
+  }
+  if (!file.type.startsWith('image/')) {
+    return { error: 'Nur Bilddateien sind erlaubt.' };
+  }
+  if (file.size > MAX_WAPPEN_SIZE_BYTES) {
+    return { error: 'Die Datei ist zu groß (maximal 2 MB).' };
+  }
+
+  const data = Buffer.from(await file.arrayBuffer());
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { wappenImageData: data, wappenImageMimeType: file.type },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/meine-feuerwehr');
+  return { success: true };
+}
+
+export async function removeOrganizationWappen(organizationId: string): Promise<void> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { wappenImageData: null, wappenImageMimeType: null },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/meine-feuerwehr');
+}
+
 export interface IcsImportUrlState {
   success?: boolean;
   error?: string;

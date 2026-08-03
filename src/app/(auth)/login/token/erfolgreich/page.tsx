@@ -34,10 +34,10 @@ export default async function LoginTokenSuccessPage() {
         )}
 
         <Link
-          href="/kalender"
+          href="/meine-feuerwehr"
           className="inline-block rounded bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark"
         >
-          Weiter zum Kalender
+          Weiter zu Meine Feuerwehr
         </Link>
       </div>
     </div>

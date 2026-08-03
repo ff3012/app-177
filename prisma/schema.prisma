@@ -95,6 +95,13 @@ model Organization {
   icsImportLastSyncAt    DateTime?
   icsImportLastSyncError String?
 
+  // Wappen der Feuerwehr für die mobile Tab-Bar/Startbildschirm (Startbildschirm-Brief.md) - Bytes
+  // in Postgres statt Dateisystem, analog zu DroneDocument/FacebookPostImage (wenige, kleine
+  // Bilder, kein zusätzliches Docker-Volume nötig). Fehlt es, zeigt die Tab-Bar ein neutrales
+  // Ersatzsymbol statt eines fremden Wappens.
+  wappenImageData     Bytes?
+  wappenImageMimeType String?
+
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
   events       Event[]

@@ -10,7 +10,7 @@ export default async function LoginPage({
 }) {
   const user = await getOptionalUser();
   if (user) {
-    redirect('/kalender');
+    redirect('/meine-feuerwehr');
   }
 
   const { callbackUrl } = await searchParams;
@@ -22,7 +22,7 @@ export default async function LoginPage({
         <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow">
           <h1 className="mb-1 text-xl font-semibold text-neutral-900">Feuerwehr Abschnitt Purkersdorf</h1>
           <p className="mb-6 text-sm text-neutral-500">Anmeldung für Mitglieder</p>
-          <LoginForm callbackUrl={callbackUrl ?? '/kalender'} />
+          <LoginForm callbackUrl={callbackUrl ?? '/meine-feuerwehr'} />
         </div>
       </div>
       <Footer />

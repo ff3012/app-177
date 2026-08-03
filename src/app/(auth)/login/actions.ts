@@ -37,7 +37,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     await signIn('credentials', {
       email,
       password,
-      redirectTo: typeof callbackUrl === 'string' && callbackUrl.length > 0 ? callbackUrl : '/kalender',
+      redirectTo: typeof callbackUrl === 'string' && callbackUrl.length > 0 ? callbackUrl : '/meine-feuerwehr',
     });
     await resetLoginAttempts(email);
     return {};
@@ -158,7 +158,7 @@ export async function confirmLoginWithToken(_prevState: LoginTokenState, formDat
   }
 
   try {
-    await signIn('email-token', { email, shortCode, redirectTo: '/kalender' });
+    await signIn('email-token', { email, shortCode, redirectTo: '/meine-feuerwehr' });
     await resetLoginAttempts(email);
     await resetLoginTokenThrottle(email);
     return {};

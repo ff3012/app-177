@@ -14,14 +14,14 @@ export function MobileHeaderTitleSlot({ fallback }: { fallback: string }) {
   return (
     <div className="relative h-5 min-w-0 flex-1 sm:hidden">
       <span
-        className="absolute inset-0 truncate text-sm font-semibold text-white transition-opacity duration-150 motion-reduce:transition-none"
+        className="absolute inset-0 truncate text-[17px] font-semibold text-white transition-opacity duration-150 motion-reduce:transition-none"
         style={{ opacity: 1 - titleProgress }}
       >
         {fallback}
       </span>
       {title && (
         <span
-          className="absolute inset-0 truncate text-sm font-semibold text-white transition-opacity duration-150 motion-reduce:transition-none"
+          className="absolute inset-0 truncate text-[17px] font-semibold text-white transition-opacity duration-150 motion-reduce:transition-none"
           style={{ opacity: titleProgress }}
         >
           {title}

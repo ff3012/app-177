@@ -37,7 +37,7 @@ export async function resetPassword(
     await signIn('credentials', {
       email: user.email,
       password: parsed.data.newPassword,
-      redirectTo: '/kalender',
+      redirectTo: '/meine-feuerwehr',
     });
     return {};
   } catch (error) {

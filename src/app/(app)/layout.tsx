@@ -1,8 +1,9 @@
 import { Toaster } from 'sonner';
+import Link from 'next/link';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessHeimatfeuerwehrAdmin, canManageNews, isSiteAdmin } from '@/lib/auth/permissions';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
@@ -12,15 +13,33 @@ import { MobileHeaderTitleSlot } from '@/components/layout/mobile-header-title-s
 import { MobileHeaderActionSlot } from '@/components/layout/mobile-header-action-slot';
 import { logoutAction } from './logout-action';
 
+/** Startbildschirm-Brief.md §2: "Feuerwehr {Heimatfeuerwehr}", ohne "Freiwillige" - für
+ * AFKDO-Mitglieder (kein "Feuerwehr X"-Kontext) einfach der Org-Name selbst. */
+function buildMobileHeaderLabel(org: { name: string; shortName: string | null; type: string }): string {
+  if (org.type === 'ABSCHNITTSKOMMANDO') return org.shortName ?? org.name;
+  return `Feuerwehr ${org.shortName ?? org.name}`;
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
   const [homeOrganization, adminOrganizations] = await Promise.all([
-    prisma.organization.findUnique({ where: { id: user.homeOrganizationId } }),
+    // Explizites select statt findUnique ohne select: wappenImageData ist ein potenziell
+    // mehrere hundert KB großer Bytes-Blob, der bei jeder Navigation sonst unnötig mitgeladen
+    // würde, obwohl hier nur wappenImageMimeType (Präsenz-Check) gebraucht wird.
+    prisma.organization.findUnique({
+      where: { id: user.homeOrganizationId },
+      select: { id: true, name: true, shortName: true, type: true, wappenImageMimeType: true },
+    }),
     user.feuerwehrAdminOrgIds.length > 0
       ? prisma.organization.findMany({ where: { id: { in: user.feuerwehrAdminOrgIds } } })
       : Promise.resolve([]),
   ]);
+
+  const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'AFKDO Purkersdorf';
+  const wappenSrc = homeOrganization?.wappenImageMimeType ? `/api/organization/${homeOrganization.id}/wappen` : null;
+  const showVerwaltungPill = canAccessHeimatfeuerwehrAdmin(user);
+  const verwaltungHref = isSiteAdmin(user) ? '/admin/benutzer' : '/admin/heimatfeuerwehr';
 
   return (
     <TooltipProvider>
@@ -34,17 +53,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="pt-safe bg-[#1c1c1e] text-white">
           <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-5 sm:h-auto sm:px-4 sm:py-3">
             <div className="flex min-w-0 items-center gap-2 sm:gap-6">
-              <img
-                src="/wappen-afkdo.png"
-                alt="Wappen AFKDO Purkersdorf"
-                className="h-7 w-auto shrink-0 sm:hidden"
-              />
-              <MobileHeaderTitleSlot fallback="AFKDO Purkersdorf" />
+              {/* Startbildschirm-Brief.md §2: Wappen sitzt nur noch in der Tab-Bar (Wappen-Home-Tab),
+                  nicht mehr zusätzlich links in der Kopfzeile - das Mobile-Wappen-<img> von V2/V3
+                  entfällt deshalb hier ersatzlos. */}
+              <MobileHeaderTitleSlot fallback={mobileHeaderLabel} />
               <span className="hidden text-sm font-semibold text-white sm:inline">AFKDO Purkersdorf</span>
               <Nav user={user} />
             </div>
             <div className="flex shrink-0 items-center gap-1 text-sm text-neutral-200 sm:gap-3">
               <MobileHeaderActionSlot />
+              {showVerwaltungPill && (
+                <Link
+                  href={verwaltungHref}
+                  className="inline-flex h-[30px] items-center rounded-full border border-[#4a4a4e] px-3 text-[13px] font-semibold text-white sm:hidden"
+                >
+                  Verwaltung
+                </Link>
+              )}
               <img
                 src="/wappen-afkdo.png"
                 alt="Wappen AFKDO Purkersdorf"
@@ -57,6 +82,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 isSiteAdmin={isSiteAdmin(user)}
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}
+                canManageNews={canManageNews(user)}
                 vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
                 logoutAction={logoutAction}
               />
@@ -74,7 +100,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="hidden sm:block">
           <Footer />
         </div>
-        <MobileTabBar user={user} />
+        <MobileTabBar user={user} wappenSrc={wappenSrc} />
         {/* App ist fixed-light-themed (siehe globals.css/color-scheme:light) - theme="light" statt
             sonners Standard "system", damit Toasts bei OS-Dark-Mode nicht plötzlich abweichen. */}
         <Toaster theme="light" position="top-right" richColors />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { ChangePasswordForm } from './change-password-form';
 import { FeedbackForm } from './feedback-form';
 import { PushNotificationsToggle } from './push-notifications-toggle';
@@ -14,6 +15,11 @@ interface ProfileMenuProps {
   isSiteAdmin: boolean;
   adminOrganizationNames: string[];
   isDrohnengruppeMember: boolean;
+  /** Startbildschirm-Brief.md §3: die mobile Tab-Bar hat nur noch 3 feste Einträge (Kalender,
+   * Meine Feuerwehr, Drohnengruppe) - News (bislang Teil der permissionsgetriebenen Nav-Liste)
+   * braucht auf Mobile deshalb eine neue Anlaufstelle. Desktop erreicht News weiterhin unverändert
+   * über <Nav>, daher ist der Link hier unten sm:hidden. */
+  canManageNews: boolean;
   vapidPublicKey: string | null;
   logoutAction: () => Promise<void>;
 }
@@ -25,6 +31,7 @@ export function ProfileMenu({
   isSiteAdmin,
   adminOrganizationNames,
   isDrohnengruppeMember,
+  canManageNews,
   vapidPublicKey,
   logoutAction,
 }: ProfileMenuProps) {
@@ -154,6 +161,18 @@ export function ProfileMenu({
               </div>
             )}
           </div>
+
+          {canManageNews && (
+            <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
+              <Link
+                href="/news"
+                onClick={() => setOpen(false)}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                News
+              </Link>
+            </div>
+          )}
 
           {/* Nur Mobile: Desktop hat "Abmelden" bereits als eigenen Button in der Kopfleiste
               (siehe (app)/layout.tsx) - hier zusätzlich anzeigen würde es doppeln. */}

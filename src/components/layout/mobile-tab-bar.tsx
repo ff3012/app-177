@@ -1,75 +1,90 @@
 'use client';
 
-import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { SessionUser } from '@/types/next-auth';
-import { getActiveNavHref, getNavItems } from '@/lib/nav-items';
+import { canViewDroneModule } from '@/lib/auth/permissions';
+import { WappenFallbackIcon } from './wappen-fallback-icon';
 
-// Hand-authored inline SVGs, matching this codebase's existing convention (e.g. the edit-pencil
-// icon in user-management-section.tsx) - no icon library is used anywhere in the app.
-const ICONS: Record<string, ReactElement> = {
-  '/kalender': (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="5" width="18" height="16" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 10h18M8 3v4M16 3v4" strokeLinecap="round" />
-    </svg>
-  ),
-  '/drohnen': (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="2.5" />
-      <path d="M5 5l3.5 3.5M19 5l-3.5 3.5M5 19l3.5-3.5M19 19l-3.5-3.5" strokeLinecap="round" />
-      <circle cx="5" cy="5" r="1.6" />
-      <circle cx="19" cy="5" r="1.6" />
-      <circle cx="5" cy="19" r="1.6" />
-      <circle cx="19" cy="19" r="1.6" />
-    </svg>
-  ),
-  '/news': (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M4 5h13a2 2 0 0 1 2 2v11l-3-2H6a2 2 0 0 1-2-2V5Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8 9h7M8 12.5h5" strokeLinecap="round" />
-    </svg>
-  ),
-  '/admin/benutzer': (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 8a3 3 0 1 1 0 6M22 20c0-2.6-1.8-4.8-4.2-5.6" strokeLinecap="round" />
-    </svg>
-  ),
-};
+// Hand-authored inline SVGs, matching this codebase's existing convention - no icon library.
+const KALENDER_ICON = (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="5" width="18" height="16" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M3 10h18M8 3v4M16 3v4" strokeLinecap="round" />
+  </svg>
+);
+const DROHNEN_ICON = (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M5 5l3.5 3.5M19 5l-3.5 3.5M5 19l3.5-3.5M19 19l-3.5-3.5" strokeLinecap="round" />
+    <circle cx="5" cy="5" r="1.6" />
+    <circle cx="19" cy="5" r="1.6" />
+    <circle cx="5" cy="19" r="1.6" />
+    <circle cx="19" cy="19" r="1.6" />
+  </svg>
+);
 
-// Mobile-only (<640px) counterpart to Nav (nav.tsx). z-30: above ordinary page content, but below
-// the profile dropdown (z-40) and the calendar's full-screen event modal (z-50) - see the z-index
-// table in the design plan for why that ordering matters (a fixed bottom bar must never be tappable
-// through/above content that's meant to be blocking).
-export function MobileTabBar({ user }: { user: SessionUser }) {
+function isActiveHref(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Startbildschirm-Brief.md §3: feste 3-Tab-Leiste (Kalender | Wappen-Home | Drohnengruppe),
+ * bewusst NICHT mehr über getNavItems()/nav-items.ts gebaut wie die Desktop-<Nav> - dieser Umbau
+ * betrifft laut Brief nur die mobile Ansicht, Desktop bleibt bei der bisherigen, permissionsgetriebenen
+ * Item-Liste (News/Verwaltung landen auf Mobile stattdessen im Kopfzeilen-Pill bzw. im ProfileMenu,
+ * siehe (app)/layout.tsx und profile-menu.tsx). Der Drohnengruppe-Tab entfällt ganz (statt einen
+ * toten Link zu zeigen), wenn canViewDroneModule falsch ist - die mittlere Spalte bleibt trotzdem
+ * zentriert, da alle drei Grid-Spalten immer gleich breit sind (repeat(3,1fr)).
+ */
+export function MobileTabBar({ user, wappenSrc }: { user: SessionUser; wappenSrc: string | null }) {
   const pathname = usePathname();
-  const items = getNavItems(user);
-  const activeHref = getActiveNavHref(items, pathname);
+  const showDrohnen = canViewDroneModule(user);
+  const kalenderActive = isActiveHref(pathname, '/kalender');
+  const homeActive = isActiveHref(pathname, '/meine-feuerwehr');
+  const drohnenActive = isActiveHref(pathname, '/drohnen');
 
   return (
     <nav
-      className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 grid grid-cols-[repeat(var(--tab-count),1fr)] border-t border-neutral-200 bg-white sm:hidden"
-      style={{ '--tab-count': items.length } as React.CSSProperties}
+      className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 grid h-[86px] grid-cols-3 items-start border-t border-neutral-200 bg-white pt-2.5 sm:hidden"
       aria-label="Hauptnavigation"
     >
-      {items.map((item) => {
-        const active = item.href === activeHref;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex flex-col items-center justify-center gap-0.5 pt-2 text-[11px] font-medium ${
-              active ? 'text-brand' : 'text-[#aeaeb2]'
-            }`}
-            aria-current={active ? 'page' : undefined}
-          >
-            {ICONS[item.href]}
-            {item.label}
-          </Link>
-        );
-      })}
+      <Link
+        href="/kalender"
+        className={`flex flex-col items-center gap-0.5 text-[11px] font-medium ${kalenderActive ? 'text-brand' : 'text-[#aeaeb2]'}`}
+        aria-current={kalenderActive ? 'page' : undefined}
+      >
+        {KALENDER_ICON}
+        Kalender
+      </Link>
+
+      <Link
+        href="/meine-feuerwehr"
+        className="flex flex-col items-center gap-1"
+        aria-current={homeActive ? 'page' : undefined}
+      >
+        <span className="-mt-4 flex h-[46px] w-[46px] items-center justify-center rounded-full bg-white shadow-[0_2px_10px_rgba(28,28,30,0.18)]">
+          {wappenSrc ? (
+            <img src={wappenSrc} alt="Wappen der eigenen Feuerwehr" className="h-[30px] w-[30px] object-contain" />
+          ) : (
+            <WappenFallbackIcon size={30} />
+          )}
+        </span>
+        <span className={`text-[11px] font-semibold ${homeActive ? 'text-brand' : 'text-[#aeaeb2]'}`}>Meine Feuerwehr</span>
+      </Link>
+
+      {showDrohnen ? (
+        <Link
+          href="/drohnen"
+          className={`flex flex-col items-center gap-0.5 text-[11px] font-medium ${drohnenActive ? 'text-brand' : 'text-[#aeaeb2]'}`}
+          aria-current={drohnenActive ? 'page' : undefined}
+        >
+          {DROHNEN_ICON}
+          Drohnengruppe
+        </Link>
+      ) : (
+        <span aria-hidden="true" />
+      )}
     </nav>
   );
 }

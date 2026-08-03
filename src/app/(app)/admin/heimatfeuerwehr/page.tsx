@@ -19,6 +19,7 @@ import { VehicleRowActions } from './vehicle-row-actions';
 import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
 import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
 import { IcsImportForm } from './ics-import-form';
+import { WappenUploadForm } from './wappen-upload-form';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
@@ -144,6 +145,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         icsImportUrl: true,
         icsImportLastSyncAt: true,
         icsImportLastSyncError: true,
+        wappenImageMimeType: true,
       },
     }),
   ]);
@@ -162,6 +164,19 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       <AdminMobileTabs items={getAdminNavItems(user)} />
 
       {allowedOrgs.length > 1 && <OrgSelect organizations={allowedOrgs} selectedId={selectedOrgId} />}
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Wappen (Startbildschirm)</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Wird im mittleren Tab der mobilen Navigation gezeigt. Ohne Bild erscheint dort ein neutrales
+          Ersatzsymbol statt eines fremden Wappens.
+        </p>
+        <WappenUploadForm
+          organizationId={selectedOrgId}
+          hasWappen={Boolean(selectedOrgFull.wappenImageMimeType)}
+          wappenSrc={`/api/organization/${selectedOrgId}/wappen`}
+        />
+      </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
