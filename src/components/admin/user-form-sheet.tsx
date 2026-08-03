@@ -34,6 +34,12 @@ interface OrganizationOption {
   name: string;
 }
 
+interface DienstgradOption {
+  id: string;
+  kurzform: string;
+  bezeichnung: string;
+}
+
 export interface UserSheetTarget {
   id: string;
   firstName: string;
@@ -43,6 +49,7 @@ export interface UserSheetTarget {
   phone: string;
   isActive: boolean;
   istAtemschutzgeraeteTraeger: boolean;
+  dienstgradId: string;
   homeOrganizationId: string;
   homeOrgName: string;
   adminOrgIds: string[];
@@ -56,6 +63,7 @@ interface UserFormSheetProps {
   onOpenChange: (open: boolean) => void;
   mode: 'create' | 'edit';
   organizations: OrganizationOption[];
+  dienstgrade: DienstgradOption[];
   target?: UserSheetTarget;
   onSaved: () => void;
 }
@@ -96,6 +104,7 @@ function buildDefaultValues(
     phone: target?.phone ?? (mode === 'create' ? '+43' : ''),
     isActive: target ? target.isActive : mode === 'create' ? false : true,
     istAtemschutzgeraeteTraeger: target?.istAtemschutzgeraeteTraeger ?? false,
+    dienstgradId: target?.dienstgradId ?? '',
     homeOrganizationId: target?.homeOrganizationId ?? organizations[0]?.id ?? '',
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
@@ -113,7 +122,7 @@ function buildDefaultValues(
  * Reset-Mail-Aktion), die Mehrfachauswahl "Admin für" und den neuen Block "Funktionen und
  * Ausbildung" (Atemschutz + segmentierte Drohnengruppen-Auswahl).
  */
-export function UserFormSheet({ open, onOpenChange, mode, organizations, target, onSaved }: UserFormSheetProps) {
+export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstgrade, target, onSaved }: UserFormSheetProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
   const [activationLink, setActivationLink] = useState<string | undefined>();
@@ -180,6 +189,7 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
     formData.set('phone', values.phone ?? '');
     if (values.isActive) formData.set('isActive', 'on');
     if (values.istAtemschutzgeraeteTraeger) formData.set('istAtemschutzgeraeteTraeger', 'on');
+    formData.set('dienstgradId', values.dienstgradId ?? '');
     formData.set('homeOrganizationId', values.homeOrganizationId);
     for (const orgId of values.adminOrgIds) formData.append('adminOrgIds', orgId);
     formData.set('droneRole', values.droneRole);
@@ -323,7 +333,32 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, target,
                 <section>
                   <SectionLabel>Person</SectionLabel>
                   <div className="flex flex-col gap-3.5">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div>
+                        <FieldLabel htmlFor="dienstgradId">Dienstgrad</FieldLabel>
+                        <Controller
+                          control={control}
+                          name="dienstgradId"
+                          render={({ field }) => (
+                            <Select
+                              value={field.value || 'NONE'}
+                              onValueChange={(value) => field.onChange(value === 'NONE' ? '' : value)}
+                            >
+                              <SelectTrigger id="dienstgradId" className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE">–</SelectItem>
+                                {dienstgrade.map((d) => (
+                                  <SelectItem key={d.id} value={d.id}>
+                                    {d.kurzform}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
                       <div>
                         <FieldLabel htmlFor="firstName">Vorname</FieldLabel>
                         <Input id="firstName" {...register('firstName')} />

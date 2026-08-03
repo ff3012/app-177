@@ -52,6 +52,18 @@ enum NewsAudienceType {
   DROHNENGRUPPE
 }
 
+// Kategorien der NÖ-Feuerwehr-Dienstgradordnung (NÖ Landesfeuerwehrverband) - rein informativ zur
+// Gruppierung im Dropdown, keine Berechtigungslogik hängt daran.
+enum DienstgradKategorie {
+  MANNSCHAFT
+  CHARGE
+  OFFIZIER
+  VERWALTUNG
+  SACHBEARBEITER
+  SONDERDIENSTGRAD
+  EHRENDIENSTGRAD
+}
+
 // ---------- Core org & users ----------
 
 model Organization {
@@ -117,6 +129,11 @@ model User {
   atemschutzGueltigBis        DateTime?
   atemschutzFinnentestAm      DateTime?
 
+  // Dienstgrad laut zentraler NÖ-Dienstgradtabelle (siehe Dienstgrad-Modell unten) - nullable, da
+  // Bestandsbenutzer noch keinen zugewiesen haben.
+  dienstgradId String?
+  dienstgrad   Dienstgrad? @relation(fields: [dienstgradId], references: [id])
+
   homeOrganization       Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
   memberships            Membership[]
   droneMembership        DrohnengruppeMembership?
@@ -132,6 +149,25 @@ model User {
   dashboardTokensCreated DashboardToken[]
 
   @@index([homeOrganizationId])
+}
+
+// Zentrale Tabelle aller Dienstgrade der Feuerwehren in Niederösterreich (NÖ
+// Landesfeuerwehrverband-Dienstgradordnung) - eine einzige Quelle statt eines freien Textfelds, damit
+// "Dienstgrad" in der Benutzerverwaltung als Dropdown mit den amtlichen Kurzformen (LM, HBI, ABI, FM,
+// SB, EOBI, ...) gepflegt wird, nicht als Freitext, der sich mit der Zeit auseinanderentwickeln würde.
+// sortOrder trägt die fachliche Hierarchie innerhalb jeder Kategorie (niedrigster Dienstgrad zuerst),
+// nicht nur alphabetische Ordnung - kurzform ist @unique und die einzig sichtbare Form in Tabelle/Sheet
+// (siehe Benutzerverwaltung); bezeichnung ist nur eine Verständnishilfe im Dropdown selbst.
+model Dienstgrad {
+  id          String              @id @default(cuid())
+  kurzform    String              @unique
+  bezeichnung String
+  kategorie   DienstgradKategorie
+  sortOrder   Int                 @unique
+
+  users User[]
+
+  @@index([kategorie])
 }
 
 // Login-Rate-Limiting: getrackt pro eingegebener E-Mail-Adresse (auch wenn sie zu keinem

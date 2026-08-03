@@ -46,6 +46,8 @@ export interface UserRow {
   istAtemschutzgeraeteTraeger: boolean;
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
+  dienstgradId: string;
+  dienstgrad: string;
 }
 
 type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
@@ -53,6 +55,12 @@ type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
 interface Organization {
   id: string;
   name: string;
+}
+
+interface DienstgradOption {
+  id: string;
+  kurzform: string;
+  bezeichnung: string;
 }
 
 type SortKey =
@@ -65,11 +73,13 @@ type SortKey =
   | 'droneLabel'
   | 'pushCount'
   | 'status'
-  | 'lastActive';
+  | 'lastActive'
+  | 'dienstgrad';
 type SimpleFilter = 'ALLE' | 'JA' | 'NEIN';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
+  { key: 'dienstgrad', label: 'Dienstgrad' },
   { key: 'email', label: 'E-Mail' },
   { key: 'stbNr', label: 'StbNr' },
   { key: 'phone', label: 'Telefonnummer' },
@@ -109,7 +119,10 @@ function UserCard({ user, onSelect }: { user: UserRow; onSelect: (id: string) =>
       className="flex min-h-11 w-full flex-col gap-0.5 border-b border-line px-4 py-3 text-left last:border-0"
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-semibold text-ink">{user.name}</span>
+        <span className="font-semibold text-ink">
+          {user.dienstgrad && <span className="text-ink-muted">{user.dienstgrad} </span>}
+          {user.name}
+        </span>
         <Badge
           variant="outline"
           className={
@@ -140,6 +153,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 export function UserManagementSection({
   users,
   organizations,
+  dienstgrade,
   initialQuery,
   initialFeuerwehr,
   initialRolle,
@@ -154,6 +168,7 @@ export function UserManagementSection({
 }: {
   users: UserRow[];
   organizations: Organization[];
+  dienstgrade: DienstgradOption[];
   initialQuery: string;
   initialFeuerwehr: string;
   initialRolle: string;
@@ -431,6 +446,7 @@ export function UserManagementSection({
         droneRole: sheetTargetRow.droneRole,
         lastLoginAt: sheetTargetRow.lastLoginAt,
         passwordChangedAt: sheetTargetRow.passwordChangedAt,
+        dienstgradId: sheetTargetRow.dienstgradId,
       }
     : undefined;
 
@@ -692,6 +708,18 @@ export function UserManagementSection({
                       aria-label="Alle auswählen"
                     />
                   </TableHead>
+                  <TableHead className="w-20">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('dienstgrad')}
+                      className={`text-[11px] font-semibold uppercase tracking-[.08em] hover:text-ink ${
+                        sortKey === 'dienstgrad' ? 'text-ink' : 'text-ink-muted'
+                      }`}
+                    >
+                      Dienstgrad
+                      {sortKey === 'dienstgrad' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                    </button>
+                  </TableHead>
                   {(['name', 'homeOrg', 'adminFor', 'status'] as SortKey[]).map((key) => {
                     const option = SORT_OPTIONS.find((o) => o.key === key)!;
                     const active = key === sortKey;
@@ -741,6 +769,7 @@ export function UserManagementSection({
                         aria-label={`${u.name} auswählen`}
                       />
                     </TableCell>
+                    <TableCell className="text-ink-muted">{u.dienstgrad || '–'}</TableCell>
                     <TableCell>
                       <div className="font-semibold text-ink">{u.name}</div>
                       <div className="text-xs text-ink-muted xl:hidden">{u.email}</div>
@@ -806,6 +835,7 @@ export function UserManagementSection({
         }}
         mode={sheetState?.mode ?? 'create'}
         organizations={organizations}
+        dienstgrade={dienstgrade}
         target={sheetTarget}
         onSaved={() => {
           setSheetState(null);

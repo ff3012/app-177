@@ -91,6 +91,7 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
       phone: data.phone || null,
       isActive: false,
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
+      dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
       passwordHash,
     },
@@ -162,6 +163,7 @@ export async function updateUser(
       phone: data.phone || null,
       isActive: data.isActive,
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
+      dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
     },
   });

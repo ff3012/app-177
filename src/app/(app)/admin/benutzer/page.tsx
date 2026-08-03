@@ -34,7 +34,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   }
   const fullAdmin = isSiteAdmin(currentUser);
 
-  const [users, organizations] = await Promise.all([
+  const [users, organizations, dienstgrade] = await Promise.all([
     prisma.user.findMany({
       where: fullAdmin ? undefined : { homeOrganizationId: { in: currentUser.feuerwehrAdminOrgIds } },
       include: {
@@ -42,6 +42,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
         memberships: { where: { role: MembershipRole.ADMIN }, include: { organization: true } },
         droneMembership: true,
         pushSubscriptions: { select: { createdAt: true } },
+        dienstgrad: true,
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     }),
@@ -49,6 +50,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
       orderBy: { name: 'asc' },
     }),
+    prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
   ]);
 
   const rows: UserRow[] = users.map((u) => {
@@ -76,6 +78,8 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       istAtemschutzgeraeteTraeger: u.istAtemschutzgeraeteTraeger,
       lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
       passwordChangedAt: u.passwordChangedAt ? u.passwordChangedAt.toISOString() : null,
+      dienstgradId: u.dienstgradId ?? '',
+      dienstgrad: u.dienstgrad?.kurzform ?? '',
     };
   });
 
@@ -83,6 +87,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     <UserManagementSection
       users={rows}
       organizations={organizations.map((org) => ({ id: org.id, name: org.shortName ?? org.name }))}
+      dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
       initialQuery={params.q ?? ''}
       initialFeuerwehr={params.feuerwehr ?? 'ALLE'}
       initialRolle={params.rolle ?? 'ALLE'}

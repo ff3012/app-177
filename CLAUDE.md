@@ -946,6 +946,53 @@ description emphasizes) rather than a browser/WebFetch flow.
   real local database; and `formatRelativeDate`/`isOlderThanMonths`'s date math against several concrete
   offsets - plus a clean `tsc`/production build across the whole change.
 
+**Dienstgrad (NÖ-Feuerwehr-Rangdropdown)** — a follow-up request to add rank (Dienstgrad) to
+Benutzerverwaltung, always shown/edited as its official short form only (e.g. `LM`, `HBI`, `ABI`, `FM`,
+`SB`, `EOBI`), backed by a new central lookup table rather than a free-text field, so the value can never
+drift from the NÖ Landesfeuerwehrverband's actual rank names.
+
+- **`Dienstgrad` model** (`prisma/schema.prisma`): `kurzform` (`@unique`, the only form ever displayed),
+  `bezeichnung` (full name, shown nowhere in the UI today - kept purely as a documentation/future-proofing
+  field on the row itself), `kategorie` (`DienstgradKategorie` enum: `MANNSCHAFT`/`CHARGE`/`OFFIZIER`/
+  `VERWALTUNG`/`SACHBEARBEITER`/`SONDERDIENSTGRAD`/`EHRENDIENSTGRAD` - informational grouping only, no
+  permission logic attached), `sortOrder` (`@unique`, the actual professional hierarchy within each
+  category, not alphabetical - lowest rank first). `User.dienstgradId` is nullable (existing members have
+  none set) with `onDelete` left at Prisma's default (`Restrict`) since there's no legitimate reason to ever
+  delete a row from this reference table. **The 46-row seed list was researched, not invented**: fetched via
+  `WebSearch`/`WebFetch` against Wikipedia's "Dienstgrade der Feuerwehr in Österreich" (Niederösterreich-
+  specific section) and AustriaWiki/austria-forum.org's mirror of the same article, cross-checked between
+  both sources for the base Mannschafts-/Chargen-/Offiziers-/Verwaltungs-/
+  Sachbearbeiter-/Sonderdienstgrade list, then a **second, targeted search specifically for the
+  Ehrendienstgrade** (honorary ranks for retired officers who keep an "Ehren-"-prefixed title, e.g. the
+  user's own example `EOBI` = Ehren-Oberbrandinspektor) since the first source didn't cover those at all.
+  The full researched draft (all 46 entries, grouped by category) was presented back to the user for
+  confirmation before seeding - specifically flagging that `EOBI` was initially missing from the first
+  source - rather than committing invented or half-verified official rank names for a real Austrian
+  volunteer fire brigade organization's actual personnel records. The user confirmed the full scope
+  (including the rarely-used Verwaltungs-/Sonderdienstgrade categories) explicitly.
+- **`prisma/seed.ts`**: `DIENSTGRADE` array + an idempotent `upsert`-by-`kurzform` loop, same pattern as the
+  existing `DROHNEN_NAMEN` seeding just above it - safe to re-run against a live production database via the
+  already-documented one-off `db seed` command (see "Stack" section) without touching any other data.
+- **UI**: `UserFormSheet`'s Person section first row is now a 3-column
+  `grid-cols-1 sm:grid-cols-3` (`[Dienstgrad] [Vorname] [Nachname]`, was a 2-column
+  Vorname/Nachname pair) with a `Select` sourced from the `dienstgrade` list (now threaded as a new prop
+  through `page.tsx` → `UserManagementSection` → `UserFormSheet`, alongside `organizations`) - a `"NONE"`
+  sentinel value maps to/from the field's real empty-string state, since Radix `Select.Item` can't take a
+  literal empty-string `value`. Every `SelectItem`'s rendered text is the bare `kurzform` only (not
+  `"kurzform – bezeichnung"`) in both the closed trigger and the open list, deliberately - Radix's
+  `Select.Value` always mirrors whichever `SelectItem`'s text was registered for the current value (it
+  can't show different text in the trigger vs. the list), and showing the full name only in the list would
+  have meant abandoning "nur die Kurzform" for that one surface. A new "Dienstgrad" column (always visible,
+  not `xl:`-gated, since rank is core identifying info alongside the name next to it) was added to the
+  desktop table - and, since roster convention is to show rank directly in front of a name, the mobile
+  `UserCard` also gained a small muted `{kurzform} ` prefix before the name text, reusing the same
+  `UserRow.dienstgrad` string both places read from.
+- Verified: the full 46-row seed against the local database (correct count, correct `kurzform`/`bezeichnung`/
+  `kategorie` for a sample), and the actual rendered table column showing the correct short form for a real
+  user after setting `dienstgradId` directly in the database - the Sheet's own `Select` interaction itself
+  falls under the same already-documented harness-wide hydration gap as every other Sheet control in this
+  module and couldn't be click-tested directly.
+
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,
