@@ -178,6 +178,45 @@ CRON_TZ=Europe/Vienna
 0 * * * * /opt/app-177/docker/facebook-fetch.sh >> /var/log/ffapp-facebook-fetch.log 2>&1
 ```
 
+### Facebook Page-ID + langlebiges Access Token beschaffen
+
+Damit `fetchAndCacheFacebookPosts()` (`src/lib/facebook/fetch-posts.ts`) etwas abrufen kann, braucht jede
+Feuerwehr unter Verwaltung → Heimatfeuerwehr → "Dashboard Feuerwehrhaus" ihre `facebookPageId` und ein
+`facebookPageAccessToken`. Voraussetzung: eine Facebook-App unter developers.facebook.com (Entwicklungsmodus
+reicht, keine App-Überprüfung nötig, solange der eigene Facebook-Account Admin der Seite ist) und
+Anwendungsfall "Ich verwalte alles auf meiner Seite" bzw. "Sonstiges".
+
+1. **Kurzlebiges Token holen** — [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
+   öffnen, oben rechts die eigene App auswählen, bei "User or Page" die Feuerwehr-Seite wählen,
+   Berechtigungen `pages_read_engagement` + `pages_show_list` hinzufügen, "Generate Access Token" klicken
+   und das Facebook-Login-Popup bestätigen. Das Token ist nur ~1–2 Stunden gültig.
+2. **App-ID/App-Secret notieren** — App-Dashboard → Einstellungen → "Basic". App-Secret erst nach
+   Passwort-Bestätigung sichtbar.
+3. **Gegen langlebiges User-Token tauschen** (~60 Tage gültig):
+   ```
+   https://graph.facebook.com/v26.0/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=KURZLEBIGES_TOKEN
+   ```
+   Die Antwort enthält ein `access_token` — das ist erst das langlebige **User**-Token, noch nicht das
+   Page-Token.
+4. **Langlebiges Page-Token ableiten** (läuft praktisch nicht mehr ab, solange die App bestehen bleibt, der
+   Account Admin der Seite bleibt und das Passwort nicht geändert wird):
+   ```
+   https://graph.facebook.com/v26.0/me/accounts?access_token=LANGLEBIGES_USER_TOKEN
+   ```
+   Die Antwort ist eine Liste aller verwalteten Seiten, je mit `id` (= Page-ID) und `access_token` (= das
+   gesuchte Page-Token). Die `id` hier gegen die tatsächliche Page-ID abgleichen, bevor sie eingetragen wird
+   — Facebook-Page-IDs sind rein numerisch (z. B. `61234567890123`); ein alphanumerischer Wert ist meist eine
+   andere Art ID (z. B. eine Asset-/App-scoped-ID) und wird von `/​{page-id}/posts` nicht akzeptiert.
+5. **Eintragen**: `id` aus Schritt 4 → "Facebook Page-ID", zugehöriges `access_token` → "Page Access Token".
+6. **Optional prüfen** (zeigt u. a. `expires_at`; `0` = läuft nicht ab):
+   ```
+   https://graph.facebook.com/debug_token?input_token=TOKEN&access_token=APP_ID|APP_SECRET
+   ```
+
+Kein automatischer Refresh vorgesehen — läuft das Token doch irgendwann ab (z. B. nach einem
+Facebook-Passwortwechsel), zeigt das Dashboard einfach wieder "Facebook nicht verbunden"; Schritte 1–5
+dann erneut durchführen.
+
 ## ICS-Kalenderimport (alle 5 Minuten)
 
 `docker/kalender-ics-sync.sh` ruft `/api/cron/kalender-ics-sync` auf, das für jede Feuerwehr mit
