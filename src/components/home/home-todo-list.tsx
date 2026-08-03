@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { setRsvp } from '@/app/(app)/kalender/[eventId]/rsvp-actions';
 import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
+import { VehicleBookingIcon } from '@/components/calendar/vehicle-booking-icon';
 import type { RsvpStatusOption } from '@/lib/validation/rsvp.schema';
 
 export interface HomeEventCardData {
@@ -21,6 +22,10 @@ export interface HomeEventCardData {
    * Brief.md §4: "Beim Kommandanten zeigt die Terminkarte zusätzlich den Rückmeldestand der Mannschaft
    * statt der eigenen Zu-/Absage-Buttons." */
   tally: { zugesagt: number; offen: number } | null;
+  /** Wie im Kalender-Modul: ein automatisch aus einer Fahrzeug-Buchung erzeugter Termin hat kein
+   * Zusage-Konzept (siehe VehicleBookingIcon-Kommentar) - der Server schließt solche Termine
+   * bereits aus rsvpTodos aus, dieses Flag steuert hier nur noch das Auto-Symbol in "Als Nächstes". */
+  isVehicleBooking: boolean;
 }
 
 export interface StaticTodoItemData {
@@ -167,7 +172,10 @@ function UpcomingEventRow({ event, isLast }: { event: HomeEventCardData; isLast:
       </div>
       <div className="w-[3px] flex-none self-stretch rounded" style={{ background: LAYER_COLORS[event.layer] }} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[16px] font-semibold leading-tight text-[#1c1c1e]">{event.title}</div>
+        <div className="flex items-center gap-1.5 truncate text-[16px] font-semibold leading-tight text-[#1c1c1e]">
+          {event.isVehicleBooking && <VehicleBookingIcon className="flex-none text-[#6c6c70]" />}
+          <span className="truncate">{event.title}</span>
+        </div>
         <div className="truncate text-[14px] text-[#6c6c70]">
           {event.allDay ? 'Ganztägig' : formatTime(event.startsAt)} · {event.location || event.organizationName}
         </div>

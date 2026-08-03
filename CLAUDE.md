@@ -1565,6 +1565,24 @@ way to vary by viewport (see "Login-Redirect" below).
   (React state never attaches in this browser-automation session, so `useState`-gated JSX - the dropdown's
   `{open && (...)}`, `HomeTodoList`'s `responded` map - never mounts in a static DOM snapshot regardless of
   the underlying logic's correctness).
+- **Bugfix (real user report, screenshot showed "Zusagen"/"Absagen" on a `Fahrzeug: MTF-BUS1 (...)`
+  card)**: the initial version didn't carry the Kalender module's own "vehicle-booking events have no
+  RSVP concept" rule into this new "Zu erledigen" query at all, so any event created via
+  `createVehicleBooking` (`Event.vehicleBookingId` set) that fell inside the 14-day window and had no
+  `TerminZusage` row (which, correctly, it never does - nobody RSVPs to a booking) was misclassified as an
+  "Offene Rückmeldung" needing a response, same as a real Übung/Einsatz. `HomeEventCardData` gained an
+  `isVehicleBooking` flag; `meine-feuerwehr/page.tsx` now excludes such events from `rsvpTodos` entirely
+  (they still show up in "Als Nächstes" as read-only entries, since a vehicle booking is still a real
+  future occupation of the calendar - just never as a to-do) and skips the Kommandant tally computation for
+  them too (same reasoning: no Zusagen to tally). `HomeTodoList`'s "Als Nächstes" row reuses the existing,
+  already-shared `VehicleBookingIcon` (`components/calendar/vehicle-booking-icon.tsx`) next to the title for
+  such entries, the same icon the Kalender grid/list/mobile-card already show - so this is now consistent
+  everywhere the app renders a vehicle-booking event, not a fourth, diverging spot. Verified live by
+  reproducing the exact reported scenario (a `Vehicle`/`VehicleBooking`/linked `Event` inserted directly via
+  `psql`, 3 days out) alongside a plain event with no RSVP 5 days out: after the fix, "Zu erledigen" shows a
+  count of 1 (the plain event only, correctly rendered with the Kommandant tally variant since the test
+  account manages that org) and the vehicle-booking event appears only in "Als Nächstes" with the car icon
+  and a plain chevron - no Zusagen/Absagen anywhere for it. Test rows cleaned up afterward.
 
 ### Module 5: Dashboard Feuerwehrhaus (GitHub Issue #8)
 

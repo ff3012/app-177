@@ -136,9 +136,13 @@ export default async function MeineFeuerwehrPage() {
   const eventCards: HomeEventCardData[] = await Promise.all(
     candidateEvents.map(async (event) => {
       const layer = event.category === 'DROHNENGRUPPE' ? 'drohnengruppe' : event.isSectionWide ? 'abschnitt' : 'own';
+      const isVehicleBooking = event.vehicleBookingId !== null;
       const canManage = canManageEventsFor(user, event.organizationId);
+      // Ein automatisch aus einer Fahrzeug-Buchung erzeugter Termin hat kein Zusage-Konzept - exakt
+      // dieselbe Regel wie im Kalender-Modul selbst (kalender/[eventId]/page.tsx blendet dort
+      // "Meine Zusage"/Teilnehmerliste komplett aus). Weder Buttons noch Team-Tally sind hier sinnvoll.
       let tally: HomeEventCardData['tally'] = null;
-      if (canManage) {
+      if (canManage && !isVehicleBooking) {
         const [zugesagtCount, totalEligible] = await Promise.all([
           prisma.terminZusage.count({ where: { eventId: event.id, status: 'ZUGESAGT' } }),
           prisma.user.count({ where: { homeOrganizationId: event.organizationId, isActive: true } }),
@@ -154,13 +158,16 @@ export default async function MeineFeuerwehrPage() {
         location: event.location,
         organizationName: event.organization.shortName ?? event.organization.name,
         layer,
-        myStatus: ownStatusByEvent.get(event.id) ?? null,
+        myStatus: isVehicleBooking ? null : ownStatusByEvent.get(event.id) ?? null,
         tally,
+        isVehicleBooking,
       };
     }),
   );
 
-  const rsvpTodos = eventCards.filter((event) => event.startsAt.getTime() <= in14Days.getTime() && !event.myStatus);
+  const rsvpTodos = eventCards.filter(
+    (event) => event.startsAt.getTime() <= in14Days.getTime() && !event.myStatus && !event.isVehicleBooking,
+  );
   const rsvpTodoIds = new Set(rsvpTodos.map((event) => event.id));
   const upcomingPool = eventCards.filter((event) => !rsvpTodoIds.has(event.id)).slice(0, 4);
 
