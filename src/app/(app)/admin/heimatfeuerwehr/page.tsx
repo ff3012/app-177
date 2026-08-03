@@ -18,6 +18,7 @@ import { VehicleFormDialog } from './vehicle-form-dialog';
 import { VehicleRowActions } from './vehicle-row-actions';
 import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
 import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
+import { IcsImportForm } from './ics-import-form';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
@@ -136,7 +137,14 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     // facebookPageAccessToken niemals für eine andere Feuerwehr ins RSC-Payload gelangt.
     prisma.organization.findUnique({
       where: { id: selectedOrgId },
-      select: { atemschutzSachbearbeiterEmail: true, facebookPageId: true, facebookPageAccessToken: true },
+      select: {
+        atemschutzSachbearbeiterEmail: true,
+        facebookPageId: true,
+        facebookPageAccessToken: true,
+        icsImportUrl: true,
+        icsImportLastSyncAt: true,
+        icsImportLastSyncError: true,
+      },
     }),
   ]);
   if (!selectedOrgFull) {
@@ -368,6 +376,16 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-3 text-[15px] font-semibold text-ink">Kalender-Import (ICS)</h2>
+        <IcsImportForm
+          organizationId={selectedOrgId}
+          initialUrl={selectedOrgFull.icsImportUrl ?? ''}
+          initialLastSyncAt={selectedOrgFull.icsImportLastSyncAt?.toISOString() ?? null}
+          initialLastSyncError={selectedOrgFull.icsImportLastSyncError ?? null}
+        />
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">

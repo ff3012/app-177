@@ -87,6 +87,14 @@ model Organization {
   facebookPageId          String?
   facebookPageAccessToken String?
 
+  // Periodischer Read-Only-Import externer Kalendertermine (z. B. ein Google Kalender) in den
+  // Kalender dieser Feuerwehr - siehe lib/calendar/ics-import.ts und api/cron/kalender-ics-sync.
+  // Öffentliche .ics-Feeds enthalten keine Geheimnisse, daher (anders als
+  // facebookPageAccessToken) keine Maskierung im Admin-Formular nötig.
+  icsImportUrl           String?
+  icsImportLastSyncAt    DateTime?
+  icsImportLastSyncError String?
+
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
   events       Event[]
@@ -264,12 +272,21 @@ model Event {
   vehicleBookingId String?         @unique
   vehicleBooking   VehicleBooking? @relation(fields: [vehicleBookingId], references: [id], onDelete: SetNull)
 
+  // Gesetzt (auf die UID des Quell-VEVENT) für per ICS-Sync importierte Termine (siehe
+  // lib/calendar/ics-import.ts) - schützt den Termin genau wie vehicleBookingId vor normaler
+  // Bearbeitung/Löschung im Kalender, da der nächste Sync (alle 5 Minuten) jede manuelle Änderung
+  // ohnehin überschreiben bzw. den Termin als "nicht mehr in der Quelle" wieder löschen würde.
+  // Zusammen mit organizationId eindeutig, da dieselbe externe UID theoretisch in mehreren
+  // Feuerwehren importiert werden könnte (jede mit ihrem eigenen icsImportUrl).
+  icsUid String?
+
   organization Organization   @relation(fields: [organizationId], references: [id])
   createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])
   zusagen      TerminZusage[]
 
   @@index([organizationId, startsAt])
   @@index([isSectionWide, startsAt])
+  @@unique([organizationId, icsUid])
 }
 
 // RSVP pro Termin und Benutzer. Eine Zeile pro (eventId, userId) - erneutes Setzen aktualisiert

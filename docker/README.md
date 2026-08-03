@@ -178,6 +178,20 @@ CRON_TZ=Europe/Vienna
 0 * * * * /opt/app-177/docker/facebook-fetch.sh >> /var/log/ffapp-facebook-fetch.log 2>&1
 ```
 
+## ICS-Kalenderimport (alle 5 Minuten)
+
+`docker/kalender-ics-sync.sh` ruft `/api/cron/kalender-ics-sync` auf, das für jede Feuerwehr mit
+gesetzter `Organization.icsImportUrl` (Verwaltung → Heimatfeuerwehr → "Kalender-Import (ICS)")
+externe Kalendertermine (z. B. ein per Google Kalender freigegebener .ics-Link) in ihren Kalender
+importiert - neue Termine anlegen, geänderte aktualisieren, aus der Quelle entfernte löschen. Alle
+5 Minuten ausführen:
+
+```bash
+crontab -e
+CRON_TZ=Europe/Vienna
+*/5 * * * * /opt/app-177/docker/kalender-ics-sync.sh >> /var/log/ffapp-kalender-ics-sync.log 2>&1
+```
+
 ## Dashboard Feuerwehrhaus (Kiosk-Screen)
 
 Der öffentliche Kiosk-Screen (`/dashboard/[token]`, Issue #8) läuft auf einem gewöhnlichen Windows-PC im

@@ -78,7 +78,9 @@ provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms ·
 the codebase, see "System Check" below for why) · `qrcode` for server-side dashboard/token QR generation ·
 `sharp` for compositing the WASTL district-status overlay GIFs onto the basemap (see "WASTL proxy" under
 Dashboard Feuerwehrhaus below) · `cmdk` (via shadcn's `command` component) for the "Admin für"
-searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md under Verwaltung below).
+searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md under Verwaltung below) ·
+`node-ical` for parsing external .ics feeds for the Kalender module's read-only import sync (see
+"Externer ICS-Kalenderimport" below - `ical-generator`, listed above, is output-only and unrelated).
 
 ### Route groups
 
@@ -408,6 +410,81 @@ same organization/category visibility check as the main Kalender query) so a rea
 links to it from wherever an event is actually visible: the list view (icon per row), the grid view's
 event-detail popup (non-editable events only show up there), and the edit page (editable events navigate
 straight there instead, so the popup never renders for them).
+
+**Externer ICS-Kalenderimport (5-Minuten-Sync)** — the reverse direction of the .ics links above: a
+Feuerwehr can point at an *external* read-only .ics feed (e.g. a Google Calendar "public/basic.ics" share
+link) and have its events mirrored into that Feuerwehr's own Kalender automatically, requested so members
+don't need to keep a separate external calendar in sync by hand.
+
+- **Schema**: `Organization.icsImportUrl`/`icsImportLastSyncAt`/`icsImportLastSyncError` (all nullable, same
+  per-org-settings shape as `atemschutzSachbearbeiterEmail`/`facebookPageId` - deliberately **not** masked
+  in the admin form the way `facebookPageAccessToken` is, since a public .ics feed URL carries no secret).
+  `Event.icsUid` (nullable, `@@unique([organizationId, icsUid])`) marks a synced event and protects it from
+  manual editing/deletion - the exact same "mere presence of a foreign flag blocks edit/delete" pattern
+  `vehicleBookingId` already established: `kalender/actions.ts`'s `updateEvent`/`deleteEvent` and
+  `kalender/[eventId]/bearbeiten/page.tsx` each got an added `!existing.icsUid` check alongside their
+  existing `!existing.vehicleBookingId` one, and `kalender/page.tsx`'s `editable` flag (which the list
+  view's double-click-to-edit shortcut and the grid's `eventClick` handler both already key off) gained the
+  same `&& !event.icsUid`. **Deliberately different from vehicle-booking events**: RSVP ("Zusage") and the
+  Teilnehmerliste are left fully visible/functional on synced events (only `kalender/[eventId]/page.tsx`'s
+  "Bearbeiten" link gets the extra `!event.icsUid` check) - a real Feuerwehr activity imported from a
+  calendar (Übung, Kameradschaftsabend, Einsatz) has a genuine RSVP concept, unlike a vehicle booking, so
+  there was no reason to hide it here the way V4 deliberately did for bookings.
+- **`src/lib/calendar/ics-import.ts`**'s `syncIcsCalendarForOrganization(organizationId, icsUrl)` is the
+  whole sync: fetch the feed, parse with `node-ical` (new dependency - the first ICS *parsing* library in
+  this codebase; `ical-generator` is output-only, used solely for the app's own outgoing .ics feeds above),
+  then a full reconcile within a rolling **sync window** (`now − 14 days` to `now + 12 months` - a deliberate
+  bound, not "import the whole feed": the real Google Calendar this was built against has ~800 events
+  stretching back to 2017, and a rolling window keeps each 5-minute sync fast and avoids flooding the
+  calendar grid with a decade of history) against `Event` rows scoped to `organizationId` with `icsUid` set:
+  new source events are created, existing ones (matched by `icsUid`) updated in place, and previously-synced
+  events whose `icsUid` no longer appears in the current feed are deleted (their `TerminZusage` rows cascade
+  automatically, same `onDelete: Cascade` already used everywhere else RSVPs are tied to an `Event`).
+  **RRULE-recurring events are supported but were never exercised by the real feed this was built
+  against** (confirmed live: 802 real VEVENTs, zero using `RRULE`/`EXDATE`/`RECURRENCE-ID` - every
+  occurrence in that calendar is already its own standalone VEVENT) - `node-ical`'s own
+  `expandRecurringEvent(event, {from, to})` helper (which handles `RECURRENCE-ID` overrides and `EXDATE`
+  exclusions internally, not hand-rolled here) is still called for any VEVENT that does carry an `rrule`,
+  with each expanded occurrence given its own deterministic `icsUid` (`${baseUid}::${occurrenceStartISO}`) so
+  a whole recurring series doesn't collapse onto one `organizationId`+`icsUid` row. `ParameterValue` fields
+  (`summary`/`description`/`location`) from `node-ical` come back as either a plain string or `{val,
+  params}`, per the library's own documented pattern - `textValue()` here follows that exact safe-access
+  pattern rather than assuming a shape. `Event.createdById` is a required FK, so imported events are
+  attributed to a lazily-created system user (`src/lib/calendar/ics-sync-user.ts`, `isActive: false`,
+  `kalender-ics-sync@system.local`) - the same precedent as the Drohnengruppe QR-Schnellerfassung's system
+  user (`src/lib/drone/quick-register-user.ts`), not a new pattern.
+- **Admin UI** (`/admin/heimatfeuerwehr`, new "Kalender-Import (ICS)" section, own card matching this page's
+  established single-page-multi-section shape): `ics-import-form.tsx` + `setIcsImportUrl`/
+  `triggerIcsImportNow` in that page's `actions.ts`, `canManageHeimatfeuerwehrFor`-gated like every other
+  action there. Changing the URL resets `icsImportLastSyncAt`/`icsImportLastSyncError` to null (an old
+  success/failure timestamp from a *previous* source URL would otherwise read as current status for the new
+  one). "Jetzt synchronisieren" calls `triggerIcsImportNow`, which runs the exact same
+  `syncIcsCalendarForOrganization` the cron route uses - the same "manual trigger reuses the real
+  production function, not a special-cased test path" precedent as `/admin/status`'s "System Check" button
+  reusing `notifySystemCheckResult()`.
+- **Cron**: `/api/cron/kalender-ics-sync` (new route, `CRON_SECRET`-gated exactly like the other `/api/cron/*`
+  routes, already covered by `middleware.ts`'s public-prefix list) loops every `Organization` with
+  `icsImportUrl` set, one `try`/`catch` per org (a broken feed for one Feuerwehr must not block the others -
+  same `continue`-on-error shape as `fetchAndCacheFacebookPosts`'s loop), always recording
+  `icsImportLastSyncAt`/`icsImportLastSyncError` (success or failure) so the admin page never shows a stale
+  success timestamp after a feed starts failing. `docker/kalender-ics-sync.sh` mirrors
+  `docker/facebook-fetch.sh`'s exact host-wrapper shape, tracked executable in git
+  (`git update-index --chmod=+x`, the same real-incident lesson from `backup.sh`/`send-scheduled-news.sh`
+  being committed non-executable, see System Check above) - crontab entry documented in
+  `docker/README.md`, **every 5 minutes** (`*/5 * * * *`) as requested, not hourly/daily like this app's
+  other cron jobs.
+- **Verified end-to-end against the real, live Google Calendar feed this was built for** (not just
+  type-checked): a standalone script run directly against `syncIcsCalendarForOrganization` (the dev-server
+  process itself can't make outbound HTTPS fetches in this sandboxed environment - the same pre-existing,
+  already-documented local TLS/proxy limitation as the WASTL proxy above, confirmed again here via the
+  identical "fetch failed / unable to get local issuer certificate" - but a script run through the Bash
+  tool's own shell fetches the same URL fine) confirmed: first sync imports 41 events (all real events
+  falling inside the 14-day/12-month window, including correct multi-line `location` text), an immediate
+  second sync updates all 41 and creates zero duplicates (confirming `icsUid`-based matching works, not
+  re-importing every run), and a manually-inserted fake "stale" `Event` with a `icsUid` absent from the real
+  feed is correctly deleted on the next sync. Also verified live in the browser: an `icsUid`-tagged event's
+  edit page shows the blocking message instead of the form, while its detail page still shows a fully
+  working "Meine Zusage"/Teilnehmerliste.
 
 ### Shared: 15-minute time picker
 

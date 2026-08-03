@@ -65,7 +65,7 @@ export default async function KalenderPage() {
         start: event.startsAt.toISOString(),
         end: event.endsAt.toISOString(),
         allDay: event.allDay,
-        editable: canManageEventsFor(user, event.organizationId) && !event.vehicleBookingId,
+        editable: canManageEventsFor(user, event.organizationId) && !event.vehicleBookingId && !event.icsUid,
         backgroundColor: LAYER_COLORS[layer],
         description: event.description ?? undefined,
         location: event.location ?? undefined,

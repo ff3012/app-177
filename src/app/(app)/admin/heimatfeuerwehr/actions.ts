@@ -7,6 +7,7 @@ import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageHeimatfeuerwehrFor } from '@/lib/auth/permissions';
 import { vehicleSchema, parseVehicleFormData } from '@/lib/validation/vehicle.schema';
 import { atemschutzSchema, parseAtemschutzFormData } from '@/lib/validation/atemschutz.schema';
+import { syncIcsCalendarForOrganization } from '@/lib/calendar/ics-import';
 
 export interface VehicleFormState {
   error?: string;
@@ -173,4 +174,93 @@ export async function setAtemschutzSachbearbeiter(
 
   revalidatePath('/admin/heimatfeuerwehr');
   return { success: true };
+}
+
+export interface IcsImportUrlState {
+  success?: boolean;
+  error?: string;
+}
+
+const icsImportUrlSchema = z.union([
+  z.literal(''),
+  z.string().trim().url('Ungültige URL.').refine((value) => value.startsWith('https://') || value.startsWith('http://'), {
+    message: 'Die URL muss mit http:// oder https:// beginnen.',
+  }),
+]);
+
+/** Leere Eingabe ist gültig (= kein ICS-Import für diese Feuerwehr). Öffentliche .ics-Feeds
+ * (z. B. ein Google-Kalender-Freigabelink) enthalten kein Geheimnis, daher anders als
+ * facebookPageAccessToken keine Maskierung/"leer lassen = unverändert"-Logik nötig - die
+ * tatsächliche URL wird im Formular immer im Klartext angezeigt. */
+export async function setIcsImportUrl(
+  organizationId: string,
+  _prevState: IcsImportUrlState,
+  formData: FormData,
+): Promise<IcsImportUrlState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const parsed = icsImportUrlSchema.safeParse(formData.get('icsImportUrl'));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige URL.' };
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      icsImportUrl: parsed.data || null,
+      // Ein Adresswechsel macht den letzten Fehler/Sync-Zeitpunkt der ALTEN Quelle bedeutungslos -
+      // sonst würde "Zuletzt synchronisiert" nach dem Ändern der URL fälschlich einen alten,
+      // erfolgreichen Sync-Zeitpunkt der vorherigen Quelle zeigen.
+      icsImportLastSyncAt: null,
+      icsImportLastSyncError: null,
+    },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  return { success: true };
+}
+
+export interface IcsImportTriggerState {
+  success?: boolean;
+  error?: string;
+  imported?: number;
+  updated?: number;
+  removed?: number;
+}
+
+/** "Jetzt synchronisieren" - ruft exakt dieselbe Sync-Funktion wie der 5-Minuten-Cron
+ * (api/cron/kalender-ics-sync) auf, für einen sofortigen End-zu-Ende-Test nach dem Setzen der
+ * URL, statt auf den nächsten Cron-Lauf warten zu müssen (gleiches Prinzip wie der manuelle
+ * "System Check"-Button auf /admin/status, der dieselbe Funktion wie der tägliche Cron aufruft). */
+export async function triggerIcsImportNow(organizationId: string): Promise<IcsImportTriggerState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { icsImportUrl: true },
+  });
+  if (!organization?.icsImportUrl) {
+    return { error: 'Keine ICS-Kalender-URL hinterlegt.' };
+  }
+
+  try {
+    const result = await syncIcsCalendarForOrganization(organizationId, organization.icsImportUrl);
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { icsImportLastSyncAt: new Date(), icsImportLastSyncError: null },
+    });
+    revalidatePath('/admin/heimatfeuerwehr');
+    revalidatePath('/kalender');
+    return { success: true, ...result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unbekannter Fehler beim Synchronisieren.';
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { icsImportLastSyncAt: new Date(), icsImportLastSyncError: message },
+    });
+    revalidatePath('/admin/heimatfeuerwehr');
+    return { error: message };
+  }
 }

@@ -32,6 +32,17 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
       </div>
     );
   }
+  if (event.icsUid) {
+    return (
+      <div className="flex flex-col gap-3">
+        <h1 className="text-lg font-semibold text-neutral-900">Termin bearbeiten</h1>
+        <p className="text-neutral-700">
+          Dieser Termin stammt aus einem importierten Kalender (Verwaltung → Heimatfeuerwehr) und wird
+          automatisch mit der Quelle synchronisiert. Änderungen sind nur im Quellkalender möglich.
+        </p>
+      </div>
+    );
+  }
 
   const organizations = await prisma.organization.findMany({
     where: { id: { in: user.feuerwehrAdminOrgIds } },
