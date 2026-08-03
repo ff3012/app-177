@@ -203,19 +203,48 @@ Anwendungsfall "Ich verwalte alles auf meiner Seite" bzw. "Sonstiges".
    ```
    https://graph.facebook.com/v26.0/me/accounts?access_token=LANGLEBIGES_USER_TOKEN
    ```
-   Die Antwort ist eine Liste aller verwalteten Seiten, je mit `id` (= Page-ID) und `access_token` (= das
-   gesuchte Page-Token). Die `id` hier gegen die tatsächliche Page-ID abgleichen, bevor sie eingetragen wird
-   — Facebook-Page-IDs sind rein numerisch (z. B. `61234567890123`); ein alphanumerischer Wert ist meist eine
-   andere Art ID (z. B. eine Asset-/App-scoped-ID) und wird von `/​{page-id}/posts` nicht akzeptiert.
-5. **Eintragen**: `id` aus Schritt 4 → "Facebook Page-ID", zugehöriges `access_token` → "Page Access Token".
+   Die Antwort ist normalerweise eine Liste aller verwalteten Seiten, je mit `id` (= Page-ID) und
+   `access_token` (= das gesuchte Page-Token). Die `id` hier gegen die tatsächliche Page-ID abgleichen, bevor
+   sie eingetragen wird — Facebook-Page-IDs sind rein numerisch (z. B. `61234567890123`); ein alphanumerischer
+   Wert ist meist eine andere Art ID (z. B. eine Asset-/App-scoped-ID) und wird von `/​{page-id}/posts` nicht
+   akzeptiert.
+   - **Falls `me/accounts` `{"data": []}` liefert, obwohl der Access Token Debugger für das langlebige
+     User-Token unter "Granulare Bereiche" bereits `pages_show_list`/`pages_read_engagement` korrekt für
+     genau diese Page-ID zeigt** (live durchgespielt, kein theoretisches Problem): die Seite läuft dann auf
+     Facebooks "New Pages Experience", bei der `me/accounts` das Page-Token nicht mehr zuverlässig liefert.
+     Stattdessen das Token direkt vom Seiten-Objekt selbst anfordern:
+     ```
+     https://graph.facebook.com/v26.0/{page-id}?fields=access_token&access_token=LANGLEBIGES_USER_TOKEN
+     ```
+     Antwort: `{"access_token": "...", "id": "{page-id}"}` — das ist das gesuchte Page-Token. Mit einem
+     einfachen User-Token direkt `/{page-id}/posts` aufzurufen funktioniert bei diesen Seiten NICHT
+     (Fehler `code 190`, `error_subcode 2069032`, "Für diesen Aufruf ist ein Seiten-Zugriffstoken für die
+     neue Seitenversion erforderlich.") — es muss wirklich dieses abgeleitete Page-Token sein.
+5. **Eintragen**: Page-ID → "Facebook Page-ID", zugehöriges `access_token` (aus Schritt 4, regulär oder über
+   den New-Pages-Experience-Weg) → "Page Access Token".
 6. **Optional prüfen** (zeigt u. a. `expires_at`; `0` = läuft nicht ab):
    ```
    https://graph.facebook.com/debug_token?input_token=TOKEN&access_token=APP_ID|APP_SECRET
    ```
+7. **Vor dem Eintragen den eigentlichen Anwendungsfall testen** (genau der Aufruf, den
+   `fetchAndCacheFacebookPosts()` später macht):
+   ```
+   https://graph.facebook.com/v26.0/{page-id}/posts?fields=message,created_time,permalink_url,full_picture&access_token=PAGE_ACCESS_TOKEN
+   ```
+   Kommen hier echte Beiträge zurück, ist das Token verifiziert richtig.
 
 Kein automatischer Refresh vorgesehen — läuft das Token doch irgendwann ab (z. B. nach einem
 Facebook-Passwortwechsel), zeigt das Dashboard einfach wieder "Facebook nicht verbunden"; Schritte 1–5
 dann erneut durchführen.
+
+**App-Berechtigung fehlt trotz korrektem Setup**: Falls eine Seite im OAuth-Berechtigungsdialog ("Auswählen,
+auf welche Seiten [App] zugreifen soll") angehakt wurde, aber weiterhin nicht funktioniert — z. B. weil sie
+im Graph API Explorer nicht unter "Seiten-Zugriffstokens" auftaucht — hilft meist eine komplett neue
+Autorisierung: auf facebook.com unter Einstellungen → "Apps und Websites" den Zugriff der App entfernen,
+Explorer in einem frischen Tab neu öffnen und den Token neu generieren. Eine Verknüpfung über die
+Business-Einstellungen (Konten → Apps → App auswählen → "Assets verknüpfen") ist dafür **nicht** zwingend
+nötig — bereits eine rein persönliche OAuth-Freigabe (ohne Business-Asset-Verknüpfung) reicht aus, wie ein
+Live-Test bestätigt hat (die zuerst funktionierende Seite hatte ebenfalls keine verknüpften Assets).
 
 ## ICS-Kalenderimport (alle 5 Minuten)
 
