@@ -628,6 +628,32 @@ App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes au
   verifiziert statt angenommen). Ein `grep -noE "data-[a-z-]+:" src/components/ui/*.tsx | grep -v "data-\["`
   über den gesamten Ordner findet danach keine bare Variante mehr — die Suche nach zukünftig neu
   hinzugefügten shadcn-Komponenten sollte denselben Check vor dem Commit wiederholen.
+- **Weiterer echter Bug aus derselben v3/v4-Ursache (gefunden nach einem Nutzerbericht: "Dienstgrade-Dropdown
+  kann nicht ausgewählt werden")**: `npx shadcn add` generiert für Radix-Popup-Inhalte (`select.tsx`,
+  `dropdown-menu.tsx`, `popover.tsx`, `tooltip.tsx`) Klassen wie `max-h-(--radix-select-content-available-height)`
+  und `origin-(--radix-select-content-transform-origin)` — Tailwind **v4**s neue Kurzform, eine CSS-Variable
+  direkt in runden statt eckigen Klammern zu referenzieren, ohne `var(...)`. Tailwind v3.4.19 kennt diese
+  Syntax nicht; empirisch mit `npx tailwindcss -i ... --config tailwind.config.ts` gegen ein Test-HTML
+  verifiziert (derselbe Verifikationsweg wie beim `data-checked:`-Fund oben): die Klasse erzeugt unter v3
+  **gar keine Regel**, `max-height`/`transform-origin`/`width`/`height`/`min-width` bleiben unbounded/unset.
+  Bei den meisten Radix-Popups (wenige Einträge, z. B. Rolle/Status-Filter oder das Row-Actions-Dropdown)
+  blieb das unbemerkt, weil der Inhalt ohnehin in den Viewport passt — bei der 46-Einträge-Dienstgradliste
+  im `UserFormSheet` sprengte das fehlende `max-height`/`overflow-y-auto`-Zusammenspiel jedoch die
+  Panelgröße: das Dropdown öffnete sich (Radix rendert den Portal-Inhalt clientseitig ungeachtet der
+  fehlenden CSS-Regel), aber ohne Höhenbegrenzung/Scroll ragte ein Großteil der Liste außerhalb des
+  sichtbaren Viewports und war damit faktisch nicht anklickbar — genau das gemeldete Symptom. Gefixt durch
+  Ersetzen der v4-Kurzform durch die v3-taugliche Arbitrary-Value-Syntax mit explizitem `var(...)`
+  (`max-h-[var(--radix-select-content-available-height)]` etc.) an allen 6 betroffenen Stellen in den 4
+  genannten Dateien — vorher/nachher per Tailwind-CLI-Kompilierung gegenübergestellt (Regel fehlte komplett →
+  erzeugt jetzt `max-height: var(--radix-select-content-available-height)` korrekt). Da dieses
+  Browser-Automatisierungs-Sandbox React clientseitig nie hydratisiert (derselbe bereits dokumentierte,
+  session-übergreifende Befund — `__reactFiber$`-Lookup findet nirgends etwas, auch nicht nach direkter
+  `?edit=<id>`-Navigation), war ein echtes Klick-Nachstellen des Dropdowns hier nicht möglich; die Behebung
+  stützt sich stattdessen vollständig auf die empirische Tailwind-Kompilierungsprüfung, nicht auf einen
+  Browser-Repro. `outline-hidden` (select.tsx/popover.tsx) und `not-data-[variant=destructive]:focus:**:...`
+  (select.tsx, `**:`-Deszendenten-Variante) sind ebenfalls v4-only und erzeugen ebenso keine Regel, wurden
+  aber bewusst **nicht** angefasst — rein kosmetisch (Fokus-Outline bzw. Fokus-Textfarbe), exakt dieselbe
+  Abwägung wie beim ursprünglichen `tooltip.tsx`-Fund weiter oben.
 - `tailwind.config.ts` braucht `import tailwindcssAnimate from 'tailwindcss-animate'` statt
   `require('tailwindcss-animate')` im `plugins`-Array — dieses Next-15-Setup lädt `tailwind.config.ts` in
   einem Kontext, in dem `require` zur Laufzeit nicht definiert ist (`ReferenceError: require is not defined`),
