@@ -5,6 +5,9 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { isSiteAdmin } from '@/lib/auth/permissions';
 import { USER_EXCEL_COLUMNS } from '@/lib/admin/user-excel-columns';
+import { getUserStatus } from '@/lib/auth/user-status';
+
+const STATUS_LABEL = { AKTIV: 'Aktiv', INAKTIV: 'Inaktiv', DEAKTIVIERT: 'Deaktiviert' } as const;
 
 export async function GET() {
   const user = await requireUser();
@@ -21,6 +24,9 @@ export async function GET() {
     },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
   });
+  // passwordChangedAt wird oben nicht selektiert, aber via include automatisch mitgeliefert (kein
+  // eigener select-Block hier) - getUserStatus() unterscheidet damit "noch nie aktiviert" (Inaktiv)
+  // von "war aktiv, wurde deaktiviert" (Deaktiviert), statt beides als "Deaktiviert" zu melden.
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Benutzer');
@@ -37,7 +43,7 @@ export async function GET() {
       homeOrganizationName: u.homeOrganization.shortName ?? u.homeOrganization.name,
       adminFor: u.memberships.map((m) => m.organization.shortName ?? m.organization.name).join(', '),
       droneRole: u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '',
-      status: u.isActive ? 'Aktiv' : 'Deaktiviert',
+      status: STATUS_LABEL[getUserStatus(u)],
     });
   }
 

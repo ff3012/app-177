@@ -1130,6 +1130,70 @@ drift from the NÖ Landesfeuerwehrverband's actual rank names.
   falls under the same already-documented harness-wide hydration gap as every other Sheet control in this
   module and couldn't be click-tested directly.
 
+**Benutzerstatus: Inaktiv vs. Deaktiviert (Atemschutz/Drohnengruppe-Sichtbarkeit)** — a real reported bug:
+a brand-new user, created but not yet clicked through their activation link, is `isActive: false` exactly
+like an explicitly deactivated user - both collapsed onto the same boolean, so the Atemschutz table
+(`/admin/heimatfeuerwehr`) and the Drohnengruppe pilot-picker/flight-eligibility check both hid a never-
+activated member just as thoroughly as a genuinely deactivated one, making it impossible to pre-enter their
+Atemschutzuntersuchung/Finnentest or record a drone flight they'd already flown before the account existed
+in this app.
+
+- **`src/lib/auth/user-status.ts`** (new) introduces a derived, non-persisted 3-state distinction rather
+  than a new DB column: `getUserStatus(user): 'AKTIV' | 'INAKTIV' | 'DEAKTIVIERT'` reads `isActive` +
+  `passwordChangedAt` - `AKTIV` if `isActive`, else `DEAKTIVIERT` if `passwordChangedAt` is set (the account
+  was activated/reset/self-changed at some point, so `isActive: false` means an admin deliberately turned it
+  off), else `INAKTIV` (never activated at all). `passwordChangedAt` is set exactly once by activation/
+  password-reset/self-service-change and **never cleared again** (not even by another deactivation), so this
+  derivation stays correct across any number of activate/deactivate cycles. Deliberately not a new enum
+  column: the existing `isActive` boolean still drives login and every other existing check unchanged
+  (nothing about auth gating changed), and the three-state read is only needed at a handful of display/
+  filter call sites. Accepted, rare edge case: an admin who deactivates a user who has *never* activated at
+  all sees them still labeled "Inaktiv" rather than "Deaktiviert" (both still correctly hidden from nothing,
+  since only `DEAKTIVIERT` is ever hidden - see below) - judged acceptable rather than adding a dedicated
+  `activatedAt` column for a scenario with no real consequence.
+- **`NOT_DEACTIVATED_WHERE`** (same file) is the companion Prisma `where`-fragment for the opposite
+  direction - which users an admin-facing "who's an eligible/active member" query should still include:
+  `{ OR: [{ isActive: true }, { isActive: false, passwordChangedAt: null }] }`, i.e. everyone except
+  `DEAKTIVIERT`. Applied at exactly the three places that previously read a plain `isActive: true`:
+  the Atemschutz-Tabelle's member query (`admin/heimatfeuerwehr/page.tsx`), and both
+  `listDrohnengruppeMembers()` and `isEligiblePilot()` (`src/lib/drone/members.ts`) - the latter two are
+  shared by the flight-registration pilot picker, the write-time eligibility re-check in
+  `createFlight`/`updateFlight`, the 90-Tage-Report, and `/admin/drohnen`'s "Mitglieder · 90-Tage-Status"
+  table, so broadening them once fixes all four consistently rather than only the flight form (confirmed
+  as the desired behavior with the app owner rather than assumed - a never-activated Drohnengruppe member's
+  compliance is legitimately worth tracking in those reports too, not just recordable). Saving Atemschutz
+  dates itself already had no `isActive` gate of its own (`updateAtemschutzStatus` only checks
+  `canManageHeimatfeuerwehrFor`) - the bug was purely that the page never surfaced the row/edit-trigger to
+  click in the first place, so widening the query alone was the complete fix for that half of the report.
+- **Benutzerverwaltung UI**: the previously 2-state Aktiv/Inaktiv badge (`UserCard` mobile card, desktop
+  table row) and the Status filter `Select` (2 options, `SimpleFilter`'s `JA`/`NEIN`) both become genuinely
+  3-state, driven by `getUserStatus()` - green/amber/red (`success`/`warning`/`danger` tokens, the same
+  amber already used for "läuft bald ab" elsewhere in Heimatfeuerwehr) for Aktiv/Inaktiv/Deaktiviert
+  respectively. A new `StatusFilter` type (`'ALLE' | UserStatus`) replaces `SimpleFilter` for the status
+  filter specifically - `SimpleFilter` (`ALLE`/`JA`/`NEIN`) stays exactly as before for the unrelated Rolle
+  filter. The existing single "Zugang aktiv" on/off toggle in `UserFormSheet` is **unchanged** - no new
+  control was added; which of the two "off" labels shows is purely a consequence of whether that user had
+  ever been active before, decided deliberately with the app owner over adding a manual status picker. The
+  Excel export's "Status" column (previously a bug-for-bug-identical `isActive ? 'Aktiv' : 'Deaktiviert'`,
+  silently mislabeling a never-activated user as "Deaktiviert") now reads the same three labels via
+  `getUserStatus()` too, for consistency with the on-screen badge.
+- **Data retention, unchanged/confirmed rather than built**: a `DEAKTIVIERT` user's `atemschutz*` fields
+  (plain columns on `User`) and `DroneFlight` rows (`onDelete` unrelated to `User.isActive`) were never
+  touched by any of this - deactivating only ever changes visibility via the query filters above, never the
+  data itself, and reactivating (`isActive: true` again) makes both reappear exactly as they were. Only
+  actually deleting the `User` row cascades away that history, which was already true before this change and
+  needed no new code.
+- Verified directly against the real dev database (not just read for correctness): a standalone script
+  created a never-activated Atemschutzgeräteträger + Drohnengruppe-Pilot, confirmed they appear in the
+  Atemschutz query, `listDrohnengruppeMembers()`, and `isEligiblePilot()`; added a real Untersuchungsdatum
+  and recorded a real past `DroneFlight` for them; simulated activation-then-deactivation and confirmed the
+  derived status flips to `DEAKTIVIERT` and the same three checks now correctly exclude them while the
+  Atemschutz date and the flight row both remain in the database untouched; then reactivated and confirmed
+  visibility returns. 17/17 assertions passed. Also confirmed live in the browser (this session's rendered
+  HTML, not just the underlying query): three real users (never-activated, currently active, previously-
+  active-then-deactivated) each show the correct one of the three distinct badge labels/colors in both the
+  mobile card list and the desktop table.
+
 - `/admin/status` — `SystemCheckPanel` calls `runSystemCheck()` only on button click (not on page load).
   "Docker läuft" is actually a live `SELECT 1` through Prisma, not a Docker-daemon check (the app container
   can't see the host daemon) — a successful query proves the app ↔ Postgres Compose network path is up,

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { canAccessHeimatfeuerwehrAdmin, isSiteAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { cancelVehicleBooking } from '@/app/(app)/meine-feuerwehr/actions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import {
   getExpiryStatus,
   getFinnentestExpiryDate,
@@ -133,9 +134,12 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     // Wer ÜBERHAUPT Atemschutzgeräteträger ist, wird seit der Aufteilung Benutzerverwaltung/
     // Heimatfeuerwehr in der Benutzerverwaltung gepflegt (UserFormSheet) - diese Seite verwaltet
     // nur noch die Untersuchungs-/Finnentest-Details und zeigt daher ausschließlich bereits als
-    // Träger markierte Mitglieder (istAtemschutzgeraeteTraeger: true im where).
+    // Träger markierte Mitglieder (istAtemschutzgeraeteTraeger: true im where). NOT_DEACTIVATED_WHERE
+    // statt eines reinen isActive:true schließt noch nie aktivierte Benutzer bewusst ein, damit ihre
+    // Untersuchung/Finnentest gleich erfasst werden kann - nur bewusst deaktivierte Benutzer werden
+    // ausgeblendet (siehe lib/auth/user-status.ts).
     prisma.user.findMany({
-      where: { homeOrganizationId: selectedOrgId, isActive: true, istAtemschutzgeraeteTraeger: true },
+      where: { homeOrganizationId: selectedOrgId, ...NOT_DEACTIVATED_WHERE, istAtemschutzgeraeteTraeger: true },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       select: {
         id: true,

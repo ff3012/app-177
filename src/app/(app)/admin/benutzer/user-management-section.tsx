@@ -22,6 +22,7 @@ import type { AdminNavItem } from '@/lib/admin/nav-items';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
 import { formatRelativeDate, isOlderThanMonths } from '@/lib/format';
+import { getUserStatus, type UserStatus } from '@/lib/auth/user-status';
 import { bulkSetActive, bulkSetHomeOrganization } from './actions';
 import { UserRowActions } from './user-row-actions';
 
@@ -76,6 +77,15 @@ type SortKey =
   | 'lastActive'
   | 'dienstgrad';
 type SimpleFilter = 'ALLE' | 'JA' | 'NEIN';
+type StatusFilter = 'ALLE' | UserStatus;
+
+const STATUS_LABEL: Record<UserStatus, string> = { AKTIV: 'Aktiv', INAKTIV: 'Inaktiv', DEAKTIVIERT: 'Deaktiviert' };
+const STATUS_BADGE_CLASS: Record<UserStatus, string> = {
+  AKTIV: 'border-transparent bg-success-subtle text-success-text',
+  INAKTIV: 'border-transparent bg-warning-subtle text-warning-text',
+  DEAKTIVIERT: 'border-transparent bg-danger-subtle text-danger',
+};
+const STATUS_SORT_RANK: Record<UserStatus, number> = { INAKTIV: 0, DEAKTIVIERT: 1, AKTIV: 2 };
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
@@ -96,7 +106,7 @@ function compareRows(a: UserRow, b: UserRow, key: SortKey): number {
     case 'pushCount':
       return a.pushCount - b.pushCount;
     case 'status':
-      return Number(a.isActive) - Number(b.isActive);
+      return STATUS_SORT_RANK[getUserStatus(a)] - STATUS_SORT_RANK[getUserStatus(b)];
     case 'lastActive':
       return (a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0) - (b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0);
     default:
@@ -112,6 +122,7 @@ function formatPushTooltip(dates: string[]): string {
 /** Kartenansicht für schmale Bildschirme (Verwaltung-Brief.md 5): "Name fett, darunter
  * 'Feuerwehr · Rolle' 13px, rechts der Status-Badge" - min-h-11 (44px) für die Trefferfläche. */
 function UserCard({ user, onSelect }: { user: UserRow; onSelect: (id: string) => void }) {
+  const status = getUserStatus(user);
   return (
     <button
       type="button"
@@ -123,13 +134,8 @@ function UserCard({ user, onSelect }: { user: UserRow; onSelect: (id: string) =>
           {user.dienstgrad && <span className="text-ink-muted">{user.dienstgrad} </span>}
           {user.name}
         </span>
-        <Badge
-          variant="outline"
-          className={
-            user.isActive ? 'border-transparent bg-success-subtle text-success-text' : 'border-transparent bg-danger-subtle text-danger'
-          }
-        >
-          {user.isActive ? 'Aktiv' : 'Inaktiv'}
+        <Badge variant="outline" className={STATUS_BADGE_CLASS[status]}>
+          {STATUS_LABEL[status]}
         </Badge>
       </div>
       <span className="text-[13px] text-ink-muted">
@@ -198,7 +204,7 @@ export function UserManagementSection({
   const [query, setQuery] = useState(initialQuery);
   const [feuerwehr, setFeuerwehr] = useState(initialFeuerwehr || 'ALLE');
   const [rolle, setRolle] = useState<SimpleFilter>((initialRolle as SimpleFilter) || 'ALLE');
-  const [status, setStatus] = useState<SimpleFilter>((initialStatus as SimpleFilter) || 'ALLE');
+  const [status, setStatus] = useState<StatusFilter>((initialStatus as StatusFilter) || 'ALLE');
   const [sortKey, setSortKey] = useState<SortKey>(
     SORT_OPTIONS.some((o) => o.key === initialSort) ? (initialSort as SortKey) : 'name',
   );
@@ -238,8 +244,7 @@ export function UserManagementSection({
       if (feuerwehr !== 'ALLE' && u.homeOrganizationId !== feuerwehr) return false;
       if (rolle === 'JA' && !u.isAdmin) return false;
       if (rolle === 'NEIN' && u.isAdmin) return false;
-      if (status === 'JA' && !u.isActive) return false;
-      if (status === 'NEIN' && u.isActive) return false;
+      if (status !== 'ALLE' && getUserStatus(u) !== status) return false;
       if (!q) return true;
       return [u.name, u.email, u.stbNr, u.phone, u.homeOrg, u.adminFor, u.droneLabel].some((field) =>
         field.toLowerCase().includes(q),
@@ -381,14 +386,15 @@ export function UserManagementSection({
         </SelectContent>
       </Select>
 
-      <Select value={status} onValueChange={(value) => setStatus(value as SimpleFilter)}>
+      <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
         <SelectTrigger className="w-full md:w-auto">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ALLE">Alle Status</SelectItem>
-          <SelectItem value="JA">Aktiv</SelectItem>
-          <SelectItem value="NEIN">Inaktiv</SelectItem>
+          <SelectItem value="AKTIV">Aktiv</SelectItem>
+          <SelectItem value="INAKTIV">Inaktiv</SelectItem>
+          <SelectItem value="DEAKTIVIERT">Deaktiviert</SelectItem>
         </SelectContent>
       </Select>
 
@@ -417,7 +423,7 @@ export function UserManagementSection({
             onClick={() => setStatus('ALLE')}
             className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
           >
-            {status === 'JA' ? 'Aktiv' : 'Inaktiv'} ✕
+            {STATUS_LABEL[status as UserStatus]} ✕
           </button>
         )}
         {activeFilterCount > 1 && (
@@ -546,14 +552,15 @@ export function UserManagementSection({
           </SelectContent>
         </Select>
 
-        <Select value={status} onValueChange={(value) => setStatus(value as SimpleFilter)}>
+        <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
           <SelectTrigger>
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALLE">Alle Status</SelectItem>
-            <SelectItem value="JA">Aktiv</SelectItem>
-            <SelectItem value="NEIN">Inaktiv</SelectItem>
+            <SelectItem value="AKTIV">Aktiv</SelectItem>
+            <SelectItem value="INAKTIV">Inaktiv</SelectItem>
+            <SelectItem value="DEAKTIVIERT">Deaktiviert</SelectItem>
           </SelectContent>
         </Select>
 
@@ -581,7 +588,7 @@ export function UserManagementSection({
             onClick={() => setStatus('ALLE')}
             className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
           >
-            {status === 'JA' ? 'Aktiv' : 'Inaktiv'} ✕
+            {STATUS_LABEL[status as UserStatus]} ✕
           </button>
         )}
         {activeFilterCount > 1 && (
@@ -777,15 +784,8 @@ export function UserManagementSection({
                     <TableCell className="text-ink">{u.homeOrg}</TableCell>
                     <TableCell className="text-ink-faint">{u.adminFor}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          u.isActive
-                            ? 'border-transparent bg-success-subtle text-success-text'
-                            : 'border-transparent bg-danger-subtle text-danger'
-                        }
-                      >
-                        {u.isActive ? 'Aktiv' : 'Inaktiv'}
+                      <Badge variant="outline" className={STATUS_BADGE_CLASS[getUserStatus(u)]}>
+                        {STATUS_LABEL[getUserStatus(u)]}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden text-ink-muted xl:table-cell">{u.email}</TableCell>
