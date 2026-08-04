@@ -105,6 +105,16 @@ model Organization {
   icsImportLastSyncAt    DateTime?
   icsImportLastSyncError String?
 
+  // Gegenrichtung zu icsImportUrl: schreibt app-177-eigene Termine (icsUid: null, siehe Event) sofort
+  // in einen Google Kalender zurück (lib/calendar/google-calendar-push.ts), statt per periodischem
+  // Cron - siehe docs/superpowers/specs/2026-08-04-google-calendar-push-sync-design.md. Das
+  // Service-Account-JSON ist ein echtes Geheimnis (anders als icsImportUrl) und wird nie ans
+  // Client-UI zurückgegeben, analog zu facebookPageAccessToken.
+  googleCalendarServiceAccountJson String?
+  googleCalendarId                 String?
+  googleCalendarLastSyncAt         DateTime?
+  googleCalendarLastSyncError      String?
+
   // Wappen der Feuerwehr für die mobile Tab-Bar/Startbildschirm (Startbildschirm-Brief.md) - Bytes
   // in Postgres statt Dateisystem, analog zu DroneDocument/FacebookPostImage (wenige, kleine
   // Bilder, kein zusätzliches Docker-Volume nötig). Fehlt es, zeigt die Tab-Bar ein neutrales
@@ -301,6 +311,11 @@ model Event {
   // Zusammen mit organizationId eindeutig, da dieselbe externe UID theoretisch in mehreren
   // Feuerwehren importiert werden könnte (jede mit ihrem eigenen icsImportUrl).
   icsUid String?
+
+  // Gegenrichtung: die Google-Calendar-Event-Id, sobald dieser (app-177-eigene, icsUid: null)
+  // Termin einmal nach Google gepusht wurde (siehe lib/calendar/google-calendar-push.ts) - erlaubt
+  // spätere Updates/Löschungen als PATCH/DELETE statt eines erneuten POST.
+  googleEventId String?
 
   organization Organization   @relation(fields: [organizationId], references: [id])
   createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])

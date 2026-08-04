@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canCreateSectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
 import { eventSchema, parseEventFormData } from '@/lib/validation/event.schema';
+import { deleteEventFromGoogleCalendar, pushEventToGoogleCalendar } from '@/lib/calendar/google-calendar-push';
 
 export interface EventFormState {
   error?: string;
@@ -31,7 +32,7 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
     return { error: 'Keine Berechtigung für Abschnitt-weite Termine.' };
   }
 
-  await prisma.event.create({
+  const created = await prisma.event.create({
     data: {
       title: data.title,
       description: data.description || null,
@@ -45,6 +46,7 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       createdById: user.id,
     },
   });
+  await pushEventToGoogleCalendar(created);
 
   revalidateCalendars();
   redirect('/kalender');
@@ -84,7 +86,7 @@ export async function updateEvent(
     return { error: 'Keine Berechtigung für Abschnitt-weite Termine.' };
   }
 
-  await prisma.event.update({
+  const updated = await prisma.event.update({
     where: { id: eventId },
     data: {
       title: data.title,
@@ -98,6 +100,7 @@ export async function updateEvent(
       category: data.category,
     },
   });
+  await pushEventToGoogleCalendar(updated);
 
   revalidateCalendars();
   redirect('/kalender');
@@ -122,6 +125,7 @@ export async function deleteEvent(eventId: string): Promise<void> {
     'Dieser Termin stammt aus einem importierten Kalender und kann hier nicht gelöscht werden.',
   );
 
+  await deleteEventFromGoogleCalendar(existing);
   await prisma.event.delete({ where: { id: eventId } });
   revalidateCalendars();
   redirect('/kalender');

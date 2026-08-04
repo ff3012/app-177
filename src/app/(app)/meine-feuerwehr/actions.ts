@@ -9,6 +9,7 @@ import { assertPermission, canManageVehicleBooking } from '@/lib/auth/permission
 import { vehicleBookingSchema, parseVehicleBookingFormData } from '@/lib/validation/vehicle-booking.schema';
 import { findOverlappingBooking } from '@/lib/heimatfeuerwehr/vehicle-availability';
 import { sendVehicleBookingApprovalRequest } from '@/lib/heimatfeuerwehr/notify-vehicle-booking';
+import { deleteEventFromGoogleCalendar, pushEventToGoogleCalendar } from '@/lib/calendar/google-calendar-push';
 
 export interface VehicleBookingFormState {
   error?: string;
@@ -68,7 +69,7 @@ export async function createVehicleBooking(
   });
 
   if (!approvalEmail) {
-    await prisma.event.create({
+    const bookingEvent = await prisma.event.create({
       data: {
         title: `Fahrzeug: ${vehicle.taktischeBezeichnung} (${user.name})`,
         startsAt,
@@ -80,6 +81,7 @@ export async function createVehicleBooking(
         vehicleBookingId: booking.id,
       },
     });
+    await pushEventToGoogleCalendar(bookingEvent);
   } else {
     try {
       await sendVehicleBookingApprovalRequest(
@@ -140,6 +142,7 @@ export async function cancelVehicleBooking(bookingId: string, redirectTo = '/mei
   // blind zu löschen. Eine noch OFFENE oder ABGELEHNTE Reservierung hat ohnehin nie einen Termin.
   const linkedEvent = await prisma.event.findUnique({ where: { vehicleBookingId: bookingId } });
   if (linkedEvent) {
+    await deleteEventFromGoogleCalendar(linkedEvent);
     await prisma.event.delete({ where: { id: linkedEvent.id } });
   }
 

@@ -80,7 +80,10 @@ the codebase, see "System Check" below for why) · `qrcode` for server-side dash
 Dashboard Feuerwehrhaus below) · `cmdk` (via shadcn's `command` component) for the "Admin für"
 searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md under Verwaltung below) ·
 `node-ical` for parsing external .ics feeds for the Kalender module's read-only import sync (see
-"Externer ICS-Kalenderimport" below - `ical-generator`, listed above, is output-only and unrelated).
+"Externer ICS-Kalenderimport" below - `ical-generator`, listed above, is output-only and unrelated) ·
+`google-auth-library` for the Google-Calendar-Rückschreiben write side (see "Google-Kalender-
+Rückschreiben" below) - only the lean auth/JWT-signing package, not the full `googleapis` client,
+same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/client-s3` above.
 
 ### Route groups
 
@@ -520,7 +523,69 @@ don't need to keep a separate external calendar in sync by hand.
   should rename both folders to sort after `meine_feuerwehr` and fix production's tracking table in the
   same change, not treat it as a pure local-repo rename.
 
-### Shared: 15-minute time picker
+**Google-Kalender-Rückschreiben** — the reverse direction of the ICS import above: app-177-originated
+events (`icsUid: null`) are pushed into a Google Calendar per Feuerwehr, configured via an uploaded
+Service-Account JSON + a target calendar ID, instead of a periodic cron. Full design rationale in
+`docs/superpowers/specs/2026-08-04-google-calendar-push-sync-design.md`.
+
+- **Additive schema**: `Organization.googleCalendarServiceAccountJson`/`googleCalendarId`/
+  `googleCalendarLastSyncAt`/`googleCalendarLastSyncError` + `Event.googleEventId`. The JSON field is a
+  real secret, treated exactly like `facebookPageAccessToken` - plain `String?`, never selected/passed
+  into a client-component prop, only a derived `hasCredentials: boolean` reaches the UI.
+- **`src/lib/calendar/google-calendar-push.ts`** (new) is the whole write side, built on
+  `google-auth-library`'s `JWT` client (not the full `googleapis` package - only RS256 JWT-signing is
+  genuine cryptography worth pulling in a library for, the same reasoning that already justified
+  `@aws-sdk/client-s3` as this codebase's one other SDK dependency instead of hand-rolling AWS SigV4).
+  `pushEventToGoogleCalendar(event)`/`deleteEventFromGoogleCalendar(event)` **never throw** - both
+  catch their own errors, log them, and write the result into
+  `Organization.googleCalendarLastSyncAt`/`googleCalendarLastSyncError`, so every call site can just
+  `await` them with no try/catch of its own (same "external side effect must never block the core
+  action" principle as `notifyFlightCreated`). **Schleifen-Schutz**: both no-op immediately if
+  `event.icsUid` is set - an event that came FROM a Google import is never written back, regardless of
+  whether the import and push calendars are the same one.
+- **Sofort, nicht periodisch**: no cron job for this direction. Six call sites push/delete directly
+  inside the existing Server Actions right after the corresponding Prisma write - `createEvent`/
+  `updateEvent`/`deleteEvent` (`kalender/actions.ts`), `createVehicleBooking`'s immediate-`GENEHMIGT`
+  branch and `cancelVehicleBooking` (`meine-feuerwehr/actions.ts`), and `decideVehicleBooking`'s
+  `GENEHMIGT` branch (`lib/heimatfeuerwehr/vehicle-booking-decision.ts`) - the last two mean a Fahrzeug-
+  Reservierung is pushed the moment it's approved, whichever of the two approval paths (immediate or
+  freigabe-pflichtig) produced that approval, with no special-case code needed since both already only
+  ever create the linked `Event` at exactly that point. A cron-based batch diff can't detect deletions
+  (a hard-deleted row leaves nothing to compare against), so once delete needs a direct hook anyway, create/
+  update get the same direct-hook treatment for consistency rather than splitting the write path across
+  two different mechanisms.
+- **Feldabbildung**: `title`→`summary`, `description`→`description`, `location`→`location`;
+  timed events send `dateTime` (no offset) + `timeZone: 'Europe/Vienna'` explicitly rather than a UTC
+  offset, computed via `Intl.DateTimeFormat` reading the Vienna wall-clock components directly - robust
+  regardless of the host process's own default timezone (unlike the Docker container, this repo's local
+  dev machine has no `TZ` pinning at all), avoiding the same class of DST bug already documented for
+  this app's stored-datetime handling. All-day events send `date` only - Google's `end.date` is
+  **exclusive** (the day after), unlike app-177's inclusive `endsAt`, so writing one adds a day via
+  UTC-noon-anchored date arithmetic (noon is never near a DST transition, so the +1 is never
+  accidentally off by an hour's worth of calendar date).
+- **Admin UI** (`/admin/heimatfeuerwehr`, new "Google Kalender (Rückschreiben)" card right after the
+  ICS-Import card): a JSON file upload + calendar-ID text field, explicit hint text "Nur für Google
+  Kalender möglich" per the app owner's exact wording, "Hinterlegt: Ja/Nein" status (never the secret
+  itself) + last-sync timestamp/error (same pattern as the ICS import card), "Entfernen" button. The
+  upload Server Action (`setGoogleCalendarCredentials`) calls a real Google token exchange
+  (`verifyServiceAccountCredentials`, i.e. `JWT.authorize()`) **before** saving anything, rejecting a
+  malformed/wrong-project key with Google's own error message instead of silently storing a broken
+  credential - same "test the real path once, don't just validate shape" precedent as the ICS import's
+  "Jetzt synchronisieren" button and `/admin/status`'s System Check.
+- **Verified end-to-end against the real Google Calendar this was built for** (not just type-checked or
+  mocked): a standalone script temporarily set a real Feuerwehr's Google-Calendar fields to the app
+  owner's actual service-account credentials and calendar id (the same one already used for the ICS
+  import - confirming the loop-protection design choice was necessary, not theoretical), inside a
+  try/finally that always restores the row afterward. Confirmed: a timed test event round-tripped
+  through create → visible via a live Google API read-back with the correct summary and the correct
+  Vienna-local `dateTime`/offset → update (`PATCH`, not a second `POST`) → delete (confirmed gone via a
+  second live read-back); an all-day test event's `end.date` came back exactly one day after
+  `start.date` as Google's own API reported it; and a third event created with `icsUid` set was
+  confirmed to receive **no** `googleEventId` at all - the loop-protection guard never even attempts a
+  network call for it. One real setup gap was hit and resolved during this verification: the Google
+  Cloud project had the Calendar API disabled by default (`Google Calendar API has not been used in
+  project ... or it is disabled`, a 403) until the app owner enabled it in the Cloud Console - documented
+  here since it's a one-time setup step, not a bug in this code.
 
 `components/ui/datetime-15min-input.tsx` (a plain `<input type="date">` + a `<select>` whose only options
 are `:00`/`:15`/`:30`/`:45`) is used via react-hook-form's `Controller` everywhere a time needs to snap to

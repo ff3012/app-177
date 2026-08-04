@@ -20,6 +20,7 @@ import { VehicleRowActions } from './vehicle-row-actions';
 import { AtemschutzEditDialog } from './atemschutz-edit-dialog';
 import { AtemschutzSachbearbeiterForm } from './atemschutz-sachbearbeiter-form';
 import { IcsImportForm } from './ics-import-form';
+import { GoogleCalendarConfigForm } from './google-calendar-config-form';
 import { WappenUploadForm } from './wappen-upload-form';
 import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
 import { listDashboardTokens } from '@/lib/dashboard/token';
@@ -172,6 +173,10 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         icsImportLastSyncError: true,
         wappenImageMimeType: true,
         fahrzeugReservierungEmail: true,
+        googleCalendarServiceAccountJson: true,
+        googleCalendarId: true,
+        googleCalendarLastSyncAt: true,
+        googleCalendarLastSyncError: true,
       },
     }),
   ]);
@@ -441,6 +446,22 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           initialUrl={selectedOrgFull.icsImportUrl ?? ''}
           initialLastSyncAt={selectedOrgFull.icsImportLastSyncAt?.toISOString() ?? null}
           initialLastSyncError={selectedOrgFull.icsImportLastSyncError ?? null}
+        />
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Google Kalender (Rückschreiben)</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Gegenrichtung zum ICS-Import: Termine dieser Feuerwehr (nicht aus einem Import stammend) werden
+          sofort beim Anlegen/Ändern/Löschen automatisch in den unten angegebenen Google Kalender
+          übertragen - kein Cron-Job nötig.
+        </p>
+        <GoogleCalendarConfigForm
+          organizationId={selectedOrgId}
+          initialCalendarId={selectedOrgFull.googleCalendarId ?? ''}
+          hasCredentials={Boolean(selectedOrgFull.googleCalendarServiceAccountJson)}
+          lastSyncAt={selectedOrgFull.googleCalendarLastSyncAt?.toISOString() ?? null}
+          lastSyncError={selectedOrgFull.googleCalendarLastSyncError ?? null}
         />
       </div>
 

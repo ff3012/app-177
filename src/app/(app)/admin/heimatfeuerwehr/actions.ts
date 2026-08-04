@@ -8,6 +8,7 @@ import { assertPermission, canManageHeimatfeuerwehrFor } from '@/lib/auth/permis
 import { vehicleSchema, parseVehicleFormData } from '@/lib/validation/vehicle.schema';
 import { atemschutzSchema, parseAtemschutzFormData } from '@/lib/validation/atemschutz.schema';
 import { syncIcsCalendarForOrganization } from '@/lib/calendar/ics-import';
+import { verifyServiceAccountCredentials } from '@/lib/calendar/google-calendar-push';
 
 export interface VehicleFormState {
   error?: string;
@@ -346,4 +347,86 @@ export async function triggerIcsImportNow(organizationId: string): Promise<IcsIm
     revalidatePath('/admin/heimatfeuerwehr');
     return { error: message };
   }
+}
+
+export interface GoogleCalendarConfigState {
+  success?: boolean;
+  error?: string;
+}
+
+const MAX_SERVICE_ACCOUNT_JSON_SIZE_BYTES = 100 * 1024;
+
+/**
+ * Nimmt die hochgeladene Google-Service-Account-JSON-Datei + die Ziel-Kalender-ID entgegen - siehe
+ * docs/superpowers/specs/2026-08-04-google-calendar-push-sync-design.md. Testet die Zugangsdaten
+ * einmal echt gegen Google (verifyServiceAccountCredentials), BEVOR irgendetwas gespeichert wird,
+ * damit eine falsche/kaputte Datei nie unbrauchbar in der Datenbank landet. Die Kalender-ID wird nur
+ * validiert, wenn tatsächlich eine neue Datei hochgeladen wird - ein reines Ändern der Kalender-ID
+ * ohne neue Datei ist ebenfalls erlaubt (dann bleiben die bestehenden Zugangsdaten unverändert).
+ */
+export async function setGoogleCalendarCredentials(
+  organizationId: string,
+  _prevState: GoogleCalendarConfigState,
+  formData: FormData,
+): Promise<GoogleCalendarConfigState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const calendarId = String(formData.get('googleCalendarId') ?? '').trim();
+  if (!calendarId) {
+    return { error: 'Bitte eine Google Kalender-ID angeben.' };
+  }
+
+  const file = formData.get('file');
+  const hasNewFile = file instanceof File && file.size > 0;
+
+  if (!hasNewFile) {
+    await prisma.organization.update({ where: { id: organizationId }, data: { googleCalendarId: calendarId } });
+    revalidatePath('/admin/heimatfeuerwehr');
+    return { success: true };
+  }
+
+  if (file.size > MAX_SERVICE_ACCOUNT_JSON_SIZE_BYTES) {
+    return { error: 'Die Datei ist zu groß (maximal 100 KB) - das sieht nicht nach einer Service-Account-JSON-Datei aus.' };
+  }
+
+  const raw = await file.text();
+  try {
+    await verifyServiceAccountCredentials(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Zugangsdaten konnten nicht überprüft werden.';
+    return { error: `Zugangsdaten ungültig: ${message}` };
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      googleCalendarServiceAccountJson: raw,
+      googleCalendarId: calendarId,
+      // Neue Zugangsdaten machen den letzten Fehler/Sync-Zeitpunkt der ALTEN Datei bedeutungslos -
+      // gleiches Prinzip wie beim Ändern der icsImportUrl.
+      googleCalendarLastSyncAt: null,
+      googleCalendarLastSyncError: null,
+    },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  return { success: true };
+}
+
+export async function removeGoogleCalendarCredentials(organizationId: string): Promise<void> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      googleCalendarServiceAccountJson: null,
+      googleCalendarId: null,
+      googleCalendarLastSyncAt: null,
+      googleCalendarLastSyncError: null,
+    },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
 }

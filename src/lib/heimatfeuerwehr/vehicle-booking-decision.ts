@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma';
 import { sendVehicleBookingDecisionEmail } from './notify-vehicle-booking';
+import { pushEventToGoogleCalendar } from '@/lib/calendar/google-calendar-push';
 
 interface BookingForDecision {
   id: string;
@@ -140,7 +141,7 @@ export async function decideVehicleBooking(
   if (!booking) return { kind: 'invalid' };
 
   if (decision === 'GENEHMIGT') {
-    await prisma.event.create({
+    const bookingEvent = await prisma.event.create({
       data: {
         title: `Fahrzeug: ${booking.vehicle.taktischeBezeichnung} (${booking.user.firstName} ${booking.user.lastName})`,
         startsAt: booking.startsAt,
@@ -152,6 +153,7 @@ export async function decideVehicleBooking(
         vehicleBookingId: booking.id,
       },
     });
+    await pushEventToGoogleCalendar(bookingEvent);
   }
 
   try {
