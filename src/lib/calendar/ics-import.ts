@@ -111,11 +111,20 @@ export async function syncIcsCalendarForOrganization(organizationId: string, ics
   const windowEnd = new Date(now.getTime() + SYNC_WINDOW_FUTURE_MS);
   const instances = parseInstances(icsText, windowStart, windowEnd);
 
+  // Bewusst NICHT nach startsAt gefiltert (anders als früher): der DB-Unique-Constraint ist
+  // (organizationId, icsUid) OHNE startsAt, also muss auch die Duplikat-Prüfung hier alle
+  // icsUid-Zeilen der Organisation kennen, egal wo ihr aktuell gespeichertes startsAt liegt. Wird
+  // im Quellkalender das Datum eines Termins verschoben, kann die zuvor gespeicherte Zeile ein
+  // startsAt außerhalb des jetzigen Fensters haben, während die neue Version wieder hineinfällt -
+  // eine auf das Fenster verengte Abfrage würde diese Zeile übersehen und fälschlich ein zweites
+  // Event mit derselben icsUid anlegen (genau der reale Fehler "Unique constraint failed on the
+  // fields: (organizationId, icsUid)"). Die Fenstergrenze gilt weiterhin für die Löschung
+  // verschwundener Termine unten, dort anhand des VOR diesem Sync gespeicherten startsAt.
   const existing = await prisma.event.findMany({
-    where: { organizationId, icsUid: { not: null }, startsAt: { gte: windowStart, lte: windowEnd } },
-    select: { id: true, icsUid: true },
+    where: { organizationId, icsUid: { not: null } },
+    select: { id: true, icsUid: true, startsAt: true },
   });
-  const existingByUid = new Map(existing.map((event) => [event.icsUid as string, event.id]));
+  const existingByUid = new Map(existing.map((event) => [event.icsUid as string, event]));
   const seenUids = new Set<string>();
 
   let imported = 0;
@@ -124,10 +133,10 @@ export async function syncIcsCalendarForOrganization(organizationId: string, ics
     const createdById = (await getOrCreateIcsSyncUser()).id;
     for (const instance of instances) {
       seenUids.add(instance.icsUid);
-      const existingId = existingByUid.get(instance.icsUid);
-      if (existingId) {
+      const match = existingByUid.get(instance.icsUid);
+      if (match) {
         await prisma.event.update({
-          where: { id: existingId },
+          where: { id: match.id },
           data: {
             title: instance.title,
             description: instance.description,
@@ -159,7 +168,12 @@ export async function syncIcsCalendarForOrganization(organizationId: string, ics
     }
   }
 
-  const staleIds = existing.filter((event) => !seenUids.has(event.icsUid as string)).map((event) => event.id);
+  const staleIds = existing
+    .filter(
+      (event) =>
+        !seenUids.has(event.icsUid as string) && event.startsAt >= windowStart && event.startsAt <= windowEnd,
+    )
+    .map((event) => event.id);
   if (staleIds.length > 0) {
     await prisma.event.deleteMany({ where: { id: { in: staleIds } } });
   }
