@@ -397,9 +397,16 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                     {booking.details || <span className="text-ink-faint">–</span>}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <ReservierungStatusBadge status={booking.status} />
-                      {booking.status === 'GENEHMIGT' && past && <span className="text-xs text-ink-faint">Vergangen</span>}
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <ReservierungStatusBadge status={booking.status} />
+                        {booking.status === 'GENEHMIGT' && past && (
+                          <span className="text-xs text-ink-faint">Vergangen</span>
+                        )}
+                      </div>
+                      {booking.status === 'ABGELEHNT' && booking.rejectionReason && (
+                        <span className="text-xs text-ink-faint">Grund: {booking.rejectionReason}</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">

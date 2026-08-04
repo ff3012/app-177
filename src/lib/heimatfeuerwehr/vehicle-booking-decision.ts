@@ -7,6 +7,8 @@ interface BookingForDecision {
   startsAt: Date;
   endsAt: Date;
   details: string | null;
+  status: 'OFFEN' | 'GENEHMIGT' | 'ABGELEHNT';
+  rejectionReason: string | null;
   vehicle: {
     organizationId: string;
     taktischeBezeichnung: string;
@@ -44,7 +46,7 @@ function buildEmailContext(booking: BookingForDecision, approvalToken: string) {
 
 export type VehicleBookingDecisionOutcome =
   | { kind: 'invalid' }
-  | { kind: 'already_decided'; status: 'GENEHMIGT' | 'ABGELEHNT' }
+  | { kind: 'already_decided'; status: 'GENEHMIGT' | 'ABGELEHNT'; rejectionReason: string | null }
   | {
       kind: 'decided';
       status: 'GENEHMIGT' | 'ABGELEHNT';
@@ -52,16 +54,55 @@ export type VehicleBookingDecisionOutcome =
       requesterName: string;
       range: { startsAt: Date; endsAt: Date };
       details: string | null;
+      rejectionReason: string | null;
     };
 
 /**
- * Trifft die Genehmigen/Ablehnen-Entscheidung für eine Fahrzeug-Reservierung - aufgerufen direkt
- * beim Laden der jeweiligen Seite (GET), nicht mehr über einen zusätzlichen Bestätigen-Klick auf
- * einer Zwischenseite (siehe CLAUDE.md "Fahrzeug-Reservierungen"-Abschnitt). Bewusste Abweichung
- * vom sonst in dieser Codebase etablierten "expliziter Klick statt Auto-GET"-Muster (Aktivierung/
- * Passwort-Reset/Login-Link) - auf
- * ausdrücklichen Wunsch, damit ein einziger Klick auf den E-Mail-Link reicht. Das bedeutet: ein
- * E-Mail-Link-Scanner, der Links vorab automatisch abruft (z. B. Microsoft Safe Links, Mimecast),
+ * Read-only Vorschau für den Ablehnen-Dialog (booking-decision-view.tsx) - trifft KEINE
+ * Entscheidung, sondern zeigt dem Fahrzeug-Admin die Buchungsdaten, damit er vor dem eigentlichen
+ * Ablehnen noch einen Grund eintragen kann (siehe submitRejection in
+ * app/fahrzeug-reservierung/ablehnen/[token]/actions.ts). Genehmigen braucht diesen Zwischenschritt
+ * nicht und ruft weiterhin direkt decideVehicleBooking() auf.
+ */
+export type VehicleBookingRejectionPreview =
+  | { kind: 'invalid' }
+  | { kind: 'already_decided'; status: 'GENEHMIGT' | 'ABGELEHNT'; rejectionReason: string | null }
+  | {
+      kind: 'pending';
+      vehicleLabel: string;
+      requesterName: string;
+      range: { startsAt: Date; endsAt: Date };
+      details: string | null;
+    };
+
+export async function previewVehicleBookingRejection(token: string): Promise<VehicleBookingRejectionPreview> {
+  const booking = await loadBookingForDecision(token);
+  if (!booking) return { kind: 'invalid' };
+
+  if (booking.status !== 'OFFEN') {
+    return { kind: 'already_decided', status: booking.status, rejectionReason: booking.rejectionReason };
+  }
+
+  return {
+    kind: 'pending',
+    vehicleLabel: `${booking.vehicle.taktischeBezeichnung} (${booking.vehicle.kennzeichen})`,
+    requesterName: `${booking.user.firstName} ${booking.user.lastName}`,
+    range: { startsAt: booking.startsAt, endsAt: booking.endsAt },
+    details: booking.details,
+  };
+}
+
+/**
+ * Trifft die Genehmigen/Ablehnen-Entscheidung für eine Fahrzeug-Reservierung. Für GENEHMIGT wird
+ * das direkt beim Laden der Seite (GET) ausgeführt, nicht über einen zusätzlichen
+ * Bestätigen-Klick (siehe CLAUDE.md "Fahrzeug-Reservierungen"-Abschnitt). Für ABGELEHNT liegt vor
+ * diesem Aufruf ein eigener Zwischenschritt (previewVehicleBookingRejection() + ein Formular mit
+ * optionalem Grund-Feld, siehe booking-decision-view.tsx und
+ * app/fahrzeug-reservierung/ablehnen/[token]/actions.ts) - erst dessen Absenden ruft diese
+ * Funktion tatsächlich auf. Bewusste Abweichung vom sonst in dieser Codebase etablierten
+ * "expliziter Klick statt Auto-GET"-Muster (Aktivierung/Passwort-Reset/Login-Link) - auf
+ * ausdrücklichen Wunsch, damit für GENEHMIGT ein einziger Klick auf den E-Mail-Link reicht. Das
+ * bedeutet: ein E-Mail-Link-Scanner, der Links vorab automatisch abruft (z. B. Microsoft Safe Links, Mimecast),
  * KÖNNTE die Entscheidung theoretisch selbst auslösen, bevor der Mensch den Link überhaupt öffnet -
  * ein bewusst akzeptiertes Risiko für diesen Anwendungsfall (interne Freigabe, kein Passwort-Reset).
  *
@@ -75,16 +116,24 @@ export type VehicleBookingDecisionOutcome =
 export async function decideVehicleBooking(
   token: string,
   decision: 'GENEHMIGT' | 'ABGELEHNT',
+  rejectionReason: string | null = null,
 ): Promise<VehicleBookingDecisionOutcome> {
   const claimed = await prisma.vehicleBooking.updateMany({
     where: { approvalToken: token, status: 'OFFEN' },
-    data: { status: decision },
+    data: { status: decision, rejectionReason: decision === 'ABGELEHNT' ? rejectionReason : null },
   });
 
   if (claimed.count === 0) {
-    const existing = await prisma.vehicleBooking.findUnique({ where: { approvalToken: token }, select: { status: true } });
+    const existing = await prisma.vehicleBooking.findUnique({
+      where: { approvalToken: token },
+      select: { status: true, rejectionReason: true },
+    });
     if (!existing || existing.status === 'OFFEN') return { kind: 'invalid' };
-    return { kind: 'already_decided', status: existing.status as 'GENEHMIGT' | 'ABGELEHNT' };
+    return {
+      kind: 'already_decided',
+      status: existing.status as 'GENEHMIGT' | 'ABGELEHNT',
+      rejectionReason: existing.rejectionReason,
+    };
   }
 
   const booking = await loadBookingForDecision(token);
@@ -106,7 +155,12 @@ export async function decideVehicleBooking(
   }
 
   try {
-    await sendVehicleBookingDecisionEmail(buildEmailContext(booking, token), decision, booking.vehicle.organization.fahrzeugReservierungEmail);
+    await sendVehicleBookingDecisionEmail(
+      buildEmailContext(booking, token),
+      decision,
+      booking.vehicle.organization.fahrzeugReservierungEmail,
+      decision === 'ABGELEHNT' ? rejectionReason : null,
+    );
   } catch (error) {
     console.error(`Ergebnis-E-Mail (${decision === 'GENEHMIGT' ? 'genehmigt' : 'abgelehnt'}) für Fahrzeug-Reservierung fehlgeschlagen:`, error);
   }
@@ -126,5 +180,6 @@ export async function decideVehicleBooking(
     requesterName: `${booking.user.firstName} ${booking.user.lastName}`,
     range: { startsAt: booking.startsAt, endsAt: booking.endsAt },
     details: booking.details,
+    rejectionReason: decision === 'ABGELEHNT' ? rejectionReason : null,
   };
 }

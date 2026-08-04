@@ -390,6 +390,9 @@ export default async function MeineFeuerwehrPage() {
                     <span className="font-medium text-neutral-900">{booking.vehicle.taktischeBezeichnung}</span>{' '}
                     <span className="text-neutral-500">{formatRange(booking.startsAt, booking.endsAt)}</span>{' '}
                     <ReservierungStatusBadge status={booking.status} />
+                    {booking.status === 'ABGELEHNT' && booking.rejectionReason && (
+                      <span className="block text-xs text-neutral-500">Grund: {booking.rejectionReason}</span>
+                    )}
                   </span>
                   {booking.status !== 'ABGELEHNT' && (
                     <form action={boundCancel}>

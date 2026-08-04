@@ -485,6 +485,40 @@ don't need to keep a separate external calendar in sync by hand.
   feed is correctly deleted on the next sync. Also verified live in the browser: an `icsUid`-tagged event's
   edit page shows the blocking message instead of the form, while its detail page still shows a fully
   working "Meine Zusage"/Teilnehmerliste.
+- **Bugfix (real production error, seen in the admin UI's "Letzter Sync fehlgeschlagen": "Invalid
+  `prisma.event.create()` invocation: Unique constraint failed on the fields: (`organizationId`,
+  `icsUid`)")**: the dedupe lookup that decides update-vs-create scoped its `existing` query to
+  `startsAt: { gte: windowStart, lte: windowEnd }` - the same window used to decide what to import in
+  the first place. If a source event's date changes (rescheduled, corrected) such that its
+  *previously stored* `startsAt` now falls outside the current sync window while its *new* `startsAt`
+  falls back inside it, that DB row silently drops out of `existingByUid`, and the next sync tries to
+  `create()` a second row with the same `icsUid` - violating the `(organizationId, icsUid)` unique
+  constraint the DB enforces (there is no `startsAt` in that constraint, only `icsUid`). Fixed by
+  querying `existing` without any `startsAt` filter at all (so the update-vs-create dedupe always sees
+  every `icsUid` row for the org, however far its stored date has drifted) and moving the window check
+  to where it actually belongs: deciding which *disappeared-from-the-feed* rows count as "stale" and
+  get deleted, using each row's own pre-sync `startsAt` captured in that same query. Verified directly
+  (not just read for correctness): a standalone script stubbed `global.fetch` to serve a synthetic
+  one-VEVENT feed, pre-inserted an `Event` with a matching `icsUid` but a `startsAt` 20 days in the
+  past (outside the window), and confirmed the sync now resolves to `updated: 1, imported: 0` with
+  exactly one row for that `icsUid` afterward - reproducing the exact reported scenario and confirming
+  the fix, whereas the old scoped query would have missed the row and hit the unique-constraint error.
+- **Pre-existing, separately flagged issue (found while investigating the bug above, not fixed in this
+  round)**: two committed migrations - `20260804090000_vehicle_booking_details` and
+  `20260804110000_vehicle_booking_approval` - `ALTER TABLE "VehicleBooking"`, but are timestamped
+  *before* `20260811090000_meine_feuerwehr`, the migration that actually `CREATE TABLE`s
+  `VehicleBooking`. This doesn't affect the already-migrated dev/production databases (their
+  `_prisma_migrations` history was populated in the real, correct order those migrations were actually
+  run in, regardless of what their folder names suggest), but it does break any from-scratch replay -
+  confirmed live via `prisma migrate dev`'s shadow-database step failing with `P1014: The underlying
+  table for model VehicleBooking does not exist`. Deliberately **not fixed** here: correcting it means
+  renaming already-deployed migration folders, which would require a matching, carefully-coordinated
+  `UPDATE "_prisma_migrations" SET migration_name = ...` against production's database at deploy time
+  (the same remedy this codebase's history already documents doing successfully twice before for the
+  same class of bug, see the `Organization.nummer`/`atemschutzSachbearbeiterEmail` migrations above) -
+  too risky to bundle into an unrelated bugfix without that coordination. Whoever picks this up next
+  should rename both folders to sort after `meine_feuerwehr` and fix production's tracking table in the
+  same change, not treat it as a pure local-repo rename.
 
 ### Shared: 15-minute time picker
 
@@ -1602,6 +1636,36 @@ entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emaile
   calls at the identical row via `Promise.all` resolves to exactly one `{kind: 'decided'}` and one
   `{kind: 'already_decided'}`, with exactly one linked `Event` row created - confirming the guard holds
   in the new one-click code path too.
+- **Ablehnen-Grund (follow-up)**: Ablehnen alone got a deliberate, partial reversal of the one-click
+  design above - a request to let the Fahrzeug-Admin explain *why* a reservation can't be granted.
+  `VehicleBooking.rejectionReason` (nullable `String`, migration `20260815090000_vehicle_booking_
+  rejection_reason`) stores it, set only on `ABGELEHNT` (always `null` on `GENEHMIGT`).
+  `previewVehicleBookingRejection(token)` (`vehicle-booking-decision.ts`) is a new, read-only sibling of
+  `decideVehicleBooking()` - it loads the booking and returns `invalid`/`already_decided` (unchanged
+  from before) or a new `pending` case (booking still `OFFEN`) without mutating anything.
+  `booking-decision-view.tsx`'s ablehnen branch now calls this preview first: `pending` renders a plain
+  page-level form (a `<textarea name="reason">`, optional, 500-char capped both client-side
+  `maxLength` and server-side `.slice()`) instead of immediately deciding; `invalid`/`already_decided`
+  render the exact same result view Genehmigen already used (a small `renderOutcome()` helper shared by
+  both branches). Submitting posts to a new Server Action, `submitRejection` (`app/fahrzeug-
+  reservierung/ablehnen/[token]/actions.ts`), which calls `decideVehicleBooking(token, 'ABGELEHNT',
+  reason)` (now takes an optional third parameter) and then `redirect()`s back to the same ablehnen
+  URL - the reload shows the `already_decided` outcome with the stored reason. Genehmigen is
+  completely unaffected: it still calls `decideVehicleBooking(token, 'GENEHMIGT')` directly from
+  render, no dialog, one click. The reason is surfaced to the person who reaches it: in
+  `sendVehicleBookingDecisionEmail`'s result mail (a `Grund: ...` line, ABGELEHNT-only), on
+  `/meine-feuerwehr`'s "Meine Reservierungen" (under the status badge), and on `/admin/
+  heimatfeuerwehr`'s Fahrzeug-Reservierungen table (under the status cell) - so it isn't write-only,
+  visible only in an email that could get lost. Verified live end-to-end: submitted a real rejection
+  through the actual form (not a scripted call), confirmed via direct DB read that `status`/
+  `rejectionReason` landed correctly and zero `Event` rows were created, and confirmed the reason
+  renders correctly on both the reload confirmation page and `/meine-feuerwehr`; Genehmigen's one-click
+  path re-tested unchanged in the same session.
+- **E-Mail-Signatur entfernt (follow-up)**: both vehicle-booking emails
+  (`sendVehicleBookingApprovalRequest`/`sendVehicleBookingDecisionEmail`, both text and HTML parts)
+  dropped their trailing "Abschnittsfeuerwehrkommando Purkersdorf" line at the app owner's explicit
+  request - scoped to just these two templates, not the app-wide email sign-off convention described
+  under "Email" below (those templates are untouched).
 
 ### Startbildschirm & mobile Navigation (Startbildschirm-Brief.md)
 

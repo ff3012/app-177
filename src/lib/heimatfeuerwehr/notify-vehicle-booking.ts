@@ -48,8 +48,6 @@ export async function sendVehicleBookingApprovalRequest(ctx: BookingEmailContext
       '',
       `Genehmigen: ${genehmigenLink}`,
       `Nicht genehmigen: ${ablehnenLink}`,
-      '',
-      'Abschnittsfeuerwehrkommando Purkersdorf',
     ]
       .filter((line) => line !== null)
       .join('\n'),
@@ -64,7 +62,6 @@ export async function sendVehicleBookingApprovalRequest(ctx: BookingEmailContext
       `<a href="${genehmigenLink}" style="display:inline-block;background:#22a06b;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin-right:12px;">GENEHMIGT</a>`,
       `<a href="${ablehnenLink}" style="display:inline-block;background:#c62828;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">NICHT GENEHMIGT</a>`,
       '</p>',
-      '<p>Abschnittsfeuerwehrkommando Purkersdorf</p>',
     ].join(''),
   });
 }
@@ -78,9 +75,11 @@ export async function sendVehicleBookingDecisionEmail(
   ctx: BookingEmailContext,
   decision: 'GENEHMIGT' | 'ABGELEHNT',
   ccEmail: string | null,
+  rejectionReason: string | null = null,
 ): Promise<void> {
   const range = formatRange(ctx.startsAt, ctx.endsAt);
   const decisionLabel = decision === 'GENEHMIGT' ? 'genehmigt' : 'abgelehnt';
+  const showReason = decision === 'ABGELEHNT' && !!rejectionReason;
 
   await sendEmail({
     to: ctx.requesterEmail,
@@ -92,25 +91,26 @@ export async function sendVehicleBookingDecisionEmail(
       '',
       `Fahrzeug: ${ctx.vehicleTaktischeBezeichnung} (${ctx.vehicleKennzeichen})`,
       `Zeitraum: ${range}`,
+      showReason ? `Grund: ${rejectionReason}` : null,
       '',
       decision === 'GENEHMIGT'
         ? 'Die Reservierung ist jetzt im Kalender deiner Feuerwehr sichtbar.'
         : 'Das Fahrzeug ist für diesen Zeitraum weiterhin frei zum Reservieren.',
-      '',
-      'Abschnittsfeuerwehrkommando Purkersdorf',
-    ].join('\n'),
+    ]
+      .filter((line) => line !== null)
+      .join('\n'),
     htmlPart: [
       `<p>Deine Fahrzeug-Reservierung wurde <strong>${decisionLabel}</strong>.</p>`,
       '<ul>',
       `<li>Fahrzeug: ${escapeHtml(ctx.vehicleTaktischeBezeichnung)} (${escapeHtml(ctx.vehicleKennzeichen)})</li>`,
       `<li>Zeitraum: ${escapeHtml(range)}</li>`,
+      showReason ? `<li>Grund: ${escapeHtml(rejectionReason)}</li>` : '',
       '</ul>',
       `<p>${
         decision === 'GENEHMIGT'
           ? 'Die Reservierung ist jetzt im Kalender deiner Feuerwehr sichtbar.'
           : 'Das Fahrzeug ist für diesen Zeitraum weiterhin frei zum Reservieren.'
       }</p>`,
-      '<p>Abschnittsfeuerwehrkommando Purkersdorf</p>',
     ].join(''),
   });
 }

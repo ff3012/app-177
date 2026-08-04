@@ -483,6 +483,12 @@ model VehicleBooking {
   status        VehicleBookingStatus @default(GENEHMIGT)
   approvalToken String?              @unique
 
+  // Optionaler Freitext, den der Fahrzeug-Admin beim Ablehnen (in einem eigenen Zwischenschritt vor
+  // der eigentlichen Entscheidung, siehe booking-decision-view.tsx) hinterlassen kann - erklärt dem
+  // Ausborger, warum das Fahrzeug in diesem Zeitraum nicht reserviert werden kann. Nur bei ABGELEHNT
+  // gesetzt; bei GENEHMIGT immer null.
+  rejectionReason String?
+
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   event   Event?
