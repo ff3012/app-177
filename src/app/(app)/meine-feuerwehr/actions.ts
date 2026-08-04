@@ -8,7 +8,7 @@ import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageVehicleBooking } from '@/lib/auth/permissions';
 import { vehicleBookingSchema, parseVehicleBookingFormData } from '@/lib/validation/vehicle-booking.schema';
 import { findOverlappingBooking } from '@/lib/heimatfeuerwehr/vehicle-availability';
-import { sendVehicleBookingApprovalRequest, sendVehicleBookingDecisionEmail } from '@/lib/heimatfeuerwehr/notify-vehicle-booking';
+import { sendVehicleBookingApprovalRequest } from '@/lib/heimatfeuerwehr/notify-vehicle-booking';
 
 export interface VehicleBookingFormState {
   error?: string;
@@ -109,136 +109,11 @@ export async function createVehicleBooking(
   redirect('/meine-feuerwehr');
 }
 
-interface BookingForDecision {
-  id: string;
-  userId: string;
-  startsAt: Date;
-  endsAt: Date;
-  details: string | null;
-  status: string;
-  vehicle: {
-    organizationId: string;
-    taktischeBezeichnung: string;
-    kennzeichen: string;
-    organization: { name: string; shortName: string | null; fahrzeugReservierungEmail: string | null };
-  };
-  user: { firstName: string; lastName: string; email: string };
-}
-
-async function loadBookingForDecision(token: string): Promise<BookingForDecision | null> {
-  return prisma.vehicleBooking.findUnique({
-    where: { approvalToken: token },
-    include: {
-      vehicle: {
-        include: { organization: { select: { name: true, shortName: true, fahrzeugReservierungEmail: true } } },
-      },
-      user: { select: { firstName: true, lastName: true, email: true } },
-    },
-  });
-}
-
-function buildEmailContext(booking: BookingForDecision, approvalToken: string) {
-  return {
-    approvalToken,
-    startsAt: booking.startsAt,
-    endsAt: booking.endsAt,
-    details: booking.details ?? '',
-    vehicleTaktischeBezeichnung: booking.vehicle.taktischeBezeichnung,
-    vehicleKennzeichen: booking.vehicle.kennzeichen,
-    organizationLabel: booking.vehicle.organization.shortName ?? booking.vehicle.organization.name,
-    requesterName: `${booking.user.firstName} ${booking.user.lastName}`,
-    requesterEmail: booking.user.email,
-  };
-}
-
-/**
- * Genehmigt eine OFFENE Fahrzeug-Reservierung über den Link aus der Freigabe-Mail - session-los,
- * der Approval-Token selbst ist die Berechtigung (siehe schema.prisma-Kommentar auf
- * VehicleBooking.approvalToken). Legt erst jetzt den verknüpften Kalender-Termin an, damit die
- * Reservierung ab diesem Moment für die ganze Feuerwehr im Kalender sichtbar wird.
- *
- * Der Statuswechsel muss atomar (per updateMany mit status: 'OFFEN' in der WHERE-Klausel) erfolgen,
- * nicht als "erst lesen, dann schreiben" - sonst gewinnen zwei nahezu gleichzeitige Aufrufe (z. B.
- * ein Doppelklick/Doppel-Tap auf den Bestätigen-Button) beide den Status-Check, bevor einer von
- * beiden schreibt, und beide legen einen Termin an UND verschicken die Ergebnis-Mail - genau der
- * gemeldete Bug ("E-Mail wird immer doppelt geschickt"). Dasselbe TOCTOU-Muster wie consumeToken()
- * in lib/auth/tokens.ts, hier auf den Reservierungs-Status übertragen. Ein count von 0 (ungültiger
- * Token ODER bereits entschieden, auch durch die gleichzeitige zweite Anfrage) ist ein stiller
- * No-op - der Redirect zurück auf dieselbe Seite zeigt dann die "bereits entschieden"-Ansicht.
- */
-export async function approveVehicleBooking(token: string): Promise<void> {
-  const claimed = await prisma.vehicleBooking.updateMany({
-    where: { approvalToken: token, status: 'OFFEN' },
-    data: { status: 'GENEHMIGT' },
-  });
-  if (claimed.count === 0) {
-    redirect(`/fahrzeug-reservierung/genehmigen/${token}`);
-  }
-
-  const booking = await loadBookingForDecision(token);
-  if (!booking) {
-    redirect(`/fahrzeug-reservierung/genehmigen/${token}`);
-  }
-
-  await prisma.event.create({
-    data: {
-      title: `Fahrzeug: ${booking.vehicle.taktischeBezeichnung} (${booking.user.firstName} ${booking.user.lastName})`,
-      startsAt: booking.startsAt,
-      endsAt: booking.endsAt,
-      organizationId: booking.vehicle.organizationId,
-      isSectionWide: false,
-      category: 'ALLGEMEIN',
-      createdById: booking.userId,
-      vehicleBookingId: booking.id,
-    },
-  });
-
-  try {
-    await sendVehicleBookingDecisionEmail(
-      buildEmailContext(booking, token),
-      'GENEHMIGT',
-      booking.vehicle.organization.fahrzeugReservierungEmail,
-    );
-  } catch (error) {
-    console.error('Ergebnis-E-Mail (genehmigt) für Fahrzeug-Reservierung fehlgeschlagen:', error);
-  }
-
-  revalidatePath('/meine-feuerwehr');
-  revalidatePath('/kalender');
-  revalidatePath('/admin/heimatfeuerwehr');
-  redirect(`/fahrzeug-reservierung/genehmigen/${token}`);
-}
-
-/** Wie approveVehicleBooking (inkl. derselben atomaren updateMany-Absicherung gegen doppelte
- * Aufrufe), aber ohne Termin-Erstellung - das Fahrzeug bleibt für den Zeitraum frei. */
-export async function rejectVehicleBooking(token: string): Promise<void> {
-  const claimed = await prisma.vehicleBooking.updateMany({
-    where: { approvalToken: token, status: 'OFFEN' },
-    data: { status: 'ABGELEHNT' },
-  });
-  if (claimed.count === 0) {
-    redirect(`/fahrzeug-reservierung/ablehnen/${token}`);
-  }
-
-  const booking = await loadBookingForDecision(token);
-  if (!booking) {
-    redirect(`/fahrzeug-reservierung/ablehnen/${token}`);
-  }
-
-  try {
-    await sendVehicleBookingDecisionEmail(
-      buildEmailContext(booking, token),
-      'ABGELEHNT',
-      booking.vehicle.organization.fahrzeugReservierungEmail,
-    );
-  } catch (error) {
-    console.error('Ergebnis-E-Mail (abgelehnt) für Fahrzeug-Reservierung fehlgeschlagen:', error);
-  }
-
-  revalidatePath('/meine-feuerwehr');
-  revalidatePath('/admin/heimatfeuerwehr');
-  redirect(`/fahrzeug-reservierung/ablehnen/${token}`);
-}
+// Die Genehmigen-/Ablehnen-Entscheidung selbst lebt in
+// src/lib/heimatfeuerwehr/vehicle-booking-decision.ts (decideVehicleBooking) - eine reine, nicht
+// als Server Action markierte lib-Funktion, die direkt beim Laden der jeweiligen öffentlichen Seite
+// aufgerufen wird (ein Klick auf den E-Mail-Link reicht), statt hier als zusätzlicher, per Button
+// ausgelöster Zwischenschritt zu existieren.
 
 // redirectTo lässt admin/heimatfeuerwehr/page.tsx diese exakte Funktion wiederverwenden (statt
 // sie zu duplizieren), ohne einen Admin nach dem Löschen fremder Buchungen auf /meine-feuerwehr

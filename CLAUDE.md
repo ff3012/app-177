@@ -1527,21 +1527,34 @@ entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emaile
   `/fahrzeug-reservierung/ablehnen/[token]` (new top-level segment, added to `middleware.ts`'s
   `PUBLIC_PATH_PREFIXES`, same reasoning as `/drohnen-schnell`/`/dashboard`: no session exists when a
   clicked email link opens on any device) - both render via one shared server component,
-  `booking-decision-view.tsx`, parameterized by `mode`. A **plain `<form action={...}>`** with no
-  client JS (no `useTransition`/`useActionState`) - Next's Server Actions progressively enhance a bare
-  HTML form submission, so this works even where React never hydrates (this session's own
-  browser-automation sandbox is a real example: confirmed live that a plain `computer` click on the
-  submit button correctly flipped the booking's status and created the linked `Event`, with zero
-  client-side JS attached). This also matches the same "explicit click, not auto-consumed on GET"
-  security pattern already established for `/login/token/[token]`/activation/password-reset links - an
-  email link-scanner's automatic GET can't burn the decision before a human actually clicks the button,
-  since the GET only renders the confirm page, never performs the mutation itself.
-  `approveVehicleBooking`/`rejectVehicleBooking` (`meine-feuerwehr/actions.ts`) are plain
-  `(token: string) => Promise<void>` Server Actions with no `requireUser()` call at all - the token
-  itself is the authorization, exactly like the QR quick-registration flow. A booking that's no longer
-  `OFFEN` (already decided, or an invalid token) is a silent no-op that redirects back to the same page,
-  which then renders a "bereits entschieden" message instead of the action button - clicking a link
-  twice, or the "other" link after a decision was already made, is harmless.
+  `booking-decision-view.tsx`, parameterized by `mode`. **One click on the email link is enough** - the
+  page's own GET request performs the Genehmigen/Ablehnen decision directly during render (no
+  intermediate "Ja, bestätigen"-button/second click), by calling `decideVehicleBooking(token, decision)`
+  (`lib/heimatfeuerwehr/vehicle-booking-decision.ts`) straight from `BookingDecisionView`'s server
+  component body and rendering whatever `VehicleBookingDecisionOutcome` it returns
+  (`invalid`/`already_decided`/`decided`, a discriminated union) - there is no form and no button on this
+  page at all, only the resulting confirmation text. This is a **deliberate, explicit departure** from
+  the "explicit click required, not auto-consumed on GET" pattern used everywhere else in this codebase
+  for one-time links (`/login/token/[token]`, activation, password reset) - see the long comment on
+  `decideVehicleBooking()` for the accepted tradeoff: an email link-scanner (Microsoft Safe Links,
+  Mimecast, etc.) that auto-visits links could in theory trigger the decision itself before a human ever
+  opens it. Judged acceptable here because this is a low-stakes internal approval action, not a password
+  reset, and the requester explicitly asked for a single click to suffice.
+  `decideVehicleBooking` is a plain, non-`'use server'` lib function (not a Server Action) precisely so
+  it can be called directly from render - Server Actions are POST-triggered and would have needed a
+  form/button, defeating the point. `approveVehicleBooking`/`rejectVehicleBooking` no longer exist; the
+  whole decision (atomic status flip, conditional `Event` creation, result email) lives in this one
+  function, called identically by both routes via the shared view component. **`revalidatePath()` is
+  deliberately NOT called from `decideVehicleBooking`** - Next.js forbids calling it during a Server
+  Component's render phase (`"used ... during render which is unsupported"`, a real crash hit and fixed
+  while building this: the DB mutation had already committed successfully before the crash, confirmed via
+  direct `psql` inspection, so only the trailing revalidation calls were the problem, not the core logic).
+  Not needed anyway: `/meine-feuerwehr`, `/kalender`, and `/admin/heimatfeuerwehr` all render dynamically
+  from the DB on every real navigation (fresh tab, external link, hard reload) - only an already-open,
+  client-router-cached view could stay briefly stale until its own next load. A booking that's no longer
+  `OFFEN` (already decided, or an invalid token) returns `already_decided`/`invalid` instead of
+  re-processing - clicking a link twice, or the "other" link after a decision was already made, is
+  harmless and shows the already-reached status rather than an error.
 - **`lib/heimatfeuerwehr/notify-vehicle-booking.ts`**: `sendVehicleBookingApprovalRequest()` (to the
   configured Freigabe-Adresse, two literal `<a>` buttons styled inline, labelled exactly `GENEHMIGT` /
   `NICHT GENEHMIGT` per the request) and `sendVehicleBookingDecisionEmail()` (to the requester, **Cc**
@@ -1572,19 +1585,23 @@ entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emaile
   afterward. Email delivery itself was not verified live (Mailjet isn't configured in this dev
   environment) - the send call sites are try/catch-wrapped for exactly this kind of failure, and the
   booking/decision logic was confirmed correct independent of whether the email actually goes out.
-- **Bugfix (real user report: "E-Mail wird immer doppelt geschickt - sowohl bei Genehmigt als auch bei
-  Abgelehnt")**: the initial version read the booking (`status !== 'OFFEN'` check) and wrote the new
-  status as two separate steps. Two near-simultaneous invocations of the same link - a doubled tap on
-  the confirm button is the obvious real-world trigger, nothing exotic - could both pass the read-check
-  before either write landed, so both created an `Event` (approve) and both sent the result email; the
-  action itself has no client-side "disable after first click" since it's a plain, JS-free `<form>` by
-  design (see above). Fixed with the exact TOCTOU guard `consumeToken()` (`lib/auth/tokens.ts`) already
+- **Bugfix history (real user report: "E-Mail wird immer doppelt geschickt - sowohl bei Genehmigt als
+  auch bei Abgelehnt")**: the original two-step design (a confirm page with a "Ja, bestätigen"-button
+  Server Action) read the booking (`status !== 'OFFEN'` check) and wrote the new status as two separate
+  steps - a doubled tap on the confirm button could pass the read-check twice before either write landed,
+  sending two result emails. A first fix applied the TOCTOU guard below to those Server Actions, but the
+  user reported the duplicate still happened - at which point the user separately asked for the two-step
+  design to become one-click (see above), which removed the vulnerable confirm-button step entirely
+  rather than patching it further. The atomic guard itself carried over unchanged into
+  `decideVehicleBooking`, the exact same pattern as `consumeToken()` (`lib/auth/tokens.ts`) already
   established for one-time tokens: `prisma.vehicleBooking.updateMany({ where: { approvalToken, status:
-  'OFFEN' }, data: { status: newStatus } })`, checking `count === 1` before doing anything further - a
-  `count` of `0` (already decided, invalid token, or lost the race to a concurrent call) is a silent
-  no-op. Verified directly: firing two `updateMany` calls at the identical row via `Promise.all` (the
-  same race the bug report described) resolves to exactly one `count: 1` and one `count: 0`, never two
-  `1`s - confirming only one `Event`/one email can ever result from a doubled click.
+  'OFFEN' }, data: { status: decision } })`, checking `claimed.count === 0` (already decided/invalid/lost
+  the race) before doing anything further - only the winning call creates the `Event`/sends the result
+  email. **Re-verified directly against the current `decideVehicleBooking` function** (not just the
+  removed Server Actions the original fix targeted): firing two `decideVehicleBooking(token, 'GENEHMIGT')`
+  calls at the identical row via `Promise.all` resolves to exactly one `{kind: 'decided'}` and one
+  `{kind: 'already_decided'}`, with exactly one linked `Event` row created - confirming the guard holds
+  in the new one-click code path too.
 
 ### Startbildschirm & mobile Navigation (Startbildschirm-Brief.md)
 
