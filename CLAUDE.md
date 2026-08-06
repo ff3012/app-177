@@ -586,6 +586,38 @@ Service-Account JSON + a target calendar ID, instead of a periodic cron. Full de
   Cloud project had the Calendar API disabled by default (`Google Calendar API has not been used in
   project ... or it is disabled`, a 403) until the app owner enabled it in the Cloud Console - documented
   here since it's a one-time setup step, not a bug in this code.
+- **Bugfix (real production report: a Fahrzeug-Reservierung's calendar entry showed RSVP buttons, and
+  the same reservation appeared TWICE in the Kalender list)**: the write side's loop-protection
+  (`pushEventToGoogleCalendar` skipping anything with `icsUid` set) only defends against re-pushing an
+  *imported* event back to Google - it never anticipated the opposite direction. Wolfsgraben has
+  `icsImportUrl` and `googleCalendarId` pointing at the **same** Google Calendar (by the app owner's own
+  design - see the Context section above). The moment app-177 pushes its own event to that calendar, the
+  next 5-minute ICS-import sync reads it straight back - and since the import side only recognizes
+  previously-imported rows by `icsUid`, which has nothing to do with `googleEventId`, it saw an
+  unrecognized "new" VEVENT and created a **second, phantom `Event` row** for it (`icsUid` set,
+  `vehicleBookingId` never set, since it's not the row the vehicle-booking code created). That phantom row
+  passed every existing RSVP guard fine on its own terms - `!event.vehicleBookingId` is true for it - which
+  is exactly why RSVP appeared "for the automatically created appointment": there were two rows, one
+  correctly protected and one not. **Root cause fully confirmed, not guessed**: a standalone script pushed
+  a real test event and confirmed empirically that Google's ICS feed exports that event's `UID` as
+  exactly `{googleEventId}@google.com` (Google's own `iCalUID` field in the create response literally
+  spells this out) - a deterministic relationship, not a coincidence to work around loosely. Fixed in
+  `syncIcsCalendarForOrganization` (`ics-import.ts`): before importing, it now also loads that org's own
+  `Event` rows with `googleEventId` set (`icsUid: null`), builds the set of `{googleEventId}@google.com`
+  UIDs they'd appear as in the feed, and skips any incoming VEVENT whose UID is in that set entirely -
+  not counted as "seen" either, so a phantom row already sitting in the DB from *before* this fix gets
+  correctly recognized as orphaned and deleted by the existing stale-row cleanup on the very next sync,
+  with no manual database cleanup needed. This is the general fix for the whole read/write loop, not a
+  vehicle-booking-specific patch - it protects any app-177-native event (Kalender, Fahrzeug-Reservierung,
+  anything with a `googleEventId`) from ever being duplicated back in by its own organization's import.
+  Verified end-to-end against the real Google Calendar and a real Postgres row set (not mocked): pushed a
+  native test event, manually inserted a phantom duplicate row exactly like the bug would have produced,
+  ran the real `syncIcsCalendarForOrganization`, and confirmed all three outcomes - the pre-existing
+  phantom was deleted as stale, no new phantom was created for the freshly-pushed event, and the native
+  event itself was left untouched. Separately, `setRsvp` (`kalender/[eventId]/rsvp-actions.ts`) also
+  gained its own `!event.vehicleBookingId` guard during this investigation - it was the only Event-related
+  write action without one (`updateEvent`/`deleteEvent` already had it), a real defense-in-depth gap even
+  though no current UI path reaches it for such an event.
 
 `components/ui/datetime-15min-input.tsx` (a plain `<input type="date">` + a `<select>` whose only options
 are `:00`/`:15`/`:30`/`:45`) is used via react-hook-form's `Controller` everywhere a time needs to snap to

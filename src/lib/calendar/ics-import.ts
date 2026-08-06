@@ -127,11 +127,28 @@ export async function syncIcsCalendarForOrganization(organizationId: string, ics
   const existingByUid = new Map(existing.map((event) => [event.icsUid as string, event]));
   const seenUids = new Set<string>();
 
+  // Rückschreib-Schleife: Google übernimmt die UID eines per API angelegten Termins 1:1 als
+  // `{googleEventId}@google.com` (empirisch gegen die echte Calendar API verifiziert, nicht
+  // angenommen) - liest also derselbe Google-Kalender, in den lib/calendar/google-calendar-push.ts
+  // app-177-eigene Termine schreibt, UND wird von dieser Organisation zusätzlich importiert, würde
+  // ohne diese Prüfung jeder gepushte Termin hier als "neuer externer Termin" nochmal importiert -
+  // ein zweites, eigenständiges Event ohne vehicleBookingId/vehicleBookingId-Schutz und ohne
+  // RSVP-Sperre (echter Produktions-Fehler, siehe CLAUDE.md). Solche UIDs werden komplett
+  // übersprungen, nicht nur beim Anlegen - sie zählen auch nicht als "gesehen", sodass eine
+  // bereits vorhandene Alt-Zeile mit genau dieser UID beim nächsten Sync korrekt als verwaist
+  // erkannt und gelöscht wird.
+  const ownPushedEvents = await prisma.event.findMany({
+    where: { organizationId, icsUid: null, googleEventId: { not: null } },
+    select: { googleEventId: true },
+  });
+  const selfPushedUids = new Set(ownPushedEvents.map((event) => `${event.googleEventId}@google.com`));
+
   let imported = 0;
   let updated = 0;
   if (instances.length > 0) {
     const createdById = (await getOrCreateIcsSyncUser()).id;
     for (const instance of instances) {
+      if (selfPushedUids.has(instance.icsUid)) continue;
       seenUids.add(instance.icsUid);
       const match = existingByUid.get(instance.icsUid);
       if (match) {
