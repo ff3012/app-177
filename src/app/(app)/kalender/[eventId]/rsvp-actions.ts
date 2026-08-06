@@ -21,6 +21,14 @@ export async function setRsvp(eventId: string, status: ZusageStatus, note?: stri
     return { error: 'Termin wurde nicht gefunden.' };
   }
   assertPermission(canViewEvent(user, event));
+  // Verteidigung in der Tiefe: die UI (kalender/[eventId]/page.tsx, home-todo-list.tsx) bietet für
+  // Fahrzeug-Reservierungs-Termine schon gar keine Zusage-Buttons an, aber diese Aktion selbst
+  // prüfte das bislang nicht - derselbe "jede Aktion prüft selbst"-Grundsatz wie bei
+  // updateEvent/deleteEvent (kalender/actions.ts).
+  assertPermission(
+    !event.vehicleBookingId,
+    'Für Fahrzeug-Reservierungs-Termine gibt es keine Zusage.',
+  );
 
   const parsed = rsvpSchema.safeParse({ status, note });
   if (!parsed.success) {
