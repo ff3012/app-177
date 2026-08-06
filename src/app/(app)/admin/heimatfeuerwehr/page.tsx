@@ -168,6 +168,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         atemschutzSachbearbeiterEmail: true,
         facebookPageId: true,
         facebookPageAccessToken: true,
+        facebookLastFetchAt: true,
+        facebookLastFetchError: true,
         icsImportUrl: true,
         icsImportLastSyncAt: true,
         icsImportLastSyncError: true,
@@ -479,6 +481,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           organizationId={selectedOrgId}
           initialPageId={selectedOrgFull.facebookPageId ?? ''}
           hasAccessToken={Boolean(selectedOrgFull.facebookPageAccessToken)}
+          lastFetchAt={selectedOrgFull.facebookLastFetchAt?.toISOString() ?? null}
+          lastFetchError={selectedOrgFull.facebookLastFetchError ?? null}
         />
 
         <Table>

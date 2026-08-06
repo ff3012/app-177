@@ -2085,6 +2085,35 @@ mockup), not derived from scratch — the spec at
   the newest post **with an image** is shown large (or the most recent one with an image within the last
   30 days, if the newest post itself has none); everything else renders as a compact date+headline list
   through `HeightFittedList`. No `facebookPageId` configured → "Facebook nicht verbunden", never an error.
+- **Bugfix (real production report: "Facebook am Dashboard aktualisiert sich nicht")**: the hourly cron
+  gave zero real signal about whether the Facebook fetch was actually succeeding.
+  `fetchAndCacheFacebookPosts()`'s original `if (!response.ok) return;` silently discarded every Graph API
+  error (expired/invalidated token, wrong permissions, etc.) with no logging and no persisted state, and
+  `/api/cron/facebook-fetch/route.ts`'s per-org `try/catch { continue; }` loop always returned a flat
+  `{ok:true, count:organizations.length}` regardless of whether any individual org's fetch actually worked
+  — so 65+ hours of "successful" cron log entries told nothing about the underlying Graph API call. Other
+  candidate causes were ruled out first (token still valid via a direct live `curl` at the time, cron
+  running hourly per `crontab -l`, `docker/facebook-fetch.sh` correctly tracked executable (`100755`) and
+  correctly reading `AUTH_URL`/`CRON_SECRET` from `.env`, not a hardcoded domain) before concluding the real
+  problem was this lack of visibility, not any of those. Fixed with the same `<feature>LastSyncAt`/
+  `LastSyncError` pattern already established for `icsImportLastSyncAt/-Error` and
+  `googleCalendarLastSyncAt/-Error`: new `Organization.facebookLastFetchAt`/`facebookLastFetchError`
+  columns, written by a new `markFetchResult()` helper that `fetchAndCacheFacebookPosts()` now calls on
+  every path (success, and a caught error whose message is persisted) — the function's whole body is
+  wrapped in try/catch and **never throws** (same "external side effect must never block/blow up the
+  caller" principle as `notifyFlightCreated`/`notify-system-check.ts`), and a non-OK Graph response now
+  reads the response body's own `error.message` before throwing, instead of discarding it. The status is
+  surfaced on `/admin/heimatfeuerwehr`'s Facebook config card exactly like `IcsImportForm`/
+  `GoogleCalendarConfigForm`'s existing status lines ("Zuletzt aktualisiert: ..." /
+  "Letzter Abruf fehlgeschlagen: ..." / "Noch nicht abgerufen (läuft stündlich per Cron-Job)."). Verified
+  directly via a standalone script against the local dev database: an invalid-credentials fetch correctly
+  populates both fields with the real Graph API error message and does not throw; a fetch with no
+  `facebookPageId` configured (the early-return branch) correctly leaves both fields untouched. The local
+  dev database has no real Facebook Page Access Token configured, so the actual specific reason
+  production's fetch has been failing (or, if it turns out to actually be succeeding, that the dashboard
+  render itself was stale for some unrelated reason) could not be reproduced here — that will only be
+  revealed once this ships and the next real hourly cron run (or a manually triggered one) writes into
+  `facebookLastFetchError` on the production server.
 - **Admin section** (`/admin/heimatfeuerwehr`'s "Dashboard Feuerwehrhaus" — a fourth section on the
   same page, not a new route, matching this page's established single-page-multi-section shape): token
   create/list/expire/revoke plus the Facebook Page-ID/Access-Token form. `dashboard-token-actions.ts`'s

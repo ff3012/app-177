@@ -96,6 +96,13 @@ model Organization {
   // Seite hinterlegen. Leer = "Facebook nicht verbunden" auf dem Dashboard.
   facebookPageId          String?
   facebookPageAccessToken String?
+  // Sichtbarkeit für den Admin, ob der stündliche Fetch tatsächlich funktioniert - vorher gab es
+  // hierfür keine Rückmeldung, ein Fehler (abgelaufener Token, falsche Berechtigung) blieb
+  // unsichtbar, selbst wenn der Cron-Job selbst erfolgreich lief (siehe echter Produktionsfall:
+  // "Facebook am Dashboard aktualisiert sich nicht"). Gleiches Muster wie
+  // icsImportLastSyncAt/-Error und googleCalendarLastSyncAt/-Error.
+  facebookLastFetchAt    DateTime?
+  facebookLastFetchError String?
 
   // Periodischer Read-Only-Import externer Kalendertermine (z. B. ein Google Kalender) in den
   // Kalender dieser Feuerwehr - siehe lib/calendar/ics-import.ts und api/cron/kalender-ics-sync.
