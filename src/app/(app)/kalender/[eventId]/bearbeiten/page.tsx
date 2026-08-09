@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateSectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
+import { canCreateAnySectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
 import { EventForm } from '@/components/calendar/event-form';
 import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
 import { toDatetimeLocalValue } from '@/lib/format';
@@ -71,7 +71,7 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
       </div>
       <EventForm
         organizations={organizations}
-        canSectionWide={canCreateSectionWideEvent(user)}
+        canSectionWide={canCreateAnySectionWideEvent(user)}
         droneGroupOptions={droneGroupOptions}
         action={boundUpdate}
         submitLabel="Änderungen speichern"

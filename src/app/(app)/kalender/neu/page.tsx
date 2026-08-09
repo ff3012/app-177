@@ -1,6 +1,6 @@
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateSectionWideEvent } from '@/lib/auth/permissions';
+import { canCreateAnySectionWideEvent } from '@/lib/auth/permissions';
 import { EventForm } from '@/components/calendar/event-form';
 import { createEvent } from '../actions';
 
@@ -16,7 +16,7 @@ export default async function NeuerTerminPage({
   }
 
   const { sectionWide } = await searchParams;
-  const canSectionWide = canCreateSectionWideEvent(user);
+  const canSectionWide = canCreateAnySectionWideEvent(user);
 
   const [organizations, ownDroneGroup] = await Promise.all([
     prisma.organization.findMany({

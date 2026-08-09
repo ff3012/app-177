@@ -19,9 +19,24 @@ export function canManageEventsFor(user: SessionUser, organizationId: string): b
   return user.feuerwehrAdminOrgIds.includes(organizationId);
 }
 
-/** Darf einen Abschnitt-weiten (isSectionWide) Termin anlegen. */
-export function canCreateSectionWideEvent(user: SessionUser): boolean {
-  return user.abschnittAdminOrgIds.length > 0;
+/**
+ * Darf einen Abschnitt-weiten (isSectionWide) Termin FÜR DIESEN Abschnitt anlegen/bearbeiten/löschen.
+ * Der Abschnitt ist der des Termin-Eigentümers, aufzulösen über getAbschnittOrganizationId(organization).
+ * Bewusst nicht mehr die pauschale Frage "verwaltet dieser Nutzer IRGENDEINEN Abschnitt": wer Admin von
+ * Abschnitt A ist und zusätzlich eine direkte Feuerwehr-Admin-Mitgliedschaft unter Abschnitt B hat,
+ * konnte damit einen im gesamten Abschnitt B sichtbaren (und pushbaren) Termin anlegen.
+ */
+export function canCreateSectionWideEvent(user: SessionUser, abschnittOrganizationId: string): boolean {
+  return canManageAbschnittFor(user, abschnittOrganizationId);
+}
+
+/**
+ * Reine UI-Vorabprüfung für die Termin-Formularseiten ("überhaupt ein Abschnitt-Recht?"), damit die
+ * Checkbox/Kategorie-Auswahl gar nicht erst gerendert wird. Die eigentliche, abschnittsgenaue
+ * Absicherung ist canCreateSectionWideEvent in den Server Actions - nicht diese Funktion.
+ */
+export function canCreateAnySectionWideEvent(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.abschnittAdminOrgIds.length > 0;
 }
 
 /** Admin Drohnengruppe: eigenes Recht innerhalb der Drohnengruppe, unabhängig vom Abschnittskommando-Admin. */
@@ -154,6 +169,28 @@ export function canManageUsersFor(user: SessionUser, organizationId: string): bo
  * Feuerwehr (analog canAccessHeimatfeuerwehrAdmin). */
 export function canAccessUserManagementAdmin(user: SessionUser): boolean {
   return canAccessHeimatfeuerwehrAdmin(user);
+}
+
+/**
+ * Welche der BESTEHENDEN Admin-Mitgliedschaften eines Benutzers darf `currentUser` beim Speichern des
+ * Benutzerformulars entfernen? Antwort: nur solche, die (a) in der neuen Auswahl nicht mehr vorkommen
+ * UND (b) für eine Organisation gelten, die currentUser selbst verwalten darf.
+ *
+ * Als eigene, reine Funktion herausgezogen, weil die frühere Inline-Variante in
+ * admin/benutzer/actions.ts (`deleteMany({ organizationId: { notIn: adminOrgIds } })`) eine echte
+ * Rechte-Lücke hatte: sie war nur nach userId/role gescoped. Bei leerem nextAdminOrgIds passierte
+ * `canGrantAdminFor([])` leer-wahr und `notIn: []` schloss nichts aus - es wurden ALLE
+ * Admin-Mitgliedschaften des Zielbenutzers gelöscht, auch die für Organisationen außerhalb des
+ * Verwaltungsbereichs des Aufrufers (z. B. ein Abschnittskommando).
+ */
+export function filterRemovableAdminOrgIds(
+  currentUser: SessionUser,
+  currentAdminOrgIds: string[],
+  nextAdminOrgIds: string[],
+): string[] {
+  return currentAdminOrgIds
+    .filter((organizationId) => !nextAdminOrgIds.includes(organizationId))
+    .filter((organizationId) => canManageUsersFor(currentUser, organizationId));
 }
 
 /** Fahrzeug-Buchung stornieren/verwalten: die eigene Buchung, oder Admin der Feuerwehr, der das
