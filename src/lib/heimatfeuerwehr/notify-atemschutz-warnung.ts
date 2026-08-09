@@ -21,7 +21,7 @@ interface AtemschutzWarning {
  */
 export async function checkAndNotifyAtemschutzWarnungen(): Promise<void> {
   const orgs = await prisma.organization.findMany({
-    where: { type: 'FEUERWEHR', atemschutzSachbearbeiterEmail: { not: null } },
+    where: { type: 'FEUERWEHR', atemschutzSachbearbeiterEmail: { not: null }, featureAtemschutz: true },
     select: { id: true, name: true, shortName: true, atemschutzSachbearbeiterEmail: true },
   });
 

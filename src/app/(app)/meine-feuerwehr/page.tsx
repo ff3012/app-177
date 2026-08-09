@@ -110,7 +110,7 @@ export default async function MeineFeuerwehrPage() {
   const in14Days = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   const droneMember = canViewDroneModule(user);
 
-  const [me, candidateEventsRaw, vehicles, myBookings] = await Promise.all([
+  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: {
@@ -140,6 +140,10 @@ export default async function MeineFeuerwehrPage() {
       where: { userId: user.id, endsAt: { gte: now } },
       orderBy: { startsAt: 'asc' },
       include: { vehicle: true },
+    }),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: user.homeOrganizationId },
+      select: { featureAtemschutz: true },
     }),
   ]);
 
@@ -192,7 +196,7 @@ export default async function MeineFeuerwehrPage() {
   const upcomingPool = eventCards.filter((event) => !rsvpTodoIds.has(event.id)).slice(0, 4);
 
   const staticTodos: StaticTodoItemData[] = [];
-  const atemschutzTodo = buildAtemschutzTodo(me);
+  const atemschutzTodo = orgFeatures.featureAtemschutz ? buildAtemschutzTodo(me) : null;
   if (atemschutzTodo) staticTodos.push(atemschutzTodo);
 
   let droneFlightCount = 0;
@@ -238,10 +242,12 @@ export default async function MeineFeuerwehrPage() {
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const [activeMemberCount, traeger, bookingsThisMonthCount] = await Promise.all([
       prisma.user.count({ where: { homeOrganizationId: user.homeOrganizationId, isActive: true } }),
-      prisma.user.findMany({
-        where: { homeOrganizationId: user.homeOrganizationId, isActive: true, istAtemschutzgeraeteTraeger: true },
-        select: { atemschutzGueltigBis: true, atemschutzFinnentestAm: true },
-      }),
+      orgFeatures.featureAtemschutz
+        ? prisma.user.findMany({
+            where: { homeOrganizationId: user.homeOrganizationId, isActive: true, istAtemschutzgeraeteTraeger: true },
+            select: { atemschutzGueltigBis: true, atemschutzFinnentestAm: true },
+          })
+        : Promise.resolve([]),
       prisma.vehicleBooking.count({
         where: { vehicle: { organizationId: user.homeOrganizationId }, startsAt: { gte: startOfMonth, lt: endOfMonth } },
       }),
@@ -293,7 +299,7 @@ export default async function MeineFeuerwehrPage() {
       {standDerWehr && (
         <div className="flex flex-col gap-2.5">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Stand der Wehr</span>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className={orgFeatures.featureAtemschutz ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
             <div className="rounded-xl bg-white p-4 shadow-sm">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Mitglieder</div>
               <div className="flex items-baseline gap-1.5">
@@ -301,19 +307,21 @@ export default async function MeineFeuerwehrPage() {
                 <span className="text-[14px] text-[#6c6c70]">aktiv</span>
               </div>
             </div>
-            <div className="rounded-xl bg-white p-4 shadow-sm">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Atemschutz</div>
-              <div className="flex items-baseline gap-1.5">
-                <span
-                  className={`font-condensed text-[28px] font-bold leading-none ${
-                    standDerWehr.atemschutzExpiringCount > 0 ? 'text-[#8a6113]' : 'text-[#1c1c1e]'
-                  }`}
-                >
-                  {standDerWehr.atemschutzExpiringCount}
-                </span>
-                <span className="text-[14px] text-[#6c6c70]">laufen ab</span>
+            {orgFeatures.featureAtemschutz && (
+              <div className="rounded-xl bg-white p-4 shadow-sm">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Atemschutz</div>
+                <div className="flex items-baseline gap-1.5">
+                  <span
+                    className={`font-condensed text-[28px] font-bold leading-none ${
+                      standDerWehr.atemschutzExpiringCount > 0 ? 'text-[#8a6113]' : 'text-[#1c1c1e]'
+                    }`}
+                  >
+                    {standDerWehr.atemschutzExpiringCount}
+                  </span>
+                  <span className="text-[14px] text-[#6c6c70]">laufen ab</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <Link href="/admin/heimatfeuerwehr" className="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
             <div className="min-w-0">
@@ -328,6 +336,7 @@ export default async function MeineFeuerwehrPage() {
         </div>
       )}
 
+      {orgFeatures.featureAtemschutz && (
       <div id="atemschutz-status" className="rounded-lg bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-neutral-900">Atemschutz</h2>
         <p className="text-sm text-neutral-700">
@@ -355,6 +364,7 @@ export default async function MeineFeuerwehrPage() {
           </div>
         )}
       </div>
+      )}
 
       <div className="rounded-lg bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-neutral-900">Fuhrpark</h2>

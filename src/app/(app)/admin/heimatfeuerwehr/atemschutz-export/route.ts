@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/session';
 import { canManageHeimatfeuerwehrFor } from '@/lib/auth/permissions';
 import { getExpiryStatus, getFinnentestExpiryDate, type AtemschutzExpiryStatus } from '@/lib/heimatfeuerwehr/atemschutz-status';
 import { ATEMSCHUTZ_EXCEL_COLUMNS } from '@/lib/heimatfeuerwehr/atemschutz-excel-columns';
+import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
   aktiv: 'Aktiv',
@@ -18,6 +19,11 @@ export async function GET(request: Request) {
   const organizationId = new URL(request.url).searchParams.get('org');
   if (!organizationId || !canManageHeimatfeuerwehrFor(user, organizationId)) {
     return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
+  }
+
+  const { atemschutz } = await getOrganizationFeatures(organizationId);
+  if (!atemschutz) {
+    return NextResponse.json({ error: 'Nicht gefunden.' }, { status: 404 });
   }
 
   const members = await prisma.user.findMany({

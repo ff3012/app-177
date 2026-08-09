@@ -2142,6 +2142,84 @@ mockup), not derived from scratch — the spec at
   `'use client'` island (`clock-display.tsx`) so the whole page doesn't re-render for that. Chrome launch
   flags and the crontab entry are documented in `docker/README.md`.
 
+### Funktionsschalter je Heimatfeuerwehr (Atemschutz/Facebook)
+
+Two admin-facing on/off switches, one per Feuerwehr, so a Feuerwehr that doesn't use a given module can hide
+it instead of showing an empty/unused section to its members. Full design rationale in
+`docs/superpowers/specs/2026-08-09-funktionsschalter-design.md`.
+
+- **Two flags on `Organization`**: `featureAtemschutz` (`@default(true)`) and `featureFacebook`
+  (`@default(false)` at the column level, see the migration backfill below) plus `featuresUpdatedAt`/
+  `featuresUpdatedByName` (a plain name snapshot, no FK to `User` — same "console.log instead of an audit
+  column" reasoning already used for the admin-triggered password-reset trigger, see
+  Benutzerverwaltung-Brief.md above). `src/lib/heimatfeuerwehr/features.ts`'s `getOrganizationFeatures()` is
+  a small helper for call sites (Server Actions, cron loops) that don't already have the organization row
+  loaded with these two columns `select`ed.
+- **Disabling only hides, never deletes**: turning Atemschutz off removes the entire Atemschutz card from
+  both `/meine-feuerwehr` and `/admin/heimatfeuerwehr` (Sachbearbeiter form, table, Excel export link) and
+  makes `atemschutz-export` return `notFound()` — but every stored Untersuchung/Finnentest date, the
+  Sachbearbeiter email, and the `istAtemschutzgeraeteTraeger` flag on `User` are completely untouched and
+  reappear exactly as they were the moment the module is switched back on. The daily Atemschutz-warning cron
+  (`checkAndNotifyAtemschutzWarnungen`) also skips a Feuerwehr with the flag off, by adding
+  `featureAtemschutz: true` to its existing organization query — no separate pause flag needed. Turning
+  Facebook off hides the dashboard's Facebook widget (see grid reflow below) and pauses the hourly
+  Facebook-fetch cron for that org (`featureFacebook: true` added to its existing query filter) — the
+  cached posts/images and the stored Page-ID/Access-Token are left alone, so re-enabling picks up exactly
+  where it left off.
+- **The Ein→Aus toggle asks for confirmation, Aus→Ein doesn't** — a shadcn `AlertDialog` naming the affected
+  member count and stating explicitly that existing data is preserved, matching this codebase's existing
+  destructive-toggle confirmation pattern elsewhere in Verwaltung.
+- **Migration backfill is token-based, not a blanket default**: `featureFacebook` defaults to `false` for
+  new rows, but the migration itself runs an `UPDATE` that sets it `true` for any organization that already
+  had both `facebookPageId` AND `facebookPageAccessToken` set at migration time (in practice: Wolfsgraben,
+  the one Feuerwehr with a live Facebook integration already running) — so shipping this feature doesn't
+  silently turn off a dashboard widget that was already working in production.
+- **Two deliberate deviations from the original design brief** (see the spec file's own "Abweichungen vom
+  Brief" section for the full rationale — summarized here, not repeated):
+  1. **Facebook credential entry stays in the admin UI.** The brief wanted Page-ID/Access-Token config
+     removed from the web app entirely ("gehört in die Serverkonfiguration, vom Systembetreuer gesetzt").
+     That would have broken this app's existing, deliberate architecture — every Feuerwehr configures its
+     own Facebook page itself via `/admin/heimatfeuerwehr`, nothing is server-hardcoded. `setOrganizationFeature`
+     only gates activation/visibility; the pre-existing `DashboardFacebookConfigForm` for entering the
+     credentials themselves is unchanged.
+  2. **Facebook's post-migration default is token-dependent, not unconditionally off** (see the backfill
+     bullet above) — the brief assumed every Feuerwehr would start with Facebook off; doing that literally
+     would have interrupted Wolfsgraben's already-running integration for no reason.
+- **Real bug caught during this feature's own review, not in the shipped version**: the initial
+  implementation of the dashboard's Facebook-off grid reflow (`Feature: Dashboard-Grid ohne Facebook`,
+  commit `0f1b5e9`) dropped the WASTL card from the grid entirely when Facebook *was* active — i.e. the
+  reflow logic correctly built a "Facebook off" layout (WASTL fills column 3, QR moves to column 2) but the
+  companion "Facebook on" layout it was diffed against had silently lost the WASTL card somewhere in the
+  same edit, a plan-authoring bug rather than a runtime one. Caught by task review before merge, fixed in
+  `Fix: WASTL-Karte fehlte in Spalte 2 wenn Facebook aktiv` (commit `b9d982f`), which restores the
+  WASTL card into column 2 below the vehicle table for the Facebook-on layout. Both states were re-verified
+  live afterward (see Task 7 verification below) — column 2 shows Fahrzeuge+WASTL and column 3 shows
+  Facebook+QR when the flag is on; column 2 shows Fahrzeuge+QR and column 3 shows WASTL alone at full height
+  when it's off, with the third grid column's `clamp()` width itself changing (~508px on, ~700px off, at
+  1920px) and the footer's source list dropping ", Facebook" when off.
+- **Verified end-to-end (Task 7)**: `tsc --noEmit` and `next build` both clean. A standalone script
+  confirmed the toggle round-trips through `getOrganizationFeatures()` in both directions and that
+  `setOrganizationFeature`'s Facebook-without-token guard logic correctly blocks enabling when no
+  `facebookPageId`/`facebookPageAccessToken` is stored. Live in the browser as the seeded site admin:
+  toggling `featureAtemschutz` off for a Feuerwehr removed its Atemschutz card from `/admin/heimatfeuerwehr`
+  and made `atemschutz-export?org=<id>` return a real 404 in that same authenticated tab; toggling it back
+  on restored the card. The dashboard grid was checked at 1920×1080 with a temporary `DashboardToken`: with
+  `featureFacebook: true` (and a placeholder `facebookPageId`, since no organization in this dev database
+  has real Facebook credentials configured) the grid rendered three columns of ~632/632/518px with WASTL
+  correctly present in column 2 and Facebook+QR in column 3; with the flag `false` the grid reflowed to
+  ~540/540/701px with QR moved into column 2 below the vehicle table and WASTL alone filling column 3, no
+  horizontal scrollbar in either state, and the "Ausgeborgt von" table column fully inside its (now
+  narrower) column-2 card. All test data (the temporary token, the placeholder Facebook fields, both
+  toggled flags) was restored/deleted afterward. The interactive click-to-toggle switch itself could not be
+  exercised via simulated mouse clicks in this browser-automation session — consistent with the
+  extensively-documented, harness-wide non-hydration limitation elsewhere in this file — but the equivalent
+  end state was reached and verified through the real Auth.js credentials POST (not a fabricated session)
+  followed by direct DB flag flips, which the Server Components then render exactly as a real click would
+  have produced. A dev-server port mismatch was also hit and fixed along the way: a stray `npm run dev` from
+  the sibling non-worktree checkout was squatting on port 3000 from an earlier session, serving the main
+  checkout instead of this worktree — it was killed and restarted from the correct worktree directory before
+  any of the above checks were meaningful.
+
 ### PWA
 
 `src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (cropped from `public/wappen-afkdo.png`

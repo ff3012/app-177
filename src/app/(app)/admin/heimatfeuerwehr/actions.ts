@@ -9,6 +9,7 @@ import { vehicleSchema, parseVehicleFormData } from '@/lib/validation/vehicle.sc
 import { atemschutzSchema, parseAtemschutzFormData } from '@/lib/validation/atemschutz.schema';
 import { syncIcsCalendarForOrganization } from '@/lib/calendar/ics-import';
 import { verifyServiceAccountCredentials } from '@/lib/calendar/google-calendar-push';
+import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
 
 export interface VehicleFormState {
   error?: string;
@@ -127,6 +128,11 @@ export async function updateAtemschutzStatus(
   }
   assertPermission(canManageHeimatfeuerwehrFor(user, target.homeOrganizationId));
 
+  const { atemschutz } = await getOrganizationFeatures(target.homeOrganizationId);
+  if (!atemschutz) {
+    return { error: 'Das Modul Atemschutzgeräteträger ist für diese Feuerwehr deaktiviert.' };
+  }
+
   const parsed = atemschutzSchema.safeParse(parseAtemschutzFormData(formData));
   if (!parsed.success) {
     return { fieldErrors: parsed.error.flatten().fieldErrors };
@@ -162,6 +168,11 @@ export async function setAtemschutzSachbearbeiter(
 ): Promise<AtemschutzSachbearbeiterState> {
   const user = await requireUser();
   assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const { atemschutz } = await getOrganizationFeatures(organizationId);
+  if (!atemschutz) {
+    return { error: 'Das Modul Atemschutzgeräteträger ist für diese Feuerwehr deaktiviert.' };
+  }
 
   const parsed = sachbearbeiterEmailSchema.safeParse(formData.get('email'));
   if (!parsed.success) {
@@ -429,4 +440,46 @@ export async function removeGoogleCalendarCredentials(organizationId: string): P
   });
 
   revalidatePath('/admin/heimatfeuerwehr');
+}
+
+export interface FeatureToggleState {
+  error?: string;
+}
+
+/** Optimistisches Umschalten der beiden Funktions-Flags (Funktionsschalter-Brief.md §2) - sofortiges
+ * Speichern ohne separaten Speichern-Button, feature-toggle-row.tsx macht das eigentliche optimistische
+ * UI-Update und rollt bei einem Fehler zurück. Facebook kann nur aktiviert werden, wenn bereits ein
+ * Zugangstoken hinterlegt ist - ein manipulierter Request ohne Token darf das Flag auch serverseitig
+ * nicht setzen (Brief-Abnahmekriterium), daher die Prüfung hier statt nur im disabled-Attribut des
+ * Switches. */
+export async function setOrganizationFeature(
+  organizationId: string,
+  feature: 'ATEMSCHUTZ' | 'FACEBOOK',
+  enabled: boolean,
+): Promise<FeatureToggleState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  if (feature === 'FACEBOOK' && enabled) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { facebookPageId: true, facebookPageAccessToken: true },
+    });
+    if (!org?.facebookPageId || !org.facebookPageAccessToken) {
+      return { error: 'Ohne hinterlegtes Zugangstoken kann Facebook nicht aktiviert werden.' };
+    }
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      ...(feature === 'ATEMSCHUTZ' ? { featureAtemschutz: enabled } : { featureFacebook: enabled }),
+      featuresUpdatedAt: new Date(),
+      featuresUpdatedByName: user.name,
+    },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/meine-feuerwehr');
+  return {};
 }
