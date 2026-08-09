@@ -59,7 +59,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
     getDashboardVehicleBookings(valid.organizationId),
     getUpcomingVehicleBookingsCount(valid.organizationId),
     generateAppQrCodeDataUri(),
-    prisma.organization.findUnique({ where: { id: valid.organizationId }, select: { name: true, facebookPageId: true } }),
+    prisma.organization.findUnique({ where: { id: valid.organizationId }, select: { name: true, facebookPageId: true, featureFacebook: true } }),
     prisma.facebookPostCache.findUnique({ where: { organizationId: valid.organizationId } }),
   ]);
   if (!organizationFull) {
@@ -86,6 +86,15 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
       : posts.find((post) => post.hasImage && new Date(post.createdTime) >= thirtyDaysAgo);
   const compactPosts = posts.filter((post) => post.id !== featuredPost?.id);
 
+  // Funktionsschalter-Brief.md §5: gilt sowohl wenn der Schalter aus ist als auch wenn nie ein Token
+  // hinterlegt wurde - in beiden Fällen bekommt das Dashboard die "ohne Facebook"-Umschaltung (großes
+  // WASTL, keine leere Facebook-Spalte), nicht nur eine leere Facebook-Spalte wie bisher.
+  const facebookActive = organizationFull.featureFacebook && Boolean(organizationFull.facebookPageId);
+
+  const vehicleTableGridClass = facebookActive
+    ? 'grid-cols-[clamp(70px,4.5vw,110px)_minmax(160px,1.6fr)_clamp(104px,6.5vw,150px)_minmax(120px,1.4fr)] gap-x-[18px]'
+    : 'grid-cols-[clamp(56px,3.6vw,84px)_minmax(150px,1.15fr)_clamp(84px,5.2vw,112px)_minmax(110px,1fr)] gap-x-3';
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#f4f4f6] text-[#1c1c1e]" style={{ fontFamily: "'Barlow', system-ui, sans-serif" }}>
       <meta httpEquiv="refresh" content="300" />
@@ -109,7 +118,11 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
 
       {/* ================= Inhalt ================= */}
       <div
-        className="grid min-h-0 flex-1 gap-[clamp(16px,1.5vw,32px)] overflow-hidden px-[clamp(20px,2.1vw,44px)] pt-[clamp(20px,2.1vw,44px)] grid-cols-1 [@media(max-aspect-ratio:1/1)]:grid-cols-1 dash-sm:grid-cols-[minmax(0,1fr)_minmax(340px,26vw)] dash-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_clamp(380px,27vw,560px)]"
+        className={`grid min-h-0 flex-1 gap-[clamp(16px,1.5vw,32px)] overflow-hidden px-[clamp(20px,2.1vw,44px)] pt-[clamp(20px,2.1vw,44px)] grid-cols-1 [@media(max-aspect-ratio:1/1)]:grid-cols-1 dash-sm:grid-cols-[minmax(0,1fr)_minmax(340px,26vw)] ${
+          facebookActive
+            ? 'dash-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_clamp(380px,27vw,560px)]'
+            : 'dash-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_clamp(500px,36.5vw,760px)]'
+        }`}
       >
         {/* ---------- Spalte 1: Termine ---------- */}
         <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
@@ -153,14 +166,18 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
           )}
         </div>
 
-        {/* ---------- Spalte 2: Fahrzeuge + WASTL ---------- */}
+        {/* ---------- Spalte 2: Fahrzeuge + WASTL (mit Facebook) bzw. Fahrzeuge + QR (ohne Facebook) ---------- */}
         <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
           <div className="flex items-baseline justify-between">
             <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Ausgeborgte Fahrzeuge</span>
             <span className="dash-secondary text-[#6c6c70]">Nächste 30 Tage</span>
           </div>
-          <div className="flex flex-none flex-col overflow-hidden rounded-xl bg-white shadow-sm">
-            <div className="grid grid-cols-[clamp(70px,4.5vw,110px)_minmax(160px,1.6fr)_clamp(104px,6.5vw,150px)_minmax(120px,1.4fr)] gap-x-[18px] border-b-2 border-[#1c1c1e] px-6 py-3">
+          <div
+            className={`flex overflow-hidden rounded-xl bg-white shadow-sm ${
+              facebookActive ? 'flex-none flex-col' : 'min-h-0 flex-1 flex-col'
+            }`}
+          >
+            <div className={`grid ${vehicleTableGridClass} border-b-2 border-[#1c1c1e] px-6 py-3`}>
               <span className="dash-section-label font-semibold uppercase tracking-[0.1em]">Datum</span>
               <span className="dash-section-label font-semibold uppercase tracking-[0.1em]">Fahrzeug</span>
               <span className="dash-section-label font-semibold uppercase tracking-[0.1em]">Zeit</span>
@@ -171,10 +188,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
             ) : (
               <HeightFittedList minVisible={3} maxVisible={8}>
                 {vehicleBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="grid grid-cols-[clamp(70px,4.5vw,110px)_minmax(160px,1.6fr)_clamp(104px,6.5vw,150px)_minmax(120px,1.4fr)] items-center gap-x-[18px] border-b border-[#f0f0f2] px-6 py-3"
-                  >
+                  <div key={booking.id} className={`grid ${vehicleTableGridClass} items-center border-b border-[#f0f0f2] px-6 py-3`}>
                     <span className="dash-table-cell font-semibold">{formatBookingDate(booking.startsAt)}</span>
                     <span className="dash-table-cell overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
                       {booking.vehicleTaktischeBezeichnung}
@@ -194,125 +208,132 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
               {totalBookingsCount === 1 ? 'Buchung' : 'Buchungen'} in den nächsten 30 Tagen
             </div>
           </div>
-
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-xl bg-white p-[18px_22px] shadow-sm">
-            <div className="flex flex-none items-baseline justify-between">
-              <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Lage Niederösterreich</span>
-              <span className="dash-secondary text-[#6c6c70]">WASTL · Bezirksalarmzentralen</span>
+          {!facebookActive && (
+            <div className="flex flex-none items-center gap-4 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
+              <div className="flex aspect-square w-[clamp(56px,7vw,180px)] shrink items-center justify-center rounded-lg bg-white p-2">
+                <img src={qrCodeDataUri} alt="QR-Code zum App-Download" className="h-full w-full" />
+              </div>
+              <div className="min-w-[220px] flex-1">
+                <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
+                <div className="dash-secondary mb-3 leading-snug text-[#c9c9ce]">Termine, Fahrzeuge und Atemschutz am Handy.</div>
+                <FitText
+                  minFontSizePx={14}
+                  className="dash-secondary font-semibold text-white"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                >
+                  {appUrlDisplay}
+                </FitText>
+              </div>
             </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- proxied same-origin image, next/image's optimizer adds no value here */}
-              <img
-                src="/api/wastl/overview"
-                alt="WASTL Lagekarte Niederösterreich mit Einsatzstatus je Bezirk"
-                className="max-h-full max-w-full rounded-lg object-contain"
-              />
-            </div>
-            <div className="flex flex-none items-center justify-between border-t border-[#f0f0f2] pt-[10px]">
-              <span className="dash-secondary flex items-center gap-4 text-[#48484c]">
-                <span className="flex items-center gap-[7px]">
-                  <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#5aa552' }} />
-                  Normal
-                </span>
-                <span className="flex items-center gap-[7px]">
-                  <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#f2c14e' }} />
-                  Erhöht
-                </span>
-                <span className="flex items-center gap-[7px]">
-                  <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#e06666' }} />
-                  Stark
-                </span>
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* ---------- Spalte 3: Facebook + QR ---------- */}
+        {/* ---------- Spalte 3: Facebook + QR (mit Facebook) bzw. WASTL groß (ohne Facebook) ---------- */}
         <div className="flex min-h-0 flex-col gap-5 overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-            <div className="flex flex-none items-baseline justify-between">
-              <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Aus unserer Feuerwehr</span>
-              {organizationFull.facebookPageId && (
-                <span className="dash-secondary text-[#6c6c70]">facebook.com/{organizationFull.facebookPageId}</span>
-              )}
-            </div>
-
-            {!organizationFull.facebookPageId ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl bg-white p-[22px] shadow-sm">
-                <span className="dash-secondary text-[#6c6c70]">Facebook nicht verbunden</span>
-              </div>
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-hidden rounded-xl bg-white p-[22px] shadow-sm">
-                {featuredPost && (
-                  <div className="flex-none">
-                    <div className="mb-3.5 aspect-video w-full overflow-hidden rounded-lg">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- served from our own /api/facebook/image proxy */}
-                      <img
-                        src={`/api/facebook/image/${featuredPost.id}`}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="dash-secondary mb-2 text-[#6c6c70]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                      {new Date(featuredPost.createdTime).toLocaleDateString('de-AT')}
-                    </div>
-                    {featuredPost.message && (
-                      <div className="text-[23px] font-semibold leading-snug" style={{ textWrap: 'pretty' }}>
-                        {featuredPost.message.split('\n')[0]}
+          {facebookActive ? (
+            <>
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+                <div className="flex flex-none items-baseline justify-between">
+                  <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Aus unserer Feuerwehr</span>
+                  <span className="dash-secondary text-[#6c6c70]">facebook.com/{organizationFull.facebookPageId}</span>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-hidden rounded-xl bg-white p-[22px] shadow-sm">
+                  {featuredPost && (
+                    <div className="flex-none">
+                      <div className="mb-3.5 aspect-video w-full overflow-hidden rounded-lg">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- served from our own /api/facebook/image proxy */}
+                        <img
+                          src={`/api/facebook/image/${featuredPost.id}`}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {compactPosts.length > 0 && (
-                  <HeightFittedList minVisible={2} maxVisible={6}>
-                    {compactPosts.map((post) => (
-                      <div key={post.id} className="flex items-baseline gap-4 border-t border-[#f0f0f2] pt-3.5 first:border-t-0 first:pt-0">
-                        <span
-                          className="dash-secondary w-[100px] flex-none text-[#6c6c70]"
-                          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                        >
-                          {new Date(post.createdTime).toLocaleDateString('de-AT')}
-                        </span>
-                        <span className="dash-table-cell flex-1 font-semibold" style={{ textWrap: 'pretty' }}>
-                          {post.message?.split('\n')[0] ?? ''}
-                        </span>
+                      <div className="dash-secondary mb-2 text-[#6c6c70]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                        {new Date(featuredPost.createdTime).toLocaleDateString('de-AT')}
                       </div>
-                    ))}
-                  </HeightFittedList>
-                )}
+                      {featuredPost.message && (
+                        <div className="text-[23px] font-semibold leading-snug" style={{ textWrap: 'pretty' }}>
+                          {featuredPost.message.split('\n')[0]}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                {!featuredPost && compactPosts.length === 0 && (
-                  <div className="flex min-h-0 flex-1 items-center justify-center">
-                    <span className="dash-secondary text-[#6c6c70]">Noch keine Beiträge.</span>
-                  </div>
-                )}
+                  {compactPosts.length > 0 && (
+                    <HeightFittedList minVisible={2} maxVisible={6}>
+                      {compactPosts.map((post) => (
+                        <div key={post.id} className="flex items-baseline gap-4 border-t border-[#f0f0f2] pt-3.5 first:border-t-0 first:pt-0">
+                          <span
+                            className="dash-secondary w-[100px] flex-none text-[#6c6c70]"
+                            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                          >
+                            {new Date(post.createdTime).toLocaleDateString('de-AT')}
+                          </span>
+                          <span className="dash-table-cell flex-1 font-semibold" style={{ textWrap: 'pretty' }}>
+                            {post.message?.split('\n')[0] ?? ''}
+                          </span>
+                        </div>
+                      ))}
+                    </HeightFittedList>
+                  )}
+
+                  {!featuredPost && compactPosts.length === 0 && (
+                    <div className="flex min-h-0 flex-1 items-center justify-center">
+                      <span className="dash-secondary text-[#6c6c70]">Noch keine Beiträge.</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
 
-          <div className="flex flex-none items-center gap-4 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
-            {/* QR-Box ist jetzt der nachgiebige Teil dieser Zeile (shrink statt flex-none, kein
-                fixes h-[...] mehr - aspect-square hält sie quadratisch während sie schrumpft):
-                die URL darf nie umbrechen oder abgeschnitten werden (siehe FitText unten), also
-                muss bei zu wenig Platz zuerst der QR-Code kleiner werden, nicht der Text
-                unter seine 14px-Mindestgröße fallen - genau umgekehrt zur alten, fixen
-                QR-Box-Größe, die den Text bei mittleren Fensterbreiten in die Ecke gedrängt hat. */}
-            <div className="flex aspect-square w-[clamp(56px,7vw,180px)] shrink items-center justify-center rounded-lg bg-white p-2">
-              <img src={qrCodeDataUri} alt="QR-Code zum App-Download" className="h-full w-full" />
+              <div className="flex flex-none items-center gap-4 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
+                <div className="flex aspect-square w-[clamp(56px,7vw,180px)] shrink items-center justify-center rounded-lg bg-white p-2">
+                  <img src={qrCodeDataUri} alt="QR-Code zum App-Download" className="h-full w-full" />
+                </div>
+                <div className="min-w-[220px] flex-1">
+                  <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
+                  <div className="dash-secondary mb-3 leading-snug text-[#c9c9ce]">Termine, Fahrzeuge und Atemschutz am Handy.</div>
+                  <FitText
+                    minFontSizePx={14}
+                    className="dash-secondary font-semibold text-white"
+                    style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                  >
+                    {appUrlDisplay}
+                  </FitText>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-xl bg-white p-[18px_22px] shadow-sm">
+              <div className="flex flex-none items-baseline justify-between">
+                <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Lage Niederösterreich</span>
+                <span className="dash-secondary text-[#6c6c70]">WASTL · Bezirksalarmzentralen</span>
+              </div>
+              <div className="flex min-h-0 flex-1 items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- proxied same-origin image, next/image's optimizer adds no value here */}
+                <img
+                  src="/api/wastl/overview"
+                  alt="WASTL Lagekarte Niederösterreich mit Einsatzstatus je Bezirk"
+                  className="max-h-full max-w-full rounded-lg object-contain"
+                />
+              </div>
+              <div className="flex flex-none items-center justify-between border-t border-[#f0f0f2] pt-[10px]">
+                <span className="dash-secondary flex items-center gap-4 text-[#48484c]">
+                  <span className="flex items-center gap-[7px]">
+                    <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#5aa552' }} />
+                    Normal
+                  </span>
+                  <span className="flex items-center gap-[7px]">
+                    <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#f2c14e' }} />
+                    Erhöht
+                  </span>
+                  <span className="flex items-center gap-[7px]">
+                    <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#e06666' }} />
+                    Stark
+                  </span>
+                </span>
+              </div>
             </div>
-            <div className="min-w-[220px] flex-1">
-              <div className="mb-2 text-[22px] font-semibold leading-tight text-white">App installieren</div>
-              <div className="dash-secondary mb-3 leading-snug text-[#c9c9ce]">Termine, Fahrzeuge und Atemschutz am Handy.</div>
-              <FitText
-                minFontSizePx={14}
-                className="dash-secondary font-semibold text-white"
-                style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-              >
-                {appUrlDisplay}
-              </FitText>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -324,7 +345,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
         <span className="dash-secondary text-[#6c6c70]">Dashboard Feuerwehrhaus · Anzeige aktualisiert sich automatisch</span>
         <span className="dash-secondary text-[#6c6c70]">
           Zuletzt aktualisiert {now.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} · Quellen: App-177, WASTL
-          Niederösterreich, Facebook
+          Niederösterreich{facebookActive ? ', Facebook' : ''}
         </span>
       </div>
     </div>
