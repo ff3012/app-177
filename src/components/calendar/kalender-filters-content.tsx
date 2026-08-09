@@ -12,10 +12,16 @@ interface KalenderFiltersContentProps {
 }
 
 /**
- * Ebenen-Toggles + Legende + ICS-Import - geteilt zwischen der Desktop-Sidebar (unverändert,
- * `lg:` und größer) und dem neuen Mobile-Bottom-Sheet (Mobile-Brief.md), damit dieselbe JSX/Logik
- * nicht zweimal gepflegt werden muss. Responsive Feinheiten (Kartendichte, ICS-Linkfarbe) stecken
- * hier direkt über sm:-Klassen, nicht in zwei getrennten Aufrufern.
+ * Ebenen-Toggles + Legende + ICS-Import - seit der Kalender-Desktop-Browser-Ansicht (Task 2,
+ * `kalender-desktop-sidebar.tsx`) NUR NOCH für das mobile Bottom-Sheet (Mobile-Brief.md) zuständig -
+ * die `lg:`-Sidebar hat eine eigene Komponente (`KalenderDesktopSidebar`), da ihr Inhalt (keine
+ * Legende-Karte, dafür eine neue "Nur anzeigen"-Statusfilter-Karte) genuin abweicht. Diese Komponente
+ * hat aktuell genau eine Einbindestelle - innerhalb des `BottomSheet` in `kalender-with-layers.tsx` -
+ * und wird im Tablet-Breitenbereich (640-1023px) nirgends im Seitenfluss gerendert (der Desktop-
+ * Sidebar-Wrapper ist `hidden lg:flex`, wodurch zwischen 640px und 1024px aktuell nichts diese
+ * Komponente zeigt - ein separater, bereits bekannter und hier bewusst nicht behobener Bug, siehe
+ * das Projekt-Ledger). Responsive Feinheiten (Kartendichte, ICS-Linkfarbe) stecken hier direkt über
+ * sm:-Klassen, auch wenn die einzige aktuelle Einbindung unterhalb von sm: liegt.
  */
 export function KalenderFiltersContent({
   layers,

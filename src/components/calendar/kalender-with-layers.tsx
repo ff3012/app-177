@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarView, type CalendarEventInput } from './calendar-view';
 import { EventListView } from './event-list-view';
 import { KalenderFiltersContent } from './kalender-filters-content';
+import { KalenderDesktopSidebar } from './kalender-desktop-sidebar';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
 
@@ -18,6 +19,8 @@ export interface IcsLink {
   copyText: string;
 }
 
+export type StatusFilter = 'ALLE' | 'OFFEN' | 'ZUGESAGT';
+
 interface KalenderWithLayersProps {
   events: CalendarEventInput[];
   layers: CalendarLayer[];
@@ -25,6 +28,19 @@ interface KalenderWithLayersProps {
 }
 
 type ViewMode = 'calendar' | 'list';
+
+const OPEN_RSVP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** "Offen" für die neue Desktop-Sidebar/Kopfzeile (Kalender Browser.dc.html) - dieselbe 14-Tage-
+ * Definition wie HomeTodoList's "Zu erledigen" (home-todo-list.tsx), hier aber eigenständig auf
+ * CalendarEventInput berechnet statt eine geteilte Helper-Datei für zwei unterschiedliche
+ * Datenformen (HomeEventCardData vs. CalendarEventInput) einzuführen. */
+function isOpenForRsvp(event: CalendarEventInput): boolean {
+  if (event.isVehicleBooking) return false;
+  if (event.myRsvpStatus) return false;
+  const startsInMs = new Date(event.start).getTime() - Date.now();
+  return startsInMs <= OPEN_RSVP_WINDOW_MS;
+}
 
 function FilterIcon({ hasHiddenLayers }: { hasHiddenLayers: boolean }) {
   return (
@@ -44,11 +60,17 @@ function FilterIcon({ hasHiddenLayers }: { hasHiddenLayers: boolean }) {
 // lg: (Mobile-Brief.md V2-Mobile) verschwindet dieselbe Content-Komponente stattdessen komplett aus
 // dem Seitenfluss und wandert hinter ein Filter-Icon in der Kopfleiste (via MobileHeaderContext) in
 // ein Bottom Sheet - "Inhalt zuerst, Einstellungen dahinter" statt gestapelter Karten über dem Kalender.
+//
+// Kalender Browser.dc.html (Desktop-Browser-Ansicht): ab lg: bekommt die Sidebar eine eigene
+// Komponente (KalenderDesktopSidebar) statt KalenderFiltersContent - die Legende entfällt dort
+// zugunsten einer Fußzeile, eine neue "Nur anzeigen"-Statusfilter-Karte kommt dazu. Unterhalb lg:
+// bleibt KalenderFiltersContent (BottomSheet) unverändert und bekommt nie einen statusFilter.
 export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLayersProps) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(layers.map((layer) => [layer.key, true])),
   );
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALLE');
   const [sheetOpen, setSheetOpen] = useState(false);
   const { setActionSlot } = useMobileHeader();
 
@@ -83,6 +105,17 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
     return [...listEvents].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   }, [filteredEvents]);
 
+  const openCount = useMemo(() => sortedEvents.filter(isOpenForRsvp).length, [sortedEvents]);
+
+  // Der Status-Filter (Kalender Browser.dc.html) wirkt bewusst nur auf die Listenansicht, nicht auf
+  // das Kalendergitter - das Gitter hat keine vergleichbare Farbkennzeichnung für Rückmeldestatus,
+  // ein stilles Verschwinden von Terminen dort wäre verwirrender als hilfreich.
+  const visibleListEvents = useMemo(() => {
+    if (statusFilter === 'OFFEN') return sortedEvents.filter(isOpenForRsvp);
+    if (statusFilter === 'ZUGESAGT') return sortedEvents.filter((event) => event.myRsvpStatus === 'ZUGESAGT');
+    return sortedEvents;
+  }, [sortedEvents, statusFilter]);
+
   const showDrone = layers.some((layer) => layer.key === 'drohnengruppe');
 
   function handleToggle(key: string, checked: boolean) {
@@ -92,12 +125,15 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="hidden lg:flex lg:w-64 lg:shrink-0">
-        <KalenderFiltersContent
+        <KalenderDesktopSidebar
           layers={layers}
           enabled={enabled}
           onToggle={handleToggle}
           showDrone={showDrone}
           icsLinks={icsLinks}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          openCount={openCount}
         />
       </div>
 
@@ -112,6 +148,9 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
       </BottomSheet>
 
       <div className="flex flex-1 flex-col gap-4">
+        <div className="hidden text-sm text-neutral-500 lg:block">
+          {sortedEvents.length} Termine · {openCount} offene Rückmeldungen
+        </div>
         <div className="flex sm:justify-end">
           <div className="flex w-full rounded-lg bg-neutral-100 p-1 shadow-sm sm:w-auto sm:bg-white">
             <button
@@ -138,7 +177,11 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
             </button>
           </div>
         </div>
-        {viewMode === 'calendar' ? <CalendarView events={filteredEvents} /> : <EventListView events={sortedEvents} />}
+        {viewMode === 'calendar' ? (
+          <CalendarView events={filteredEvents} />
+        ) : (
+          <EventListView events={sortedEvents} desktopEvents={visibleListEvents} />
+        )}
       </div>
     </div>
   );

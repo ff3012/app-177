@@ -7,7 +7,7 @@ export const LAYER_COLORS: Record<string, string> = {
 };
 
 export const LAYER_LABELS: Record<string, string> = {
-  own: 'Allgemein · eigene Feuerwehr',
-  abschnitt: 'Abschnittsweit',
+  own: 'Meine Feuerwehr',
+  abschnitt: 'Abschnitt-Kalender',
   drohnengruppe: 'Drohnengruppe',
 };
