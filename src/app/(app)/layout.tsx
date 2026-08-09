@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canAccessHeimatfeuerwehrAdmin, canManageNews, isBezirksAdmin } from '@/lib/auth/permissions';
+import { canManageNews, isBezirksAdmin } from '@/lib/auth/permissions';
+import { getVerwaltungNavItem } from '@/lib/nav-items';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
@@ -38,8 +39,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'AFKDO Purkersdorf';
   const wappenSrc = homeOrganization?.wappenImageMimeType ? `/api/organization/${homeOrganization.id}/wappen` : null;
-  const showVerwaltungPill = canAccessHeimatfeuerwehrAdmin(user);
-  const verwaltungHref = isBezirksAdmin(user) ? '/admin/benutzer' : '/admin/heimatfeuerwehr';
+  // Dieselbe Quelle wie der Desktop-Nav-Eintrag (lib/nav-items.ts) statt einer zweiten, hier inline
+  // gepflegten Kopie derselben Bedingung/Ziel-Auflösung - sonst fehlt der mobilen Pille jeder künftig
+  // dort ergänzte Fall (zuletzt: der reine Drohnengruppen-Admin, der auf /admin/drohnen gehört).
+  const verwaltungNavItem = getVerwaltungNavItem(user);
+  const showVerwaltungPill = verwaltungNavItem !== null;
+  const verwaltungHref = verwaltungNavItem?.href ?? '/admin/heimatfeuerwehr';
 
   return (
     <TooltipProvider>

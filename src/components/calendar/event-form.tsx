@@ -70,6 +70,17 @@ export function EventForm({
   const category = watch('category');
   const startsAt = watch('startsAt');
 
+  // "Drohnengruppe" nur anbieten, wenn es überhaupt eine wählbare Gruppe gibt (droneGroupOptions
+  // enthält nur die eigene Gruppe des Nutzers) - sonst entstünde ein Termin ohne droneGroupId, der
+  // für niemanden sichtbar wäre. Bearbeitet man einen bereits als Drohnengruppen-Termin angelegten
+  // Eintrag, bleibt die Option erhalten, damit der aktuelle Wert im Select nicht verlorengeht.
+  const categoryOptions = EVENT_CATEGORIES.filter(
+    (categoryOption) =>
+      categoryOption !== 'DROHNENGRUPPE' ||
+      droneGroupOptions.length > 0 ||
+      defaultValues?.category === 'DROHNENGRUPPE',
+  );
+
   // Drohnengruppe-Termine sind gruppenübergreifend gedacht, daher beim Auswählen automatisch
   // als Abschnitt-weit vorbelegen (Benutzer kann es danach weiterhin manuell abwählen).
   useEffect(() => {
@@ -188,7 +199,7 @@ export function EventForm({
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Kategorie</label>
           <select {...register('category')} className="rounded border border-neutral-300 px-3 py-2">
-            {EVENT_CATEGORIES.map((categoryOption) => (
+            {categoryOptions.map((categoryOption) => (
               <option key={categoryOption} value={categoryOption}>
                 {categoryOption === 'DROHNENGRUPPE' ? 'Drohnengruppe' : 'Allgemein'}
               </option>
@@ -210,6 +221,7 @@ export function EventForm({
               </option>
             ))}
           </select>
+          {errors.droneGroupId && <p className="text-sm text-red-700">{errors.droneGroupId.message}</p>}
         </div>
       )}
 

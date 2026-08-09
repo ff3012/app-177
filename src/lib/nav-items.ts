@@ -1,5 +1,11 @@
 import type { SessionUser } from '@/types/next-auth';
-import { canAccessHeimatfeuerwehrAdmin, canManageNews, canViewDroneModule, isBezirksAdmin } from '@/lib/auth/permissions';
+import {
+  canAccessHeimatfeuerwehrAdmin,
+  canManageNews,
+  canViewDroneModule,
+  isBezirksAdmin,
+  isDroneGroupAdmin,
+} from '@/lib/auth/permissions';
 
 export interface NavItem {
   href: string;
@@ -23,19 +29,38 @@ export function getNavItems(user: SessionUser): NavItem[] {
     items.push({ href: '/news', label: 'News' });
   }
 
-  // Bugfix: vorher nur `if (isSiteAdmin(user))` - ein reiner Feuerwehr-Admin (Membership-Admin
-  // ohne Abschnittskommando-Admin) sah dadurch den Menüpunkt "Verwaltung" gar nicht und konnte
-  // /admin/heimatfeuerwehr praktisch nicht erreichen, obwohl canAccessHeimatfeuerwehrAdmin(user)
-  // bereits korrekt true zurückgab (per Live-Test mit einem echten Konto bestätigt). Site-Admins
-  // landen weiterhin auf der Benutzerverwaltung, reine Feuerwehr-Admins direkt auf der einzigen
-  // Verwaltungsseite, die sie tatsächlich sehen dürfen.
-  if (isBezirksAdmin(user)) {
-    items.push({ href: '/admin/benutzer', label: 'Verwaltung' });
-  } else if (canAccessHeimatfeuerwehrAdmin(user)) {
-    items.push({ href: '/admin/heimatfeuerwehr', label: 'Verwaltung' });
+  const verwaltung = getVerwaltungNavItem(user);
+  if (verwaltung) {
+    items.push(verwaltung);
   }
 
   return items;
+}
+
+/**
+ * Der "Verwaltung"-Eintrag samt Ziel - eine Funktion statt zweier Kopien, weil ihn außer getNavItems
+ * auch die mobile Kopfzeilen-Pille in (app)/layout.tsx braucht (die zuvor dieselbe Bedingung und
+ * dieselbe Ziel-Auflösung ein zweites Mal inline enthielt und damit von Änderungen hier abwich).
+ *
+ * Bugfix-Historie: ursprünglich nur `if (isSiteAdmin(user))` - ein reiner Feuerwehr-Admin sah den
+ * Menüpunkt gar nicht, obwohl canAccessHeimatfeuerwehrAdmin(user) bereits true zurückgab (per
+ * Live-Test bestätigt). Derselbe Fehler traf danach den neuen dritten Fall, den reinen
+ * Drohnengruppen-Admin: admin/layout.tsx und lib/admin/nav-items.ts lassen ihn korrekt zu
+ * /admin/drohnen durch, aber ohne den dritten Zweig hier gab es keinen Link dorthin - die Rolle war
+ * nur über direkte URL-Eingabe erreichbar. Jede Rolle landet auf der obersten Verwaltungsseite, die
+ * sie tatsächlich sehen darf.
+ */
+export function getVerwaltungNavItem(user: SessionUser): NavItem | null {
+  if (isBezirksAdmin(user)) {
+    return { href: '/admin/benutzer', label: 'Verwaltung' };
+  }
+  if (canAccessHeimatfeuerwehrAdmin(user)) {
+    return { href: '/admin/heimatfeuerwehr', label: 'Verwaltung' };
+  }
+  if (isDroneGroupAdmin(user)) {
+    return { href: '/admin/drohnen', label: 'Verwaltung' };
+  }
+  return null;
 }
 
 /** Nested routes (e.g. /kalender/abschnitt under /kalender) would otherwise match more than one

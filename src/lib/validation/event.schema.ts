@@ -19,6 +19,14 @@ export const eventSchema = z
   .refine((data) => new Date(data.endsAt).getTime() >= new Date(data.startsAt).getTime(), {
     message: 'Ende darf nicht vor dem Start liegen.',
     path: ['endsAt'],
+  })
+  // Ein Termin der Kategorie "Drohnengruppe" OHNE Gruppe wäre für niemanden sichtbar (jede
+  // Sichtbarkeits-/Push-Prüfung vergleicht exakt gegen die Gruppe des Nutzers) - er würde also still
+  // im Nichts landen. Serverseitig geprüft, nicht nur über die UI, damit auch ein direkter
+  // Server-Action-Aufruf keine solche Waise anlegen kann.
+  .refine((data) => data.category !== 'DROHNENGRUPPE' || Boolean(data.droneGroupId), {
+    message: 'Für einen Drohnengruppen-Termin muss eine Drohnengruppe gewählt werden.',
+    path: ['droneGroupId'],
   });
 
 export type EventInput = z.infer<typeof eventSchema>;
