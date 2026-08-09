@@ -20,6 +20,33 @@ UPDATE "DrohnengruppeMembership" SET "droneGroupId" = 'dronegroup-afkdo-purkersd
 UPDATE "DroneDocument" SET "droneGroupId" = 'dronegroup-afkdo-purkersdorf' WHERE "droneGroupId" IS NULL;
 UPDATE "Drone" SET "droneGroupId" = 'dronegroup-afkdo-purkersdorf' WHERE "droneGroupId" IS NULL;
 
+-- Dasselbe für bestehende Drohnengruppen-TERMINE. Event.droneGroupId bleibt zwar nullable (anders als
+-- die drei Spalten oben), muss aber trotzdem gesetzt werden: jede Sichtbarkeits-/Push-Prüfung vergleicht
+-- exakt (event.droneGroupId === user.droneGroupId), und NULL === '<gruppe>' ist für JEDEN Nutzer false -
+-- ohne dieses Backfill würden alle bereits bestehenden Drohnengruppen-Termine nach dem Deploy still
+-- für alle unsichtbar.
+UPDATE "Event" SET "droneGroupId" = 'dronegroup-afkdo-purkersdorf'
+WHERE category = 'DROHNENGRUPPE' AND "droneGroupId" IS NULL;
+
+-- Die 9 bestehenden Purkersdorf-Feuerwehren gehören zum bestehenden Abschnitt. Muss per Migration
+-- passieren, nicht nur im Seed-Skript (prisma/seed.ts, seedAbschnitteUndFeuerwehren): docker/entrypoint.sh
+-- führt beim Containerstart automatisch nur `prisma migrate deploy` aus, der Seed ist ein separater,
+-- manueller Einmal-Befehl. Ohne dieses UPDATE bliebe parentId zwischen Deploy und manuellem Seed NULL,
+-- und getAbschnittOrganizationId() könnte den Abschnitt einer Feuerwehr nicht auflösen - /kalender und
+-- /meine-feuerwehr (die Startseite nach dem Login) würden für praktisch jeden Nutzer fehlschlagen.
+-- nummer-Werte identisch zu FEUERWEHR_NAMEN in prisma/seed.ts.
+UPDATE "Organization" SET "parentId" = (
+  SELECT id FROM "Organization" WHERE name = 'Abschnittsfeuerwehrkommando Purkersdorf'
+)
+WHERE nummer IN ('17711','17703','17704','17701','17708','17709','17707','17702','17706')
+  AND "parentId" IS NULL;
+
+-- Bootstrap-Admin wird Bezirksadmin - ebenfalls per Migration statt nur im Seed, damit die App sofort
+-- nach dem Deploy einen erreichbaren Bezirksadmin hat (sonst wären /admin/email, /admin/status, /news
+-- und die Benutzer-Excel-Routen bis zum manuellen Seed-Lauf für niemanden erreichbar).
+UPDATE "User" SET "isBezirksAdmin" = true
+WHERE email = 'admin@abschnitt-purkersdorf.at';
+
 -- DropForeignKey
 ALTER TABLE "DrohnengruppeMembership" DROP CONSTRAINT "DrohnengruppeMembership_droneGroupId_fkey";
 

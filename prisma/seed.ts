@@ -283,14 +283,22 @@ async function seedDrohnengruppen(abschnittIdByNummer: Map<string, string>): Pro
 }
 
 async function main() {
+  // Der Bezirk selbst wird von der Migration 20260809010000_hierarchie_backfill angelegt, nicht hier -
+  // deshalb nur gelesen. Purkersdorf braucht die districtId genauso wie die 6 neuen Abschnitte: auf
+  // einer frisch migrierten Datenbank setzt die Migration sie zwar bereits, auf einer per
+  // `migrate deploy` + `db:seed` von Null aufgebauten Datenbank legt aber dieser Upsert die Zeile an -
+  // ohne districtId wäre Purkersdorf der einzige Abschnitt ohne Bezirk.
+  const district = await prisma.district.findUniqueOrThrow({ where: { number: '17' } });
+
   const abschnittskommando = await prisma.organization.upsert({
     where: { name: 'Abschnittsfeuerwehrkommando Purkersdorf' },
-    update: { nummer: '17700' },
+    update: { nummer: '17700', districtId: district.id },
     create: {
       name: 'Abschnittsfeuerwehrkommando Purkersdorf',
       shortName: 'AFKDO Purkersdorf',
       nummer: '17700',
       type: OrganizationType.ABSCHNITTSKOMMANDO,
+      districtId: district.id,
     },
   });
 
