@@ -208,6 +208,38 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
               {totalBookingsCount === 1 ? 'Buchung' : 'Buchungen'} in den nächsten 30 Tagen
             </div>
           </div>
+          {facebookActive && (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-xl bg-white p-[18px_22px] shadow-sm">
+              <div className="flex flex-none items-baseline justify-between">
+                <span className="dash-section-label font-bold uppercase tracking-[0.15em] text-[#6c6c70]">Lage Niederösterreich</span>
+                <span className="dash-secondary text-[#6c6c70]">WASTL · Bezirksalarmzentralen</span>
+              </div>
+              <div className="flex min-h-0 flex-1 items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- proxied same-origin image, next/image's optimizer adds no value here */}
+                <img
+                  src="/api/wastl/overview"
+                  alt="WASTL Lagekarte Niederösterreich mit Einsatzstatus je Bezirk"
+                  className="max-h-full max-w-full rounded-lg object-contain"
+                />
+              </div>
+              <div className="flex flex-none items-center justify-between border-t border-[#f0f0f2] pt-[10px]">
+                <span className="dash-secondary flex items-center gap-4 text-[#48484c]">
+                  <span className="flex items-center gap-[7px]">
+                    <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#5aa552' }} />
+                    Normal
+                  </span>
+                  <span className="flex items-center gap-[7px]">
+                    <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#f2c14e' }} />
+                    Erhöht
+                  </span>
+                  <span className="flex items-center gap-[7px]">
+                    <span className="h-[13px] w-[13px] rounded-[3px]" style={{ backgroundColor: '#e06666' }} />
+                    Stark
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
           {!facebookActive && (
             <div className="flex flex-none items-center gap-4 rounded-xl bg-[#1c1c1e] p-[20px_22px]">
               <div className="flex aspect-square w-[clamp(56px,7vw,180px)] shrink items-center justify-center rounded-lg bg-white p-2">
