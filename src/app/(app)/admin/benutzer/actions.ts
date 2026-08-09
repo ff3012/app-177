@@ -52,10 +52,14 @@ async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
     return;
   }
   const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  // Vorläufig: bis Task 9 dieses Formular auf eine echte Gruppenauswahl umstellt, gibt es genau
+  // eine Drohnengruppe im ganzen System (siehe Task 2 Backfill) - jede neue Mitgliedschaft gehört
+  // dazu.
+  const droneGroup = await prisma.droneGroup.findFirstOrThrow();
   await prisma.drohnengruppeMembership.upsert({
     where: { userId },
     update: { role },
-    create: { userId, role },
+    create: { userId, role, droneGroupId: droneGroup.id },
   });
 }
 

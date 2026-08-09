@@ -325,8 +325,8 @@ model DrohnengruppeMembership {
   role    DroneRole @default(PILOT)
   addedAt DateTime  @default(now())
 
-  droneGroupId String?
-  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -431,8 +431,8 @@ model Drone {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  droneGroupId String?
-  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
   flights DroneFlight[]
 
@@ -487,8 +487,8 @@ model DroneDocument {
   uploadedById String
   createdAt    DateTime @default(now())
 
-  droneGroupId String?
-  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
   uploadedBy User @relation("DroneDocumentUploadedBy", fields: [uploadedById], references: [id])
 

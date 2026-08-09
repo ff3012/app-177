@@ -212,11 +212,21 @@ async function main() {
     });
   }
 
+  // Vorläufig: die einzige, bestehende Drohnengruppe. Task 3 ersetzt dies durch die reale
+  // 4-Gruppen-Struktur des ganzen Bezirks - dieser Upsert existiert nur, damit `Drone.droneGroupId`
+  // (seit Task 2 verpflichtend) hier einen gültigen Wert bekommt, ohne den Seed vorzeitig auf die
+  // noch nicht importierten Bezirksdaten umzustellen.
+  const droneGroup = await prisma.droneGroup.upsert({
+    where: { name: 'AFKDO Purkersdorf' },
+    update: {},
+    create: { name: 'AFKDO Purkersdorf', organizationId: abschnittskommando.id },
+  });
+
   for (const [index, name] of DROHNEN_NAMEN.entries()) {
     await prisma.drone.upsert({
       where: { name },
       update: {},
-      create: { name, sortOrder: index },
+      create: { name, sortOrder: index, droneGroupId: droneGroup.id },
     });
   }
 

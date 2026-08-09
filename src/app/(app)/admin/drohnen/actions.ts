@@ -25,7 +25,10 @@ export async function createDrone(_prevState: DroneFormState, formData: FormData
   }
 
   const count = await prisma.drone.count();
-  await prisma.drone.create({ data: { name, sortOrder: count } });
+  // Vorläufig: bis Task 9 dieses Modul auf echtes Gruppen-Scoping umstellt, gibt es genau eine
+  // Drohnengruppe im ganzen System (siehe Task 2 Backfill) - jede neu angelegte Drohne gehört dazu.
+  const droneGroup = await prisma.droneGroup.findFirstOrThrow();
+  await prisma.drone.create({ data: { name, sortOrder: count, droneGroupId: droneGroup.id } });
 
   revalidatePath('/admin/drohnen');
   return {};
@@ -103,6 +106,8 @@ export async function uploadDroneDocument(
   }
 
   const data = Buffer.from(await file.arrayBuffer());
+  // Vorläufig, siehe Kommentar in createDrone oben - genau eine Drohnengruppe existiert bis Task 9.
+  const droneGroup = await prisma.droneGroup.findFirstOrThrow();
   await prisma.droneDocument.create({
     data: {
       title,
@@ -110,6 +115,7 @@ export async function uploadDroneDocument(
       sizeBytes: file.size,
       data,
       uploadedById: user.id,
+      droneGroupId: droneGroup.id,
     },
   });
 
