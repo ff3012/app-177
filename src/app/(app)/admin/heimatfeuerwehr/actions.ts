@@ -169,11 +169,11 @@ export async function setAtemschutzSachbearbeiter(
   const user = await requireUser();
   assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
 
-
   const { atemschutz } = await getOrganizationFeatures(organizationId);
   if (!atemschutz) {
     return { error: 'Das Modul Atemschutzgeräteträger ist für diese Feuerwehr deaktiviert.' };
   }
+
   const parsed = sachbearbeiterEmailSchema.safeParse(formData.get('email'));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };

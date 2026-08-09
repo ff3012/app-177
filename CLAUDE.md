@@ -2215,10 +2215,10 @@ it instead of showing an empty/unused section to its members. Full design ration
   extensively-documented, harness-wide non-hydration limitation elsewhere in this file — but the equivalent
   end state was reached and verified through the real Auth.js credentials POST (not a fabricated session)
   followed by direct DB flag flips, which the Server Components then render exactly as a real click would
-  have produced, since disabling this in a dev server proxy's own worktree/main-checkout path mismatch was
-  also hit and fixed along the way (a stray `npm run dev` from the sibling non-worktree checkout was
-  squatting on port 3000 from an earlier session — killed and restarted from the correct worktree directory
-  before any of the above checks were meaningful).
+  have produced. A dev-server port mismatch was also hit and fixed along the way: a stray `npm run dev` from
+  the sibling non-worktree checkout was squatting on port 3000 from an earlier session, serving the main
+  checkout instead of this worktree — it was killed and restarted from the correct worktree directory before
+  any of the above checks were meaningful.
 
 ### PWA
 

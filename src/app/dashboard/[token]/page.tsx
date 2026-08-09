@@ -59,7 +59,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
     getDashboardVehicleBookings(valid.organizationId),
     getUpcomingVehicleBookingsCount(valid.organizationId),
     generateAppQrCodeDataUri(),
-    prisma.organization.findUnique({ where: { id: valid.organizationId }, select: { name: true, facebookPageId: true, featureFacebook: true } }),
+    prisma.organization.findUnique({ where: { id: valid.organizationId }, select: { name: true, facebookPageId: true, facebookPageAccessToken: true, featureFacebook: true } }),
     prisma.facebookPostCache.findUnique({ where: { organizationId: valid.organizationId } }),
   ]);
   if (!organizationFull) {
@@ -89,7 +89,10 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
   // Funktionsschalter-Brief.md §5: gilt sowohl wenn der Schalter aus ist als auch wenn nie ein Token
   // hinterlegt wurde - in beiden Fällen bekommt das Dashboard die "ohne Facebook"-Umschaltung (großes
   // WASTL, keine leere Facebook-Spalte), nicht nur eine leere Facebook-Spalte wie bisher.
-  const facebookActive = organizationFull.featureFacebook && Boolean(organizationFull.facebookPageId);
+  const facebookActive =
+    organizationFull.featureFacebook &&
+    Boolean(organizationFull.facebookPageId) &&
+    Boolean(organizationFull.facebookPageAccessToken);
 
   const vehicleTableGridClass = facebookActive
     ? 'grid-cols-[clamp(70px,4.5vw,110px)_minmax(160px,1.6fr)_clamp(104px,6.5vw,150px)_minmax(120px,1.4fr)] gap-x-[18px]'

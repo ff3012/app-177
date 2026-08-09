@@ -66,7 +66,7 @@ export function FunktionenCard({
         enabled={featureAtemschutz}
         meta={atemschutzMeta}
         confirmTitle="Modul Atemschutzgeräteträger abschalten?"
-        confirmDescription={`Die ${membersErfasstCount} Mitglieder dieser Feuerwehr sehen den Atemschutz-Bereich unter „Meine Feuerwehr“ nicht mehr. Die Atemschutz-Liste verschwindet auch aus dieser Verwaltung.`}
+        confirmDescription={`Alle Mitglieder dieser Feuerwehr sehen den Atemschutz-Bereich unter „Meine Feuerwehr“ nicht mehr. Die ${membersErfasstCount} erfassten Atemschutzgeräteträger behalten ihre Daten - die Atemschutz-Liste verschwindet auch aus dieser Verwaltung.`}
         confirmNote="Alle erfassten Untersuchungen und Finnentests bleiben gespeichert und erscheinen unverändert, sobald das Modul wieder aktiviert wird."
       />
 
@@ -76,7 +76,7 @@ export function FunktionenCard({
         title="Facebook-Integration Dashboard"
         description="Blendet die letzten Beiträge der Facebook-Seite auf dem Dashboard im Feuerwehrhaus ein."
         enabled={featureFacebook}
-        disabled={!hasFacebookToken}
+        disabled={!hasFacebookToken && !featureFacebook}
         meta={facebookMeta}
         disabledHint="Kein Zugangstoken hinterlegt. Zum Aktivieren wird ein Facebook-Seitentoken benötigt."
         confirmTitle="Facebook-Integration abschalten?"
