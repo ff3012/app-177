@@ -2248,7 +2248,235 @@ git commit -m "Verwaltung: Feuerwehr-Dropdowns nach Abschnitt gruppiert"
 
 ---
 
-## Final verification (after all 10 tasks)
+### Task 11: Benutzerverwaltung — echte Drohnengruppen-Auswahl statt Notbehelf
+
+**Why this task exists:** Task 2's implementer discovered, and Task 2's reviewer independently confirmed,
+a real gap in this plan: `src/app/(app)/admin/benutzer/actions.ts`'s `syncDroneMembership` (called from
+`createUser`/`updateUser`) creates a `DrohnengruppeMembership` row whenever an admin sets the
+"Drohnengruppe" `SegmentedControl` in `UserFormSheet` to "Mitglied"/"Admin" — but that control only ever
+offered a 3-way role choice ("Kein · Mitglied · Admin"), never a *group* choice, because it was built
+before groups existed. Task 2 added a temporary shim (`prisma.droneGroup.findFirstOrThrow()`, correct only
+while exactly one group exists) so the build stays green through Tasks 3–10, with a code comment pointing
+here. This task replaces that shim with a real group picker, once Task 3 has seeded all 4 real groups to
+choose from.
+
+**Files:**
+- Modify: `src/lib/validation/user.schema.ts`
+- Modify: `src/components/admin/user-form-sheet.tsx`
+- Modify: `src/app/(app)/admin/benutzer/actions.ts`
+- Modify: `src/app/(app)/admin/benutzer/page.tsx`
+- Modify: `src/app/(app)/admin/benutzer/user-management-section.tsx`
+
+**Interfaces:**
+- Consumes: `DroneGroup` rows from Task 3, `canManageDroneGroupFor`/`isBezirksAdmin` from Task 5 (which
+  groups the current admin may assign into — see Step 4).
+
+- [ ] **Step 1: `src/lib/validation/user.schema.ts` — add `droneGroupId`**
+
+Find the `droneRole: z.enum(DRONE_ROLE_OPTIONS),` line inside the zod object and add right after it:
+
+```typescript
+  droneGroupId: z.string().nullable(),
+```
+
+In the parse function (the one reading `rawDroneRole` off `formData`), add alongside it:
+
+```typescript
+  droneGroupId: (formData.get('droneGroupId') as string) || null,
+```
+
+- [ ] **Step 2: `user-form-sheet.tsx` — add the group `<Select>`, shown only when a role is chosen**
+
+Add `droneGroupId: string | null;` to the form's internal input type (alongside the existing `droneRole:
+DroneRoleOption;` field). In the `defaultValues` object, add `droneGroupId: target?.droneGroupId ?? null,`
+right after the existing `droneRole: target?.droneRole ?? 'NONE',` line.
+
+Add a new prop to `UserFormSheetProps`: `droneGroups: { id: string; name: string }[];` and destructure it
+in the component's parameter list alongside the existing `dienstgrade` prop.
+
+In the `onSubmit`/form-data-building function, add right after the existing
+`formData.set('droneRole', values.droneRole);` line:
+
+```typescript
+    if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
+```
+
+Replace the existing Drohnengruppe block:
+
+```tsx
+                    <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                      <div className="text-[15px] font-medium text-ink">Drohnengruppe</div>
+                      <Controller
+                        control={control}
+                        name="droneRole"
+                        render={({ field }) => (
+                          <SegmentedControl
+                            aria-label="Drohnengruppe"
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            options={DRONE_ROLE_OPTIONS.map((option) => ({ value: option, label: DRONE_ROLE_LABELS[option] }))}
+                          />
+                        )}
+                      />
+                    </div>
+```
+
+with (the group `<Select>` only renders once a role other than "Kein" is chosen — matching the existing
+Dienstgrad `Select`'s `NONE`-sentinel pattern in this same file, since Radix `Select.Item` can't take a
+literal empty-string value):
+
+```tsx
+                    <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
+                      <div className="text-[15px] font-medium text-ink">Drohnengruppe</div>
+                      <Controller
+                        control={control}
+                        name="droneRole"
+                        render={({ field }) => (
+                          <SegmentedControl
+                            aria-label="Drohnengruppe"
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            options={DRONE_ROLE_OPTIONS.map((option) => ({ value: option, label: DRONE_ROLE_LABELS[option] }))}
+                          />
+                        )}
+                      />
+                    </div>
+                    {droneRole !== 'NONE' && (
+                      <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                        <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
+                        <Controller
+                          control={control}
+                          name="droneGroupId"
+                          render={({ field }) => (
+                            <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
+                              <SelectTrigger id="droneGroupId" className="w-full">
+                                <SelectValue placeholder="Gruppe wählen" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE" disabled>
+                                  Gruppe wählen
+                                </SelectItem>
+                                {droneGroups.map((group) => (
+                                  <SelectItem key={group.id} value={group.id}>
+                                    {group.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    )}
+```
+
+`droneRole` needs to be read via `watch('droneRole')` (check whether this file already destructures
+`watch` from `useForm()` — if not, add it) to drive the conditional render above.
+
+- [ ] **Step 3: `admin/benutzer/actions.ts` — replace the shim**
+
+Replace `syncDroneMembership`'s body:
+
+```typescript
+async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
+  if (droneRole === 'NONE') {
+    await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
+    return;
+  }
+  const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  // ... (shim comment + findFirstOrThrow) ...
+  const droneGroup = await prisma.droneGroup.findFirstOrThrow();
+  await prisma.drohnengruppeMembership.upsert({
+    where: { userId },
+    update: { role },
+    create: { userId, role, droneGroupId: droneGroup.id },
+  });
+}
+```
+
+with:
+
+```typescript
+async function syncDroneMembership(userId: string, droneRole: DroneRoleOption, droneGroupId: string | null) {
+  if (droneRole === 'NONE') {
+    await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
+    return;
+  }
+  if (!droneGroupId) {
+    throw new Error('Drohnengruppe ist erforderlich, wenn eine Rolle gewählt wurde.');
+  }
+  const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  await prisma.drohnengruppeMembership.upsert({
+    where: { userId },
+    update: { role, droneGroupId },
+    create: { userId, role, droneGroupId },
+  });
+}
+```
+
+Update both call sites (`createUser`, `updateUser`) from `await syncDroneMembership(user.id,
+data.droneRole);` to `await syncDroneMembership(user.id, data.droneRole, data.droneGroupId);`.
+
+- [ ] **Step 4: `admin/benutzer/page.tsx` — fetch and pass `droneGroups`**
+
+Find the `Promise.all([users, organizations, dienstgrade])` fetch (or however it's currently named/ordered)
+and add a fourth query: `prisma.droneGroup.findMany({ orderBy: { name: 'asc' }, select: { id: true, name:
+true } })`. Pass the result through to `<UserManagementSection droneGroups={...} />` alongside the existing
+`dienstgrade={...}` prop, unfiltered by admin scope — any admin who can reach Benutzerverwaltung at all may
+assign a user to any of the 4 groups (this mirrors the existing `dienstgrade` list, which is also shown
+unfiltered; scoping *which groups* a given Abschnittsadmin may assign into was not part of Issue #10's ask
+and would need its own design discussion, not a silent addition here).
+
+- [ ] **Step 5: `user-management-section.tsx` — thread `droneGroups` through to `UserFormSheet`**
+
+Add `droneGroups: { id: string; name: string }[];` to this component's own props type (alongside the
+existing `dienstgrade` prop) and pass it straight through to `<UserFormSheet droneGroups={droneGroups}
+... />` at its existing render call site (alongside the existing `dienstgrade={dienstgrade}` line).
+
+- [ ] **Step 6: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Create `scripts-tmp-verify-benutzer-dronegroup.ts`:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+async function main() {
+  const groups = await prisma.droneGroup.findMany();
+  const testUser = await prisma.user.findFirstOrThrow({ where: { droneMembership: null } });
+  const targetGroup = groups.find((g) => g.name !== 'AFKDO Purkersdorf')!;
+
+  // Simulates what syncDroneMembership now does with an explicit droneGroupId.
+  await prisma.drohnengruppeMembership.create({
+    data: { userId: testUser.id, role: 'PILOT', droneGroupId: targetGroup.id },
+  });
+
+  const membership = await prisma.drohnengruppeMembership.findUnique({ where: { userId: testUser.id } });
+  console.log('Assigned to the chosen non-default group, not an arbitrary one:', membership?.droneGroupId === targetGroup.id);
+
+  await prisma.drohnengruppeMembership.delete({ where: { userId: testUser.id } });
+}
+
+main().finally(() => prisma.$disconnect());
+```
+
+Run: `npx tsx scripts-tmp-verify-benutzer-dronegroup.ts` — must print `true`. Delete afterward.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lib/validation/user.schema.ts src/components/admin/user-form-sheet.tsx src/app/\(app\)/admin/benutzer/
+git commit -m "Benutzerverwaltung: echte Drohnengruppen-Auswahl statt Notbehelf (Task-2-Review-Fund)"
+```
+
+---
+
+## Final verification (after all 11 tasks)
 
 - [ ] `npx tsc --noEmit` — clean across the whole repo.
 - [ ] `npm run build` — clean production build.
