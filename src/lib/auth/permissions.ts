@@ -86,14 +86,18 @@ export function canManageNews(user: SessionUser): boolean {
 
 /**
  * Sichtbarkeit eines einzelnen Termins - identische Regel wie die Kalenderübersicht-Query selbst
- * (eigene Feuerwehr ODER abschnittsweit; Drohnengruppe-Kategorie zusätzlich nur mit Modulzugriff).
+ * (eigene Feuerwehr ODER abschnittsweit INNERHALB DES EIGENEN ABSCHNITTS; Drohnengruppe-Kategorie
+ * zusätzlich nur mit Modulzugriff). `eventAbschnittOrganizationId` muss der Aufrufer selbst via
+ * getAbschnittOrganizationId(event.organization) berechnen - diese Funktion hat keinen DB-Zugriff.
  * Muss bei einer Änderung der Sichtbarkeitsregel in kalender/page.tsx mitgezogen werden.
  */
 export function canViewEvent(
   user: SessionUser,
-  event: { organizationId: string; isSectionWide: boolean; category: string },
+  event: { organizationId: string; isSectionWide: boolean; category: string; eventAbschnittOrganizationId: string },
 ): boolean {
-  const visible = event.organizationId === user.homeOrganizationId || event.isSectionWide;
+  const visible =
+    event.organizationId === user.homeOrganizationId ||
+    (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId);
   if (!visible) return false;
   if (event.category === 'DROHNENGRUPPE') return canViewDroneModule(user);
   return true;

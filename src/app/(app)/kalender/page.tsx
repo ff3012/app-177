@@ -17,7 +17,17 @@ export default async function KalenderPage() {
   const [organization, allEvents] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: user.homeOrganizationId } }),
     prisma.event.findMany({
-      where: { OR: [{ organizationId: user.homeOrganizationId }, { isSectionWide: true }] },
+      where: {
+        OR: [
+          { organizationId: user.homeOrganizationId },
+          {
+            isSectionWide: true,
+            organization: {
+              OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
+            },
+          },
+        ],
+      },
       include: { organization: true },
       orderBy: { startsAt: 'asc' },
     }),

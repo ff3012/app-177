@@ -126,7 +126,18 @@ export default async function MeineFeuerwehrPage() {
     // wie dort. `take: 8` ist ein großzügiger Pool für "Zu erledigen" (≤14 Tage) plus die "Als
     // Nächstes"-Anzeige (Top 2), nicht die tatsächliche Anzeigegrenze.
     prisma.event.findMany({
-      where: { OR: [{ organizationId: user.homeOrganizationId }, { isSectionWide: true }], endsAt: { gte: now } },
+      where: {
+        OR: [
+          { organizationId: user.homeOrganizationId },
+          {
+            isSectionWide: true,
+            organization: {
+              OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
+            },
+          },
+        ],
+        endsAt: { gte: now },
+      },
       orderBy: { startsAt: 'asc' },
       take: 8,
       include: { organization: { select: { shortName: true, name: true } } },

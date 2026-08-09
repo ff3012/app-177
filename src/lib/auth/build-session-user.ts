@@ -1,6 +1,7 @@
 import { MembershipRole, OrganizationType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import type { SessionUser } from '@/types/next-auth';
+import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 
 const userInclude = {
   homeOrganization: true,
@@ -43,10 +44,7 @@ export async function buildSessionUser(user: UserWithRelations): Promise<Session
 
   const feuerwehrAdminOrgIds = Array.from(new Set([...directFeuerwehrAdminOrgIds, ...inheritedFeuerwehrOrgIds]));
 
-  const homeAbschnittOrganizationId =
-    user.homeOrganization.type === OrganizationType.ABSCHNITTSKOMMANDO
-      ? user.homeOrganizationId
-      : user.homeOrganization.parentId!;
+  const homeAbschnittOrganizationId = getAbschnittOrganizationId(user.homeOrganization);
 
   return {
     id: user.id,

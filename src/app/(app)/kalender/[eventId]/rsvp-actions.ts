@@ -7,6 +7,7 @@ import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageEventsFor, canViewEvent } from '@/lib/auth/permissions';
 import { rsvpSchema } from '@/lib/validation/rsvp.schema';
 import { sendEventPushNow } from '@/lib/push/send-event-push';
+import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 
 export interface RsvpActionState {
   error?: string;
@@ -16,11 +17,16 @@ export interface RsvpActionState {
 /** Setzt (bzw. aktualisiert) die eigene Zusage zu einem Termin. Direkt aus Client-Code aufrufbar, kein FormData nötig. */
 export async function setRsvp(eventId: string, status: ZusageStatus, note?: string): Promise<RsvpActionState> {
   const user = await requireUser();
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: { organization: { select: { type: true, id: true, parentId: true } } },
+  });
   if (!event) {
     return { error: 'Termin wurde nicht gefunden.' };
   }
-  assertPermission(canViewEvent(user, event));
+  assertPermission(
+    canViewEvent(user, { ...event, eventAbschnittOrganizationId: getAbschnittOrganizationId(event.organization) }),
+  );
   // Verteidigung in der Tiefe: die UI (kalender/[eventId]/page.tsx, home-todo-list.tsx) bietet für
   // Fahrzeug-Reservierungs-Termine schon gar keine Zusage-Buttons an, aber diese Aktion selbst
   // prüfte das bislang nicht - derselbe "jede Aktion prüft selbst"-Grundsatz wie bei
