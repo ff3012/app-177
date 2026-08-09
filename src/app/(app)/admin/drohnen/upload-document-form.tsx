@@ -1,12 +1,18 @@
 'use client';
 
 import { useActionState } from 'react';
-import { uploadDroneDocument, type DroneDocumentFormState } from './actions';
+import type { DroneDocumentFormState } from './actions';
 
 const initialState: DroneDocumentFormState = {};
 
-export function UploadDocumentForm() {
-  const [state, formAction, pending] = useActionState(uploadDroneDocument, initialState);
+/** `action` kommt jetzt vorgebunden (uploadDroneDocument.bind(null, droneGroupId)) von der
+ * aufrufenden Seite - siehe Kommentar in add-drone-form.tsx. */
+export function UploadDocumentForm({
+  action,
+}: {
+  action: (state: DroneDocumentFormState, formData: FormData) => Promise<DroneDocumentFormState>;
+}) {
+  const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-3 sm:flex-row sm:items-end">

@@ -1,4 +1,3 @@
-import { getDroneFlightNotificationEmail } from '@/lib/settings';
 import { sendEmail } from '@/lib/email/mailjet';
 import { escapeHtml } from '@/lib/email/escape-html';
 
@@ -16,8 +15,17 @@ type NewFlightForNotification = {
   registeredBy: { firstName: string; lastName: string };
 };
 
-export async function notifyDroneFlightCreated(flight: NewFlightForNotification): Promise<void> {
-  const recipient = await getDroneFlightNotificationEmail();
+/**
+ * `notificationEmail` kommt jetzt vom Aufrufer (DroneGroup.flightNotificationEmail der Gruppe, zu
+ * der der Flug gehört) statt hier selbst aus der (mittlerweile entfernten) AppSettings-Singleton-
+ * Spalte gelesen zu werden - jeder Aufrufer hat die DroneGroup-Zeile ohnehin schon für andere Zwecke
+ * geladen, siehe CLAUDE.md.
+ */
+export async function notifyDroneFlightCreated(
+  flight: NewFlightForNotification,
+  notificationEmail: string | null,
+): Promise<void> {
+  const recipient = notificationEmail;
   if (!recipient) return;
 
   const dateLabel = flight.startsAt.toLocaleString('de-AT', { dateStyle: 'medium', timeStyle: 'short' });

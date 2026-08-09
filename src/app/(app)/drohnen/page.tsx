@@ -34,10 +34,17 @@ export default async function DrohnenPage() {
 
   const seeAll = canViewAllFlights(user);
   const cutoff = getNinetyDayCutoff();
+  const droneGroupId = user.droneGroupId!;
 
+  // seeAll ("Alle Flüge einsehen") zeigt weiterhin nur Flüge DER EIGENEN Drohnengruppe, nicht
+  // systemweit über alle Drohnengruppen - Scoping über die Drohne, da DroneFlight selbst keine
+  // droneGroupId trägt (jede Drohne gehört eindeutig zu genau einer Gruppe). Vor Task 9 gab es nur
+  // eine einzige Gruppe im System, daher fiel das leere `{}` bislang nicht als Leck auf.
   const [flights, ownFlightsInWindow, lastOwnFlight, groupMembers, groupCounts] = await Promise.all([
     prisma.droneFlight.findMany({
-      where: seeAll ? {} : { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] },
+      where: seeAll
+        ? { drone: { droneGroupId } }
+        : { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] },
       include: { drone: true, registeredBy: true, pilotUser: true },
       orderBy: { startsAt: 'desc' },
     }),
@@ -51,9 +58,13 @@ export default async function DrohnenPage() {
       orderBy: { startsAt: 'desc' },
       select: { startsAt: true },
     }),
-    seeAll ? listDrohnengruppeMembers() : Promise.resolve([]),
+    seeAll ? listDrohnengruppeMembers(droneGroupId) : Promise.resolve([]),
     seeAll
-      ? prisma.droneFlight.groupBy({ by: ['pilotUserId'], where: { startsAt: { gte: cutoff } }, _count: { _all: true } })
+      ? prisma.droneFlight.groupBy({
+          by: ['pilotUserId'],
+          where: { startsAt: { gte: cutoff }, drone: { droneGroupId } },
+          _count: { _all: true },
+        })
       : Promise.resolve([]),
   ]);
 

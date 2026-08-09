@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canViewAllFlights, isSiteAdmin } from '@/lib/auth/permissions';
-import { getDroneQuickRegisterToken } from '@/lib/settings';
+import { canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,10 +10,12 @@ import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { listDrohnengruppeMembers } from '@/lib/drone/members';
 import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
+import { GroupSelect } from './group-select';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
 import { UploadDocumentForm } from './upload-document-form';
-import { toggleDroneActive, regenerateQuickRegisterLink, deleteDroneDocument } from './actions';
+import { DroneGroupEmailForm } from './drone-group-email-form';
+import { createDrone, toggleDroneActive, regenerateQuickRegisterLink, uploadDroneDocument, deleteDroneDocument } from './actions';
 
 function formatBytes(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -24,24 +25,33 @@ function baseUrl(): string {
   return process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
 }
 
-// admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab - diese
-// Seite bleibt Site-Admin-only, daher die eigene Prüfung hier (Sicherheits-Härtung, siehe
-// CLAUDE.md). Die Mitglieder-/90-Tage-Sektion unten braucht zusätzlich canViewAllFlights (Admin
-// Drohnengruppe) - dieselbe, bewusst separate Berechtigung wie bei GroupStatusChart auf /drohnen
-// (siehe CLAUDE.md "isSiteAdmin und isDroneGroupAdmin sind unabhängige Rechte") - ein
-// Abschnittskommando-Admin, der selbst nicht Admin Drohnengruppe ist, soll diese Compliance-Daten
-// nicht automatisch sehen.
-export default async function DrohnenVerwaltungPage() {
+// admin/layout.tsx's Gate deckt (seit "Heimatfeuerwehr") auch reine Feuerwehr-/Abschnitt-Admins ab -
+// diese Seite braucht deshalb keine eigene pauschale isSiteAdmin-Sperre mehr (anders als
+// benutzer/email/status): der Zugriff ist jetzt PRO GRUPPE über canManageDroneGroupFor geregelt
+// (Bezirksadmin, Admin des Abschnitts, an dem die Gruppe verankert ist, oder Admin dieser
+// Drohnengruppe selbst) - wer für KEINE einzige Gruppe berechtigt ist, bekommt notFound().
+export default async function DrohnenVerwaltungPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ group?: string }>;
+}) {
   const user = await requireUser();
-  if (!isSiteAdmin(user)) {
+  const { group } = await searchParams;
+
+  const allGroups = await prisma.droneGroup.findMany({ orderBy: { name: 'asc' } });
+  const allowedGroups = isBezirksAdmin(user) ? allGroups : allGroups.filter((g) => canManageDroneGroupFor(user, g));
+
+  if (allowedGroups.length === 0) {
     notFound();
   }
-  const canSeeMembers = canViewAllFlights(user);
 
-  const [drones, quickRegisterToken, documents, members, flightCounts] = await Promise.all([
-    prisma.drone.findMany({ orderBy: { sortOrder: 'asc' } }),
-    getDroneQuickRegisterToken(),
+  const selectedGroup = (group && allowedGroups.find((g) => g.id === group)) || allowedGroups[0];
+  const canSeeMembers = true; // wer diese Seite für eine Gruppe sieht, darf deren Compliance-Daten sehen
+
+  const [drones, documents, members, flightCounts] = await Promise.all([
+    prisma.drone.findMany({ where: { droneGroupId: selectedGroup.id }, orderBy: { sortOrder: 'asc' } }),
     prisma.droneDocument.findMany({
+      where: { droneGroupId: selectedGroup.id },
       select: {
         id: true,
         title: true,
@@ -52,23 +62,29 @@ export default async function DrohnenVerwaltungPage() {
       },
       orderBy: { createdAt: 'desc' },
     }),
-    canSeeMembers ? listDrohnengruppeMembers() : Promise.resolve([]),
-    canSeeMembers
-      ? prisma.droneFlight.groupBy({
-          by: ['pilotUserId'],
-          where: { startsAt: { gte: getNinetyDayCutoff() } },
-          _count: { _all: true },
-        })
-      : Promise.resolve([]),
+    listDrohnengruppeMembers(selectedGroup.id),
+    prisma.droneFlight.groupBy({
+      by: ['pilotUserId'],
+      where: { startsAt: { gte: getNinetyDayCutoff() }, pilotUser: { droneMembership: { droneGroupId: selectedGroup.id } } },
+      _count: { _all: true },
+    }),
   ]);
-  const quickRegisterLink = quickRegisterToken ? `${baseUrl()}/drohnen-schnell/${quickRegisterToken}` : null;
+  const quickRegisterLink = selectedGroup.qrToken ? `${baseUrl()}/drohnen-schnell/${selectedGroup.qrToken}` : null;
   const countByPilot = new Map(flightCounts.map((c) => [c.pilotUserId, c._count._all]));
+
+  const boundRegenerateLink = regenerateQuickRegisterLink.bind(null, selectedGroup.id);
+  const boundCreateDrone = createDrone.bind(null, selectedGroup.id);
+  const boundUploadDocument = uploadDroneDocument.bind(null, selectedGroup.id);
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
 
       <AdminMobileTabs items={getAdminNavItems(user)} />
+
+      {allowedGroups.length > 1 && (
+        <GroupSelect groups={allowedGroups.map((g) => ({ id: g.id, name: g.name }))} selectedId={selectedGroup.id} />
+      )}
 
       {canSeeMembers && (
         <div className="rounded-lg bg-surface p-4 shadow-card">
@@ -83,15 +99,11 @@ export default async function DrohnenVerwaltungPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                  Name
-                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                   Flüge (90 Tage)
                 </TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                  Status
-                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -124,7 +136,7 @@ export default async function DrohnenVerwaltungPage() {
               {members.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center text-ink-muted">
-                    Keine Mitglieder der Drohnengruppe hinterlegt.
+                    Keine Mitglieder dieser Drohnengruppe hinterlegt.
                   </TableCell>
                 </TableRow>
               )}
@@ -138,12 +150,8 @@ export default async function DrohnenVerwaltungPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Name
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Status
-              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -180,17 +188,17 @@ export default async function DrohnenVerwaltungPage() {
           </TableBody>
         </Table>
         <div className="mt-3">
-          <AddDroneForm />
+          <AddDroneForm action={boundCreateDrone} />
         </div>
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">QR-Code Schnellerfassung</h2>
         <p className="mb-3 text-sm text-ink-muted">
-          Dieser Link führt ohne Anmeldung direkt zum Formular „Flug registrieren" – gedacht, um ihn als QR-Code
-          auszudrucken. Wer den Link/QR-Code kennt, kann damit ausschließlich neue Flüge anlegen; andere Daten
-          (bestehende Flüge, Benutzer, …) sind darüber nicht einsehbar. Ein neu erzeugter Link macht den alten QR-Code
-          sofort ungültig.
+          Dieser Link führt ohne Anmeldung direkt zum Formular „Flug registrieren" für die Gruppe „{selectedGroup.name}"
+          – gedacht, um ihn als QR-Code auszudrucken. Wer den Link/QR-Code kennt, kann damit ausschließlich neue Flüge
+          für diese Gruppe anlegen; andere Daten sind darüber nicht einsehbar. Ein neu erzeugter Link macht den alten
+          QR-Code sofort ungültig.
         </p>
 
         {quickRegisterLink && (
@@ -202,23 +210,28 @@ export default async function DrohnenVerwaltungPage() {
           </div>
         )}
 
-        <form action={regenerateQuickRegisterLink}>
-          <button
-            type="submit"
-            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-          >
+        <form action={boundRegenerateLink}>
+          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover">
             {quickRegisterLink ? 'Link neu erzeugen' : 'Link erzeugen'}
           </button>
         </form>
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Benachrichtigung</h2>
+        <p className="mb-3 text-sm text-ink-muted">
+          Empfängeradresse für die Benachrichtigung bei jedem neu registrierten Flug dieser Gruppe.
+        </p>
+        <DroneGroupEmailForm droneGroupId={selectedGroup.id} initialEmail={selectedGroup.flightNotificationEmail ?? ''} />
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Unterlagen für Mitglieder</h2>
         <p className="mb-3 text-sm text-ink-muted">
-          PDFs, die für alle Mitglieder der Drohnengruppe unter „Unterlagen" zum Download bereitstehen.
+          PDFs, die für alle Mitglieder der Gruppe „{selectedGroup.name}" unter „Unterlagen" zum Download bereitstehen.
         </p>
 
-        <UploadDocumentForm />
+        <UploadDocumentForm action={boundUploadDocument} />
 
         {documents.length > 0 && (
           <ul className="mt-4 flex flex-col divide-y divide-line border-t border-line">

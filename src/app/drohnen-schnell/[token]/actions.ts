@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/db/prisma';
 import { flightSchema, parseFlightFormData } from '@/lib/validation/flight.schema';
-import { getDroneQuickRegisterToken } from '@/lib/settings';
 import { getOrCreateQuickRegisterUser } from '@/lib/drone/quick-register-user';
 import { notifyDroneFlightCreated } from '@/lib/drone/notify-flight-created';
 import { isEligiblePilot, isActiveDrone } from '@/lib/drone/members';
@@ -17,15 +16,16 @@ export interface QuickFlightFormState {
  * Erstellt einen Flug über den öffentlichen QR-Code-Link – bewusst OHNE requireUser()/Session,
  * dafür mit erneuter serverseitiger Token-Prüfung (das Formular selbst erscheint nur bei
  * gültigem Token, siehe page.tsx, aber die Server Action vertraut dem Client nicht blind).
- * Kein Zugriff auf bestehende Flüge oder andere Daten möglich – nur das Anlegen eines Flugs.
+ * Kein Zugriff auf bestehende Flüge oder andere Daten möglich – nur das Anlegen eines Flugs, und
+ * ausschließlich innerhalb der Gruppe, deren qrToken der Link trägt.
  */
 export async function registerFlightViaQuickLink(
   token: string,
   _prevState: QuickFlightFormState,
   formData: FormData,
 ): Promise<QuickFlightFormState> {
-  const storedToken = await getDroneQuickRegisterToken();
-  if (!storedToken || token !== storedToken) {
+  const droneGroup = await prisma.droneGroup.findUnique({ where: { qrToken: token } });
+  if (!droneGroup) {
     return { error: 'Dieser Link ist ungültig oder wurde deaktiviert.' };
   }
 
@@ -35,12 +35,12 @@ export async function registerFlightViaQuickLink(
   }
   const data = parsed.data;
 
-  if (!(await isEligiblePilot(data.pilotUserId))) {
-    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied der Drohnengruppe.'] } };
+  if (!(await isEligiblePilot(data.pilotUserId, droneGroup.id))) {
+    return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied dieser Drohnengruppe.'] } };
   }
 
-  if (!(await isActiveDrone(data.droneId))) {
-    return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
+  if (!(await isActiveDrone(data.droneId, droneGroup.id))) {
+    return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv oder gehört nicht zu dieser Gruppe.'] } };
   }
 
   const systemUser = await getOrCreateQuickRegisterUser();
@@ -58,7 +58,7 @@ export async function registerFlightViaQuickLink(
     include: { drone: true, pilotUser: true, registeredBy: true },
   });
 
-  await notifyDroneFlightCreated(flight);
+  await notifyDroneFlightCreated(flight, droneGroup.flightNotificationEmail);
 
   return { success: true };
 }
