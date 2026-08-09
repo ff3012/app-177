@@ -9,6 +9,7 @@ import { vehicleSchema, parseVehicleFormData } from '@/lib/validation/vehicle.sc
 import { atemschutzSchema, parseAtemschutzFormData } from '@/lib/validation/atemschutz.schema';
 import { syncIcsCalendarForOrganization } from '@/lib/calendar/ics-import';
 import { verifyServiceAccountCredentials } from '@/lib/calendar/google-calendar-push';
+import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
 
 export interface VehicleFormState {
   error?: string;
@@ -127,6 +128,11 @@ export async function updateAtemschutzStatus(
   }
   assertPermission(canManageHeimatfeuerwehrFor(user, target.homeOrganizationId));
 
+  const { atemschutz } = await getOrganizationFeatures(target.homeOrganizationId);
+  if (!atemschutz) {
+    return { error: 'Das Modul Atemschutzgeräteträger ist für diese Feuerwehr deaktiviert.' };
+  }
+
   const parsed = atemschutzSchema.safeParse(parseAtemschutzFormData(formData));
   if (!parsed.success) {
     return { fieldErrors: parsed.error.flatten().fieldErrors };
@@ -163,6 +169,11 @@ export async function setAtemschutzSachbearbeiter(
   const user = await requireUser();
   assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
 
+
+  const { atemschutz } = await getOrganizationFeatures(organizationId);
+  if (!atemschutz) {
+    return { error: 'Das Modul Atemschutzgeräteträger ist für diese Feuerwehr deaktiviert.' };
+  }
   const parsed = sachbearbeiterEmailSchema.safeParse(formData.get('email'));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };

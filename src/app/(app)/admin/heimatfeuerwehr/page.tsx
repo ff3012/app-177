@@ -304,6 +304,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         </Table>
       </div>
 
+      {selectedOrgFull.featureAtemschutz && (
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold text-ink">Atemschutz</h2>
@@ -379,6 +380,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           </TableBody>
         </Table>
       </div>
+      )}
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Fahrzeug-Reservierungen</h2>
