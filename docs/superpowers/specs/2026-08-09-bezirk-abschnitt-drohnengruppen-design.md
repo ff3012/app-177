@@ -406,13 +406,17 @@ anlegenden Nutzers.
 
 ## 6. Admin-UI
 
-- **Neuer Bezirk/Abschnitt-Auswahl-Schritt**, der das bestehende `?org=<id>`-Muster von
-  `/admin/heimatfeuerwehr` um eine Ebene erweitert: zuerst Abschnitt wählen (nur die, für die
-  `abschnittAdminOrgIds` oder Bezirksadmin-Recht besteht), danach Feuerwehr innerhalb dieses Abschnitts —
-  bestehende Konvention wiederverwendet statt neu erfunden.
-- **`/admin/drohnen`** wird über dieselbe Art Auswahl gruppenscoped (die jetzt 4 `DroneGroup`s statt einer
-  flachen Seite).
-- **Benutzerverwaltungs-Filter** bekommen eine Abschnitts-Ebene vor der bestehenden Feuerwehr-Filterung.
+- **Kein neuer zweistufiger Auswahl-Flow nötig**: `feuerwehrAdminOrgIds` enthält dank der
+  Session-Vererbung (§4.2) für einen Abschnittsadmin bereits automatisch jede Feuerwehr seines Abschnitts —
+  das bestehende flache `?org=<id>`-Muster von `/admin/heimatfeuerwehr` (und die Feuerwehr-Filter in der
+  Benutzerverwaltung) funktionieren dadurch unverändert korrekt, nur mit mehr Einträgen. Die einzige nötige
+  Änderung ist rein darstellerisch: die bestehenden Dropdowns (`OrgSelect`, die zwei
+  Feuerwehr-Filter-`<Select>`s in der Benutzerverwaltung) gruppieren ihre `<option>`/`<SelectItem>`-Einträge
+  per `<optgroup>`/`SelectGroup` nach Abschnitt, damit ein Bezirksadmin mit bis zu 124 Feuerwehren zur
+  Auswahl nicht vor einer unbrauchbaren flachen Liste steht — ein neuer, mehrstufiger Auswahl-Flow wäre
+  hierfür unnötiger Mehraufwand.
+- **`/admin/drohnen`** wird über dasselbe `OrgSelect`-Muster (auf `DroneGroup` statt `Organization`
+  angewendet) gruppenscoped, da es jetzt 4 Gruppen statt einer flachen Seite gibt.
 - Kein neues Bezirks-Verwaltungs-UI über die reine Existenz der einen `District`-Zeile hinaus — es gibt
   aktuell nichts, das pro Bezirk konfigurierbar wäre.
 
