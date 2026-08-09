@@ -392,9 +392,11 @@ full rationale in `docs/superpowers/specs/2026-08-09-kalender-desktop-browser-de
   `KalenderFiltersContent`/`KalenderDesktopSidebar` already showed `'Meine Feuerwehr'`/`'Abschnitt-Kalender'`
   for the very same two layers — a pre-existing inconsistency, not something this pass introduced. Fixed by
   changing `LAYER_LABELS` itself to the toggle's wording, so `LayerLegend` (still shown, unchanged, on
-  tablet/mobile) now agrees with the toggle row above it; the desktop sidebar doesn't render `LayerLegend` at
-  all (see above) but reads the same constant for its Ebenen-Toggle labels, so both surfaces are correct by
-  construction rather than by two separately hand-typed strings.
+  tablet/mobile) now agrees with the toggle row above it. This is **not** a structural guarantee, though:
+  `kalender/page.tsx`'s `layers` array (read by both the Ebenen-Toggle list and `KalenderDesktopSidebar`,
+  which renders `layer.label` straight from that prop) and `layer-colors.ts`'s `LAYER_LABELS` (read only by
+  `LayerLegend`) remain two separate, manually-synchronized string sets — this fix aligned their current
+  values, but nothing prevents them from drifting apart again if either one is edited alone in the future.
 - **Verified live** against the running dev server with real, temporarily-inserted test data (a no-RSVP
   event, a section-wide event with three `TerminZusage` rows in each status, and a vehicle-booking event) —
   cleaned up afterward. Confirmed via rendered HTML/computed styles at 1280px: month-grouped cards with the

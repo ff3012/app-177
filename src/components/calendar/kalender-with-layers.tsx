@@ -177,7 +177,11 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
             </button>
           </div>
         </div>
-        {viewMode === 'calendar' ? <CalendarView events={filteredEvents} /> : <EventListView events={visibleListEvents} />}
+        {viewMode === 'calendar' ? (
+          <CalendarView events={filteredEvents} />
+        ) : (
+          <EventListView events={sortedEvents} desktopEvents={visibleListEvents} />
+        )}
       </div>
     </div>
   );

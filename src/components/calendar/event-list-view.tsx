@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import type { CalendarEventInput } from './calendar-view';
 import { AddToCalendarLink } from './add-to-calendar-link';
@@ -253,7 +254,9 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
                 Fahrzeug
               </span>
             )}
-            {event.title}
+            <Link href={`/kalender/${event.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+              {event.title}
+            </Link>
           </div>
           <div className="text-sm text-neutral-500">
             {event.isVehicleBooking ? formatTimeRange(event) : formatStartTime(event)}
@@ -262,7 +265,11 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
         </div>
 
         {event.isVehicleBooking ? (
-          <div className="flex shrink-0 justify-end" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex shrink-0 justify-end"
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
             <a
               href={`/kalender/${event.id}`}
               className="rounded border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
@@ -273,7 +280,11 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
         ) : (
           <>
             <RsvpCountChips counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
-            <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="flex shrink-0 items-center gap-1.5"
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
               {status ? (
                 <span className={`rounded px-3 py-2 text-sm font-semibold ${RSVP_STATUS_CLASS[status]}`}>
                   {RSVP_STATUS_LABEL[status]}
@@ -380,7 +391,15 @@ function DesktopMonthList({ events }: { events: CalendarEventInput[] }) {
   );
 }
 
-export function EventListView({ events }: { events: CalendarEventInput[] }) {
+export function EventListView({
+  events,
+  desktopEvents,
+}: {
+  events: CalendarEventInput[];
+  desktopEvents?: CalendarEventInput[];
+}) {
+  const eventsForDesktop = desktopEvents ?? events;
+
   if (events.length === 0) {
     return (
       <div className="rounded-lg bg-white p-6 text-center text-sm text-neutral-500 shadow-sm">
@@ -420,9 +439,18 @@ export function EventListView({ events }: { events: CalendarEventInput[] }) {
         </table>
       </div>
 
-      {/* Monatsgruppen-Ansicht: ab lg (Kalender Browser.dc.html) */}
+      {/* Monatsgruppen-Ansicht: ab lg (Kalender Browser.dc.html) - bekommt eine eigene,
+          ggf. nach Status gefilterte Liste (desktopEvents), damit der Status-Filter strukturell
+          nie die Tablet-Tabelle/mobile Kartenliste beeinflussen kann, auch nicht bei einer
+          Fenstergrößenänderung während ein Filter-Chip aktiv ist. */}
       <div className="hidden lg:block">
-        <DesktopMonthList events={events} />
+        {eventsForDesktop.length === 0 ? (
+          <div className="rounded-lg bg-white p-6 text-center text-sm text-neutral-500 shadow-sm">
+            Keine Termine für diese Auswahl.
+          </div>
+        ) : (
+          <DesktopMonthList events={eventsForDesktop} />
+        )}
       </div>
     </>
   );
