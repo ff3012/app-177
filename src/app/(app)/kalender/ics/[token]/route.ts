@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { buildIcsCalendar } from '@/lib/calendar/ics';
+import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 
 // .ics-Feeds sind nicht Session-, sondern Token-authentifiziert - wir können nicht prüfen, ob der
 // Abonnent Mitglied der Drohnengruppe ist. Kategorie "Drohnengruppe" bleibt daher hier immer außen vor.
@@ -22,9 +23,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: 'Ungültiger Kalender-Link.' }, { status: 404 });
   }
 
+  const abschnittOrganizationId = getAbschnittOrganizationId(organization);
   const events = await prisma.event.findMany({
     where: {
-      OR: [{ organizationId: organization.id }, { isSectionWide: true }],
+      OR: [
+        { organizationId: organization.id },
+        {
+          isSectionWide: true,
+          organization: { OR: [{ id: abschnittOrganizationId }, { parentId: abschnittOrganizationId }] },
+        },
+      ],
       category: { not: 'DROHNENGRUPPE' },
     },
     orderBy: { startsAt: 'asc' },
