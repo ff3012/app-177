@@ -12,10 +12,14 @@ interface KalenderFiltersContentProps {
 }
 
 /**
- * Ebenen-Toggles + Legende + ICS-Import - geteilt zwischen der Desktop-Sidebar (unverändert,
- * `lg:` und größer) und dem neuen Mobile-Bottom-Sheet (Mobile-Brief.md), damit dieselbe JSX/Logik
- * nicht zweimal gepflegt werden muss. Responsive Feinheiten (Kartendichte, ICS-Linkfarbe) stecken
- * hier direkt über sm:-Klassen, nicht in zwei getrennten Aufrufern.
+ * Ebenen-Toggles + Legende + ICS-Import - seit der Kalender-Desktop-Browser-Ansicht (Task 2,
+ * `kalender-desktop-sidebar.tsx`) NUR NOCH für die Tablet-Tabelle (640-1023px, gestapelt im
+ * Seitenfluss) und das mobile Bottom-Sheet (Mobile-Brief.md) zuständig - die `lg:`-Sidebar hat
+ * eine eigene Komponente (`KalenderDesktopSidebar`), da ihr Inhalt (keine Legende-Karte, dafür eine
+ * neue "Nur anzeigen"-Statusfilter-Karte) genuin abweicht. Bleibt trotzdem eine gemeinsame
+ * Komponente für Tablet+Mobile, damit dieselbe JSX/Logik dort nicht zweimal gepflegt werden muss.
+ * Responsive Feinheiten (Kartendichte, ICS-Linkfarbe) stecken hier direkt über sm:-Klassen, nicht in
+ * zwei getrennten Aufrufern.
  */
 export function KalenderFiltersContent({
   layers,

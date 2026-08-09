@@ -327,6 +327,96 @@ complained about. An earlier version of this exposed a "Vergangene Termine anzei
 `KalenderFiltersContent` to re-enable past events in the list — removed again shortly after, since the list
 view should simply never show them; don't reintroduce that toggle without checking this history first.
 
+**Kalender V4 (Desktop-Browser-Ansicht, `Kalender Browser.dc.html`)** — a follow-up pass scoped exclusively
+to `lg:` (1024px) and up, replacing the flat table with the same date-block/color-strip/inline-RSVP language
+the mobile card already used. Tablet (640–1023px) and mobile (<640px) code paths are untouched by this pass —
+full rationale in `docs/superpowers/specs/2026-08-09-kalender-desktop-browser-design.md`.
+
+- **Month-grouped list** (`event-list-view.tsx`): `DesktopMonthList`/`DesktopEventRow`, rendered from a new
+  `hidden lg:block` wrapper alongside (not replacing) the existing `sm:block lg:hidden` tablet table and
+  `sm:hidden` mobile card list — all three read from the same already-filtered/sorted `events` array, so
+  they can't diverge on which events show. `groupEventsByMonth()` buckets the already-chronologically-sorted
+  list into consecutive year+month runs (no re-sorting) and each group renders as its own white
+  `rounded-lg` card with an uppercase month label ("August 2026") above it. Each row keeps a `5px solid`
+  left border in the event's `LAYER_COLORS` shade — the same source `EventCard`'s mobile accent bar and the
+  FullCalendar chips already read from, so this is a fourth call site of an existing convention, not a new
+  color decision.
+- **`KalenderDesktopSidebar`** (`kalender-desktop-sidebar.tsx`, new) is a deliberately separate component
+  from `KalenderFiltersContent`, not an `lg:`-branch bolted onto it — `KalenderFiltersContent` keeps serving
+  the tablet stack and the mobile `BottomSheet` completely unchanged. The two sidebars' content genuinely
+  diverges: the desktop version drops the standalone `LayerLegend` card (its explanation becomes a footnote
+  sentence inside the Ebenen card instead — "Die Farbe links am Termin zeigt die Ebene…") and adds a new
+  "Nur anzeigen" status-filter card with its own Zugesagt/Abgesagt/Offen color-swatch legend, neither of
+  which exists in the tablet/mobile version. Same reasoning already established for `AdminSidebarNav` vs.
+  `AdminMobileTabs` in Verwaltung: once two layouts genuinely diverge, a shared component with branches for
+  both becomes harder to read than two small, separately named ones.
+- **Inline optimistic Zusage/Absage**: `DesktopEventRow`'s Zusage/Absage buttons call `setRsvp(eventId,
+  status)` (the same Server Action already used by the event detail page and, since Startbildschirm shipped,
+  `HomeTodoList`) directly from the row, no navigation. `DesktopMonthList` holds the same
+  `overrideStatus`/`pending` local-state shape `HomeTodoList` already established: set the override
+  immediately, await the action, and on `result.error` roll the override back out and show a `sonner` toast
+  — this list is the second call site of that exact pattern, not a new one. A successful response needs no
+  explicit handling since the next full page load will reflect the real `myRsvpStatus` anyway; the point of
+  the override is purely to avoid a visible flash/revert while the request is in flight. Date/title stay
+  routed through the existing `useRowClick` (single-click → detail page, double-click → edit if `editable`)
+  unchanged — the Zusage/Absage buttons, the `⌄` expand toggle, and the `.ics` icon all call
+  `e.stopPropagation()` in their wrapping `<div>` so a click there never also triggers the row's own
+  click/dblclick handling.
+- **Expand/collapse row**: the `⌄` button toggles a per-row `expanded` boolean (component-local state in
+  `DesktopMonthList`, not persisted) that reveals `location`/`description` inline in a `bg-neutral-50` panel
+  below the row — both fields already flow into `CalendarEventInput` for other reasons (the edit form, the
+  detail page), so no new data fetch was needed, just reading fields the row wasn't displaying yet.
+- **Fahrzeug-Reservierungs-Zeilen**: `DesktopEventRow` branches on `event.isVehicleBooking` before rendering
+  any RSVP UI at all — no chips, no Zusage/Absage buttons, no `⌄` chevron, just a small "Fahrzeug" label
+  pill next to the title and a single "Buchung öffnen" link to the detail page. Consistent with the rest of
+  this codebase's vehicle-booking handling (no RSVP concept for these events, see "Fahrzeug-Reservierungen"
+  above) rather than a new rule invented for this view specifically.
+- **"Offen" (14-day, no-RSVP-yet) definition**: `kalender-with-layers.tsx`'s `isOpenForRsvp()` — visible,
+  non-vehicle-booking event starting within 14 days with no `myRsvpStatus` yet — feeds both the sidebar's
+  "Offen (n)" chip and the new header subline ("`{n}` Termine · `{n}` offene Rückmeldungen", `lg:`-only).
+  This is the **same 14-day window** `HomeTodoList`'s own "Zu erledigen" RSVP todos use
+  (`meine-feuerwehr/page.tsx`'s `in14Days`), but **computed independently** in its own function against
+  `CalendarEventInput` rather than sharing one helper across both call sites — the two consuming pages pass
+  structurally different shapes (`CalendarEventInput` here vs. `HomeEventCardData` there), and introducing a
+  shared helper just to unify two three-line predicates over different input types wasn't judged worth the
+  indirection. Keep both in sync by hand if the 14-day figure ever changes in one place.
+- **`StatusFilter`** (`'ALLE' | 'OFFEN' | 'ZUGESAGT'`, new client state in `KalenderWithLayers`) drives
+  `visibleListEvents`, which only the list branches (mobile card, tablet table, and this new `lg:` month
+  list) consume — the FullCalendar month grid keeps rendering `filteredEvents` (layer-toggle-filtered only)
+  regardless of `statusFilter`, since the grid has no per-cell way to signal "hidden because of RSVP status"
+  the way a list row can simply not render. Tablet/mobile never change this state away from its `'ALLE'`
+  default (their UI has no chip for it), so the tablet table and mobile card list only ever see the
+  unfiltered list in practice — same intent as the design spec's "wirkt sich nur auf den `lg:`-Zweig aus".
+- **`LAYER_LABELS` reconciliation**: `layer-colors.ts`'s labels were `'Allgemein · eigene Feuerwehr'`/
+  `'Abschnittsweit'` (only ever read by `LayerLegend`) while the Ebenen-Toggle row in
+  `KalenderFiltersContent`/`KalenderDesktopSidebar` already showed `'Meine Feuerwehr'`/`'Abschnitt-Kalender'`
+  for the very same two layers — a pre-existing inconsistency, not something this pass introduced. Fixed by
+  changing `LAYER_LABELS` itself to the toggle's wording, so `LayerLegend` (still shown, unchanged, on
+  tablet/mobile) now agrees with the toggle row above it; the desktop sidebar doesn't render `LayerLegend` at
+  all (see above) but reads the same constant for its Ebenen-Toggle labels, so both surfaces are correct by
+  construction rather than by two separately hand-typed strings.
+- **Verified live** against the running dev server with real, temporarily-inserted test data (a no-RSVP
+  event, a section-wide event with three `TerminZusage` rows in each status, and a vehicle-booking event) —
+  cleaned up afterward. Confirmed via rendered HTML/computed styles at 1280px: month-grouped cards with the
+  correct per-layer left-border color, the "3 Termine · N offene Rückmeldungen" header line, the sidebar's
+  Ebenen-card-with-footnote (no separate Legende card) plus the "Nur anzeigen" chips and Rückmeldungen
+  swatch legend, and the vehicle-booking row showing only the "Fahrzeug" pill + "Buchung öffnen" (no RSVP
+  UI at all). Confirmed via a direct DB write simulating a completed click (this session's browser-automation
+  tooling has the same pre-existing, already-documented hydration gap noted throughout this file's other
+  "Verification note" sections — `__reactFiber$`/`__reactContainer$` lookups found nothing attached, and even
+  a pure client-state control with no server call, the `⌄` expand toggle, produced no visible change on
+  click either, confirming this is the harness-wide gap and not specific to `setRsvp`): after inserting a
+  `ZUGESAGT` row directly, reloading showed the row correctly collapsed to a single "Zugesagt" pill in place
+  of both buttons, its RSVP chip counts incremented, and both the sidebar's "Offen" chip and the header
+  subline correctly decremented by one — confirming the optimistic-update code path's *end state* renders
+  correctly, though the click interaction and the live optimistic-then-settle transition itself could not be
+  exercised directly in this session. The status-filter chips and the expand/collapse toggle's actual click
+  behavior are code-reviewed (matching `HomeTodoList`'s already-proven-live pattern) but likewise not
+  click-tested here, for the same reason. Tablet (768px) and mobile (390px) were confirmed unchanged both by
+  live computed-style checks (correct table/card wrapper `display` at each width) and by diffing this pass's
+  three touched files against the pre-pass commit, showing the tablet/mobile code paths received zero edits
+  beyond the `LAYER_LABELS` string change above.
+
 ### Shared: Mobile header context (Titel-Collapse, Filter-Slot, Bottom Sheet)
 
 Mobile-Brief.md needed two things a page deep inside `<main>` can't otherwise reach: pushing a page-specific
