@@ -427,7 +427,7 @@ model TerminZusage {
 
 model Drone {
   id        String  @id @default(cuid())
-  name      String  @unique
+  name      String
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
@@ -436,6 +436,10 @@ model Drone {
 
   flights DroneFlight[]
 
+  // Task 9 Review-Fix: war zuvor global @unique - zwei verschiedene Drohnengruppen konnten dadurch
+  // nicht beide eine Drohne "Drohne 1" nennen (fast garantiert zu kollidieren, da das der naheliegende
+  // Name für die jeweils erste Drohne einer neuen Gruppe ist). Eindeutigkeit ist jetzt PRO Gruppe.
+  @@unique([droneGroupId, name])
   @@index([droneGroupId])
 }
 

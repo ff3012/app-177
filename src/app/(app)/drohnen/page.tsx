@@ -59,10 +59,14 @@ export default async function DrohnenPage() {
       select: { startsAt: true },
     }),
     seeAll ? listDrohnengruppeMembers(droneGroupId) : Promise.resolve([]),
+    // 90-Tage-Compliance-Zählung für GroupStatusChart - bewusst über pilotUser.droneMembership,
+    // nicht über die Drohne (siehe Kommentar oben bei `flights`) - dieselbe Regel wie
+    // drohnen/90-tage/page.tsx und admin/drohnen/page.tsx, damit alle drei Ansichten für denselben
+    // Piloten/Zeitraum nicht auseinanderlaufen (Task 9 Review-Fix).
     seeAll
       ? prisma.droneFlight.groupBy({
           by: ['pilotUserId'],
-          where: { startsAt: { gte: cutoff }, drone: { droneGroupId } },
+          where: { startsAt: { gte: cutoff }, pilotUser: { droneMembership: { droneGroupId } } },
           _count: { _all: true },
         })
       : Promise.resolve([]),

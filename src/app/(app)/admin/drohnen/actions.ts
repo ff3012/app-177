@@ -30,7 +30,11 @@ export async function createDrone(
     return { error: 'Name ist erforderlich.' };
   }
 
-  const existing = await prisma.drone.findUnique({ where: { name } });
+  // Eindeutigkeit ist PRO Gruppe (Drone.@@unique([droneGroupId, name]), Task 9 Review-Fix) - eine
+  // globale Suche wäre nicht nur falsch (zwei Gruppen dürfen dieselbe Drohnenbezeichnung haben),
+  // sondern hätte einer fremden Gruppe gegenüber auch verraten, dass sie bereits eine Drohne mit
+  // diesem Namen hat (Existence-Oracle).
+  const existing = await prisma.drone.findUnique({ where: { droneGroupId_name: { droneGroupId, name } } });
   if (existing) {
     return { error: 'Eine Drohne mit diesem Namen existiert bereits.' };
   }
@@ -55,7 +59,10 @@ export async function renameDrone(
     return { error: 'Name ist erforderlich.' };
   }
 
-  const existing = await prisma.drone.findUnique({ where: { name } });
+  // Siehe Kommentar in createDrone oben - Eindeutigkeit ist PRO Gruppe, nicht global.
+  const existing = await prisma.drone.findUnique({
+    where: { droneGroupId_name: { droneGroupId: drone.droneGroupId, name } },
+  });
   if (existing && existing.id !== droneId) {
     return { error: 'Eine Drohne mit diesem Namen existiert bereits.' };
   }

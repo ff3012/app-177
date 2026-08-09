@@ -323,8 +323,10 @@ async function main() {
   });
 
   for (const [index, name] of DROHNEN_NAMEN.entries()) {
+    // Eindeutigkeit ist seit Task 9 (Review-Fix) PRO Gruppe (Drone.@@unique([droneGroupId, name])),
+    // nicht mehr global - der Upsert-Schlüssel muss deshalb beide Felder tragen.
     await prisma.drone.upsert({
-      where: { name },
+      where: { droneGroupId_name: { droneGroupId: droneGroup.id, name } },
       update: {},
       create: { name, sortOrder: index, droneGroupId: droneGroup.id },
     });

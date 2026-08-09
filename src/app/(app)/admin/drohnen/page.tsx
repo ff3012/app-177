@@ -46,7 +46,6 @@ export default async function DrohnenVerwaltungPage({
   }
 
   const selectedGroup = (group && allowedGroups.find((g) => g.id === group)) || allowedGroups[0];
-  const canSeeMembers = true; // wer diese Seite für eine Gruppe sieht, darf deren Compliance-Daten sehen
 
   const [drones, documents, members, flightCounts] = await Promise.all([
     prisma.drone.findMany({ where: { droneGroupId: selectedGroup.id }, orderBy: { sortOrder: 'asc' } }),
@@ -86,64 +85,66 @@ export default async function DrohnenVerwaltungPage({
         <GroupSelect groups={allowedGroups.map((g) => ({ id: g.id, name: g.name }))} selectedId={selectedGroup.id} />
       )}
 
-      {canSeeMembers && (
-        <div className="rounded-lg bg-surface p-4 shadow-card">
-          <h2 className="mb-1 text-[15px] font-semibold text-ink">Mitglieder · 90-Tage-Status</h2>
-          <p className="mb-3 text-xs text-ink-faint">
-            Mindestens 3 Flüge in den letzten 90 Tagen. Rolle/Mitgliedschaft ändern über die{' '}
-            <Link href="/admin/benutzer" className="text-brand hover:underline">
-              Benutzerverwaltung
-            </Link>
-            .
-          </p>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                  Flüge (90 Tage)
-                </TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((member) => {
-                const count = countByPilot.get(member.id) ?? 0;
-                const met = meetsNinetyDayRule(count);
-                return (
-                  <TableRow key={member.id} className="border-line">
-                    <TableCell>
-                      <Link href={`/admin/benutzer?edit=${member.id}`} className="text-ink hover:underline">
-                        {member.lastName} {member.firstName}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="font-mono text-ink-muted">{count}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          met
-                            ? 'border-transparent bg-success-subtle text-success-text'
-                            : 'border-transparent bg-danger-subtle text-danger'
-                        }
-                      >
-                        {met ? 'Erfüllt' : 'Offen'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {members.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-ink-muted">
-                    Keine Mitglieder dieser Drohnengruppe hinterlegt.
+      {/* Kein eigenes Sichtbarkeits-Gate mehr für diesen Abschnitt (Task 9 Review-Fix, war zuvor
+          `{canSeeMembers && (...)}` mit `canSeeMembers = true` - toter Code): die eigentliche
+          Berechtigungsgrenze ist bereits `allowedGroups`/canManageDroneGroupFor oben - wer diese
+          Seite für eine Gruppe überhaupt sieht, darf auch deren Compliance-Daten sehen. */}
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Mitglieder · 90-Tage-Status</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Mindestens 3 Flüge in den letzten 90 Tagen. Rolle/Mitgliedschaft ändern über die{' '}
+          <Link href="/admin/benutzer" className="text-brand hover:underline">
+            Benutzerverwaltung
+          </Link>
+          .
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Flüge (90 Tage)
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.map((member) => {
+              const count = countByPilot.get(member.id) ?? 0;
+              const met = meetsNinetyDayRule(count);
+              return (
+                <TableRow key={member.id} className="border-line">
+                  <TableCell>
+                    <Link href={`/admin/benutzer?edit=${member.id}`} className="text-ink hover:underline">
+                      {member.lastName} {member.firstName}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="font-mono text-ink-muted">{count}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        met
+                          ? 'border-transparent bg-success-subtle text-success-text'
+                          : 'border-transparent bg-danger-subtle text-danger'
+                      }
+                    >
+                      {met ? 'Erfüllt' : 'Offen'}
+                    </Badge>
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              );
+            })}
+            {members.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-ink-muted">
+                  Keine Mitglieder dieser Drohnengruppe hinterlegt.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-3 text-[15px] font-semibold text-ink">Drohnen</h2>

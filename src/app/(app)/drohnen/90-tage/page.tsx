@@ -15,13 +15,18 @@ export default async function NinetyDayFlightsPage() {
   const cutoff = getNinetyDayCutoff();
   const droneGroupId = user.droneGroupId!;
 
-  // Scoped auf die eigene Drohnengruppe (über die Drohne, siehe Kommentar in drohnen/page.tsx) -
-  // dieser Bericht darf keine Compliance-Daten anderer Drohnengruppen zeigen.
+  // Scoped auf die eigene Drohnengruppe - dieser Bericht darf keine Compliance-Daten anderer
+  // Drohnengruppen zeigen. Bewusst über pilotUser.droneMembership (WER aktuell zu dieser Gruppe
+  // gehört), nicht über drone.droneGroupId (WELCHE Drohne geflogen wurde) - Compliance ist eine
+  // Eigenschaft der Person für ihre aktuelle Gruppe, nicht der verwendeten Drohne (Task 9
+  // Review-Fix: dieselbe Regel wie admin/drohnen/page.tsx, das bereits so scoped, damit beide
+  // Ansichten für denselben Piloten/Zeitraum nicht auseinanderlaufen können, z. B. wenn jemand die
+  // Gruppe wechselt oder eine fremde Drohne ausleiht).
   const [members, counts] = await Promise.all([
     listDrohnengruppeMembers(droneGroupId),
     prisma.droneFlight.groupBy({
       by: ['pilotUserId'],
-      where: { startsAt: { gte: cutoff }, drone: { droneGroupId } },
+      where: { startsAt: { gte: cutoff }, pilotUser: { droneMembership: { droneGroupId } } },
       _count: { _all: true },
     }),
   ]);

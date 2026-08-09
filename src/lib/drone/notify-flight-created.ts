@@ -25,8 +25,7 @@ export async function notifyDroneFlightCreated(
   flight: NewFlightForNotification,
   notificationEmail: string | null,
 ): Promise<void> {
-  const recipient = notificationEmail;
-  if (!recipient) return;
+  if (!notificationEmail) return;
 
   const dateLabel = flight.startsAt.toLocaleString('de-AT', { dateStyle: 'medium', timeStyle: 'short' });
   const purposeLabel = PURPOSE_LABEL[flight.purpose] ?? flight.purpose;
@@ -35,7 +34,7 @@ export async function notifyDroneFlightCreated(
 
   try {
     await sendEmail({
-      to: recipient,
+      to: notificationEmail,
       subject: `Neuer Drohnenflug: ${pilotName} am ${dateLabel}`,
       textPart: [
         'Ein neuer Drohnenflug wurde registriert.',
