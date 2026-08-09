@@ -52,9 +52,19 @@ export function canViewAllFlights(user: SessionUser): boolean {
   return isDroneGroupAdmin(user);
 }
 
-/** Darf einen bestehenden Flug bearbeiten/löschen: Admin Drohnengruppe oder der Ersteller selbst. */
-export function canManageFlight(user: SessionUser, flight: { registeredById: string }): boolean {
-  return isDroneGroupAdmin(user) || flight.registeredById === user.id;
+/**
+ * Darf einen bestehenden Flug bearbeiten/löschen: Admin Drohnengruppe DER EIGENEN Gruppe (Admin
+ * einer anderen Gruppe hat hier kein Recht, auch wenn er die cuid() des Flugs kennt/errät) oder der
+ * Ersteller selbst - Letzteres bewusst gruppenunabhängig, ein Mitglied durfte seinen eigenen
+ * erfassten Flug schon vor dieser Einschränkung gruppenübergreifend bearbeiten und soll das
+ * weiterhin dürfen. `flight.droneGroupId` ist die Gruppe des Flugs selbst (über seine Drohne
+ * aufgelöst, siehe Kommentar an den Aufrufstellen) - DroneFlight trägt keine eigene droneGroupId-Spalte.
+ */
+export function canManageFlight(
+  user: SessionUser,
+  flight: { registeredById: string; droneGroupId: string },
+): boolean {
+  return (isDroneGroupAdmin(user) && user.droneGroupId === flight.droneGroupId) || flight.registeredById === user.id;
 }
 
 /**

@@ -69,7 +69,9 @@ export async function updateFlight(
   if (!existing) {
     return { error: 'Flug wurde nicht gefunden.' };
   }
-  assertPermission(canManageFlight(user, existing));
+  assertPermission(
+    canManageFlight(user, { registeredById: existing.registeredById, droneGroupId: existing.drone.droneGroupId }),
+  );
   // Gruppenzugehörigkeit des Flugs ist über seine (unveränderliche) ursprüngliche Drohne definiert -
   // bewusst nicht user.droneGroupId, da ein Flug beim Bearbeiten innerhalb seiner eigenen Gruppe
   // bleiben muss, unabhängig davon, wer ihn gerade bearbeitet (siehe canManageFlight, das Admin
@@ -109,11 +111,13 @@ export async function updateFlight(
 export async function deleteFlight(flightId: string): Promise<void> {
   const user = await requireUser();
 
-  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId } });
+  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId }, include: { drone: true } });
   if (!existing) {
     redirect('/drohnen');
   }
-  assertPermission(canManageFlight(user, existing));
+  assertPermission(
+    canManageFlight(user, { registeredById: existing.registeredById, droneGroupId: existing.drone.droneGroupId }),
+  );
 
   await prisma.droneFlight.delete({ where: { id: flightId } });
   revalidatePath('/drohnen');

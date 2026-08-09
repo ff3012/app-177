@@ -92,7 +92,7 @@ export default async function DrohnenPage() {
     purposeLabel: PURPOSE_LABEL[flight.purpose] ?? flight.purpose,
     registeredByName: `${flight.registeredBy.firstName} ${flight.registeredBy.lastName}`,
     registeredById: flight.registeredById,
-    editable: canManageFlight(user, flight),
+    editable: canManageFlight(user, { registeredById: flight.registeredById, droneGroupId: flight.drone.droneGroupId }),
   }));
 
   return (

@@ -15,7 +15,7 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
   if (!flight) {
     return <p className="text-neutral-700">Flug wurde nicht gefunden.</p>;
   }
-  if (!canManageFlight(user, flight)) {
+  if (!canManageFlight(user, { registeredById: flight.registeredById, droneGroupId: flight.drone.droneGroupId })) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Flug zu bearbeiten.</p>;
   }
 
