@@ -25,6 +25,7 @@ export const userSchema = z.object({
   homeOrganizationId: z.string().min(1, 'Feuerwehr/Organisation ist erforderlich.'),
   adminOrgIds: z.array(z.string()),
   droneRole: z.enum(DRONE_ROLE_OPTIONS),
+  droneGroupId: z.string().nullable(),
   sendWelcomeEmail: z.boolean(),
 });
 
@@ -46,6 +47,7 @@ export function parseUserFormData(formData: FormData) {
     droneRole: (DRONE_ROLE_OPTIONS as readonly string[]).includes(rawDroneRole)
       ? (rawDroneRole as DroneRoleOption)
       : 'NONE',
+    droneGroupId: (formData.get('droneGroupId') as string) || null,
     sendWelcomeEmail: formData.get('sendWelcomeEmail') === 'on',
   };
 }

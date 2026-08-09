@@ -34,7 +34,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   }
   const fullAdmin = isBezirksAdmin(currentUser);
 
-  const [users, organizations, dienstgrade] = await Promise.all([
+  const [users, organizations, dienstgrade, droneGroups] = await Promise.all([
     prisma.user.findMany({
       where: fullAdmin ? undefined : { homeOrganizationId: { in: currentUser.feuerwehrAdminOrgIds } },
       include: {
@@ -52,6 +52,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       include: { parent: { select: { shortName: true, name: true } } },
     }),
     prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
+    prisma.droneGroup.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
 
   const rows: UserRow[] = users.map((u) => {
@@ -73,6 +74,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       adminOrgIds: u.memberships.map((m) => m.organizationId),
       droneLabel: u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '–',
       droneRole,
+      droneGroupId: u.droneMembership?.droneGroupId ?? null,
       pushCount: u.pushSubscriptions.length,
       pushDates: u.pushSubscriptions.map((s) => s.createdAt.toISOString()),
       isActive: u.isActive,
@@ -93,6 +95,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
         abschnittName: org.parent?.shortName ?? org.parent?.name,
       }))}
       dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
+      droneGroups={droneGroups}
       initialQuery={params.q ?? ''}
       initialFeuerwehr={params.feuerwehr ?? 'ALLE'}
       initialRolle={params.rolle ?? 'ALLE'}

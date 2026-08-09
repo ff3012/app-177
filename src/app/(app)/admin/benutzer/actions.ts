@@ -46,23 +46,19 @@ async function syncAdminMemberships(userId: string, adminOrgIds: string[]) {
   }
 }
 
-async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
+async function syncDroneMembership(userId: string, droneRole: DroneRoleOption, droneGroupId: string | null) {
   if (droneRole === 'NONE') {
     await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
     return;
   }
+  if (!droneGroupId) {
+    throw new Error('Drohnengruppe ist erforderlich, wenn eine Rolle gewählt wurde.');
+  }
   const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
-  // Vorläufiger Notbehelf, KEIN von Task 9 abgedeckter Folge-Fix (Task 9 rewritet nur /admin/drohnen,
-  // nicht dieses Formular) - siehe Task 11 im Plan, die UserFormSheet um eine echte
-  // Drohnengruppen-Auswahl ergänzt und diese Funktion entsprechend umbaut. Bis dahin gibt es genau
-  // eine Drohnengruppe im System (siehe Task 2 Backfill), daher ist findFirstOrThrow() heute korrekt,
-  // aber sobald Task 3 weitere Gruppen seedet, würde jede neue Mitgliedschaft ohne Task 11 einer
-  // beliebigen Gruppe zugeordnet werden, nicht der vom Admin gemeinten.
-  const droneGroup = await prisma.droneGroup.findFirstOrThrow();
   await prisma.drohnengruppeMembership.upsert({
     where: { userId },
-    update: { role },
-    create: { userId, role, droneGroupId: droneGroup.id },
+    update: { role, droneGroupId },
+    create: { userId, role, droneGroupId },
   });
 }
 
@@ -105,7 +101,7 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   });
 
   await syncAdminMemberships(user.id, data.adminOrgIds);
-  await syncDroneMembership(user.id, data.droneRole);
+  await syncDroneMembership(user.id, data.droneRole, data.droneGroupId);
 
   const token = await createToken(user.id, TokenPurpose.ACTIVATION);
 
@@ -176,7 +172,7 @@ export async function updateUser(
   });
 
   await syncAdminMemberships(userId, data.adminOrgIds);
-  await syncDroneMembership(userId, data.droneRole);
+  await syncDroneMembership(userId, data.droneRole, data.droneGroupId);
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');

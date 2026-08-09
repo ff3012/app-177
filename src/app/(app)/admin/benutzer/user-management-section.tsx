@@ -51,6 +51,7 @@ export interface UserRow {
   adminOrgIds: string[];
   droneLabel: string;
   droneRole: DroneRoleOption;
+  droneGroupId: string | null;
   pushCount: number;
   pushDates: string[];
   isActive: boolean;
@@ -184,6 +185,7 @@ export function UserManagementSection({
   users,
   organizations,
   dienstgrade,
+  droneGroups,
   initialQuery,
   initialFeuerwehr,
   initialRolle,
@@ -199,6 +201,7 @@ export function UserManagementSection({
   users: UserRow[];
   organizations: Organization[];
   dienstgrade: DienstgradOption[];
+  droneGroups: { id: string; name: string }[];
   initialQuery: string;
   initialFeuerwehr: string;
   initialRolle: string;
@@ -479,6 +482,7 @@ export function UserManagementSection({
         homeOrgName: sheetTargetRow.homeOrg,
         adminOrgIds: sheetTargetRow.adminOrgIds,
         droneRole: sheetTargetRow.droneRole,
+        droneGroupId: sheetTargetRow.droneGroupId,
         lastLoginAt: sheetTargetRow.lastLoginAt,
         passwordChangedAt: sheetTargetRow.passwordChangedAt,
         dienstgradId: sheetTargetRow.dienstgradId,
@@ -875,6 +879,7 @@ export function UserManagementSection({
         mode={sheetState?.mode ?? 'create'}
         organizations={organizations}
         dienstgrade={dienstgrade}
+        droneGroups={droneGroups}
         target={sheetTarget}
         onSaved={() => {
           setSheetState(null);
