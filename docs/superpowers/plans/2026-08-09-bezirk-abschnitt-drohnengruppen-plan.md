@@ -2637,7 +2637,80 @@ git commit -m "Push: Zielgruppe für abschnittsweite/Drohnengruppen-Termine korr
 
 ---
 
-## Final verification (after all 12 tasks)
+### Task 13: Drohnengruppen-scoped Flug-Verwaltungsrecht
+
+**Why this task exists:** Task 9's reviewer confirmed a real, pre-existing-but-now-more-reachable gap:
+`canManageFlight`/`isDroneGroupAdmin` in `src/lib/auth/permissions.ts` grant Admin-Drohnengruppe rights
+globally, not per group — an Admin of Group A can edit/delete a Group B flight if they know or guess its
+`cuid()`. Task 9 didn't widen the exposure (no UI surfaces a foreign flight's id), but it did remove an
+accidental barrier: Task 9's `bearbeiten`-page dropdowns and `updateFlight`'s eligibility checks now scope
+by the flight's OWN drone's group rather than the editing user's group, so a cross-group edit that reaches
+the form no longer gets rejected by the pilot/drone `<select>` options being wrong for the editor's group.
+
+**Files:**
+- Modify: `src/lib/auth/permissions.ts`
+- Modify: call sites of `canManageFlight` (grep for them — expected in `drohnen/[flightId]/actions.ts`
+  or similarly named flight update/delete actions, and the `bearbeiten` page's own gate)
+
+**Interfaces:**
+- Consumes: `DroneFlight.drone.droneGroupId` (via the flight's own drone relation), `user.droneGroupId`.
+
+- [ ] **Step 1: Scope `canManageFlight` by group**
+
+Replace:
+
+```typescript
+export function canManageFlight(user: SessionUser, flight: { registeredById: string }): boolean {
+  return isDroneGroupAdmin(user) || flight.registeredById === user.id;
+}
+```
+
+with:
+
+```typescript
+export function canManageFlight(
+  user: SessionUser,
+  flight: { registeredById: string; droneGroupId: string },
+): boolean {
+  return (isDroneGroupAdmin(user) && user.droneGroupId === flight.droneGroupId) || flight.registeredById === user.id;
+}
+```
+
+`flight.droneGroupId` here is the flight's OWN group — resolved via its `drone.droneGroupId` at each call
+site (a `DroneFlight` has no direct `droneGroupId` column, only through its `Drone` relation), not a new
+schema field. Every call site must pass `{ registeredById: flight.registeredById, droneGroupId:
+flight.drone.droneGroupId }`, which requires that call site's Prisma query to `include`/`select`
+`drone: { select: { droneGroupId: true } }` if it doesn't already.
+
+- [ ] **Step 2: Update every call site**
+
+Grep for `canManageFlight(` and update each one to pass the new shape, adding the `drone` relation to
+whatever query fetches the flight if it's missing.
+
+- [ ] **Step 3: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Write a standalone script confirming: a Group-A drone-admin CAN manage a Group-A flight, CANNOT manage a
+Group-B flight (even though `isDroneGroupAdmin` alone is true for them), and CAN still manage their own
+registered flight regardless of its group (the `flight.registeredById === user.id` branch is unchanged and
+un-scoped — a member editing their own logged flight was never restricted by group and shouldn't become
+so now).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/lib/auth/permissions.ts
+git commit -m "Drohnengruppe: canManageFlight gruppenscoped (Task-9-Review-Fund)"
+```
+
+---
+
+## Final verification (after all 13 tasks)
 
 - [ ] `npx tsc --noEmit` — clean across the whole repo.
 - [ ] `npm run build` — clean production build.
