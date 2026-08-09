@@ -2476,7 +2476,168 @@ git commit -m "Benutzerverwaltung: echte Drohnengruppen-Auswahl statt Notbehelf 
 
 ---
 
-## Final verification (after all 11 tasks)
+### Task 12: Push-Benachrichtigungs-Zielgruppe abschnitts-/gruppenscoped
+
+**Why this task exists:** Task 7's implementer, while fixing `canViewEvent`'s Abschnitt-scoping,
+independently found the same bug class in a file no task in this plan touches:
+`src/lib/push/audience.ts`'s `resolveEventAudienceUserIds()` — used by the event detail page's
+"Push-Benachrichtigung jetzt senden" button — sends to **every active user in the entire Bezirk**
+for any `isSectionWide` event (`event.isSectionWide ? { isActive: true } : {...}`, no Abschnitt filter
+at all), and to **every Drohnengruppe member across all 4 groups** for any `DROHNENGRUPPE`-category
+event (same ungated `droneMembership: { isNot: null }` query Task 8 already fixes for Kalender
+*visibility*, but never for *push audience*). Confirmed by reading the file directly — this is a real,
+unaddressed gap, not a hypothetical: it means pressing that button on a single Herzogenburg event would
+push-notify every person in the whole Bezirk 17, not just Herzogenburg's members, once real users exist
+across all 7 Abschnitte.
+
+**Files:**
+- Modify: `src/lib/push/audience.ts`
+
+**Interfaces:**
+- Consumes: `getAbschnittOrganizationId` from Task 7, `Event.droneGroupId` from Task 8 (this task must
+  run after Task 8, not before, since it needs the `droneGroupId` field Task 8 adds to `Event`).
+
+- [ ] **Step 1: Fix `resolveEventAudienceUserIds`**
+
+Replace the whole function body:
+
+```typescript
+export async function resolveEventAudienceUserIds(event: {
+  organizationId: string;
+  isSectionWide: boolean;
+  category: string;
+}): Promise<string[]> {
+  if (event.category === 'DROHNENGRUPPE') {
+    const members = await prisma.user.findMany({
+      where: { droneMembership: { isNot: null }, isActive: true },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+
+  const members = await prisma.user.findMany({
+    where: event.isSectionWide ? { isActive: true } : { isActive: true, homeOrganizationId: event.organizationId },
+    select: { id: true },
+  });
+  return members.map((member) => member.id);
+}
+```
+
+with:
+
+```typescript
+export async function resolveEventAudienceUserIds(event: {
+  organizationId: string;
+  isSectionWide: boolean;
+  category: string;
+  droneGroupId: string | null;
+}): Promise<string[]> {
+  if (event.category === 'DROHNENGRUPPE') {
+    const members = await prisma.user.findMany({
+      where: { droneMembership: { droneGroupId: event.droneGroupId ?? undefined }, isActive: true },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+
+  if (!event.isSectionWide) {
+    const members = await prisma.user.findMany({
+      where: { isActive: true, homeOrganizationId: event.organizationId },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+
+  const organization = await prisma.organization.findUniqueOrThrow({
+    where: { id: event.organizationId },
+    select: { type: true, id: true, parentId: true },
+  });
+  const abschnittOrganizationId = getAbschnittOrganizationId(organization);
+  const members = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      homeOrganization: { OR: [{ id: abschnittOrganizationId }, { parentId: abschnittOrganizationId }] },
+    },
+    select: { id: true },
+  });
+  return members.map((member) => member.id);
+}
+```
+
+Add the import: `import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';`.
+
+`droneMembership: { droneGroupId: event.droneGroupId ?? undefined }` — if `event.droneGroupId` is
+somehow `null` on a `DROHNENGRUPPE`-category event (shouldn't happen after Task 8, but defensively:
+`undefined` in a Prisma nested-relation filter means "don't filter on this field", which here would
+incorrectly widen back to all groups) — check this specific edge case in your verification step below
+rather than assuming the `?? undefined` fallback is safe.
+
+- [ ] **Step 2: Update the call site**
+
+Grep for `resolveEventAudienceUserIds(` (expected in the event detail page's `triggerEventPushNotification`
+Server Action or similar). Confirm the `event` object passed in already includes `droneGroupId` — if the
+Prisma query feeding it doesn't `select`/`include` that field yet, add it.
+
+- [ ] **Step 3: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Create `scripts-tmp-verify-push-audience.ts`:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { resolveEventAudienceUserIds } from './src/lib/push/audience';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  const herzogenburg = await prisma.organization.findFirstOrThrow({ where: { name: 'Abschnittsfeuerwehrkommando Herzogenburg' } });
+  const purkersdorfUser = await prisma.user.findFirstOrThrow({ where: { homeOrganization: { name: 'FF Wolfsgraben' } } });
+
+  const audience = await resolveEventAudienceUserIds({
+    organizationId: herzogenburg.id,
+    isSectionWide: true,
+    category: 'ALLGEMEIN',
+    droneGroupId: null,
+  });
+  console.log('Purkersdorf-Nutzer NICHT in Herzogenburg-Push-Zielgruppe:', !audience.includes(purkersdorfUser.id));
+
+  const kirchbergGroup = await prisma.droneGroup.findFirstOrThrow({ where: { name: 'AFKDO Kirchberg' } });
+  const purkersdorfGroup = await prisma.droneGroup.findFirstOrThrow({ where: { name: 'AFKDO Purkersdorf' } });
+  const droneAudience = await resolveEventAudienceUserIds({
+    organizationId: herzogenburg.id,
+    isSectionWide: true,
+    category: 'DROHNENGRUPPE',
+    droneGroupId: kirchbergGroup.id,
+  });
+  // Any existing AFKDO-Purkersdorf drone member must not appear in a Kirchberg-group push audience.
+  const purkersdorfDronePilots = await prisma.user.findMany({ where: { droneMembership: { droneGroupId: purkersdorfGroup.id } }, select: { id: true } });
+  console.log(
+    'AFKDO-Purkersdorf-Piloten NICHT in AFKDO-Kirchberg-Push-Zielgruppe:',
+    purkersdorfDronePilots.every((p) => !droneAudience.includes(p.id)),
+  );
+}
+
+main().finally(() => prisma.$disconnect());
+```
+
+Run: `npx tsx scripts-tmp-verify-push-audience.ts` — both lines must print `true`. Delete the script
+afterward.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/lib/push/audience.ts
+git commit -m "Push: Zielgruppe für abschnittsweite/Drohnengruppen-Termine korrekt gescoped (Task-7-Fund)"
+```
+
+---
+
+## Final verification (after all 12 tasks)
 
 - [ ] `npx tsc --noEmit` — clean across the whole repo.
 - [ ] `npm run build` — clean production build.
