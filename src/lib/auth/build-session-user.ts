@@ -18,10 +18,35 @@ export async function findUserWithRelationsById(id: string) {
   return prisma.user.findUnique({ where: { id }, include: userInclude });
 }
 
-export function buildSessionUser(user: UserWithRelations): SessionUser {
+export async function buildSessionUser(user: UserWithRelations): Promise<SessionUser> {
   const abschnittskommandoMembership = user.memberships.find(
     (m) => m.organization.type === OrganizationType.ABSCHNITTSKOMMANDO,
   );
+
+  const abschnittAdminOrgIds = user.memberships
+    .filter((m) => m.role === MembershipRole.ADMIN && m.organization.type === OrganizationType.ABSCHNITTSKOMMANDO)
+    .map((m) => m.organizationId);
+
+  const directFeuerwehrAdminOrgIds = user.memberships
+    .filter((m) => m.role === MembershipRole.ADMIN && m.organization.type === OrganizationType.FEUERWEHR)
+    .map((m) => m.organizationId);
+
+  const inheritedFeuerwehrOrgIds =
+    abschnittAdminOrgIds.length > 0
+      ? (
+          await prisma.organization.findMany({
+            where: { parentId: { in: abschnittAdminOrgIds } },
+            select: { id: true },
+          })
+        ).map((o) => o.id)
+      : [];
+
+  const feuerwehrAdminOrgIds = Array.from(new Set([...directFeuerwehrAdminOrgIds, ...inheritedFeuerwehrOrgIds]));
+
+  const homeAbschnittOrganizationId =
+    user.homeOrganization.type === OrganizationType.ABSCHNITTSKOMMANDO
+      ? user.homeOrganizationId
+      : user.homeOrganization.parentId!;
 
   return {
     id: user.id,
@@ -29,13 +54,14 @@ export function buildSessionUser(user: UserWithRelations): SessionUser {
     name: `${user.firstName} ${user.lastName}`,
     homeOrganizationId: user.homeOrganizationId,
     homeOrganizationType: user.homeOrganization.type,
-    feuerwehrAdminOrgIds: user.memberships
-      .filter((m) => m.role === MembershipRole.ADMIN)
-      .map((m) => m.organizationId),
-    isAbschnittsAdmin: abschnittskommandoMembership?.role === MembershipRole.ADMIN,
+    homeAbschnittOrganizationId,
+    feuerwehrAdminOrgIds,
+    abschnittAdminOrgIds,
+    isBezirksAdmin: user.isBezirksAdmin,
     isAbschnittskommandoMitglied:
       user.homeOrganization.type === OrganizationType.ABSCHNITTSKOMMANDO || Boolean(abschnittskommandoMembership),
     isDrohnengruppeMember: Boolean(user.droneMembership),
+    droneGroupId: user.droneMembership?.droneGroupId ?? null,
     droneGroupRole: user.droneMembership?.role ?? null,
   };
 }

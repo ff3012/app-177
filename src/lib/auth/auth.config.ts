@@ -35,7 +35,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        return buildSessionUser(user);
+        return await buildSessionUser(user);
       },
     }),
     // Zweiter Anmeldeweg neben Passwort: ein per E-Mail verschickter Einmal-Link ODER ein
@@ -75,7 +75,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        return buildSessionUser(user);
+        return await buildSessionUser(user);
       },
     }),
   ],
@@ -109,7 +109,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
-      Object.assign(token, buildSessionUser(dbUser));
+      Object.assign(token, await buildSessionUser(dbUser));
       return token;
     },
     async session({ session, token }) {
