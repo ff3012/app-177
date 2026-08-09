@@ -2,16 +2,23 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageNews } from '@/lib/auth/permissions';
-import type { NewsMessage, Organization, User } from '@prisma/client';
+import type { DroneGroup, NewsMessage, Organization, User } from '@prisma/client';
 
 const EMPTY_MESSAGE = 'Noch keine News erstellt.';
 
-type NewsMessageWithRelations = NewsMessage & { audienceOrg: Organization | null; createdBy: User };
+type NewsMessageWithRelations = NewsMessage & {
+  audienceOrg: Organization | null;
+  audienceDroneGroup: DroneGroup | null;
+  createdBy: User;
+};
 
 function getAudienceLabel(message: NewsMessageWithRelations): string {
-  return message.audienceType === 'DROHNENGRUPPE'
-    ? 'Drohnengruppe'
-    : (message.audienceOrg?.shortName ?? message.audienceOrg?.name ?? '–');
+  if (message.audienceType === 'DROHNENGRUPPE') {
+    // null audienceDroneGroupId bedeutet weiterhin "alle Gruppen" (siehe NewsMessage.audienceDroneGroupId
+    // im Schema und resolveAudienceUserIds) - auch für historische Zeilen vor dieser Erweiterung.
+    return message.audienceDroneGroup ? `Drohnengruppe: ${message.audienceDroneGroup.name}` : 'Drohnengruppe (alle Gruppen)';
+  }
+  return message.audienceOrg?.shortName ?? message.audienceOrg?.name ?? '–';
 }
 
 function getStatusLabel(message: NewsMessageWithRelations): string {
@@ -46,7 +53,7 @@ export default async function NewsPage() {
   }
 
   const messages = await prisma.newsMessage.findMany({
-    include: { audienceOrg: true, createdBy: true },
+    include: { audienceOrg: true, audienceDroneGroup: true, createdBy: true },
     orderBy: { createdAt: 'desc' },
   });
 

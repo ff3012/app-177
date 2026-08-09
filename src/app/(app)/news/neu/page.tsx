@@ -10,12 +10,15 @@ export default async function NeueNewsPage() {
     return <p className="text-neutral-700">Dieser Bereich ist nur für die Abschnittskommando-Verwaltung sichtbar.</p>;
   }
 
-  const organizations = await prisma.organization.findMany({ orderBy: { name: 'asc' } });
+  const [organizations, droneGroups] = await Promise.all([
+    prisma.organization.findMany({ orderBy: { name: 'asc' } }),
+    prisma.droneGroup.findMany({ orderBy: { name: 'asc' } }),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-neutral-900">Neue News</h1>
-      <NewsForm organizations={organizations} action={createNewsMessage} />
+      <NewsForm organizations={organizations} droneGroups={droneGroups} action={createNewsMessage} />
     </div>
   );
 }

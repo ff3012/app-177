@@ -12,6 +12,10 @@ export const newsSchema = z
     body: z.string().trim().min(1, 'Text ist erforderlich.').max(500),
     audienceType: z.enum(NEWS_AUDIENCE_TYPES),
     audienceOrgId: z.string().optional().or(z.literal('')),
+    // Leer/"" bedeutet "Alle Gruppen" (mappt auf null) - bewusst weiterhin eine gültige Auswahl,
+    // nicht nur ein Kompatibilitäts-Notbehelf für alte Zeilen (siehe NewsMessage.audienceDroneGroupId
+    // im Schema). Deshalb kein .refine, das hier eine konkrete Gruppe erzwingt.
+    audienceDroneGroupId: z.string().nullable().optional().or(z.literal('')),
     sendMode: z.enum(NEWS_SEND_MODES),
     scheduledAt: z.string().optional().or(z.literal('')),
   })
@@ -32,6 +36,7 @@ export function parseNewsFormData(formData: FormData) {
     body: String(formData.get('body') ?? ''),
     audienceType: String(formData.get('audienceType') ?? 'ORGANIZATION'),
     audienceOrgId: String(formData.get('audienceOrgId') ?? ''),
+    audienceDroneGroupId: String(formData.get('audienceDroneGroupId') ?? ''),
     sendMode: String(formData.get('sendMode') ?? 'NOW'),
     scheduledAt: String(formData.get('scheduledAt') ?? ''),
   };

@@ -13,12 +13,18 @@ interface OrganizationOption {
   name: string;
 }
 
+interface DroneGroupOption {
+  id: string;
+  name: string;
+}
+
 interface NewsFormProps {
   organizations: OrganizationOption[];
+  droneGroups: DroneGroupOption[];
   action: (prevState: NewsFormState, formData: FormData) => Promise<NewsFormState>;
 }
 
-export function NewsForm({ organizations, action }: NewsFormProps) {
+export function NewsForm({ organizations, droneGroups, action }: NewsFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -35,6 +41,10 @@ export function NewsForm({ organizations, action }: NewsFormProps) {
       body: '',
       audienceType: 'ORGANIZATION',
       audienceOrgId: organizations[0]?.id ?? '',
+      // '' = "Alle Gruppen" (mappt serverseitig auf null) - bewusst der Default, damit sich das
+      // bisherige Verhalten (Versand an alle Drohnengruppen) nicht ändert, ohne dass jemand aktiv
+      // eine konkrete Gruppe auswählt.
+      audienceDroneGroupId: '',
       sendMode: 'NOW',
       scheduledAt: '',
     },
@@ -49,6 +59,7 @@ export function NewsForm({ organizations, action }: NewsFormProps) {
     formData.set('body', values.body);
     formData.set('audienceType', values.audienceType);
     formData.set('audienceOrgId', values.audienceOrgId ?? '');
+    formData.set('audienceDroneGroupId', values.audienceDroneGroupId ?? '');
     formData.set('sendMode', values.sendMode);
     formData.set('scheduledAt', values.scheduledAt ?? '');
 
@@ -91,6 +102,23 @@ export function NewsForm({ organizations, action }: NewsFormProps) {
             ))}
           </select>
           {errors.audienceOrgId && <p className="text-sm text-red-700">{errors.audienceOrgId.message}</p>}
+        </div>
+      )}
+
+      {audienceType === 'DROHNENGRUPPE' && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Drohnengruppe</label>
+          <select {...register('audienceDroneGroupId')} className="rounded border border-neutral-300 px-3 py-2">
+            <option value="">Alle Gruppen</option>
+            {droneGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          {errors.audienceDroneGroupId && (
+            <p className="text-sm text-red-700">{errors.audienceDroneGroupId.message}</p>
+          )}
         </div>
       )}
 
