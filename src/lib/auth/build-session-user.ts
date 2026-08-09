@@ -28,8 +28,16 @@ export async function buildSessionUser(user: UserWithRelations): Promise<Session
     .filter((m) => m.role === MembershipRole.ADMIN && m.organization.type === OrganizationType.ABSCHNITTSKOMMANDO)
     .map((m) => m.organizationId);
 
-  const directFeuerwehrAdminOrgIds = user.memberships
-    .filter((m) => m.role === MembershipRole.ADMIN && m.organization.type === OrganizationType.FEUERWEHR)
+  // BEWUSST ohne Typ-Filter: hier landen ALLE direkten ADMIN-Mitgliedschaften, auch die an einem
+  // Abschnittskommando. Ein zwischenzeitlicher Filter auf type === FEUERWEHR hat den Abschnitt selbst
+  // aus dieser Liste entfernt - und damit zwei Features stillgelegt, weil die Organisationsauswahl der
+  // Terminformulare (kalender/neu, kalender/[eventId]/bearbeiten) genau aus diesem Array gebaut wird:
+  // ohne eine ABSCHNITTSKOMMANDO-Option darin rendert event-form.tsx weder die Checkbox
+  // "Abschnitt-weiter Termin" noch die Kategorie-Auswahl, und bestehende Termine, die direkt einem
+  // Abschnittskommando gehören, waren für niemanden mehr bearbeitbar (canManageEventsFor liest
+  // ebenfalls nur dieses Array). abschnittAdminOrgIds unten bleibt davon unberührt typgefiltert.
+  const directAdminOrgIds = user.memberships
+    .filter((m) => m.role === MembershipRole.ADMIN)
     .map((m) => m.organizationId);
 
   const inheritedFeuerwehrOrgIds =
@@ -42,7 +50,7 @@ export async function buildSessionUser(user: UserWithRelations): Promise<Session
         ).map((o) => o.id)
       : [];
 
-  const feuerwehrAdminOrgIds = Array.from(new Set([...directFeuerwehrAdminOrgIds, ...inheritedFeuerwehrOrgIds]));
+  const feuerwehrAdminOrgIds = Array.from(new Set([...directAdminOrgIds, ...inheritedFeuerwehrOrgIds]));
 
   const homeAbschnittOrganizationId = getAbschnittOrganizationId(user.homeOrganization);
 
