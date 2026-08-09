@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { MembershipRole } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
-import { canAccessUserManagementAdmin, isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessUserManagementAdmin, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
@@ -32,7 +32,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   if (!canAccessUserManagementAdmin(currentUser)) {
     notFound();
   }
-  const fullAdmin = isSiteAdmin(currentUser);
+  const fullAdmin = isBezirksAdmin(currentUser);
 
   const [users, organizations, dienstgrade] = await Promise.all([
     prisma.user.findMany({

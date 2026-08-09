@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
-import { isSiteAdmin } from '@/lib/auth/permissions';
+import { isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { getDroneFlightNotificationEmail, getSystemCheckNotificationEmail } from '@/lib/settings';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
@@ -13,7 +13,7 @@ import { SystemCheckEmailForm } from './system-check-email-form';
 // CLAUDE.md).
 export default async function EmailVerwaltungPage() {
   const user = await requireUser();
-  if (!isSiteAdmin(user)) {
+  if (!isBezirksAdmin(user)) {
     notFound();
   }
 

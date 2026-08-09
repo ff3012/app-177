@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
+import { assertPermission, isBezirksAdmin } from '@/lib/auth/permissions';
 import { sendEmail } from '@/lib/email/mailjet';
 import { setDroneFlightNotificationEmail, setSystemCheckNotificationEmail } from '@/lib/settings';
 
@@ -21,7 +21,7 @@ export async function sendTestEmail(
   formData: FormData,
 ): Promise<TestMailjetState> {
   const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  assertPermission(isBezirksAdmin(user));
 
   const parsed = testEmailSchema.safeParse({ recipient: formData.get('recipient') });
   if (!parsed.success) {
@@ -60,7 +60,7 @@ export async function saveDroneFlightEmail(
   formData: FormData,
 ): Promise<DroneFlightEmailState> {
   const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  assertPermission(isBezirksAdmin(user));
 
   const parsed = droneFlightEmailSchema.safeParse({ email: formData.get('email') });
   if (!parsed.success) {
@@ -86,7 +86,7 @@ export async function saveSystemCheckEmail(
   formData: FormData,
 ): Promise<SystemCheckEmailState> {
   const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  assertPermission(isBezirksAdmin(user));
 
   const parsed = systemCheckEmailSchema.safeParse({ email: formData.get('email') });
   if (!parsed.success) {

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { MembershipRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { isSiteAdmin } from '@/lib/auth/permissions';
+import { isBezirksAdmin } from '@/lib/auth/permissions';
 import { USER_EXCEL_COLUMNS } from '@/lib/admin/user-excel-columns';
 import { getUserStatus } from '@/lib/auth/user-status';
 
@@ -11,7 +11,7 @@ const STATUS_LABEL = { AKTIV: 'Aktiv', INAKTIV: 'Inaktiv', DEAKTIVIERT: 'Deaktiv
 
 export async function GET() {
   const user = await requireUser();
-  if (!isSiteAdmin(user)) {
+  if (!isBezirksAdmin(user)) {
     return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
   }
 

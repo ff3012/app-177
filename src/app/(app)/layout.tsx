@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canAccessHeimatfeuerwehrAdmin, canManageNews, isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessHeimatfeuerwehrAdmin, canManageNews, isBezirksAdmin } from '@/lib/auth/permissions';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'AFKDO Purkersdorf';
   const wappenSrc = homeOrganization?.wappenImageMimeType ? `/api/organization/${homeOrganization.id}/wappen` : null;
   const showVerwaltungPill = canAccessHeimatfeuerwehrAdmin(user);
-  const verwaltungHref = isSiteAdmin(user) ? '/admin/benutzer' : '/admin/heimatfeuerwehr';
+  const verwaltungHref = isBezirksAdmin(user) ? '/admin/benutzer' : '/admin/heimatfeuerwehr';
 
   return (
     <TooltipProvider>
@@ -79,7 +79,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 name={user.name}
                 email={user.email}
                 homeOrganizationName={homeOrganization?.shortName ?? homeOrganization?.name ?? '–'}
-                isSiteAdmin={isSiteAdmin(user)}
+                isSiteAdmin={isBezirksAdmin(user)}
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}
                 canManageNews={canManageNews(user)}

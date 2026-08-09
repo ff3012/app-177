@@ -1,5 +1,5 @@
 import type { SessionUser } from '@/types/next-auth';
-import { canAccessHeimatfeuerwehrAdmin, canManageNews, canViewDroneModule, isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessHeimatfeuerwehrAdmin, canManageNews, canViewDroneModule, isBezirksAdmin } from '@/lib/auth/permissions';
 
 export interface NavItem {
   href: string;
@@ -29,7 +29,7 @@ export function getNavItems(user: SessionUser): NavItem[] {
   // bereits korrekt true zurückgab (per Live-Test mit einem echten Konto bestätigt). Site-Admins
   // landen weiterhin auf der Benutzerverwaltung, reine Feuerwehr-Admins direkt auf der einzigen
   // Verwaltungsseite, die sie tatsächlich sehen dürfen.
-  if (isSiteAdmin(user)) {
+  if (isBezirksAdmin(user)) {
     items.push({ href: '/admin/benutzer', label: 'Verwaltung' });
   } else if (canAccessHeimatfeuerwehrAdmin(user)) {
     items.push({ href: '/admin/heimatfeuerwehr', label: 'Verwaltung' });
