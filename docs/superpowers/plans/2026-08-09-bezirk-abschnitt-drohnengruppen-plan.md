@@ -2710,7 +2710,110 @@ git commit -m "Drohnengruppe: canManageFlight gruppenscoped (Task-9-Review-Fund)
 
 ---
 
-## Final verification (after all 13 tasks)
+### Task 14: News-Modul — Drohnengruppen-Zielgruppe auf eine konkrete Gruppe einschränken
+
+**Why this task exists:** Task 12's implementer and reviewer both confirmed a real, unaddressed gap:
+`src/lib/push/audience.ts`'s `resolveAudienceUserIds()` (used by the News module, `NewsAudienceType.DROHNENGRUPPE`)
+sends to **every** Drohnengruppe member across all 4 groups — `NewsMessage` has no field to identify a
+*specific* target group, unlike `NewsAudienceType.ORGANIZATION`, which already has `audienceOrgId`.
+Unlike Task 12's Kalender-Push fix (where an `Event` already had a concrete `droneGroupId` to scope by),
+this one genuinely needs new schema + UI, which is why it's its own task rather than a one-line fix.
+**Not a low-priority edge case**: `canManageNews` is `isBezirksAdmin`-gated — a Bezirk-wide right — and 4
+real `DroneGroup`s already exist across different Abschnitte in seed data, so this is reachable by the
+exact admin persona this whole plan introduces, not a remote theoretical case.
+
+**Files:**
+- Modify: `prisma/schema.prisma`
+- Modify: `src/lib/push/audience.ts`
+- Modify: `src/lib/validation/news.schema.ts` (or wherever the News form's zod schema lives — grep for
+  `audienceOrgId` to find it)
+- Modify: `src/components/news/news-form.tsx`
+- Modify: `src/app/(app)/news/actions.ts` (or wherever `NewsMessage` gets created — grep for
+  `prisma.newsMessage.create`)
+
+**Interfaces:**
+- Produces: `NewsMessage.audienceDroneGroupId` (nullable, mirrors the existing `audienceOrgId` pattern).
+
+- [ ] **Step 1: Add `audienceDroneGroupId` to `NewsMessage`**
+
+```prisma
+model NewsMessage {
+  // ...existing fields...
+  audienceDroneGroupId String?
+  audienceDroneGroup    DroneGroup? @relation(fields: [audienceDroneGroupId], references: [id])
+}
+```
+
+Nullable, additive — no backfill needed (existing `DROHNENGRUPPE`-audience `NewsMessage` rows simply keep
+`audienceDroneGroupId: null`, meaning "was sent to all groups," a fact worth preserving for historical
+accuracy rather than erasing). Run `npm run db:migrate`.
+
+- [ ] **Step 2: `resolveAudienceUserIds` — scope by the new field when present**
+
+```typescript
+export async function resolveAudienceUserIds(
+  audienceType: NewsAudienceType,
+  audienceOrgId: string | null,
+  audienceDroneGroupId: string | null,
+): Promise<string[]> {
+  if (audienceType === NewsAudienceType.DROHNENGRUPPE) {
+    const members = await prisma.user.findMany({
+      where: { droneMembership: { droneGroupId: audienceDroneGroupId ?? undefined }, isActive: true },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+  // ...unchanged ORGANIZATION branch...
+}
+```
+
+Unlike Task 12's fix, `?? undefined` here is the CORRECT, intentional choice (not the bug it was in
+`resolveEventAudienceUserIds`): a `null` `audienceDroneGroupId` genuinely means "every group" for this
+function specifically (preserving old messages' broad-send behavior, per Step 1's rationale), whereas
+Task 12's bug was a group-scoped event ending up with a null id by mistake, not by design.
+
+- [ ] **Step 3: Update every call site of `resolveAudienceUserIds`**
+
+Grep for it (expected in `src/lib/news/send-news.ts`'s `dispatchNewsMessage`) and pass the new third
+argument from the `NewsMessage` row's own `audienceDroneGroupId`.
+
+- [ ] **Step 4: `news-form.tsx` — add the group picker**
+
+Mirror the existing `audienceType === 'ORGANIZATION'` conditional `<select>` block: add a sibling
+`audienceType === 'DROHNENGRUPPE'` block with a `<select {...register('audienceDroneGroupId')}>` listing
+all 4 `DroneGroup`s (plus perhaps an explicit "Alle Gruppen" option mapping to `null`, matching the
+Step 1 backward-compatibility intent — confirm with whoever reviews this task whether "send to all
+groups" should remain a selectable option going forward, or whether it should now always require picking
+one specific group; the brief doesn't mandate an answer here, treat it as an open question to flag in
+your report rather than silently deciding it yourself).
+
+- [ ] **Step 5: Update the zod schema and the create action**
+
+Add `audienceDroneGroupId: z.string().nullable()` to the News form schema, parse it from `FormData`, and
+pass it into `prisma.newsMessage.create({ data: { ..., audienceDroneGroupId } })`.
+
+- [ ] **Step 6: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Write a script confirming: a `NewsMessage` with `audienceType: DROHNENGRUPPE` and a specific
+`audienceDroneGroupId` resolves via `resolveAudienceUserIds` to only that group's members; a message
+with `audienceDroneGroupId: null` still resolves to every drone-group member (preserving old behavior).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add prisma/schema.prisma src/lib/push/audience.ts src/lib/validation/news.schema.ts src/components/news/news-form.tsx src/app/\(app\)/news/actions.ts
+git commit -m "News: Drohnengruppen-Zielgruppe auf eine konkrete Gruppe einschraenkbar (Task-12-Review-Fund)"
+```
+
+---
+
+## Final verification (after all 14 tasks)
 
 - [ ] `npx tsc --noEmit` — clean across the whole repo.
 - [ ] `npm run build` — clean production build.
