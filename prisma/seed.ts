@@ -1,5 +1,6 @@
 import { PrismaClient, OrganizationType, MembershipRole, DienstgradKategorie } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import feuerwehrenData from './data/feuerwehren-bezirk-17-raw.json';
 
 const prisma = new PrismaClient();
 
@@ -19,6 +20,28 @@ const FEUERWEHR_NAMEN: { name: string; nummer: string }[] = [
 ];
 
 const DROHNEN_NAMEN = ['Drohne 1', 'Drohne 2'];
+
+// Die 7 Abschnitte des Bezirks 17 St. Pölten - Nummer und Name exakt wie in AFK_NUMMER/AFK_NAME der
+// Quelldatei (prisma/data/feuerwehren-bezirk-17-raw.json), damit der spätere Join eindeutig ist.
+// Purkersdorf (177) ist NICHT in dieser Liste - die bestehende Organization-Zeile dafür existiert
+// bereits (siehe main() unten, sie bekommt nur districtId ergänzt statt neu angelegt zu werden).
+const NEUE_ABSCHNITTE: { nummer: string; name: string }[] = [
+  { nummer: '171', name: 'Herzogenburg' },
+  { nummer: '172', name: 'Kirchberg/Pielach' },
+  { nummer: '173', name: 'Neulengbach' },
+  { nummer: '174', name: 'St.Pölten - West' },
+  { nummer: '175', name: 'St.Pölten-Stadt' },
+  { nummer: '176', name: 'St.Pölten - Ost' },
+];
+
+// Die 4 Drohnengruppen (die 4. - "AFKDO Purkersdorf" - existiert bereits seit der Backfill-Migration,
+// siehe Task 2) - Zuordnung zu ihrem Abschnitt anhand der realen Excel-Daten bestätigt (siehe
+// docs/superpowers/specs/2026-08-09-bezirk-abschnitt-drohnengruppen-design.md §3.3), nicht geraten.
+const NEUE_DROHNENGRUPPEN: { name: string; abschnittNummer: string }[] = [
+  { name: 'AFKDO Kirchberg', abschnittNummer: '172' },
+  { name: 'Feuerwehr Hafnerbach', abschnittNummer: '174' },
+  { name: 'Spar BTF', abschnittNummer: '175' },
+];
 
 // Zentrale Dienstgrad-Tabelle laut NÖ-Landesfeuerwehrverband-Dienstgradordnung (recherchiert
 // gegen Wikipedia/AustriaWiki "Dienstgrade der Feuerwehr in Österreich", NÖ-spezifischer
@@ -187,6 +210,78 @@ const DIENSTGRADE: {
   },
 ];
 
+/**
+ * Legt die 6 neuen Abschnitte (171-176) und alle 124 Feuerwehren/BTF aus der Excel-Quelldatei an.
+ * Abschnitt 177 (Purkersdorf) existiert bereits (siehe main()) und wird hier übersprungen - seine 9
+ * Feuerwehren werden trotzdem per nummer-Match aktualisiert (parentId ergänzt), nicht dupliziert. Die
+ * Excel-Daten (AFK_NUMMER/AFK_NAME) haben keine eigene Abschnittskommando-nummer (nur Feuerwehren haben
+ * eine) - die hier konstruierte nummer folgt der bereits an Purkersdorf sichtbaren Konvention
+ * ({Abschnittsnummer}00, z. B. Purkersdorfs bestehende '17700'). Gibt eine Map von AFK_NUMMER ->
+ * Organization.id zurück, die seedDrohnengruppen für die Abschnitts-Verankerung nutzt.
+ */
+async function seedAbschnitteUndFeuerwehren(purkersdorfOrgId: string): Promise<Map<string, string>> {
+  const district = await prisma.district.findUniqueOrThrow({ where: { number: '17' } });
+
+  const abschnittIdByNummer = new Map<string, string>([['177', purkersdorfOrgId]]);
+
+  for (const { nummer, name } of NEUE_ABSCHNITTE) {
+    const orgName = `Abschnittsfeuerwehrkommando ${name}`;
+    const org = await prisma.organization.upsert({
+      where: { name: orgName },
+      update: { districtId: district.id },
+      create: {
+        name: orgName,
+        shortName: `AFKDO ${name}`,
+        nummer: `${nummer}00`,
+        type: OrganizationType.ABSCHNITTSKOMMANDO,
+        districtId: district.id,
+      },
+    });
+    abschnittIdByNummer.set(nummer, org.id);
+  }
+
+  const rows = feuerwehrenData.rows as {
+    AFK_NUMMER: string;
+    FW_ART: string;
+    FW_NAME: string;
+    FW_NUMMER: string;
+  }[];
+
+  for (const row of rows) {
+    const parentId = abschnittIdByNummer.get(row.AFK_NUMMER);
+    if (!parentId) continue;
+    const name = row.FW_ART === 'BTF' ? row.FW_NAME : `FF ${row.FW_NAME}`;
+    await prisma.organization.upsert({
+      where: { nummer: row.FW_NUMMER },
+      update: { parentId },
+      create: {
+        name,
+        shortName: row.FW_NAME,
+        nummer: row.FW_NUMMER,
+        type: OrganizationType.FEUERWEHR,
+        parentId,
+      },
+    });
+  }
+
+  return abschnittIdByNummer;
+}
+
+/** Legt die 3 neuen Drohnengruppen an (die 4. existiert bereits seit der Backfill-Migration). */
+async function seedDrohnengruppen(abschnittIdByNummer: Map<string, string>): Promise<void> {
+  for (const { name, abschnittNummer } of NEUE_DROHNENGRUPPEN) {
+    const organizationId = abschnittIdByNummer.get(abschnittNummer);
+    if (!organizationId) {
+      throw new Error(`Abschnitt ${abschnittNummer} für Drohnengruppe "${name}" nicht gefunden.`);
+    }
+    await prisma.droneGroup.upsert({
+      where: { name },
+      update: { organizationId },
+      create: { name, organizationId },
+    });
+  }
+}
+
 async function main() {
   const abschnittskommando = await prisma.organization.upsert({
     where: { name: 'Abschnittsfeuerwehrkommando Purkersdorf' },
@@ -198,6 +293,10 @@ async function main() {
       type: OrganizationType.ABSCHNITTSKOMMANDO,
     },
   });
+
+  const { id: purkersdorfOrgId } = abschnittskommando;
+  const abschnittIdByNummer = await seedAbschnitteUndFeuerwehren(purkersdorfOrgId);
+  await seedDrohnengruppen(abschnittIdByNummer);
 
   for (const { name, nummer } of FEUERWEHR_NAMEN) {
     await prisma.organization.upsert({
@@ -212,10 +311,11 @@ async function main() {
     });
   }
 
-  // Vorläufig: die einzige, bestehende Drohnengruppe. Task 3 ersetzt dies durch die reale
-  // 4-Gruppen-Struktur des ganzen Bezirks - dieser Upsert existiert nur, damit `Drone.droneGroupId`
-  // (seit Task 2 verpflichtend) hier einen gültigen Wert bekommt, ohne den Seed vorzeitig auf die
-  // noch nicht importierten Bezirksdaten umzustellen.
+  // Die Drohnengruppe "AFKDO Purkersdorf" - die 4. der 4 Drohnengruppen im Bezirk, die anderen 3
+  // werden oben bereits über seedDrohnengruppen() angelegt (siehe Task 3). Dieser Upsert bleibt hier
+  // bestehen (statt in NEUE_DROHNENGRUPPEN aufzugehen), weil er an abschnittskommando.id hängt, das
+  // an dieser Stelle im Code bereits vorliegt, und weil Drone.droneGroupId (seit Task 2 verpflichtend)
+  // hier einen gültigen Wert braucht.
   const droneGroup = await prisma.droneGroup.upsert({
     where: { name: 'AFKDO Purkersdorf' },
     update: {},
@@ -268,6 +368,11 @@ async function main() {
       organizationId: abschnittskommando.id,
       role: MembershipRole.ADMIN,
     },
+  });
+
+  await prisma.user.update({
+    where: { id: admin.id },
+    data: { isBezirksAdmin: true },
   });
 
   console.log(`Seed abgeschlossen. Bootstrap-Admin: ${adminEmail} / ${adminPassword}`);
