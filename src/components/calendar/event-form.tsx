@@ -14,15 +14,28 @@ interface OrganizationOption {
   type: 'FEUERWEHR' | 'ABSCHNITTSKOMMANDO';
 }
 
+interface DroneGroupOption {
+  id: string;
+  name: string;
+}
+
 interface EventFormProps {
   organizations: OrganizationOption[];
   canSectionWide: boolean;
+  droneGroupOptions: DroneGroupOption[];
   defaultValues?: Partial<EventInput>;
   action: (prevState: EventFormState, formData: FormData) => Promise<EventFormState>;
   submitLabel: string;
 }
 
-export function EventForm({ organizations, canSectionWide, defaultValues, action, submitLabel }: EventFormProps) {
+export function EventForm({
+  organizations,
+  canSectionWide,
+  droneGroupOptions,
+  defaultValues,
+  action,
+  submitLabel,
+}: EventFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -46,6 +59,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
       organizationId: organizations[0]?.id ?? '',
       isSectionWide: false,
       category: 'ALLGEMEIN',
+      droneGroupId: droneGroupOptions[0]?.id ?? null,
       ...defaultValues,
     },
   });
@@ -99,6 +113,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
     formData.set('organizationId', values.organizationId);
     if (values.isSectionWide) formData.set('isSectionWide', 'on');
     formData.set('category', values.category);
+    if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
 
     startTransition(async () => {
       const result = await action({}, formData);
@@ -182,6 +197,19 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
           <p className="text-xs text-neutral-500">
             Kategorie "Drohnengruppe" ist nur für Mitglieder der Drohnengruppe sichtbar.
           </p>
+        </div>
+      )}
+
+      {category === 'DROHNENGRUPPE' && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Drohnengruppe</label>
+          <select {...register('droneGroupId')} className="rounded border border-neutral-300 px-3 py-2">
+            {droneGroupOptions.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

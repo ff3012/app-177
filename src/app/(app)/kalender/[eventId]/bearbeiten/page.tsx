@@ -44,10 +44,16 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
     );
   }
 
-  const organizations = await prisma.organization.findMany({
-    where: { id: { in: user.feuerwehrAdminOrgIds } },
-    orderBy: { name: 'asc' },
-  });
+  const [organizations, ownDroneGroup] = await Promise.all([
+    prisma.organization.findMany({
+      where: { id: { in: user.feuerwehrAdminOrgIds } },
+      orderBy: { name: 'asc' },
+    }),
+    user.droneGroupId
+      ? prisma.droneGroup.findUnique({ where: { id: user.droneGroupId }, select: { name: true } })
+      : Promise.resolve(null),
+  ]);
+  const droneGroupOptions = user.droneGroupId && ownDroneGroup ? [{ id: user.droneGroupId, name: ownDroneGroup.name }] : [];
 
   const boundUpdate = updateEvent.bind(null, event.id);
   const boundDelete = deleteEvent.bind(null, event.id);
@@ -66,6 +72,7 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
       <EventForm
         organizations={organizations}
         canSectionWide={canCreateSectionWideEvent(user)}
+        droneGroupOptions={droneGroupOptions}
         action={boundUpdate}
         submitLabel="Änderungen speichern"
         defaultValues={{
@@ -78,6 +85,7 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
           organizationId: event.organizationId,
           isSectionWide: event.isSectionWide,
           category: event.category,
+          droneGroupId: event.droneGroupId,
         }}
       />
       <form action={boundDelete}>

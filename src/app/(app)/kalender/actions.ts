@@ -43,6 +43,7 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
       category: data.category,
+      droneGroupId: data.category === 'DROHNENGRUPPE' ? data.droneGroupId : null,
       createdById: user.id,
     },
   });
@@ -98,6 +99,7 @@ export async function updateEvent(
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
       category: data.category,
+      droneGroupId: data.category === 'DROHNENGRUPPE' ? data.droneGroupId : null,
     },
   });
   await pushEventToGoogleCalendar(updated);

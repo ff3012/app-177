@@ -93,13 +93,21 @@ export function canManageNews(user: SessionUser): boolean {
  */
 export function canViewEvent(
   user: SessionUser,
-  event: { organizationId: string; isSectionWide: boolean; category: string; eventAbschnittOrganizationId: string },
+  event: {
+    organizationId: string;
+    isSectionWide: boolean;
+    category: string;
+    eventAbschnittOrganizationId: string;
+    droneGroupId: string | null;
+  },
 ): boolean {
   const visible =
     event.organizationId === user.homeOrganizationId ||
     (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId);
   if (!visible) return false;
-  if (event.category === 'DROHNENGRUPPE') return canViewDroneModule(user);
+  if (event.category === 'DROHNENGRUPPE') {
+    return canViewDroneModule(user) && event.droneGroupId === user.droneGroupId;
+  }
   return true;
 }
 

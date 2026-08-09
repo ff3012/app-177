@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ eve
   const visible =
     (event.organizationId === user.homeOrganizationId ||
       (event.isSectionWide && eventAbschnittOrganizationId === user.homeAbschnittOrganizationId)) &&
-    (event.category !== 'DROHNENGRUPPE' || canViewDroneModule(user));
+    (event.category !== 'DROHNENGRUPPE' || (canViewDroneModule(user) && event.droneGroupId === user.droneGroupId));
   if (!visible) {
     return NextResponse.json({ error: 'Kein Zugriff auf diesen Termin.' }, { status: 404 });
   }

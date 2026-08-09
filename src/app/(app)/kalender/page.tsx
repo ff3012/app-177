@@ -66,7 +66,9 @@ export default async function KalenderPage() {
   }
 
   const calendarEvents: CalendarEventInput[] = allEvents
-    .filter((event) => event.category !== 'DROHNENGRUPPE' || canSeeDroneCategory)
+    .filter(
+      (event) => event.category !== 'DROHNENGRUPPE' || (canSeeDroneCategory && event.droneGroupId === user.droneGroupId),
+    )
     .map((event) => {
       const layer = event.category === 'DROHNENGRUPPE' ? 'drohnengruppe' : event.isSectionWide ? 'abschnitt' : 'own';
       return {
