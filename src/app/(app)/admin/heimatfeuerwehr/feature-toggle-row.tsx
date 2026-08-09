@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -51,13 +51,27 @@ export function FeatureToggleRow({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  // Resynchronisiert den optimistischen Zustand, wenn die zugrunde liegende Identität wechselt -
+  // z. B. wenn ein Admin mehrerer Feuerwehren über OrgSelect die Organisation wechselt (page.tsx
+  // rendert dann mit neuen Props, aber diese Komponente wird ohne key-Wechsel nicht neu gemountet)
+  // oder wenn eine Server-Revalidierung nach der Änderung eines anderen Admins eintrifft. Gleiches
+  // Prinzip wie UserFormSheet's reset()-in-useEffect-Fix (siehe CLAUDE.md).
+  useEffect(() => {
+    setOptimisticEnabled(enabled);
+  }, [organizationId, feature, enabled]);
+
   function apply(next: boolean) {
     setOptimisticEnabled(next);
     startTransition(async () => {
-      const result = await setOrganizationFeature(organizationId, feature, next);
-      if (result.error) {
+      try {
+        const result = await setOrganizationFeature(organizationId, feature, next);
+        if (result.error) {
+          setOptimisticEnabled(!next);
+          toast.error(result.error);
+        }
+      } catch {
         setOptimisticEnabled(!next);
-        toast.error(result.error);
+        toast.error('Änderung konnte nicht gespeichert werden.');
       }
     });
   }
