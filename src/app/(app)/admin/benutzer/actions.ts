@@ -52,9 +52,12 @@ async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
     return;
   }
   const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
-  // Vorläufig: bis Task 9 dieses Formular auf eine echte Gruppenauswahl umstellt, gibt es genau
-  // eine Drohnengruppe im ganzen System (siehe Task 2 Backfill) - jede neue Mitgliedschaft gehört
-  // dazu.
+  // Vorläufiger Notbehelf, KEIN von Task 9 abgedeckter Folge-Fix (Task 9 rewritet nur /admin/drohnen,
+  // nicht dieses Formular) - siehe Task 11 im Plan, die UserFormSheet um eine echte
+  // Drohnengruppen-Auswahl ergänzt und diese Funktion entsprechend umbaut. Bis dahin gibt es genau
+  // eine Drohnengruppe im System (siehe Task 2 Backfill), daher ist findFirstOrThrow() heute korrekt,
+  // aber sobald Task 3 weitere Gruppen seedet, würde jede neue Mitgliedschaft ohne Task 11 einer
+  // beliebigen Gruppe zugeordnet werden, nicht der vom Admin gemeinten.
   const droneGroup = await prisma.droneGroup.findFirstOrThrow();
   await prisma.drohnengruppeMembership.upsert({
     where: { userId },
