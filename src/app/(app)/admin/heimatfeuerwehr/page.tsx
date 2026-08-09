@@ -114,12 +114,12 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     ? await prisma.organization.findMany({
         where: { type: 'FEUERWEHR' },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, parent: { select: { shortName: true, name: true } } },
       })
     : await prisma.organization.findMany({
         where: { id: { in: user.feuerwehrAdminOrgIds } },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, parent: { select: { shortName: true, name: true } } },
       });
 
   if (allowedOrgs.length === 0) {
@@ -201,7 +201,16 @@ export default async function HeimatfeuerwehrVerwaltungPage({
 
       <AdminMobileTabs items={getAdminNavItems(user)} />
 
-      {allowedOrgs.length > 1 && <OrgSelect organizations={allowedOrgs} selectedId={selectedOrgId} />}
+      {allowedOrgs.length > 1 && (
+        <OrgSelect
+          organizations={allowedOrgs.map((org) => ({
+            id: org.id,
+            name: org.name,
+            abschnittName: org.parent?.shortName ?? org.parent?.name,
+          }))}
+          selectedId={selectedOrgId}
+        />
+      )}
 
       <FunktionenCard
         organizationId={selectedOrgId}

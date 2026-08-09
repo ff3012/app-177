@@ -6,7 +6,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
@@ -32,6 +40,23 @@ const RESET_COOLDOWN_MS = 60_000;
 interface OrganizationOption {
   id: string;
   name: string;
+  abschnittName?: string;
+}
+
+/** Gruppiert Feuerwehren nach Abschnitt für das "Heimat-Feuerwehr"-Select unten - dieselbe
+ * Begründung wie OrgSelect (admin/heimatfeuerwehr/org-select.tsx)/groupByAbschnitt
+ * (admin/benutzer/user-management-section.tsx): mit bis zu 124 Feuerwehren (Bezirksadmin) ist eine
+ * flache Liste ohne Gruppierung unbrauchbar. Nur gruppieren, wenn wenigstens ein Eintrag tatsächlich
+ * einen abschnittName mitgibt - ein Feuerwehr-Admin mit 1-2 Optionen sieht weiterhin die schlichte
+ * flache Liste.
+ */
+function groupOrganizationsByAbschnitt(organizations: OrganizationOption[]): Record<string, OrganizationOption[]> {
+  const groups: Record<string, OrganizationOption[]> = {};
+  for (const org of organizations) {
+    const key = org.abschnittName ?? 'Ohne Abschnitt';
+    (groups[key] ??= []).push(org);
+  }
+  return groups;
 }
 
 interface DienstgradOption {
@@ -456,11 +481,24 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {organizations.map((org) => (
-                                <SelectItem key={org.id} value={org.id}>
-                                  {org.name}
-                                </SelectItem>
-                              ))}
+                              {organizations.some((org) => Boolean(org.abschnittName))
+                                ? Object.entries(groupOrganizationsByAbschnitt(organizations)).map(
+                                    ([abschnittName, orgs]) => (
+                                      <SelectGroup key={abschnittName}>
+                                        <SelectLabel>{abschnittName}</SelectLabel>
+                                        {orgs.map((org) => (
+                                          <SelectItem key={org.id} value={org.id}>
+                                            {org.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    ),
+                                  )
+                                : organizations.map((org) => (
+                                    <SelectItem key={org.id} value={org.id}>
+                                      {org.name}
+                                    </SelectItem>
+                                  ))}
                             </SelectContent>
                           </Select>
                         )}

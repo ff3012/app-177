@@ -49,6 +49,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     prisma.organization.findMany({
       where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
       orderBy: { name: 'asc' },
+      include: { parent: { select: { shortName: true, name: true } } },
     }),
     prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
   ]);
@@ -86,7 +87,11 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   return (
     <UserManagementSection
       users={rows}
-      organizations={organizations.map((org) => ({ id: org.id, name: org.shortName ?? org.name }))}
+      organizations={organizations.map((org) => ({
+        id: org.id,
+        name: org.shortName ?? org.name,
+        abschnittName: org.parent?.shortName ?? org.parent?.name,
+      }))}
       dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
       initialQuery={params.q ?? ''}
       initialFeuerwehr={params.feuerwehr ?? 'ALLE'}
