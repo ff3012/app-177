@@ -153,7 +153,33 @@ model Organization {
   dashboardTokens   DashboardToken[]
   facebookPostCache FacebookPostCache?
 
+  // Nur für type == ABSCHNITTSKOMMANDO gesetzt: der Bezirk, dem dieser Abschnitt angehört.
+  districtId String?
+  district   District? @relation(fields: [districtId], references: [id])
+
+  // Nur für type == FEUERWEHR gesetzt: die Organization-Zeile (type == ABSCHNITTSKOMMANDO) ihres
+  // Abschnitts. Selbstreferenzierend statt einer eigenen Section-Tabelle - Abschnitt ist bereits
+  // heute eine Organization-Zeile, keine zweite Tabelle für dasselbe Konzept.
+  parentId String?
+  parent   Organization?  @relation("OrgHierarchy", fields: [parentId], references: [id])
+  children Organization[] @relation("OrgHierarchy")
+
+  droneGroups DroneGroup[]
+
+  @@index([districtId])
+  @@index([parentId])
   @@index([type])
+}
+
+// Bezirk (z. B. "17 St. Pölten") - oberste Ebene der Hierarchie Bezirk -> Abschnitt -> Feuerwehr.
+// Eigenes Modell statt einer Konstante, um künftig einen zweiten Bezirk ohne Schemaänderung
+// aufnehmen zu können (siehe docs/superpowers/specs/2026-08-09-bezirk-abschnitt-drohnengruppen-design.md).
+model District {
+  id     String @id @default(cuid())
+  number String @unique // "17"
+  name   String // "St. Pölten"
+
+  organizations Organization[]
 }
 
 model User {
@@ -190,6 +216,11 @@ model User {
   // Bestandsbenutzer noch keinen zugewiesen haben.
   dienstgradId String?
   dienstgrad   Dienstgrad? @relation(fields: [dienstgradId], references: [id])
+
+  // Bezirksweites, von jeder Organisation unabhängiges Admin-Recht (siehe permissions.ts) - ersetzt
+  // die bisherige globale Wirkung von isSiteAdmin, die mit mehreren Abschnitten nicht mehr korrekt
+  // wäre. Default false: niemand ist automatisch Bezirksadmin, siehe Task 3 für den Bootstrap-Admin.
+  isBezirksAdmin Boolean @default(false)
 
   homeOrganization       Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
   memberships            Membership[]
@@ -294,7 +325,33 @@ model DrohnengruppeMembership {
   role    DroneRole @default(PILOT)
   addedAt DateTime  @default(now())
 
+  droneGroupId String?
+  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([droneGroupId])
+}
+
+// Eine von mehreren eigenständigen Drohnengruppen (bisher: eine einzige, flache Gruppe). Jede
+// Gruppe ist an einem Abschnitt (Organization.type == ABSCHNITTSKOMMANDO) verankert.
+model DroneGroup {
+  id             String       @id @default(cuid())
+  name           String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Ersetzen die bisherigen AppSettings.droneFlightNotificationEmail/droneQuickRegisterToken
+  // (Singleton-Felder) - jetzt pro Gruppe statt app-weit.
+  flightNotificationEmail String?
+  qrToken                 String?  @unique
+
+  memberships DrohnengruppeMembership[]
+  documents   DroneDocument[]
+  drones      Drone[]
+  events      Event[]
+
+  @@index([organizationId])
 }
 
 // ---------- Module 1: Terminplanung ----------
@@ -334,6 +391,11 @@ model Event {
   // spätere Updates/Löschungen als PATCH/DELETE statt eines erneuten POST.
   googleEventId String?
 
+  // Nur für category == DROHNENGRUPPE gesetzt: welche Drohnengruppe dieser Termin betrifft -
+  // schränkt die Sichtbarkeit auf deren Mitglieder ein (siehe Task 8).
+  droneGroupId String?
+  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+
   organization Organization   @relation(fields: [organizationId], references: [id])
   createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])
   zusagen      TerminZusage[]
@@ -369,7 +431,12 @@ model Drone {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
+  droneGroupId String?
+  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+
   flights DroneFlight[]
+
+  @@index([droneGroupId])
 }
 
 /**
@@ -420,8 +487,12 @@ model DroneDocument {
   uploadedById String
   createdAt    DateTime @default(now())
 
+  droneGroupId String?
+  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+
   uploadedBy User @relation("DroneDocumentUploadedBy", fields: [uploadedById], references: [id])
 
+  @@index([droneGroupId])
   @@index([createdAt])
 }
 
