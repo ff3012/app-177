@@ -1,8 +1,12 @@
 import type { SessionUser } from '@/types/next-auth';
 
-/** Site admin = Admin-Mitgliedschaft beim Abschnittsfeuerwehrkommando. */
-export function isSiteAdmin(user: SessionUser): boolean {
-  return user.isAbschnittsAdmin;
+export function isBezirksAdmin(user: SessionUser): boolean {
+  return user.isBezirksAdmin;
+}
+
+/** Admin des angegebenen Abschnitts (Organization.id vom Typ ABSCHNITTSKOMMANDO), oder Bezirksadmin. */
+export function canManageAbschnittFor(user: SessionUser, abschnittOrganizationId: string): boolean {
+  return isBezirksAdmin(user) || user.abschnittAdminOrgIds.includes(abschnittOrganizationId);
 }
 
 /**
@@ -17,7 +21,7 @@ export function canManageEventsFor(user: SessionUser, organizationId: string): b
 
 /** Darf einen Abschnitt-weiten (isSectionWide) Termin anlegen. */
 export function canCreateSectionWideEvent(user: SessionUser): boolean {
-  return user.isAbschnittsAdmin;
+  return user.abschnittAdminOrgIds.length > 0;
 }
 
 /** Admin Drohnengruppe: eigenes Recht innerhalb der Drohnengruppe, unabhängig vom Abschnittskommando-Admin. */
@@ -54,13 +58,30 @@ export function canManageFlight(user: SessionUser, flight: { registeredById: str
 }
 
 /**
+ * Verwaltung einer Drohnengruppe (QR-Token/Unterlagen/Drohnen/Mitgliederliste dieser Gruppe):
+ * Bezirksadmin, Admin des Abschnitts, an dem die Gruppe verankert ist, oder Admin Drohnengruppe der
+ * eigenen Gruppe. Eigene Funktion statt canManageHeimatfeuerwehrFor wiederzuverwenden, da DroneGroup
+ * keine Organization ist.
+ */
+export function canManageDroneGroupFor(
+  user: SessionUser,
+  droneGroup: { id: string; organizationId: string },
+): boolean {
+  return (
+    isBezirksAdmin(user) ||
+    canManageAbschnittFor(user, droneGroup.organizationId) ||
+    (user.droneGroupRole === 'ADMIN' && user.droneGroupId === droneGroup.id)
+  );
+}
+
+/**
  * News/Push-Modul: bewusst auf Abschnittskommando-Admin beschränkt (erste Version) statt
  * feuerwehrAdminOrgIds — eine Push-Nachricht geht direkt an Mobilgeräte, ohne die redaktionelle
  * Kontrolle, die z. B. ein Kalendertermin durch bloße Sichtbarkeit hat. Kann später auf
  * FF-Admins für ihre eigene Feuerwehr ausgeweitet werden, wenn das gewünscht ist.
  */
 export function canManageNews(user: SessionUser): boolean {
-  return isSiteAdmin(user);
+  return isBezirksAdmin(user);
 }
 
 /**
@@ -85,13 +106,13 @@ export function canViewEvent(
  * Terminen bewusst nicht, siehe Kommentar über canManageEventsFor).
  */
 export function canManageHeimatfeuerwehrFor(user: SessionUser, organizationId: string): boolean {
-  return isSiteAdmin(user) || canManageEventsFor(user, organizationId);
+  return isBezirksAdmin(user) || canManageEventsFor(user, organizationId);
 }
 
 /** Sichtbarkeit des Verwaltungsmenüs "Heimatfeuerwehr" - Site-Admin ODER Admin von mindestens
  * einer Feuerwehr (auch ohne Abschnittskommando-Admin zu sein). */
 export function canAccessHeimatfeuerwehrAdmin(user: SessionUser): boolean {
-  return isSiteAdmin(user) || user.feuerwehrAdminOrgIds.length > 0;
+  return isBezirksAdmin(user) || user.feuerwehrAdminOrgIds.length > 0 || user.abschnittAdminOrgIds.length > 0;
 }
 
 /**
