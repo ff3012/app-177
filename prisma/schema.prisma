@@ -134,6 +134,16 @@ model Organization {
   // Feuerwehr statt global. Leer = Reservierungen werden ohne Freigabe sofort genehmigt.
   fahrzeugReservierungEmail String?
 
+  // Funktionsschalter je Heimatfeuerwehr (Funktionsschalter-Brief.md) - Abschalten blendet nur aus,
+  // löscht nichts; Reaktivierung zeigt alle Daten unverändert wieder. featureAtemschutz defaultet auf
+  // true (Bestandswehren verlieren nichts durch die Migration), featureFacebook auf false - ohne Token
+  // gäbe es ohnehin nichts anzuzeigen (die Migration setzt es zusätzlich per Backfill auf true für jede
+  // Organisation, die bereits ein vollständiges Facebook-Zugangstoken hinterlegt hat).
+  featureAtemschutz     Boolean   @default(true)
+  featureFacebook       Boolean   @default(false)
+  featuresUpdatedAt     DateTime?
+  featuresUpdatedByName String?
+
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
   events       Event[]
