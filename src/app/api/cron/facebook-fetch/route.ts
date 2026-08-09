@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   }
 
   const organizations = await prisma.organization.findMany({
-    where: { type: 'FEUERWEHR', facebookPageId: { not: null } },
+    where: { type: 'FEUERWEHR', facebookPageId: { not: null }, featureFacebook: true },
     select: { id: true },
   });
 
