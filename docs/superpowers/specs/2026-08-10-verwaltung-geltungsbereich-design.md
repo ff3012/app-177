@@ -90,11 +90,19 @@ keine neue UI-Bibliothek nötig.
 
 **Geschlossen** (58px, weiß, Hairline unten): aktuelle Ebene 15px/600 fett, darunter 13px
 `ink-faint`-Kontextzeile:
-- Bezirk: "`{N}` Abschnitte · `{M}` Feuerwehren" (live gezählt)
-- Abschnitt: "`{N}` Feuerwehren · `{M}` Mitglieder" (Mitglieder = aktive `User` mit
-  `homeOrganizationId` in diesem Abschnitt oder seinen Feuerwehren)
-- Feuerwehr: "`{N}` Mitglieder" (im Brief für diese Ebene nicht explizit vorgegeben - eigene,
-  zum Muster passende Ergänzung)
+- Bezirk: "`{N}` Abschnitte · `{M}` Feuerwehren"
+- Abschnitt: "`{N}` Feuerwehren"
+- Feuerwehr: keine Kontextzeile
+
+**Bewusste Vereinfachung gegenüber dem Brief**: der Brief zeigt für Abschnitt zusätzlich eine
+Mitgliederzahl ("12 Feuerwehren · 486 Mitglieder"). Diese Zahl hängt vom gerade ausgewählten
+Geltungsbereich ab, der - siehe §2 oben - nur clientseitig (`useSearchParams()`) bekannt ist, nicht
+in der Server Component, die `getReachableScopes` aufruft. Sie live nachzuladen bräuchte entweder
+einen zusätzlichen Client-seitigen Request oder eine Mitgliederzahl für jede der ~132 Organisationen
+im Voraus (unnötige Query-Last für Zahlen, die nie angezeigt werden). Für diese schmal geschnittene
+Phase reicht die Kontextzeile mit den bereits geladenen Zählwerten aus `reachable` (Abschnitte/
+Feuerwehren-Anzahl); Mitgliederzahlen sind ohnehin nur bei tatsächlicher Listen-Filterung (Phase 3/4)
+wirklich aussagekräftig und werden dort ergänzt.
 
 **Offen** (Popover 268px, Schatten wie im Brief): Suchfeld oben (filtert alle drei Ebenen
 gleichzeitig per Client-seitigem Substring-Match, kein Server-Roundtrip - die Liste ist bereits
