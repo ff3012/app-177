@@ -10,9 +10,7 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -288,7 +286,7 @@ export function UserManagementSection({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const abschnittOrgIds = abschnitt === 'ALLE' ? null : new Set(feuerwehrOptions.map((o) => o.id));
+    const abschnittOrgIds = abschnitt === 'ALLE' ? null : new Set([abschnitt, ...feuerwehrOptions.map((o) => o.id)]);
     return users.filter((u) => {
       if (abschnittOrgIds && !abschnittOrgIds.has(u.homeOrganizationId)) return false;
       if (feuerwehr !== 'ALLE' && u.homeOrganizationId !== feuerwehr) return false;
