@@ -28,6 +28,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { UserFormSheet, type UserSheetTarget } from '@/components/admin/user-form-sheet';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
+import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
+import type { AdminScope } from '@/lib/admin/scope';
 import type { AdminNavItem } from '@/lib/admin/nav-items';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
@@ -198,6 +200,7 @@ export function UserManagementSection({
   initialEditUserId,
   initialCreateOpen,
   adminNavItems,
+  reachableScopes,
   isFullAdmin,
   viewerIsBezirksAdmin,
   viewerIsBezirksDrohnenAdmin,
@@ -216,6 +219,7 @@ export function UserManagementSection({
   initialEditUserId?: string;
   initialCreateOpen: boolean;
   adminNavItems: AdminNavItem[];
+  reachableScopes: AdminScope[];
   isFullAdmin: boolean;
   viewerIsBezirksAdmin: boolean;
   viewerIsBezirksDrohnenAdmin: boolean;
@@ -533,6 +537,9 @@ export function UserManagementSection({
         </div>
       </div>
 
+      <div className="md:hidden">
+        <GeltungsbereichSelector reachable={reachableScopes} />
+      </div>
       <AdminMobileTabs items={adminNavItems} />
 
       {/* Verwaltung-Brief.md 5: zwei Kennzahlkarten nebeneinander über der mobilen Kartenliste. */}

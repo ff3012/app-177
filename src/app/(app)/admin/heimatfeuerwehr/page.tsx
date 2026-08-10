@@ -3,6 +3,8 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canAccessHeimatfeuerwehrAdmin, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
+import { getReachableScopes } from '@/lib/admin/scope';
+import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
 import { cancelVehicleBooking } from '@/app/(app)/meine-feuerwehr/actions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import {
@@ -100,6 +102,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   searchParams: Promise<{ org?: string }>;
 }) {
   const user = await requireUser();
+  const reachableScopes = await getReachableScopes(user);
   if (!canAccessHeimatfeuerwehrAdmin(user)) {
     notFound();
   }
@@ -199,6 +202,9 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold text-ink">Heimatfeuerwehr</h1>
 
+      <div className="md:hidden">
+        <GeltungsbereichSelector reachable={reachableScopes} />
+      </div>
       <AdminMobileTabs items={getAdminNavItems(user)} />
 
       {allowedOrgs.length > 1 && (

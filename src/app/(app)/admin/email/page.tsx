@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
+import { getReachableScopes } from '@/lib/admin/scope';
+import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
 import { getSystemCheckNotificationEmail } from '@/lib/settings';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { TestMailjetForm } from './test-mailjet-form';
@@ -12,6 +14,7 @@ import { SystemCheckEmailForm } from './system-check-email-form';
 // CLAUDE.md).
 export default async function EmailVerwaltungPage() {
   const user = await requireUser();
+  const reachableScopes = await getReachableScopes(user);
   if (!isBezirksAdmin(user)) {
     notFound();
   }
@@ -22,6 +25,9 @@ export default async function EmailVerwaltungPage() {
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold text-ink">E-Mail</h1>
 
+      <div className="md:hidden">
+        <GeltungsbereichSelector reachable={reachableScopes} />
+      </div>
       <AdminMobileTabs items={getAdminNavItems(user)} />
 
       {/* Einspaltiges Formular, max. 640px (Verwaltung-Brief.md) - anders als die volle Breite der

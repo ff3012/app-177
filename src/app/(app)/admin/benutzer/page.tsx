@@ -4,6 +4,7 @@ import { MembershipRole } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
 import { canAccessUserManagementAdmin, canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
+import { getReachableScopes } from '@/lib/admin/scope';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
 // admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab; diese Seite
@@ -34,6 +35,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   }
   const fullAdmin = isBezirksAdmin(currentUser);
   const viewerIsBezirksDrohnenAdmin = currentUser.isBezirksDrohnenAdmin;
+  const reachableScopes = await getReachableScopes(currentUser);
 
   const [users, organizations, dienstgrade, allDroneGroups] = await Promise.all([
     prisma.user.findMany({
@@ -119,6 +121,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       initialEditUserId={params.edit}
       initialCreateOpen={params.new === '1'}
       adminNavItems={getAdminNavItems(currentUser)}
+      reachableScopes={reachableScopes}
       isFullAdmin={fullAdmin}
       viewerIsBezirksAdmin={fullAdmin}
       viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}

@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
+import { getReachableScopes } from '@/lib/admin/scope';
+import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
 import { listDrohnengruppeMembers } from '@/lib/drone/members';
 import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 import { GroupSelect } from './group-select';
@@ -37,6 +39,7 @@ export default async function DrohnenVerwaltungPage({
   searchParams: Promise<{ group?: string }>;
 }) {
   const user = await requireUser();
+  const reachableScopes = await getReachableScopes(user);
   const { group } = await searchParams;
 
   const allGroups = await prisma.droneGroup.findMany({ orderBy: { name: 'asc' } });
@@ -80,6 +83,9 @@ export default async function DrohnenVerwaltungPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
 
+      <div className="md:hidden">
+        <GeltungsbereichSelector reachable={reachableScopes} />
+      </div>
       <AdminMobileTabs items={getAdminNavItems(user)} />
 
       {allowedGroups.length > 1 && (
