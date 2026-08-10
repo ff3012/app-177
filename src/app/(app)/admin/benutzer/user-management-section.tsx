@@ -60,6 +60,8 @@ export interface UserRow {
   passwordChangedAt: string | null;
   dienstgradId: string;
   dienstgrad: string;
+  isBezirksAdmin: boolean;
+  isBezirksDrohnenAdmin: boolean;
 }
 
 type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
@@ -197,6 +199,8 @@ export function UserManagementSection({
   initialCreateOpen,
   adminNavItems,
   isFullAdmin,
+  viewerIsBezirksAdmin,
+  viewerIsBezirksDrohnenAdmin,
 }: {
   users: UserRow[];
   organizations: Organization[];
@@ -213,6 +217,8 @@ export function UserManagementSection({
   initialCreateOpen: boolean;
   adminNavItems: AdminNavItem[];
   isFullAdmin: boolean;
+  viewerIsBezirksAdmin: boolean;
+  viewerIsBezirksDrohnenAdmin: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -486,6 +492,8 @@ export function UserManagementSection({
         lastLoginAt: sheetTargetRow.lastLoginAt,
         passwordChangedAt: sheetTargetRow.passwordChangedAt,
         dienstgradId: sheetTargetRow.dienstgradId,
+        isBezirksAdmin: sheetTargetRow.isBezirksAdmin,
+        isBezirksDrohnenAdmin: sheetTargetRow.isBezirksDrohnenAdmin,
       }
     : undefined;
 
@@ -880,6 +888,8 @@ export function UserManagementSection({
         organizations={organizations}
         dienstgrade={dienstgrade}
         droneGroups={droneGroups}
+        viewerIsBezirksAdmin={viewerIsBezirksAdmin}
+        viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
         target={sheetTarget}
         onSaved={() => {
           setSheetState(null);

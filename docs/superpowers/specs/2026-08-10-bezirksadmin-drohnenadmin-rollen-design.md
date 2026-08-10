@@ -57,6 +57,11 @@ export function canGrantBezirksDrohnenAdmin(currentUser: SessionUser): boolean {
 }
 ```
 
+Hinweis: ein reiner Bezirks-Drohnenadmin ohne eigene Feuerwehr-/Abschnitts-Admin-Mitgliedschaft erreicht die
+Benutzerverwaltung selbst gar nicht (siehe `canAccessUserManagementAdmin`/`canManageUsersFor`) - die weiter
+gefasste Vergabe oben wirkt also in der Praxis nur für jemanden, der zugleich Bezirks-Drohnenadmin UND
+Feuerwehr-/Abschnitts-Admin ist.
+
 `SessionUser` bekommt ein neues Feld `isBezirksDrohnenAdmin: boolean`, direkt aus `user.isBezirksDrohnenAdmin`
 in `build-session-user.ts` übernommen (kein abgeleiteter Wert, kein DB-Join nötig).
 
@@ -86,7 +91,10 @@ dargestellt, mit Tooltip "Nur Bezirksadmins können diesen Status vergeben").
 
 Direkt unter der bestehenden Drohnengruppe-Segmented-Control (Kein/Mitglied/Admin), über der Gruppe-Auswahl,
 ein neuer Ein/Aus-Schalter "Bezirks Drohnenadmin" — sichtbar nur wenn der betrachtende Admin
-`isBezirksAdmin` ODER `isBezirksDrohnenAdmin` ist; interaktiv nur unter denselben Bedingungen wie 4.1.
+`isBezirksAdmin` ODER `isBezirksDrohnenAdmin` ist; anders als der Bezirksadmin-Schalter in 4.1 ist dieser
+Schalter für jeden Betrachter interaktiv, der die Sektion überhaupt sieht (also sowohl für Bezirksadmins als
+auch für Bezirks-Drohnenadmins) — kein zusätzliches Disabled/Tooltip-Verhalten, konsistent mit
+`canGrantBezirksDrohnenAdmin`s bewusst weiter gefasster Logik in Abschnitt 3.
 
 **Verknüpfung mit der Segmented Control** (Client-seitig in `UserFormSheet`):
 - Wird der Schalter aktiviert, springt `droneRole` sofort auf `'ADMIN'`.

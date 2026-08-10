@@ -94,9 +94,25 @@ export function canManageDroneGroupFor(
 ): boolean {
   return (
     isBezirksAdmin(user) ||
+    user.isBezirksDrohnenAdmin ||
     canManageAbschnittFor(user, droneGroup.organizationId) ||
     (user.droneGroupRole === 'ADMIN' && user.droneGroupId === droneGroup.id)
   );
+}
+
+/** Wer darf isBezirksAdmin bei einem ANDEREN Benutzer setzen/entziehen - nur bestehende Bezirksadmins. */
+export function canGrantBezirksAdmin(currentUser: SessionUser): boolean {
+  return isBezirksAdmin(currentUser);
+}
+
+/** Wer darf isBezirksDrohnenAdmin bei einem ANDEREN Benutzer setzen/entziehen - ein Bezirksadmin ODER
+ * ein bestehender Bezirks-Drohnenadmin (bewusst weiter gefasst als canGrantBezirksAdmin, siehe Design-Spec).
+ * Hinweis: ein reiner Bezirks-Drohnenadmin (ohne eigene Feuerwehr-/Abschnitts-Admin-Mitgliedschaft) erreicht
+ * die Benutzerverwaltung selbst gar nicht (siehe canAccessUserManagementAdmin/canManageUsersFor) - die
+ * weitere Vergabe wirkt also nur für jemanden, der ZUGLEICH Bezirks-Drohnenadmin UND Feuerwehr-/
+ * Abschnitts-Admin ist. */
+export function canGrantBezirksDrohnenAdmin(currentUser: SessionUser): boolean {
+  return isBezirksAdmin(currentUser) || currentUser.isBezirksDrohnenAdmin;
 }
 
 /**

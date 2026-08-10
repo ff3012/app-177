@@ -33,6 +33,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     notFound();
   }
   const fullAdmin = isBezirksAdmin(currentUser);
+  const viewerIsBezirksDrohnenAdmin = currentUser.isBezirksDrohnenAdmin;
 
   const [users, organizations, dienstgrade, allDroneGroups] = await Promise.all([
     prisma.user.findMany({
@@ -93,6 +94,8 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       passwordChangedAt: u.passwordChangedAt ? u.passwordChangedAt.toISOString() : null,
       dienstgradId: u.dienstgradId ?? '',
       dienstgrad: u.dienstgrad?.kurzform ?? '',
+      isBezirksAdmin: u.isBezirksAdmin,
+      isBezirksDrohnenAdmin: u.isBezirksDrohnenAdmin,
     };
   });
 
@@ -117,6 +120,8 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       initialCreateOpen={params.new === '1'}
       adminNavItems={getAdminNavItems(currentUser)}
       isFullAdmin={fullAdmin}
+      viewerIsBezirksAdmin={fullAdmin}
+      viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
     />
   );
 }
