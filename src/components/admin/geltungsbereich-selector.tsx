@@ -1,0 +1,182 @@
+'use client';
+
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { resolveAdminScope, type AdminScope } from '@/lib/admin/scope';
+
+const STORAGE_KEY = 'admin-scope';
+const BEZIRK_LABEL = 'Bezirk 17 St. Pölten';
+
+function scopeToParams(scope: AdminScope): { ebene: string; org?: string } {
+  if (scope.level === 'BEZIRK') return { ebene: 'bezirk' };
+  return { ebene: scope.level === 'ABSCHNITT' ? 'abschnitt' : 'feuerwehr', org: scope.organizationId };
+}
+
+function scopeLabel(scope: AdminScope): string {
+  return scope.level === 'BEZIRK' ? BEZIRK_LABEL : scope.name;
+}
+
+function scopeContextLine(scope: AdminScope, reachable: AdminScope[]): string {
+  if (scope.level === 'BEZIRK') {
+    const abschnitte = reachable.filter((s) => s.level === 'ABSCHNITT').length;
+    const feuerwehren = reachable.filter((s) => s.level === 'FEUERWEHR').length;
+    return `${abschnitte} Abschnitte · ${feuerwehren} Feuerwehren`;
+  }
+  if (scope.level === 'ABSCHNITT') {
+    const feuerwehren = reachable.filter(
+      (s) => s.level === 'FEUERWEHR' && s.abschnittOrganizationId === scope.organizationId,
+    ).length;
+    return `${feuerwehren} Feuerwehr${feuerwehren === 1 ? '' : 'en'}`;
+  }
+  return '';
+}
+
+function isSameScope(a: AdminScope, b: AdminScope): boolean {
+  if (a.level !== b.level) return false;
+  if (a.level === 'BEZIRK') return true;
+  return (a as { organizationId: string }).organizationId === (b as { organizationId: string }).organizationId;
+}
+
+function GeltungsbereichSelectorInner({ reachable }: { reachable: AdminScope[] }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const rawEbene = searchParams.get('ebene') ?? undefined;
+  const rawOrg = searchParams.get('org') ?? undefined;
+  const { scope: current } = useMemo(
+    () => resolveAdminScope(reachable, rawEbene, rawOrg),
+    [reachable, rawEbene, rawOrg],
+  );
+
+  function navigateTo(scope: AdminScope) {
+    const params = new URLSearchParams(searchParams.toString());
+    const next = scopeToParams(scope);
+    params.set('ebene', next.ebene);
+    if (next.org) {
+      params.set('org', next.org);
+    } else {
+      params.delete('org');
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    router.push(`${pathname}?${params.toString()}`);
+    setOpen(false);
+  }
+
+  // Erststart ohne Parameter: zuletzt gewählte Ebene aus localStorage übernehmen, falls noch
+  // erreichbar - stellt eine kanonische, teilbare URL her, statt den impliziten Fallback (erster
+  // Eintrag von resolveAdminScope) nur unsichtbar im Hintergrund zu verwenden.
+  useEffect(() => {
+    if (rawEbene) return;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const stored = JSON.parse(raw) as { ebene?: string; org?: string };
+      const resolved = resolveAdminScope(reachable, stored.ebene, stored.org);
+      if (!resolved.requestedButUnreachable) {
+        navigateTo(resolved.scope);
+      }
+    } catch {
+      // Ungültiger localStorage-Inhalt - der bestehende Fallback bleibt einfach bestehen.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (reachable.length <= 1) {
+    return null;
+  }
+
+  const bezirk = reachable.find((s) => s.level === 'BEZIRK');
+  const abschnitte = reachable.filter((s): s is Extract<AdminScope, { level: 'ABSCHNITT' }> => s.level === 'ABSCHNITT');
+  const feuerwehren = reachable.filter((s): s is Extract<AdminScope, { level: 'FEUERWEHR' }> => s.level === 'FEUERWEHR');
+
+  const query = search.trim().toLowerCase();
+  const bezirkMatches = Boolean(bezirk) && BEZIRK_LABEL.toLowerCase().includes(query);
+  const filteredAbschnitte = abschnitte.filter((s) => s.name.toLowerCase().includes(query));
+  const filteredFeuerwehren = feuerwehren.filter((s) => s.name.toLowerCase().includes(query));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-[58px] w-full flex-col items-start justify-center border-b border-line bg-surface px-3.5 text-left hover:bg-surface-sunken"
+        >
+          <span className="flex w-full items-center justify-between gap-2">
+            <span className="text-[15px] font-semibold text-ink">{scopeLabel(current)}</span>
+            <span aria-hidden className="text-ink-faint">
+              {open ? '▴' : '▾'}
+            </span>
+          </span>
+          <span className="text-[13px] text-ink-faint">{scopeContextLine(current, reachable)}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[268px] p-0 shadow-[0_10px_28px_rgba(28,28,30,.14)]">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Suchen …" value={search} onValueChange={setSearch} />
+          <CommandList>
+            <CommandEmpty className="py-4 text-sm text-ink-faint">Keine Treffer.</CommandEmpty>
+            {bezirk && bezirkMatches && (
+              <CommandGroup>
+                <CommandItem
+                  value="__bezirk__"
+                  onSelect={() => navigateTo(bezirk)}
+                  className={isSameScope(current, bezirk) ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}
+                >
+                  {BEZIRK_LABEL}
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {filteredAbschnitte.length > 0 && (
+              <CommandGroup heading="Abschnitte">
+                {filteredAbschnitte.map((scope) => (
+                  <CommandItem
+                    key={scope.organizationId}
+                    value={scope.organizationId}
+                    onSelect={() => navigateTo(scope)}
+                    className={`pl-6 ${isSameScope(current, scope) ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}`}
+                  >
+                    {scope.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {filteredFeuerwehren.length > 0 && (
+              <CommandGroup heading="Feuerwehren">
+                {filteredFeuerwehren.map((scope) => (
+                  <CommandItem
+                    key={scope.organizationId}
+                    value={scope.organizationId}
+                    onSelect={() => navigateTo(scope)}
+                    className={`pl-6 ${isSameScope(current, scope) ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}`}
+                  >
+                    {scope.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * useSearchParams() braucht laut Next.js einen Suspense-Grenzwert. Jede andere URL-Sync-Komponente
+ * in dieser Codebase (z. B. user-management-section.tsx) bekommt ihren Anfangswert stattdessen als
+ * Prop von einer page.tsx, die searchParams selbst liest - das geht hier nicht, da AdminSidebar vom
+ * Layout gerendert wird, das gar kein searchParams erhält (siehe Design-Spec §2). Der
+ * Suspense-Wrapper lebt hier, nicht bei jedem Aufrufer, damit niemand vergisst, ihn zu setzen.
+ */
+export function GeltungsbereichSelector({ reachable }: { reachable: AdminScope[] }) {
+  return (
+    <Suspense fallback={null}>
+      <GeltungsbereichSelectorInner reachable={reachable} />
+    </Suspense>
+  );
+}
