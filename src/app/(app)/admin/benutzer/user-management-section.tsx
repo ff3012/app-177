@@ -29,6 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { UserFormSheet, type UserSheetTarget } from '@/components/admin/user-form-sheet';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
+import { OrgSearchSelect } from '@/components/admin/org-search-select';
 import type { AdminScope } from '@/lib/admin/scope';
 import type { AdminNavItem } from '@/lib/admin/nav-items';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
@@ -73,6 +74,7 @@ interface Organization {
   id: string;
   name: string;
   abschnittName?: string;
+  abschnittId?: string;
 }
 
 interface DienstgradOption {
@@ -189,6 +191,8 @@ export function UserManagementSection({
   initialCreateOpen,
   adminNavItems,
   reachableScopes,
+  initialAbschnitt,
+  abschnitte,
   isFullAdmin,
   viewerIsBezirksAdmin,
   viewerIsBezirksDrohnenAdmin,
@@ -208,6 +212,8 @@ export function UserManagementSection({
   initialCreateOpen: boolean;
   adminNavItems: AdminNavItem[];
   reachableScopes: AdminScope[];
+  initialAbschnitt: string;
+  abschnitte: { id: string; name: string }[];
   isFullAdmin: boolean;
   viewerIsBezirksAdmin: boolean;
   viewerIsBezirksDrohnenAdmin: boolean;
@@ -229,6 +235,7 @@ export function UserManagementSection({
   const [queryInput, setQueryInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
   const [feuerwehr, setFeuerwehr] = useState(initialFeuerwehr || 'ALLE');
+  const [abschnitt, setAbschnitt] = useState(initialAbschnitt || 'ALLE');
   const [rolle, setRolle] = useState<SimpleFilter>((initialRolle as SimpleFilter) || 'ALLE');
   const [status, setStatus] = useState<StatusFilter>((initialStatus as StatusFilter) || 'ALLE');
   const [sortKey, setSortKey] = useState<SortKey>(
@@ -238,6 +245,16 @@ export function UserManagementSection({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleAbschnittChange(value: string) {
+    setAbschnitt(value);
+    setFeuerwehr('ALLE');
+  }
+
+  const feuerwehrOptions = useMemo(
+    () => (abschnitt === 'ALLE' ? organizations : organizations.filter((org) => org.abschnittId === abschnitt)),
+    [organizations, abschnitt],
+  );
 
   // Suchfeld 300ms debounced (Verwaltung-Brief.md 3.2), Rest der Filter/Sortierung wirkt sofort.
   useEffect(() => {
@@ -258,6 +275,7 @@ export function UserManagementSection({
       if (value) params.set(key, value);
     }
     if (query) params.set('q', query);
+    if (abschnitt !== 'ALLE') params.set('abschnitt', abschnitt);
     if (feuerwehr !== 'ALLE') params.set('feuerwehr', feuerwehr);
     if (rolle !== 'ALLE') params.set('rolle', rolle);
     if (status !== 'ALLE') params.set('status', status);
@@ -266,11 +284,13 @@ export function UserManagementSection({
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, feuerwehr, rolle, status, sortKey, sortDir, searchParams]);
+  }, [query, abschnitt, feuerwehr, rolle, status, sortKey, sortDir, searchParams]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const abschnittOrgIds = abschnitt === 'ALLE' ? null : new Set(feuerwehrOptions.map((o) => o.id));
     return users.filter((u) => {
+      if (abschnittOrgIds && !abschnittOrgIds.has(u.homeOrganizationId)) return false;
       if (feuerwehr !== 'ALLE' && u.homeOrganizationId !== feuerwehr) return false;
       if (rolle === 'JA' && !u.isAdmin) return false;
       if (rolle === 'NEIN' && u.isAdmin) return false;
@@ -280,7 +300,7 @@ export function UserManagementSection({
         field.toLowerCase().includes(q),
       );
     });
-  }, [users, query, feuerwehr, rolle, status]);
+  }, [users, query, abschnitt, feuerwehrOptions, feuerwehr, rolle, status]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -323,7 +343,9 @@ export function UserManagementSection({
     });
   }
 
-  const activeFilterCount = [feuerwehr !== 'ALLE', rolle !== 'ALLE', status !== 'ALLE'].filter(Boolean).length;
+  const activeFilterCount = [abschnitt !== 'ALLE', feuerwehr !== 'ALLE', rolle !== 'ALLE', status !== 'ALLE'].filter(
+    Boolean,
+  ).length;
 
   // Verwaltung-Brief.md 5: Filter auf Mobile hinter einem Symbol in der Kopfzeile statt inline -
   // registriert über denselben MobileHeaderContext-Actionslot, den Kalender für sein Filter-Icon
@@ -349,6 +371,7 @@ export function UserManagementSection({
   }, [activeFilterCount]);
 
   function resetFilters() {
+    setAbschnitt('ALLE');
     setFeuerwehr('ALLE');
     setRolle('ALLE');
     setStatus('ALLE');
@@ -391,24 +414,23 @@ export function UserManagementSection({
   // unverändert über denselben Closure-Zustand (feuerwehr/rolle/status/...), keine doppelte Logik.
   const filterControls = (
     <>
-      <Select value={feuerwehr} onValueChange={setFeuerwehr}>
-        <SelectTrigger className="w-full md:w-auto">
-          <SelectValue placeholder="Feuerwehr" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="ALLE">Alle Feuerwehren</SelectItem>
-          {Object.entries(groupByAbschnitt(organizations)).map(([abschnittName, orgs]) => (
-            <SelectGroup key={abschnittName}>
-              <SelectLabel>{abschnittName}</SelectLabel>
-              {orgs.map((org) => (
-                <SelectItem key={org.id} value={org.id}>
-                  {org.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+      {isFullAdmin && (
+        <OrgSearchSelect
+          options={abschnitte}
+          value={abschnitt}
+          onChange={handleAbschnittChange}
+          placeholder="Abschnitt"
+          allLabel="Alle Abschnitte"
+        />
+      )}
+
+      <OrgSearchSelect
+        options={feuerwehrOptions}
+        value={feuerwehr}
+        onChange={setFeuerwehr}
+        placeholder="Feuerwehr"
+        allLabel="Alle Feuerwehren"
+      />
 
       <Select value={rolle} onValueChange={(value) => setRolle(value as SimpleFilter)}>
         <SelectTrigger className="w-full md:w-auto">
@@ -434,6 +456,15 @@ export function UserManagementSection({
       </Select>
 
       <div className="flex flex-wrap items-center gap-2.5">
+        {abschnitt !== 'ALLE' && (
+          <button
+            type="button"
+            onClick={() => handleAbschnittChange('ALLE')}
+            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
+          >
+            {abschnitte.find((a) => a.id === abschnitt)?.name ?? 'Abschnitt'} ✕
+          </button>
+        )}
         {feuerwehr !== 'ALLE' && (
           <button
             type="button"
@@ -567,82 +598,7 @@ export function UserManagementSection({
         />
       </div>
 
-      <div className="hidden flex-wrap items-center gap-2.5 md:flex">
-        <Select value={feuerwehr} onValueChange={setFeuerwehr}>
-          <SelectTrigger>
-            <SelectValue placeholder="Feuerwehr" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALLE">Alle Feuerwehren</SelectItem>
-            {Object.entries(groupByAbschnitt(organizations)).map(([abschnittName, orgs]) => (
-              <SelectGroup key={abschnittName}>
-                <SelectLabel>{abschnittName}</SelectLabel>
-                {orgs.map((org) => (
-                  <SelectItem key={org.id} value={org.id}>
-                    {org.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={rolle} onValueChange={(value) => setRolle(value as SimpleFilter)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Rolle" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALLE">Alle Rollen</SelectItem>
-            <SelectItem value="JA">Admin</SelectItem>
-            <SelectItem value="NEIN">Mitglied</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALLE">Alle Status</SelectItem>
-            <SelectItem value="AKTIV">Aktiv</SelectItem>
-            <SelectItem value="INAKTIV">Inaktiv</SelectItem>
-            <SelectItem value="DEAKTIVIERT">Deaktiviert</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {feuerwehr !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => setFeuerwehr('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {organizations.find((o) => o.id === feuerwehr)?.name ?? 'Feuerwehr'} ✕
-          </button>
-        )}
-        {rolle !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => setRolle('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {rolle === 'JA' ? 'Admin' : 'Mitglied'} ✕
-          </button>
-        )}
-        {status !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => setStatus('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {STATUS_LABEL[status as UserStatus]} ✕
-          </button>
-        )}
-        {activeFilterCount > 1 && (
-          <button type="button" onClick={resetFilters} className="text-xs font-medium text-brand hover:underline">
-            Alle zurücksetzen
-          </button>
-        )}
-      </div>
+      <div className="hidden flex-wrap items-center gap-2.5 md:flex">{filterControls}</div>
 
       {someVisibleSelected && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-subtle px-4 py-2.5 text-sm">

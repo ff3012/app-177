@@ -4,7 +4,7 @@ import { MembershipRole } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
 import { canAccessUserManagementAdmin, canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
-import { getReachableScopes } from '@/lib/admin/scope';
+import { getReachableScopes, resolveAdminScope } from '@/lib/admin/scope';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
 // admin/layout.tsx's Gate deckt seit "Heimatfeuerwehr" auch reine Feuerwehr-Admins ab; diese Seite
@@ -37,6 +37,14 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   const viewerIsBezirksDrohnenAdmin = currentUser.isBezirksDrohnenAdmin;
   const reachableScopes = await getReachableScopes(currentUser);
 
+  let initialAbschnitt = params.abschnitt ?? '';
+  if (fullAdmin && !initialAbschnitt) {
+    const scopeResolution = resolveAdminScope(reachableScopes, params.ebene, params.bereich);
+    if (scopeResolution.scope.level === 'ABSCHNITT') {
+      initialAbschnitt = scopeResolution.scope.organizationId;
+    }
+  }
+
   const [users, organizations, dienstgrade, allDroneGroups] = await Promise.all([
     prisma.user.findMany({
       where: fullAdmin ? undefined : { homeOrganizationId: { in: currentUser.feuerwehrAdminOrgIds } },
@@ -52,7 +60,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     prisma.organization.findMany({
       where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
       orderBy: { name: 'asc' },
-      include: { parent: { select: { shortName: true, name: true } } },
+      include: { parent: { select: { id: true, shortName: true, name: true } } },
     }),
     prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
     prisma.droneGroup.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, organizationId: true } }),
@@ -108,6 +116,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
         id: org.id,
         name: org.shortName ?? org.name,
         abschnittName: org.parent?.shortName ?? org.parent?.name,
+        abschnittId: org.parent?.id,
       }))}
       dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
       droneGroups={droneGroups}
@@ -122,6 +131,10 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       initialCreateOpen={params.new === '1'}
       adminNavItems={getAdminNavItems(currentUser)}
       reachableScopes={reachableScopes}
+      initialAbschnitt={initialAbschnitt}
+      abschnitte={reachableScopes
+        .filter((scope) => scope.level === 'ABSCHNITT')
+        .map((scope) => ({ id: scope.organizationId, name: scope.name }))}
       isFullAdmin={fullAdmin}
       viewerIsBezirksAdmin={fullAdmin}
       viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
