@@ -54,6 +54,11 @@ export interface UserRow {
   droneLabel: string;
   droneRole: DroneRoleOption;
   droneGroupId: string | null;
+  a1a3LizenzAm: string;
+  a2LizenzAm: string;
+  stuetzpunktausbildungAm: string;
+  bos1AusbildungAm: string;
+  bos2AusbildungAm: string;
   pushCount: number;
   pushDates: string[];
   isActive: boolean;
@@ -541,6 +546,11 @@ export function UserManagementSection({
         adminOrgIds: sheetTargetRow.adminOrgIds,
         droneRole: sheetTargetRow.droneRole,
         droneGroupId: sheetTargetRow.droneGroupId,
+        a1a3LizenzAm: sheetTargetRow.a1a3LizenzAm,
+        a2LizenzAm: sheetTargetRow.a2LizenzAm,
+        stuetzpunktausbildungAm: sheetTargetRow.stuetzpunktausbildungAm,
+        bos1AusbildungAm: sheetTargetRow.bos1AusbildungAm,
+        bos2AusbildungAm: sheetTargetRow.bos2AusbildungAm,
         lastLoginAt: sheetTargetRow.lastLoginAt,
         passwordChangedAt: sheetTargetRow.passwordChangedAt,
         dienstgradId: sheetTargetRow.dienstgradId,

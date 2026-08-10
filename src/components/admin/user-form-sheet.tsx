@@ -80,6 +80,11 @@ export interface UserSheetTarget {
   adminOrgIds: string[];
   droneRole: DroneRoleOption;
   droneGroupId: string | null;
+  a1a3LizenzAm: string;
+  a2LizenzAm: string;
+  stuetzpunktausbildungAm: string;
+  bos1AusbildungAm: string;
+  bos2AusbildungAm: string;
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
   isBezirksAdmin: boolean;
@@ -140,14 +145,11 @@ function buildDefaultValues(
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
     droneGroupId: target?.droneGroupId ?? null,
-    // Ausbildungsstufen: UserSheetTarget/das Formular selbst kennen diese Felder noch nicht (folgt in
-    // einem späteren Task, der sie tatsächlich durch Server-Daten und UI-Eingaben ersetzt) - bis dahin
-    // ist der leere String hier der einzige Wert, der `UserInput` erfüllt, ohne Daten zu erfinden.
-    a1a3LizenzAm: '',
-    a2LizenzAm: '',
-    stuetzpunktausbildungAm: '',
-    bos1AusbildungAm: '',
-    bos2AusbildungAm: '',
+    a1a3LizenzAm: target?.a1a3LizenzAm ?? '',
+    a2LizenzAm: target?.a2LizenzAm ?? '',
+    stuetzpunktausbildungAm: target?.stuetzpunktausbildungAm ?? '',
+    bos1AusbildungAm: target?.bos1AusbildungAm ?? '',
+    bos2AusbildungAm: target?.bos2AusbildungAm ?? '',
     isBezirksAdmin: target?.isBezirksAdmin ?? false,
     isBezirksDrohnenAdmin: target?.isBezirksDrohnenAdmin ?? false,
     sendWelcomeEmail: true,
@@ -227,6 +229,10 @@ export function UserFormSheet({
   const email = watch('email');
   const droneRole = watch('droneRole');
   const isBezirksDrohnenAdmin = watch('isBezirksDrohnenAdmin');
+  const a1a3LizenzAm = watch('a1a3LizenzAm');
+  const a2LizenzAm = watch('a2LizenzAm');
+  const stuetzpunktausbildungAm = watch('stuetzpunktausbildungAm');
+  const bos1AusbildungAm = watch('bos1AusbildungAm');
 
   // Ein Bezirks-Drohnenadmin verwaltet per Definition alle Drohnengruppen bezirksweit - die
   // segmentierte Drohnengruppen-Auswahl unten wird auf "Admin" fixiert (siehe die gesperrten
@@ -262,6 +268,11 @@ export function UserFormSheet({
     for (const orgId of values.adminOrgIds) formData.append('adminOrgIds', orgId);
     formData.set('droneRole', values.droneRole);
     if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
+    formData.set('a1a3LizenzAm', values.a1a3LizenzAm);
+    formData.set('a2LizenzAm', values.a2LizenzAm);
+    formData.set('stuetzpunktausbildungAm', values.stuetzpunktausbildungAm);
+    formData.set('bos1AusbildungAm', values.bos1AusbildungAm);
+    formData.set('bos2AusbildungAm', values.bos2AusbildungAm);
     if (values.isBezirksAdmin) formData.set('isBezirksAdmin', 'on');
     if (values.isBezirksDrohnenAdmin) formData.set('isBezirksDrohnenAdmin', 'on');
     if (values.sendWelcomeEmail) formData.set('sendWelcomeEmail', 'on');
@@ -644,33 +655,81 @@ export function UserFormSheet({
                       </div>
                     )}
                     {droneRole !== 'NONE' && (
-                      <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
-                        <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
-                        <div className="flex-1">
-                          <Controller
-                            control={control}
-                            name="droneGroupId"
-                            render={({ field }) => (
-                              <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
-                                <SelectTrigger id="droneGroupId" className="w-full">
-                                  <SelectValue placeholder="Gruppe wählen" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="NONE" disabled>
-                                    Gruppe wählen
-                                  </SelectItem>
-                                  {droneGroups.map((group) => (
-                                    <SelectItem key={group.id} value={group.id}>
-                                      {group.name}
+                      <>
+                        <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
+                          <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
+                          <div className="flex-1">
+                            <Controller
+                              control={control}
+                              name="droneGroupId"
+                              render={({ field }) => (
+                                <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
+                                  <SelectTrigger id="droneGroupId" className="w-full">
+                                    <SelectValue placeholder="Gruppe wählen" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="NONE" disabled>
+                                      Gruppe wählen
                                     </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                          <FieldError message={errors.droneGroupId?.message} />
+                                    {droneGroups.map((group) => (
+                                      <SelectItem key={group.id} value={group.id}>
+                                        {group.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                            <FieldError message={errors.droneGroupId?.message} />
+                          </div>
                         </div>
-                      </div>
+                        <div className="px-3.5 py-3">
+                          <SectionLabel>Ausbildung</SectionLabel>
+                          <div className="flex flex-col gap-3">
+                            <div>
+                              <FieldLabel htmlFor="a1a3LizenzAm">A1/A3 Pilotenlizenz</FieldLabel>
+                              <Input id="a1a3LizenzAm" type="date" {...register('a1a3LizenzAm')} />
+                            </div>
+                            <div>
+                              <FieldLabel htmlFor="a2LizenzAm">A2 Pilotenlizenz</FieldLabel>
+                              <Input
+                                id="a2LizenzAm"
+                                type="date"
+                                disabled={!a1a3LizenzAm}
+                                {...register('a2LizenzAm')}
+                              />
+                            </div>
+                            <div>
+                              <FieldLabel htmlFor="stuetzpunktausbildungAm">Stützpunktausbildung</FieldLabel>
+                              <Input
+                                id="stuetzpunktausbildungAm"
+                                type="date"
+                                disabled={!a2LizenzAm}
+                                {...register('stuetzpunktausbildungAm')}
+                              />
+                            </div>
+                            <div>
+                              <FieldLabel htmlFor="bos1AusbildungAm">BOS1 Ausbildung</FieldLabel>
+                              <Input
+                                id="bos1AusbildungAm"
+                                type="date"
+                                disabled={!stuetzpunktausbildungAm}
+                                {...register('bos1AusbildungAm')}
+                              />
+                            </div>
+                            <div>
+                              <FieldLabel htmlFor="bos2AusbildungAm">BOS2 Ausbildung</FieldLabel>
+                              <Input
+                                id="bos2AusbildungAm"
+                                type="date"
+                                disabled={!bos1AusbildungAm}
+                                {...register('bos2AusbildungAm')}
+                              />
+                              <FieldError message={errors.bos2AusbildungAm?.message} />
+                            </div>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 </section>
