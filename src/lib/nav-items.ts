@@ -57,7 +57,7 @@ export function getVerwaltungNavItem(user: SessionUser): NavItem | null {
   if (canAccessHeimatfeuerwehrAdmin(user)) {
     return { href: '/admin/heimatfeuerwehr', label: 'Verwaltung' };
   }
-  if (isDroneGroupAdmin(user)) {
+  if (isDroneGroupAdmin(user) || user.isBezirksDrohnenAdmin) {
     return { href: '/admin/drohnen', label: 'Verwaltung' };
   }
   return null;

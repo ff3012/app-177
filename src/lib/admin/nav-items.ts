@@ -19,7 +19,12 @@ export function getAdminNavItems(user: SessionUser): AdminNavItem[] {
     items.push({ href: '/admin/benutzer', label: 'Benutzerverwaltung' });
   }
 
-  if (isBezirksAdmin(user) || user.abschnittAdminOrgIds.length > 0 || user.droneGroupRole === 'ADMIN') {
+  if (
+    isBezirksAdmin(user) ||
+    user.isBezirksDrohnenAdmin ||
+    user.abschnittAdminOrgIds.length > 0 ||
+    user.droneGroupRole === 'ADMIN'
+  ) {
     items.push({ href: '/admin/drohnen', label: 'Drohnengruppe' });
   }
 

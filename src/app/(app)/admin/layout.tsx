@@ -22,7 +22,9 @@ import { AdminSidebar } from '@/components/admin/admin-sidebar';
  * `droneGroupRole === 'ADMIN'`-Flag geprüft (kein DB-Zugriff auf Layout-Ebene nötig, das Layout
  * kennt keine konkrete Gruppen-Id) - leckt dadurch NICHTS an /admin/benutzer oder
  * /admin/heimatfeuerwehr, da beide Seiten weiterhin ihre eigene, strengere Prüfung haben, die ein
- * reiner Drohnengruppen-Admin nach wie vor nicht besteht.
+ * reiner Drohnengruppen-Admin nach wie vor nicht besteht. Identische Behandlung erhält
+ * isBezirksDrohnenAdmin - ein Bezirks-Drohnenadmin ohne andere Admin-Rechte bekommt denselben
+ * transparenten Durchgang zu /admin/drohnen.
  *
  * Schützt nur den Seiten-Render. Server Actions bleiben unverändert eigenständig durch
  * assertPermission(...) abgesichert (siehe CLAUDE.md) - ein Layout kann einen direkten
@@ -30,7 +32,7 @@ import { AdminSidebar } from '@/components/admin/admin-sidebar';
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  if (!canAccessHeimatfeuerwehrAdmin(user) && user.droneGroupRole !== 'ADMIN') {
+  if (!canAccessHeimatfeuerwehrAdmin(user) && user.droneGroupRole !== 'ADMIN' && !user.isBezirksDrohnenAdmin) {
     notFound();
   }
 
