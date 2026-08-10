@@ -8,6 +8,8 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import {
   assertPermission,
+  canGrantBezirksAdmin,
+  canGrantBezirksDrohnenAdmin,
   canManageDroneGroupFor,
   canManageUsersFor,
   filterRemovableAdminOrgIds,
@@ -147,6 +149,12 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   // die er selbst verwaltet.
   assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
   assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
+  if (data.isBezirksAdmin) {
+    assertPermission(canGrantBezirksAdmin(currentUser));
+  }
+  if (data.isBezirksDrohnenAdmin) {
+    assertPermission(canGrantBezirksDrohnenAdmin(currentUser));
+  }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) {
@@ -166,6 +174,8 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
+      isBezirksAdmin: data.isBezirksAdmin,
+      isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
       passwordHash,
     },
   });
@@ -220,6 +230,12 @@ export async function updateUser(
 
   assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
   assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
+  if (data.isBezirksAdmin !== targetUser.isBezirksAdmin) {
+    assertPermission(canGrantBezirksAdmin(currentUser));
+  }
+  if (data.isBezirksDrohnenAdmin !== targetUser.isBezirksDrohnenAdmin) {
+    assertPermission(canGrantBezirksDrohnenAdmin(currentUser));
+  }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing && existing.id !== userId) {
@@ -238,6 +254,8 @@ export async function updateUser(
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
+      isBezirksAdmin: data.isBezirksAdmin,
+      isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
     },
   });
 
