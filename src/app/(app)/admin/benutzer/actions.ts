@@ -17,7 +17,7 @@ import {
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
-import { type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
+import { AUSBILDUNGSSTUFEN, type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
 import type { SessionUser } from '@/types/next-auth';
 
 export interface UserFormState {
@@ -90,18 +90,45 @@ async function syncAdminMemberships(currentUser: SessionUser, userId: string, ad
  * Ändert sich etwas, müssen BEIDE betroffenen Gruppen (bisherige und neue) im Recht des Aufrufers
  * liegen - sonst ließe sich über droneRole='NONE' eine fremde Gruppenmitgliedschaft entfernen.
  */
+interface AusbildungsDaten {
+  a1a3LizenzAm: string;
+  a2LizenzAm: string;
+  stuetzpunktausbildungAm: string;
+  bos1AusbildungAm: string;
+  bos2AusbildungAm: string;
+}
+
+function toAusbildungsUpdate(daten: AusbildungsDaten) {
+  return {
+    a1a3LizenzAm: daten.a1a3LizenzAm ? new Date(daten.a1a3LizenzAm) : null,
+    a2LizenzAm: daten.a2LizenzAm ? new Date(daten.a2LizenzAm) : null,
+    stuetzpunktausbildungAm: daten.stuetzpunktausbildungAm ? new Date(daten.stuetzpunktausbildungAm) : null,
+    bos1AusbildungAm: daten.bos1AusbildungAm ? new Date(daten.bos1AusbildungAm) : null,
+    bos2AusbildungAm: daten.bos2AusbildungAm ? new Date(daten.bos2AusbildungAm) : null,
+  };
+}
+
 async function syncDroneMembership(
   currentUser: SessionUser,
   userId: string,
   droneRole: DroneRoleOption,
   droneGroupId: string | null,
+  ausbildung: AusbildungsDaten,
 ) {
   const existing = await prisma.drohnengruppeMembership.findUnique({ where: { userId } });
   const currentRole: DroneRoleOption = !existing ? 'NONE' : existing.role === DroneRole.ADMIN ? 'ADMIN' : 'PILOT';
   const currentGroupId = existing?.droneGroupId ?? null;
   const targetGroupId = droneRole === 'NONE' ? null : droneGroupId;
 
-  if (currentRole === droneRole && currentGroupId === targetGroupId) {
+  const ausbildungChanged =
+    existing !== null &&
+    AUSBILDUNGSSTUFEN.some((key) => {
+      const current = existing[key];
+      const currentStr = current ? current.toISOString().slice(0, 10) : '';
+      return currentStr !== ausbildung[key];
+    });
+
+  if (currentRole === droneRole && currentGroupId === targetGroupId && !ausbildungChanged) {
     return;
   }
 
@@ -127,10 +154,11 @@ async function syncDroneMembership(
     throw new Error('Drohnengruppe ist erforderlich, wenn eine Rolle gewählt wurde.');
   }
   const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  const ausbildungUpdate = toAusbildungsUpdate(ausbildung);
   await prisma.drohnengruppeMembership.upsert({
     where: { userId },
-    update: { role, droneGroupId },
-    create: { userId, role, droneGroupId },
+    update: { role, droneGroupId, ...ausbildungUpdate },
+    create: { userId, role, droneGroupId, ...ausbildungUpdate },
   });
 }
 
@@ -181,7 +209,13 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   });
 
   await syncAdminMemberships(currentUser, user.id, data.adminOrgIds);
-  await syncDroneMembership(currentUser, user.id, data.droneRole, data.droneGroupId);
+  await syncDroneMembership(currentUser, user.id, data.droneRole, data.droneGroupId, {
+    a1a3LizenzAm: data.a1a3LizenzAm,
+    a2LizenzAm: data.a2LizenzAm,
+    stuetzpunktausbildungAm: data.stuetzpunktausbildungAm,
+    bos1AusbildungAm: data.bos1AusbildungAm,
+    bos2AusbildungAm: data.bos2AusbildungAm,
+  });
 
   const token = await createToken(user.id, TokenPurpose.ACTIVATION);
 
@@ -263,7 +297,13 @@ export async function updateUser(
   });
 
   await syncAdminMemberships(currentUser, userId, data.adminOrgIds);
-  await syncDroneMembership(currentUser, userId, data.droneRole, data.droneGroupId);
+  await syncDroneMembership(currentUser, userId, data.droneRole, data.droneGroupId, {
+    a1a3LizenzAm: data.a1a3LizenzAm,
+    a2LizenzAm: data.a2LizenzAm,
+    stuetzpunktausbildungAm: data.stuetzpunktausbildungAm,
+    bos1AusbildungAm: data.bos1AusbildungAm,
+    bos2AusbildungAm: data.bos2AusbildungAm,
+  });
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');
