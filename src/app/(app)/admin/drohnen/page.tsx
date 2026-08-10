@@ -13,6 +13,7 @@ import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-r
 import { GroupSelect } from './group-select';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
+import { DeleteDroneButton } from './delete-drone-button';
 import { UploadDocumentForm } from './upload-document-form';
 import { DroneGroupEmailForm } from './drone-group-email-form';
 import { createDrone, toggleDroneActive, regenerateQuickRegisterLink, uploadDroneDocument, deleteDroneDocument } from './actions';
@@ -177,11 +178,14 @@ export default async function DrohnenVerwaltungPage({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <form action={boundToggle}>
-                      <button type="submit" className="text-sm text-brand hover:underline">
-                        {drone.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                      </button>
-                    </form>
+                    <div className="flex items-center justify-end gap-3">
+                      <form action={boundToggle}>
+                        <button type="submit" className="text-sm text-brand hover:underline">
+                          {drone.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                        </button>
+                      </form>
+                      <DeleteDroneButton droneId={drone.id} droneName={drone.name} />
+                    </div>
                   </TableCell>
                 </TableRow>
               );

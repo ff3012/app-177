@@ -80,6 +80,30 @@ export async function toggleDroneActive(droneId: string): Promise<void> {
   revalidatePath('/admin/drohnen');
 }
 
+export interface DeleteDroneState {
+  error?: string;
+}
+
+/** Löschen ist nur möglich, wenn keine DroneFlight-Zeile auf diese Drohne verweist (auch keine
+ * vergangenen) - derselbe proaktive Count-Check statt eines rohen FK-Fehlers wie bei deleteVehicle
+ * in admin/heimatfeuerwehr/actions.ts. Gibt eine konkrete, count-spezifische Fehlermeldung zurück,
+ * die stattdessen zum Deaktivieren rät. */
+export async function deleteDrone(droneId: string): Promise<DeleteDroneState> {
+  const drone = await prisma.drone.findUniqueOrThrow({ where: { id: droneId } });
+  await requireDroneGroupAccess(drone.droneGroupId);
+
+  const flightCount = await prisma.droneFlight.count({ where: { droneId } });
+  if (flightCount > 0) {
+    return {
+      error: `Diese Drohne hat ${flightCount} ${flightCount === 1 ? 'Flug' : 'Flüge'} und kann nicht gelöscht werden - stattdessen deaktivieren.`,
+    };
+  }
+
+  await prisma.drone.delete({ where: { id: droneId } });
+  revalidatePath('/admin/drohnen');
+  return {};
+}
+
 export async function regenerateQuickRegisterLink(droneGroupId: string): Promise<void> {
   await requireDroneGroupAccess(droneGroupId);
 
