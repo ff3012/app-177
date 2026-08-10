@@ -330,6 +330,12 @@ model DrohnengruppeMembership {
   role    DroneRole @default(PILOT)
   addedAt DateTime  @default(now())
 
+  a1a3LizenzAm            DateTime?
+  a2LizenzAm              DateTime?
+  stuetzpunktausbildungAm DateTime?
+  bos1AusbildungAm        DateTime?
+  bos2AusbildungAm        DateTime?
+
   droneGroupId String
   droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 

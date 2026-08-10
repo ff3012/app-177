@@ -6,6 +6,15 @@ export type DroneRoleOption = (typeof DRONE_ROLE_OPTIONS)[number];
 /** E.164: "+" gefolgt von 2-15 Ziffern, erste Ziffer nicht 0. */
 export const E164_PHONE_REGEX = /^\+[1-9]\d{1,14}$/;
 
+export const AUSBILDUNGSSTUFEN = [
+  'a1a3LizenzAm',
+  'a2LizenzAm',
+  'stuetzpunktausbildungAm',
+  'bos1AusbildungAm',
+  'bos2AusbildungAm',
+] as const;
+export type Ausbildungsstufe = (typeof AUSBILDUNGSSTUFEN)[number];
+
 export const userSchema = z
   .object({
     firstName: z.string().trim().min(1, 'Vorname ist erforderlich.').max(100),
@@ -27,6 +36,11 @@ export const userSchema = z
     adminOrgIds: z.array(z.string()),
     droneRole: z.enum(DRONE_ROLE_OPTIONS),
     droneGroupId: z.string().nullable(),
+    a1a3LizenzAm: z.string(),
+    a2LizenzAm: z.string(),
+    stuetzpunktausbildungAm: z.string(),
+    bos1AusbildungAm: z.string(),
+    bos2AusbildungAm: z.string(),
     isBezirksAdmin: z.boolean(),
     isBezirksDrohnenAdmin: z.boolean(),
     sendWelcomeEmail: z.boolean(),
@@ -38,7 +52,24 @@ export const userSchema = z
   .refine((data) => data.droneRole === 'NONE' || !!data.droneGroupId, {
     message: 'Bitte eine Drohnengruppe wählen.',
     path: ['droneGroupId'],
-  });
+  })
+  .refine(
+    (data) => {
+      let seenGap = false;
+      for (const key of AUSBILDUNGSSTUFEN) {
+        if (!data[key]) {
+          seenGap = true;
+        } else if (seenGap) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Ausbildungsstufen müssen der Reihe nach abgeschlossen werden.',
+      path: ['bos2AusbildungAm'],
+    },
+  );
 
 export type UserInput = z.infer<typeof userSchema>;
 
@@ -59,6 +90,11 @@ export function parseUserFormData(formData: FormData) {
       ? (rawDroneRole as DroneRoleOption)
       : 'NONE',
     droneGroupId: (formData.get('droneGroupId') as string) || null,
+    a1a3LizenzAm: String(formData.get('a1a3LizenzAm') ?? ''),
+    a2LizenzAm: String(formData.get('a2LizenzAm') ?? ''),
+    stuetzpunktausbildungAm: String(formData.get('stuetzpunktausbildungAm') ?? ''),
+    bos1AusbildungAm: String(formData.get('bos1AusbildungAm') ?? ''),
+    bos2AusbildungAm: String(formData.get('bos2AusbildungAm') ?? ''),
     isBezirksAdmin: formData.get('isBezirksAdmin') === 'on',
     isBezirksDrohnenAdmin: formData.get('isBezirksDrohnenAdmin') === 'on',
     sendWelcomeEmail: formData.get('sendWelcomeEmail') === 'on',

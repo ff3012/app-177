@@ -140,6 +140,14 @@ function buildDefaultValues(
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
     droneGroupId: target?.droneGroupId ?? null,
+    // Ausbildungsstufen: UserSheetTarget/das Formular selbst kennen diese Felder noch nicht (folgt in
+    // einem späteren Task, der sie tatsächlich durch Server-Daten und UI-Eingaben ersetzt) - bis dahin
+    // ist der leere String hier der einzige Wert, der `UserInput` erfüllt, ohne Daten zu erfinden.
+    a1a3LizenzAm: '',
+    a2LizenzAm: '',
+    stuetzpunktausbildungAm: '',
+    bos1AusbildungAm: '',
+    bos2AusbildungAm: '',
     isBezirksAdmin: target?.isBezirksAdmin ?? false,
     isBezirksDrohnenAdmin: target?.isBezirksDrohnenAdmin ?? false,
     sendWelcomeEmail: true,
