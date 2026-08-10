@@ -254,6 +254,24 @@ export function UserManagementSection({
     [organizations, abschnitt],
   );
 
+  // Reagiert auf eine Änderung des GELTUNGSBEREICHS selbst (nicht auf eine Änderung dieses Filters) -
+  // z. B. wenn der Geltungsbereich-Wähler eine andere Ebene wählt, während diese Seite bereits offen
+  // ist. Ein useState-Initializer allein reicht dafür nicht, da er nur beim allerersten Mount läuft;
+  // dieser Effekt erkennt die Änderung über einen Ref-Vergleich und überschreibt den (dann veralteten)
+  // Filterzustand bewusst - eine erneute manuelle Filteränderung danach löst ihn nicht noch einmal aus,
+  // da sich der Geltungsbereich selbst dabei nicht ändert.
+  const previousScopeKeyRef = useRef(`${searchParams.get('ebene') ?? ''}:${searchParams.get('bereich') ?? ''}`);
+  useEffect(() => {
+    const currentScopeKey = `${searchParams.get('ebene') ?? ''}:${searchParams.get('bereich') ?? ''}`;
+    if (currentScopeKey === previousScopeKeyRef.current) return;
+    previousScopeKeyRef.current = currentScopeKey;
+    if (!isFullAdmin) return;
+    const bereich = searchParams.get('ebene') === 'abschnitt' ? searchParams.get('bereich') : null;
+    const match = bereich ? abschnitte.find((a) => a.id === bereich) : undefined;
+    setAbschnitt(match ? match.id : 'ALLE');
+    setFeuerwehr('ALLE');
+  }, [searchParams, isFullAdmin, abschnitte]);
+
   // Suchfeld 300ms debounced (Verwaltung-Brief.md 3.2), Rest der Filter/Sortierung wirkt sofort.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -273,7 +291,15 @@ export function UserManagementSection({
       if (value) params.set(key, value);
     }
     if (query) params.set('q', query);
-    if (abschnitt !== 'ALLE') params.set('abschnitt', abschnitt);
+    if (abschnitt !== 'ALLE') {
+      params.set('abschnitt', abschnitt);
+    } else if (searchParams.get('ebene') === 'abschnitt') {
+      // Explizites Löschen des Filters muss einen Reload überleben, auch wenn der
+      // Geltungsbereich-Wähler weiterhin auf denselben Abschnitt zeigt (siehe CLAUDE.md,
+      // Geltungsbereich-Wähler) - ein fehlender Parameter bedeutet sonst wieder "nie berührt" und
+      // page.tsx würde den Wert aus dem Geltungsbereich erneut übernehmen.
+      params.set('abschnitt', 'ALLE');
+    }
     if (feuerwehr !== 'ALLE') params.set('feuerwehr', feuerwehr);
     if (rolle !== 'ALLE') params.set('rolle', rolle);
     if (status !== 'ALLE') params.set('status', status);

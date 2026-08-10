@@ -1601,6 +1601,19 @@ das), sodass eine vom Layout aus gerenderte Komponente keinen anderen Weg hat, d
 erfahren. Jede `/admin/*`-Seite liest/validiert den Parameter bei Bedarf trotzdem zusätzlich selbst aus
 ihrem eigenen `searchParams`-Prop.
 
+`/admin/benutzer` hat zusätzlich einen eigenen, seitenlokalen Abschnitt-Filter (`?abschnitt=`,
+Bezirksadmin-only) — bewusst getrennt vom globalen `?ebene=`/`?bereich=` des Geltungsbereich-Wählers, auch
+wenn Letzterer den Anfangswert vorbelegt (`resolveAdminScope` in `page.tsx`). `?abschnitt=ALLE` ist dabei ein
+eigener, bedeutungsvoller Wert und nicht dasselbe wie ein fehlender Parameter: nur so überlebt ein explizites
+Zurücksetzen des Filters (Chip-×) einen Reload, ohne dass der Geltungsbereich seinen eigenen Abschnitt beim
+nächsten Laden erneut hineinzieht. Da ein `useState`-Initializer nur beim ersten Mount läuft, folgt ein
+eigener Effekt (`user-management-section.tsx`) dem Geltungsbereich auch nach einer clientseitigen Navigation,
+während die Seite bereits offen ist — der bloße Prop-Wechsel allein hätte den lokalen Filterzustand sonst
+nicht nachgezogen. `OrgSearchSelect` (`src/components/admin/org-search-select.tsx`) ist die
+Einzelauswahl-Variante von `AdminOrgMultiSelect` für genau diesen Filter und den Feuerwehr-Filter daneben;
+`groupByAbschnitt` (`src/lib/admin/group-by-abschnitt.ts`) wurde aus zwei fast identischen
+Abschnitt-Gruppierungen extrahiert, die beide Komponenten teilen.
+
 ### Email
 
 `src/lib/email/mailjet.ts` is a thin `fetch` wrapper around Mailjet's v3.1 Send API (no SDK dependency), plus

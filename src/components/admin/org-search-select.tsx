@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { Command, CommandInput, CommandList, CommandGroup, CommandItem } from '@/components/ui/command';
 import { groupByAbschnitt } from '@/lib/admin/group-by-abschnitt';
 
 export interface OrgSearchSelectOption {
@@ -66,7 +66,9 @@ export function OrgSearchSelect({
         <Command shouldFilter={false}>
           <CommandInput placeholder={`${placeholder} suchen …`} value={search} onValueChange={setSearch} />
           <CommandList>
-            <CommandEmpty className="py-4 text-sm text-ink-faint">Keine Treffer.</CommandEmpty>
+            {filteredOptions.length === 0 && (
+              <div className="py-4 text-center text-sm text-ink-faint">Keine Treffer.</div>
+            )}
             <CommandGroup>
               <CommandItem
                 value={allValue}

@@ -37,8 +37,16 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   const viewerIsBezirksDrohnenAdmin = currentUser.isBezirksDrohnenAdmin;
   const reachableScopes = await getReachableScopes(currentUser);
 
+  const abschnitte = reachableScopes
+    .filter((scope) => scope.level === 'ABSCHNITT')
+    .map((scope) => ({ id: scope.organizationId, name: scope.name }));
+
   let initialAbschnitt = params.abschnitt ?? '';
-  if (fullAdmin && !initialAbschnitt) {
+  if (initialAbschnitt !== 'ALLE' && initialAbschnitt !== '' && !abschnitte.some((a) => a.id === initialAbschnitt)) {
+    // Ein fremder/ungültiger Wert in der URL wird verworfen, nicht stillschweigend übernommen.
+    initialAbschnitt = '';
+  }
+  if (fullAdmin && params.abschnitt === undefined) {
     const scopeResolution = resolveAdminScope(reachableScopes, params.ebene, params.bereich);
     if (scopeResolution.scope.level === 'ABSCHNITT') {
       initialAbschnitt = scopeResolution.scope.organizationId;
@@ -132,9 +140,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       adminNavItems={getAdminNavItems(currentUser)}
       reachableScopes={reachableScopes}
       initialAbschnitt={initialAbschnitt}
-      abschnitte={reachableScopes
-        .filter((scope) => scope.level === 'ABSCHNITT')
-        .map((scope) => ({ id: scope.organizationId, name: scope.name }))}
+      abschnitte={abschnitte}
       isFullAdmin={fullAdmin}
       viewerIsBezirksAdmin={fullAdmin}
       viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
