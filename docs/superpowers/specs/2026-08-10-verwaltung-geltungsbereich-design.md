@@ -28,13 +28,17 @@ liefert ausschließlich den Wähler selbst: seine Datenbasis, seine UI, seine Pe
 Next.js App-Router-Layouts (`admin/layout.tsx`) erhalten **keine** `searchParams` - nur
 `page.tsx`-Dateien tun das. Der "aktuell gewählte Geltungsbereich" kann deshalb nicht als
 serverseitiger Layout-State existieren. Lösung: der Geltungsbereich lebt als URL-Query-Parameter
-(`?ebene=bezirk|abschnitt|feuerwehr&org=<id>`), aufgelöst **clientseitig** vom Wähler selbst
-(`useSearchParams()`), mit `localStorage` als Vorbelegung beim ersten Aufruf ohne Parameter. Jede
-`/admin/*`-Seite liest und validiert den Parameter bei Bedarf selbst aus ihrem eigenen
-`searchParams`-Prop - genau das Muster, das `/admin/drohnen`s `?group=` und
-`/admin/heimatfeuerwehr`s `?org=` heute schon verwenden. Der Nutzer hat explizit entschieden,
-**keine** verschachtelten Routen (`/admin/bezirk/17/…`) einzuführen, sondern bei flachen URLs mit
-Query-Parametern zu bleiben.
+(`?ebene=bezirk|abschnitt|feuerwehr&bereich=<id>`), aufgelöst **clientseitig** vom Wähler selbst
+(`useSearchParams()`), mit `localStorage` als Vorbelegung beim ersten Aufruf ohne Parameter. Der
+zweite Parameter heißt bewusst `bereich`, nicht `org` - `/admin/heimatfeuerwehr` verwendet `?org=`
+bereits für ein anderes, eigenes Konzept (welche Feuerwehr auf dieser einen Seite gerade verwaltet
+wird), und ein gemeinsamer Name hätte dort dazu geführt, dass der Geltungsbereich-Wähler ungewollt
+verändert, welche Feuerwehr diese Seite administriert (in einer frühen Fassung tatsächlich
+gefunden und vor dem Merge korrigiert). Jede `/admin/*`-Seite liest und validiert den Parameter bei
+Bedarf selbst aus ihrem eigenen `searchParams`-Prop - genau das Muster, das `/admin/drohnen`s
+`?group=` und `/admin/heimatfeuerwehr`s `?org=` heute schon verwenden. Der Nutzer hat explizit
+entschieden, **keine** verschachtelten Routen (`/admin/bezirk/17/…`) einzuführen, sondern bei
+flachen URLs mit Query-Parametern zu bleiben.
 
 ## 3. Datenmodell
 
@@ -109,8 +113,8 @@ gleichzeitig per Client-seitigem Substring-Match, kein Server-Roundtrip - die Li
 vollständig geladen), Baum mit 12px Einrückung je Stufe, nur erreichbare Ebenen (nicht ausgegraut -
 weggelassen), aktive Ebene `brand-subtle` hinterlegt.
 
-**Auswahl**: `router.push` auf denselben Pfad mit aktualisierten `?ebene=&org=`-Parametern +
-`localStorage.setItem('admin-scope', JSON.stringify({ebene, org}))`.
+**Auswahl**: `router.push` auf denselben Pfad mit aktualisierten `?ebene=&bereich=`-Parametern +
+`localStorage.setItem('admin-scope', JSON.stringify({ebene, bereich}))`.
 
 **Rendering-Bedingung**: nur wenn `reachable.length > 1` - identisch mit dem Brief's "wer nur die
 Heimatwehr verwaltet, sieht keinen Wähler".
@@ -160,7 +164,7 @@ Sicherheitsgrenze wiederverwenden können, ohne sie umzubauen.
 - Ein Feuerwehr-Admin mit genau einer Heimatwehr sieht **keinen** Wähler.
 - Ein Feuerwehr-Admin mit mehreren direkt verwalteten Feuerwehren sieht den Wähler mit genau
   diesen Feuerwehren.
-- Eine Auswahl übersteht Reload und ist als Link teilbar (`?ebene=&org=` in der URL).
+- Eine Auswahl übersteht Reload und ist als Link teilbar (`?ebene=&bereich=` in der URL).
 - Ein zweiter Besuch ohne Parameter übernimmt die zuletzt gewählte Ebene aus `localStorage`.
 - `resolveAdminScope` weist jeden Parameter zurück, der nicht in der berechneten
   `reachable`-Liste vorkommt.

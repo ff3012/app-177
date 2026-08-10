@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -226,6 +226,7 @@ export function UserManagementSection({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { setActionSlot } = useMobileHeader();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
@@ -264,6 +265,10 @@ export function UserManagementSection({
   // das gefilterte/sortierte Array bleibt komplett clientseitig berechnet (siehe unten).
   useEffect(() => {
     const params = new URLSearchParams();
+    for (const key of ['ebene', 'bereich']) {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    }
     if (query) params.set('q', query);
     if (feuerwehr !== 'ALLE') params.set('feuerwehr', feuerwehr);
     if (rolle !== 'ALLE') params.set('rolle', rolle);
@@ -273,7 +278,7 @@ export function UserManagementSection({
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, feuerwehr, rolle, status, sortKey, sortDir]);
+  }, [query, feuerwehr, rolle, status, sortKey, sortDir, searchParams]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

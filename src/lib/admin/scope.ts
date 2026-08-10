@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { prisma } from '@/lib/db/prisma';
 import { isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
@@ -17,7 +18,7 @@ export type AdminScope =
  * leeres Array liefern - das ist korrekt, dieser Nutzer hat schlicht keinen Bezirk/Abschnitt/
  * Feuerwehr-Geltungsbereich (nur /admin/drohnen, das dieses Konzept nicht verwendet).
  */
-export async function getReachableScopes(user: SessionUser): Promise<AdminScope[]> {
+export const getReachableScopes = cache(async (user: SessionUser): Promise<AdminScope[]> => {
   if (isBezirksAdmin(user)) {
     const [abschnitte, feuerwehren] = await Promise.all([
       prisma.organization.findMany({
@@ -31,20 +32,22 @@ export async function getReachableScopes(user: SessionUser): Promise<AdminScope[
         orderBy: { name: 'asc' },
       }),
     ]);
-    return [
-      { level: 'BEZIRK' },
-      ...abschnitte.map((org) => ({
-        level: 'ABSCHNITT' as const,
-        organizationId: org.id,
-        name: org.shortName ?? org.name,
-      })),
-      ...feuerwehren.map((org) => ({
+    // orderBy: { name: 'asc' } sortiert nach der rohen DB-Spalte - manche Betriebsfeuerwehren haben
+    // aber ein shortName ohne "FF "-Präfix, das von der tatsächlich angezeigten Reihenfolge abweicht.
+    // Da shortName ?? name erst nach dem Laden feststeht, wird hier zusätzlich in JS nach dem
+    // tatsächlich angezeigten Namen sortiert.
+    const sortedAbschnitte = abschnitte
+      .map((org) => ({ level: 'ABSCHNITT' as const, organizationId: org.id, name: org.shortName ?? org.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const sortedFeuerwehren = feuerwehren
+      .map((org) => ({
         level: 'FEUERWEHR' as const,
         organizationId: org.id,
         name: org.shortName ?? org.name,
         abschnittOrganizationId: getAbschnittOrganizationId({ type: 'FEUERWEHR', id: org.id, parentId: org.parentId }),
-      })),
-    ];
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return [{ level: 'BEZIRK' }, ...sortedAbschnitte, ...sortedFeuerwehren];
   }
 
   const scopes: AdminScope[] = [];
@@ -63,17 +66,23 @@ export async function getReachableScopes(user: SessionUser): Promise<AdminScope[
         orderBy: { name: 'asc' },
       }),
     ]);
-    for (const org of abschnitte) {
-      scopes.push({ level: 'ABSCHNITT', organizationId: org.id, name: org.shortName ?? org.name });
-    }
-    for (const org of feuerwehren) {
-      scopes.push({
-        level: 'FEUERWEHR',
+    const sortedAbschnitte = abschnitte
+      .map((org) => ({ level: 'ABSCHNITT' as const, organizationId: org.id, name: org.shortName ?? org.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const sortedFeuerwehren = feuerwehren
+      .map((org) => ({
+        level: 'FEUERWEHR' as const,
         organizationId: org.id,
         name: org.shortName ?? org.name,
         abschnittOrganizationId: getAbschnittOrganizationId({ type: 'FEUERWEHR', id: org.id, parentId: org.parentId }),
-      });
-      coveredFeuerwehrIds.add(org.id);
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const scope of sortedAbschnitte) {
+      scopes.push(scope);
+    }
+    for (const scope of sortedFeuerwehren) {
+      scopes.push(scope);
+      coveredFeuerwehrIds.add(scope.organizationId);
     }
   }
 
@@ -89,18 +98,21 @@ export async function getReachableScopes(user: SessionUser): Promise<AdminScope[
       select: { id: true, name: true, shortName: true, parentId: true },
       orderBy: { name: 'asc' },
     });
-    for (const org of feuerwehren) {
-      scopes.push({
-        level: 'FEUERWEHR',
+    const sortedFeuerwehren = feuerwehren
+      .map((org) => ({
+        level: 'FEUERWEHR' as const,
         organizationId: org.id,
         name: org.shortName ?? org.name,
         abschnittOrganizationId: getAbschnittOrganizationId({ type: 'FEUERWEHR', id: org.id, parentId: org.parentId }),
-      });
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const scope of sortedFeuerwehren) {
+      scopes.push(scope);
     }
   }
 
   return scopes;
-}
+});
 
 const LEVEL_ORDER: Record<AdminScope['level'], number> = { BEZIRK: 0, ABSCHNITT: 1, FEUERWEHR: 2 };
 
@@ -123,7 +135,7 @@ export interface ScopeResolution {
 }
 
 /**
- * Reine Funktion (keine DB, keine Session) - löst einen rohen `?ebene=&org=`-Parameter gegen die
+ * Reine Funktion (keine DB, keine Session) - löst einen rohen `?ebene=&bereich=`-Parameter gegen die
  * bereits berechnete reachable-Liste auf. Fällt niemals auf einen Wert außerhalb reachable zurück.
  * Voraussetzung: reachable ist nicht leer - der einzige Aufrufer in dieser Phase (der Wähler selbst)
  * rendert ohnehin nur, wenn reachable.length > 1 ist.

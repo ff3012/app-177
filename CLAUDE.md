@@ -1584,6 +1584,23 @@ in this app.
   Prisma into the client bundle. Both the status page and the email call the same `buildSystemCheckRows`, so
   the two never drift out of sync on labels/wording.
 
+**Geltungsbereich-Wähler** (`GeltungsbereichSelector`, `src/lib/admin/scope.ts`) — ein wiederverwendbarer
+Bezirk/Abschnitt/Feuerwehr-Umschalter, der sowohl in der Desktop-`AdminSidebar` als auch pro Seite mobil
+gerendert wird, für Bezirks-/Abschnitts-/Mehrfach-Feuerwehr-Admins mit mehr als einem erreichbaren
+Geltungsbereich (`getReachableScopes`, `react`-`cache()`-dedupliziert pro Request, da sie sonst pro Seite
+zweimal aufgerufen würde). Die gewählte Ebene lebt als URL-Query-Parameter,
+`?ebene=bezirk|abschnitt|feuerwehr&bereich=<id>`, aufgelöst clientseitig über `useSearchParams()` und in
+`localStorage` gemerkt. Der zweite Parameter heißt bewusst `bereich`, nicht `org` — `/admin/heimatfeuerwehr`
+verwendet `?org=` bereits für ein eigenes, andersartiges Konzept (welche Feuerwehr diese eine Seite gerade
+verwaltet), und ein gemeinsamer Name hätte den Wähler dort unbeabsichtigt in dieses Konzept hineinpfuschen
+lassen. `GeltungsbereichSelector` ist die erste Komponente in dieser Codebase, die `useSearchParams()`
+verwendet statt dem sonst üblichen Muster "eine `page.tsx` liest `searchParams` serverseitig und reicht den
+Anfangswert als Prop nach unten durch" — das geht hier nicht, weil `admin/layout.tsx` die Desktop-Sidebar
+rendert und Next.js-Layouts strukturell nie ein `searchParams`-Prop erhalten (nur `page.tsx`-Dateien tun
+das), sodass eine vom Layout aus gerenderte Komponente keinen anderen Weg hat, die aktuelle Ebene zu
+erfahren. Jede `/admin/*`-Seite liest/validiert den Parameter bei Bedarf trotzdem zusätzlich selbst aus
+ihrem eigenen `searchParams`-Prop.
+
 ### Email
 
 `src/lib/email/mailjet.ts` is a thin `fetch` wrapper around Mailjet's v3.1 Send API (no SDK dependency), plus

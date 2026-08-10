@@ -9,9 +9,9 @@ import { resolveAdminScope, type AdminScope } from '@/lib/admin/scope';
 const STORAGE_KEY = 'admin-scope';
 const BEZIRK_LABEL = 'Bezirk 17 St. Pölten';
 
-function scopeToParams(scope: AdminScope): { ebene: string; org?: string } {
+function scopeToParams(scope: AdminScope): { ebene: string; bereich?: string } {
   if (scope.level === 'BEZIRK') return { ebene: 'bezirk' };
-  return { ebene: scope.level === 'ABSCHNITT' ? 'abschnitt' : 'feuerwehr', org: scope.organizationId };
+  return { ebene: scope.level === 'ABSCHNITT' ? 'abschnitt' : 'feuerwehr', bereich: scope.organizationId };
 }
 
 function scopeLabel(scope: AdminScope): string {
@@ -47,38 +47,51 @@ function GeltungsbereichSelectorInner({ reachable }: { reachable: AdminScope[] }
   const [search, setSearch] = useState('');
 
   const rawEbene = searchParams.get('ebene') ?? undefined;
-  const rawOrg = searchParams.get('org') ?? undefined;
+  const rawOrg = searchParams.get('bereich') ?? undefined;
   const { scope: current } = useMemo(
     () => resolveAdminScope(reachable, rawEbene, rawOrg),
     [reachable, rawEbene, rawOrg],
   );
 
-  function navigateTo(scope: AdminScope) {
+  function navigateTo(scope: AdminScope, options?: { replace?: boolean }) {
     const params = new URLSearchParams(searchParams.toString());
     const next = scopeToParams(scope);
     params.set('ebene', next.ebene);
-    if (next.org) {
-      params.set('org', next.org);
+    if (next.bereich) {
+      params.set('bereich', next.bereich);
     } else {
-      params.delete('org');
+      params.delete('bereich');
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    router.push(`${pathname}?${params.toString()}`);
+    const url = `${pathname}?${params.toString()}`;
+    if (options?.replace) {
+      router.replace(url);
+    } else {
+      router.push(url);
+    }
     setOpen(false);
   }
 
   // Erststart ohne Parameter: zuletzt gewählte Ebene aus localStorage übernehmen, falls noch
   // erreichbar - stellt eine kanonische, teilbare URL her, statt den impliziten Fallback (erster
-  // Eintrag von resolveAdminScope) nur unsichtbar im Hintergrund zu verwenden.
+  // Eintrag von resolveAdminScope) nur unsichtbar im Hintergrund zu verwenden. Der Wähler ist
+  // zweimal pro Seite gemountet (Desktop-Sidebar + mobiler Seiten-Wrapper), daher `router.replace`
+  // statt `router.push` hier - eine echte Nutzerauswahl (siehe onSelect unten) bleibt push, da sie
+  // in der Browser-History landen soll, diese stille Kanonisierung nicht. reachable.length <= 1
+  // wird zusätzlich vor jedem localStorage-Zugriff geprüft, da ein reiner Drohnengruppen-/
+  // Bezirks-Drohnenadmin ganz ohne Organisations-Admin-Recht ein leeres reachable-Array haben kann -
+  // resolveAdminScope's Fallback wäre dann undefined, und navigateTo(undefined) würde in
+  // scopeToParams werfen.
   useEffect(() => {
+    if (reachable.length <= 1) return;
     if (rawEbene) return;
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const stored = JSON.parse(raw) as { ebene?: string; org?: string };
-      const resolved = resolveAdminScope(reachable, stored.ebene, stored.org);
+      const stored = JSON.parse(raw) as { ebene?: string; bereich?: string };
+      const resolved = resolveAdminScope(reachable, stored.ebene, stored.bereich);
       if (!resolved.requestedButUnreachable) {
-        navigateTo(resolved.scope);
+        navigateTo(resolved.scope, { replace: true });
       }
     } catch {
       // Ungültiger localStorage-Inhalt - der bestehende Fallback bleibt einfach bestehen.
@@ -175,7 +188,7 @@ function GeltungsbereichSelectorInner({ reachable }: { reachable: AdminScope[] }
  */
 export function GeltungsbereichSelector({ reachable }: { reachable: AdminScope[] }) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="h-[58px] border-b border-line" />}>
       <GeltungsbereichSelectorInner reachable={reachable} />
     </Suspense>
   );
