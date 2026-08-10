@@ -15,6 +15,7 @@ export interface SessionUser {
   feuerwehrAdminOrgIds: string[];
   abschnittAdminOrgIds: string[];
   isBezirksAdmin: boolean;
+  isBezirksDrohnenAdmin: boolean;
   isAbschnittskommandoMitglied: boolean;
   isDrohnengruppeMember: boolean;
   droneGroupId: string | null;

@@ -94,9 +94,21 @@ export function canManageDroneGroupFor(
 ): boolean {
   return (
     isBezirksAdmin(user) ||
+    user.isBezirksDrohnenAdmin ||
     canManageAbschnittFor(user, droneGroup.organizationId) ||
     (user.droneGroupRole === 'ADMIN' && user.droneGroupId === droneGroup.id)
   );
+}
+
+/** Wer darf isBezirksAdmin bei einem ANDEREN Benutzer setzen/entziehen - nur bestehende Bezirksadmins. */
+export function canGrantBezirksAdmin(currentUser: SessionUser): boolean {
+  return isBezirksAdmin(currentUser);
+}
+
+/** Wer darf isBezirksDrohnenAdmin bei einem ANDEREN Benutzer setzen/entziehen - ein Bezirksadmin ODER
+ * ein bestehender Bezirks-Drohnenadmin (bewusst weiter gefasst als canGrantBezirksAdmin, siehe Design-Spec). */
+export function canGrantBezirksDrohnenAdmin(currentUser: SessionUser): boolean {
+  return isBezirksAdmin(currentUser) || currentUser.isBezirksDrohnenAdmin;
 }
 
 /**

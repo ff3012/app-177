@@ -64,6 +64,7 @@ export async function buildSessionUser(user: UserWithRelations): Promise<Session
     feuerwehrAdminOrgIds,
     abschnittAdminOrgIds,
     isBezirksAdmin: user.isBezirksAdmin,
+    isBezirksDrohnenAdmin: user.isBezirksDrohnenAdmin,
     isAbschnittskommandoMitglied:
       user.homeOrganization.type === OrganizationType.ABSCHNITTSKOMMANDO || Boolean(abschnittskommandoMembership),
     isDrohnengruppeMember: Boolean(user.droneMembership),

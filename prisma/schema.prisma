@@ -222,6 +222,11 @@ model User {
   // wäre. Default false: niemand ist automatisch Bezirksadmin, siehe Task 3 für den Bootstrap-Admin.
   isBezirksAdmin Boolean @default(false)
 
+  // Bezirksweites Recht, alle 4 Drohnengruppen zu sehen/verwalten, unabhängig von einer eigenen
+  // Drohnengruppen-Mitgliedschaft - eigenständig von isBezirksAdmin, jemand kann keines, eines oder
+  // beide haben. Siehe docs/superpowers/specs/2026-08-10-bezirksadmin-drohnenadmin-rollen-design.md.
+  isBezirksDrohnenAdmin Boolean @default(false)
+
   homeOrganization       Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
   memberships            Membership[]
   droneMembership        DrohnengruppeMembership?
