@@ -3,23 +3,12 @@
 import { useMemo, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { groupByAbschnitt } from '@/lib/admin/group-by-abschnitt';
 
 interface OrgOption {
   id: string;
   name: string;
   abschnittName?: string;
-}
-
-/** Gruppiert die (bereits durchsuchte) Feuerwehr-Liste nach Abschnitt, dieselbe Begründung wie
- * OrgSelect/groupByAbschnitt/groupOrganizationsByAbschnitt an den anderen drei Feuerwehr-Auswahlstellen
- * dieser Codebase: mit bis zu 124 Feuerwehren (Bezirksadmin) ist eine flache Liste sonst unbrauchbar. */
-function groupByAbschnitt(organizations: OrgOption[]): Record<string, OrgOption[]> {
-  const groups: Record<string, OrgOption[]> = {};
-  for (const org of organizations) {
-    const key = org.abschnittName ?? 'Ohne Abschnitt';
-    (groups[key] ??= []).push(org);
-  }
-  return groups;
 }
 
 /**

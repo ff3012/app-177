@@ -35,6 +35,7 @@ import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
 import { formatRelativeDate, isOlderThanMonths } from '@/lib/format';
 import { getUserStatus, type UserStatus } from '@/lib/auth/user-status';
+import { groupByAbschnitt } from '@/lib/admin/group-by-abschnitt';
 import { bulkSetActive, bulkSetHomeOrganization } from './actions';
 import { UserRowActions } from './user-row-actions';
 
@@ -72,19 +73,6 @@ interface Organization {
   id: string;
   name: string;
   abschnittName?: string;
-}
-
-/** Gruppiert Feuerwehren nach Abschnitt für <optgroup>-artige Darstellung in den Feuerwehr-Selects/
- * -Dropdowns dieser Seite - mit bis zu 124 Feuerwehren (Bezirksadmin) ist eine flache Liste sonst
- * unbrauchbar. Orgs ohne abschnittName (z. B. ein Feuerwehr-Admin mit 1-2 Optionen) landen unter
- * "Ohne Abschnitt". */
-function groupByAbschnitt<T extends { abschnittName?: string }>(organizations: T[]): Record<string, T[]> {
-  const groups: Record<string, T[]> = {};
-  for (const org of organizations) {
-    const key = org.abschnittName ?? 'Ohne Abschnitt';
-    (groups[key] ??= []).push(org);
-  }
-  return groups;
 }
 
 interface DienstgradOption {
