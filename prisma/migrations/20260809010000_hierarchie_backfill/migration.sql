@@ -34,11 +34,14 @@ WHERE category = 'DROHNENGRUPPE' AND "droneGroupId" IS NULL;
 -- manueller Einmal-Befehl. Ohne dieses UPDATE bliebe parentId zwischen Deploy und manuellem Seed NULL,
 -- und getAbschnittOrganizationId() könnte den Abschnitt einer Feuerwehr nicht auflösen - /kalender und
 -- /meine-feuerwehr (die Startseite nach dem Login) würden für praktisch jeden Nutzer fehlschlagen.
--- nummer-Werte identisch zu FEUERWEHR_NAMEN in prisma/seed.ts.
+-- Per name statt nummer gematcht: die Spalte Organization.nummer wird erst von der später
+-- sortierenden Migration 20260810090000_organization_nummer angelegt - ein Match auf nummer würde
+-- einen From-Scratch-Replay dieser Migration hier mit "column nummer does not exist" abbrechen.
+-- name ist seit init @unique vorhanden und identisch zu FEUERWEHR_NAMEN in prisma/seed.ts.
 UPDATE "Organization" SET "parentId" = (
   SELECT id FROM "Organization" WHERE name = 'Abschnittsfeuerwehrkommando Purkersdorf'
 )
-WHERE nummer IN ('17711','17703','17704','17701','17708','17709','17707','17702','17706')
+WHERE name IN ('FF Wolfsgraben','FF Pressbaum','FF Purkersdorf','FF Gablitz','FF Tullnerbach','FF Tullnerbach-Irenental','FF Steinbach','FF Mauerbach','FF Rekawinkel')
   AND "parentId" IS NULL;
 
 -- Bootstrap-Admin wird Bezirksadmin - ebenfalls per Migration statt nur im Seed, damit die App sofort
