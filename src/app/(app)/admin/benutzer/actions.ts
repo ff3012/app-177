@@ -236,6 +236,9 @@ export async function updateUser(
   if (data.isBezirksDrohnenAdmin !== targetUser.isBezirksDrohnenAdmin) {
     assertPermission(canGrantBezirksDrohnenAdmin(currentUser));
   }
+  if (currentUser.id === userId && targetUser.isBezirksAdmin && !data.isBezirksAdmin) {
+    return { error: 'Du kannst dir den Bezirksadmin-Status nicht selbst entziehen.' };
+  }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing && existing.id !== userId) {

@@ -34,6 +34,10 @@ export const userSchema = z
   .refine((data) => !data.isBezirksDrohnenAdmin || data.droneRole === 'ADMIN', {
     message: 'Bezirks-Drohnenadmin erfordert die Rolle "Admin" in der zugeordneten Gruppe.',
     path: ['droneRole'],
+  })
+  .refine((data) => data.droneRole === 'NONE' || !!data.droneGroupId, {
+    message: 'Bitte eine Drohnengruppe wählen.',
+    path: ['droneGroupId'],
   });
 
 export type UserInput = z.infer<typeof userSchema>;

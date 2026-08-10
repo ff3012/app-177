@@ -626,7 +626,7 @@ export function UserFormSheet({
                       <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
                         <div>
                           <div className="text-[15px] font-medium text-ink">Bezirks Drohnenadmin</div>
-                          <div className="mt-0.5 text-[13px] text-ink-muted">Sieht/verwaltet alle Drohnengruppen bezirksweit</div>
+                          <div className="mt-0.5 text-[13px] text-ink-muted">Verwaltet alle Drohnengruppen bezirksweit</div>
                         </div>
                         <Controller
                           control={control}
@@ -638,27 +638,30 @@ export function UserFormSheet({
                     {droneRole !== 'NONE' && (
                       <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
                         <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
-                        <Controller
-                          control={control}
-                          name="droneGroupId"
-                          render={({ field }) => (
-                            <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
-                              <SelectTrigger id="droneGroupId" className="w-full">
-                                <SelectValue placeholder="Gruppe wählen" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="NONE" disabled>
-                                  Gruppe wählen
-                                </SelectItem>
-                                {droneGroups.map((group) => (
-                                  <SelectItem key={group.id} value={group.id}>
-                                    {group.name}
+                        <div className="flex-1">
+                          <Controller
+                            control={control}
+                            name="droneGroupId"
+                            render={({ field }) => (
+                              <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
+                                <SelectTrigger id="droneGroupId" className="w-full">
+                                  <SelectValue placeholder="Gruppe wählen" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="NONE" disabled>
+                                    Gruppe wählen
                                   </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                        />
+                                  {droneGroups.map((group) => (
+                                    <SelectItem key={group.id} value={group.id}>
+                                      {group.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          <FieldError message={errors.droneGroupId?.message} />
+                        </div>
                       </div>
                     )}
                   </div>
