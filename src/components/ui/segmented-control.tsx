@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 interface SegmentedControlOption<T extends string> {
   value: T;
   label: string;
+  disabled?: boolean;
 }
 
 /**
@@ -39,10 +40,12 @@ export function SegmentedControl<T extends string>({
         <RadioGroupPrimitive.Item
           key={option.value}
           value={option.value}
+          disabled={option.disabled}
           className={cn(
             'rounded-md px-3 py-1.5 text-[13px] font-medium text-ink-muted outline-none transition-colors',
             'focus-visible:ring-2 focus-visible:ring-ring',
             'data-[state=checked]:bg-white data-[state=checked]:font-semibold data-[state=checked]:text-ink data-[state=checked]:shadow-sm',
+            'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40',
           )}
         >
           {option.label}

@@ -82,6 +82,8 @@ export interface UserSheetTarget {
   droneGroupId: string | null;
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
+  isBezirksAdmin: boolean;
+  isBezirksDrohnenAdmin: boolean;
 }
 
 interface UserFormSheetProps {
@@ -91,6 +93,8 @@ interface UserFormSheetProps {
   organizations: OrganizationOption[];
   dienstgrade: DienstgradOption[];
   droneGroups: { id: string; name: string }[];
+  viewerIsBezirksAdmin: boolean;
+  viewerIsBezirksDrohnenAdmin: boolean;
   target?: UserSheetTarget;
   onSaved: () => void;
 }
@@ -136,6 +140,8 @@ function buildDefaultValues(
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
     droneGroupId: target?.droneGroupId ?? null,
+    isBezirksAdmin: target?.isBezirksAdmin ?? false,
+    isBezirksDrohnenAdmin: target?.isBezirksDrohnenAdmin ?? false,
     sendWelcomeEmail: true,
   };
 }
@@ -150,7 +156,18 @@ function buildDefaultValues(
  * Reset-Mail-Aktion), die Mehrfachauswahl "Admin für" und den neuen Block "Funktionen und
  * Ausbildung" (Atemschutz + segmentierte Drohnengruppen-Auswahl).
  */
-export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstgrade, droneGroups, target, onSaved }: UserFormSheetProps) {
+export function UserFormSheet({
+  open,
+  onOpenChange,
+  mode,
+  organizations,
+  dienstgrade,
+  droneGroups,
+  target,
+  onSaved,
+  viewerIsBezirksAdmin,
+  viewerIsBezirksDrohnenAdmin,
+}: UserFormSheetProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
   const [activationLink, setActivationLink] = useState<string | undefined>();
@@ -168,6 +185,7 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<UserInput>({
     resolver: zodResolver(userSchema),
@@ -200,6 +218,19 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
   const isActive = watch('isActive');
   const email = watch('email');
   const droneRole = watch('droneRole');
+  const isBezirksDrohnenAdmin = watch('isBezirksDrohnenAdmin');
+
+  // Ein Bezirks-Drohnenadmin verwaltet per Definition alle Drohnengruppen bezirksweit - die
+  // segmentierte Drohnengruppen-Auswahl unten wird auf "Admin" fixiert (siehe die gesperrten
+  // Optionen dort), da userSchema's eigenes .refine() ohnehin verlangt, dass droneRole === 'ADMIN'
+  // ist, sobald isBezirksDrohnenAdmin gesetzt ist - ohne dieses Erzwingen könnte die Validierung
+  // fehlschlagen, obwohl der Schalter aus Sicht des Admins bereits "an" ist.
+  useEffect(() => {
+    if (isBezirksDrohnenAdmin) {
+      setValue('droneRole', 'ADMIN', { shouldDirty: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBezirksDrohnenAdmin]);
 
   function requestClose(next: boolean) {
     if (!next && isDirty && !activationLink) {
@@ -223,6 +254,8 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
     for (const orgId of values.adminOrgIds) formData.append('adminOrgIds', orgId);
     formData.set('droneRole', values.droneRole);
     if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
+    if (values.isBezirksAdmin) formData.set('isBezirksAdmin', 'on');
+    if (values.isBezirksDrohnenAdmin) formData.set('isBezirksDrohnenAdmin', 'on');
     if (values.sendWelcomeEmail) formData.set('sendWelcomeEmail', 'on');
 
     startTransition(async () => {
@@ -524,6 +557,38 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
                   </div>
                 </section>
 
+                {(viewerIsBezirksAdmin || viewerIsBezirksDrohnenAdmin) && (
+                  <section>
+                    <SectionLabel>Bezirksweite Rechte</SectionLabel>
+                    <div className="rounded-lg border border-line">
+                      <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                        <div>
+                          <div className="text-[15px] font-medium text-ink">Bezirksadmin</div>
+                          <div className="mt-0.5 text-[13px] text-ink-muted">Voller Zugriff auf Benutzerverwaltung, E-Mail, Status, News</div>
+                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span tabIndex={viewerIsBezirksAdmin ? -1 : 0} className="inline-block">
+                              <Controller
+                                control={control}
+                                name="isBezirksAdmin"
+                                render={({ field }) => (
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    disabled={!viewerIsBezirksAdmin}
+                                  />
+                                )}
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          {!viewerIsBezirksAdmin && <TooltipContent>Nur Bezirksadmins können diesen Status vergeben</TooltipContent>}
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
                 <section>
                   <SectionLabel>Funktionen und Ausbildung</SectionLabel>
                   <div className="rounded-lg border border-line">
@@ -548,11 +613,28 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
                             aria-label="Drohnengruppe"
                             value={field.value}
                             onValueChange={field.onChange}
-                            options={DRONE_ROLE_OPTIONS.map((option) => ({ value: option, label: DRONE_ROLE_LABELS[option] }))}
+                            options={DRONE_ROLE_OPTIONS.map((option) => ({
+                              value: option,
+                              label: DRONE_ROLE_LABELS[option],
+                              disabled: isBezirksDrohnenAdmin && option !== 'ADMIN',
+                            }))}
                           />
                         )}
                       />
                     </div>
+                    {(viewerIsBezirksAdmin || viewerIsBezirksDrohnenAdmin) && (
+                      <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
+                        <div>
+                          <div className="text-[15px] font-medium text-ink">Bezirks Drohnenadmin</div>
+                          <div className="mt-0.5 text-[13px] text-ink-muted">Sieht/verwaltet alle Drohnengruppen bezirksweit</div>
+                        </div>
+                        <Controller
+                          control={control}
+                          name="isBezirksDrohnenAdmin"
+                          render={({ field }) => <Switch checked={field.value} onCheckedChange={field.onChange} />}
+                        />
+                      </div>
+                    )}
                     {droneRole !== 'NONE' && (
                       <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
                         <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
