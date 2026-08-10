@@ -654,6 +654,15 @@ export function UserFormSheet({
                         />
                       </div>
                     )}
+                    {droneRole === 'NONE' &&
+                      target &&
+                      [target.a1a3LizenzAm, target.a2LizenzAm, target.stuetzpunktausbildungAm, target.bos1AusbildungAm, target.bos2AusbildungAm].some(
+                        Boolean,
+                      ) && (
+                        <p className="border-b border-line px-3.5 py-2.5 text-xs text-danger">
+                          Beim Entfernen aus der Gruppe werden die erfassten Ausbildungsdaten gelöscht.
+                        </p>
+                      )}
                     {droneRole !== 'NONE' && (
                       <>
                         <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
@@ -689,6 +698,7 @@ export function UserFormSheet({
                             <div>
                               <FieldLabel htmlFor="a1a3LizenzAm">A1/A3 Pilotenlizenz</FieldLabel>
                               <Input id="a1a3LizenzAm" type="date" {...register('a1a3LizenzAm')} />
+                              <FieldError message={errors.a1a3LizenzAm?.message} />
                             </div>
                             <div>
                               <FieldLabel htmlFor="a2LizenzAm">A2 Pilotenlizenz</FieldLabel>
@@ -698,6 +708,7 @@ export function UserFormSheet({
                                 disabled={!a1a3LizenzAm}
                                 {...register('a2LizenzAm')}
                               />
+                              <FieldError message={errors.a2LizenzAm?.message} />
                             </div>
                             <div>
                               <FieldLabel htmlFor="stuetzpunktausbildungAm">Stützpunktausbildung</FieldLabel>
@@ -707,6 +718,7 @@ export function UserFormSheet({
                                 disabled={!a2LizenzAm}
                                 {...register('stuetzpunktausbildungAm')}
                               />
+                              <FieldError message={errors.stuetzpunktausbildungAm?.message} />
                             </div>
                             <div>
                               <FieldLabel htmlFor="bos1AusbildungAm">BOS1 Ausbildung</FieldLabel>
@@ -716,6 +728,7 @@ export function UserFormSheet({
                                 disabled={!stuetzpunktausbildungAm}
                                 {...register('bos1AusbildungAm')}
                               />
+                              <FieldError message={errors.bos1AusbildungAm?.message} />
                             </div>
                             <div>
                               <FieldLabel htmlFor="bos2AusbildungAm">BOS2 Ausbildung</FieldLabel>

@@ -17,7 +17,13 @@ import {
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
-import { AUSBILDUNGSSTUFEN, type DroneRoleOption, parseUserFormData, userSchema } from '@/lib/validation/user.schema';
+import {
+  AUSBILDUNGSSTUFEN,
+  type Ausbildungsstufe,
+  type DroneRoleOption,
+  parseUserFormData,
+  userSchema,
+} from '@/lib/validation/user.schema';
 import type { SessionUser } from '@/types/next-auth';
 
 export interface UserFormState {
@@ -75,6 +81,18 @@ async function syncAdminMemberships(currentUser: SessionUser, userId: string, ad
   }
 }
 
+type AusbildungsDaten = Record<Ausbildungsstufe, string>;
+
+function toAusbildungsUpdate(daten: AusbildungsDaten) {
+  return {
+    a1a3LizenzAm: daten.a1a3LizenzAm ? new Date(daten.a1a3LizenzAm) : null,
+    a2LizenzAm: daten.a2LizenzAm ? new Date(daten.a2LizenzAm) : null,
+    stuetzpunktausbildungAm: daten.stuetzpunktausbildungAm ? new Date(daten.stuetzpunktausbildungAm) : null,
+    bos1AusbildungAm: daten.bos1AusbildungAm ? new Date(daten.bos1AusbildungAm) : null,
+    bos2AusbildungAm: daten.bos2AusbildungAm ? new Date(daten.bos2AusbildungAm) : null,
+  };
+}
+
 /**
  * Die Drohnengruppe wird vom Client mitgeschickt - ohne eigene Prüfung konnte sich damit JEDER, der
  * überhaupt in die Benutzerverwaltung kommt (auch ein reiner Feuerwehr-Admin, siehe
@@ -89,25 +107,10 @@ async function syncAdminMemberships(currentUser: SessionUser, userId: string, ad
  * überhaupt nicht mehr bearbeiten (das Formular schickt dessen unveränderte Gruppe ja immer mit).
  * Ändert sich etwas, müssen BEIDE betroffenen Gruppen (bisherige und neue) im Recht des Aufrufers
  * liegen - sonst ließe sich über droneRole='NONE' eine fremde Gruppenmitgliedschaft entfernen.
+ *
+ * Seit der Ausbildungsstufen-Erweiterung gilt dieselbe Prüfung auch für eine reine
+ * Ausbildungsdaten-Änderung ohne Rollen-/Gruppenwechsel (siehe ausbildungChanged unten).
  */
-interface AusbildungsDaten {
-  a1a3LizenzAm: string;
-  a2LizenzAm: string;
-  stuetzpunktausbildungAm: string;
-  bos1AusbildungAm: string;
-  bos2AusbildungAm: string;
-}
-
-function toAusbildungsUpdate(daten: AusbildungsDaten) {
-  return {
-    a1a3LizenzAm: daten.a1a3LizenzAm ? new Date(daten.a1a3LizenzAm) : null,
-    a2LizenzAm: daten.a2LizenzAm ? new Date(daten.a2LizenzAm) : null,
-    stuetzpunktausbildungAm: daten.stuetzpunktausbildungAm ? new Date(daten.stuetzpunktausbildungAm) : null,
-    bos1AusbildungAm: daten.bos1AusbildungAm ? new Date(daten.bos1AusbildungAm) : null,
-    bos2AusbildungAm: daten.bos2AusbildungAm ? new Date(daten.bos2AusbildungAm) : null,
-  };
-}
-
 async function syncDroneMembership(
   currentUser: SessionUser,
   userId: string,

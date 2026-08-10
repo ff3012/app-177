@@ -53,23 +53,21 @@ export const userSchema = z
     message: 'Bitte eine Drohnengruppe wählen.',
     path: ['droneGroupId'],
   })
-  .refine(
-    (data) => {
-      let seenGap = false;
-      for (const key of AUSBILDUNGSSTUFEN) {
-        if (!data[key]) {
-          seenGap = true;
-        } else if (seenGap) {
-          return false;
-        }
+  .superRefine((data, ctx) => {
+    let seenGap = false;
+    for (const key of AUSBILDUNGSSTUFEN) {
+      if (!data[key]) {
+        seenGap = true;
+      } else if (seenGap) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Ausbildungsstufen müssen der Reihe nach abgeschlossen werden.',
+          path: [key],
+        });
+        break;
       }
-      return true;
-    },
-    {
-      message: 'Ausbildungsstufen müssen der Reihe nach abgeschlossen werden.',
-      path: ['bos2AusbildungAm'],
-    },
-  );
+    }
+  });
 
 export type UserInput = z.infer<typeof userSchema>;
 

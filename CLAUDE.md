@@ -873,6 +873,26 @@ own-flights query, same as before this toggle existed.
   rule would lapse with no further flights: it's 90 days after the `NINETY_DAY_REQUIRED_FLIGHTS`-th most
   recent flight still inside the window — that's the specific flight whose expiry would drop the count below
   the threshold, not simply the oldest flight in the window.
+- **Ausbildungsstufen (Verwaltung)**: fünf sequenzielle Ausbildungsstufen (A1/A3-Lizenz → A2-Lizenz →
+  Stützpunktausbildung → BOS1 → BOS2) leben als nullable `DateTime`-Felder direkt auf
+  `DrohnengruppeMembership`, nicht auf `User` — sie ergeben nur für tatsächliche Gruppenmitglieder einen
+  Sinn. Eine einzige "gültiger Präfix"-Invariante (eine Stufe darf nur gesetzt sein, wenn jede
+  vorangehende Stufe ebenfalls gesetzt ist) wird über ein einzelnes `.superRefine()` auf `userSchema`
+  erzwungen und verhindert damit gleichzeitig sowohl das Überspringen einer Stufe als auch das Entziehen
+  einer mittleren Stufe, solange eine spätere noch davon abhängt. **Achtung**: `syncDroneMembership`s
+  (`admin/benutzer/actions.ts`) Early-Return wurde gezielt um eine `ausbildungChanged`-Prüfung erweitert,
+  damit eine reine Ausbildungsdaten-Änderung (ohne Rollen-/Gruppenwechsel) nicht stillschweigend
+  übersprungen wird — würde man diesen Term wieder aus der Early-Return-Bedingung entfernen, würde jede
+  reine Ausbildungs-Bearbeitung scheinbar erfolgreich speichern (kein Fehler, Erfolgs-Toast), ohne dass
+  tatsächlich etwas in die Datenbank geschrieben wird; genau die Art von leicht übersehener Regression,
+  die es hier explizit zu vermeiden gilt. Wird `droneRole` auf `'NONE'` zurückgesetzt, löscht das
+  bestehende `deleteMany` die gesamte `DrohnengruppeMembership`-Zeile — inklusive aller 5
+  Ausbildungsdaten. Das ist eine bewusste Konsequenz der Datenmodell-Entscheidung oben und wird seit dem
+  finalen Review über eine clientseitige Warnung in `UserFormSheet` sichtbar gemacht, statt stillschweigend
+  zu passieren. Diese Phase ist reine Datenerfassung — es existiert noch keine Anzeige-/Bereitschafts-UI
+  (Badge, Ampel, bezirksweite Übersicht); das ist das noch nicht gebaute "Einsatzbereitschaft"-Konzept aus
+  `Verwaltung-Filter-Brief.md` §6.1, eine bewusst getrennte, spätere Phase, die diese Daten erst konsumieren
+  wird, sobald sie existiert.
 
 **Drohnengruppe V2 (Signalrot-Mockup-Angleichung)** — the three items below (`NinetyDayRing`,
 `GroupStatusChart`, `PurposeBadge`) were one pass to bring this module in line with the "Signalrot" design
