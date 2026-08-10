@@ -2248,7 +2248,572 @@ git commit -m "Verwaltung: Feuerwehr-Dropdowns nach Abschnitt gruppiert"
 
 ---
 
-## Final verification (after all 10 tasks)
+### Task 11: Benutzerverwaltung — echte Drohnengruppen-Auswahl statt Notbehelf
+
+**Why this task exists:** Task 2's implementer discovered, and Task 2's reviewer independently confirmed,
+a real gap in this plan: `src/app/(app)/admin/benutzer/actions.ts`'s `syncDroneMembership` (called from
+`createUser`/`updateUser`) creates a `DrohnengruppeMembership` row whenever an admin sets the
+"Drohnengruppe" `SegmentedControl` in `UserFormSheet` to "Mitglied"/"Admin" — but that control only ever
+offered a 3-way role choice ("Kein · Mitglied · Admin"), never a *group* choice, because it was built
+before groups existed. Task 2 added a temporary shim (`prisma.droneGroup.findFirstOrThrow()`, correct only
+while exactly one group exists) so the build stays green through Tasks 3–10, with a code comment pointing
+here. This task replaces that shim with a real group picker, once Task 3 has seeded all 4 real groups to
+choose from.
+
+**Files:**
+- Modify: `src/lib/validation/user.schema.ts`
+- Modify: `src/components/admin/user-form-sheet.tsx`
+- Modify: `src/app/(app)/admin/benutzer/actions.ts`
+- Modify: `src/app/(app)/admin/benutzer/page.tsx`
+- Modify: `src/app/(app)/admin/benutzer/user-management-section.tsx`
+
+**Interfaces:**
+- Consumes: `DroneGroup` rows from Task 3, `canManageDroneGroupFor`/`isBezirksAdmin` from Task 5 (which
+  groups the current admin may assign into — see Step 4).
+
+- [ ] **Step 1: `src/lib/validation/user.schema.ts` — add `droneGroupId`**
+
+Find the `droneRole: z.enum(DRONE_ROLE_OPTIONS),` line inside the zod object and add right after it:
+
+```typescript
+  droneGroupId: z.string().nullable(),
+```
+
+In the parse function (the one reading `rawDroneRole` off `formData`), add alongside it:
+
+```typescript
+  droneGroupId: (formData.get('droneGroupId') as string) || null,
+```
+
+- [ ] **Step 2: `user-form-sheet.tsx` — add the group `<Select>`, shown only when a role is chosen**
+
+Add `droneGroupId: string | null;` to the form's internal input type (alongside the existing `droneRole:
+DroneRoleOption;` field). In the `defaultValues` object, add `droneGroupId: target?.droneGroupId ?? null,`
+right after the existing `droneRole: target?.droneRole ?? 'NONE',` line.
+
+Add a new prop to `UserFormSheetProps`: `droneGroups: { id: string; name: string }[];` and destructure it
+in the component's parameter list alongside the existing `dienstgrade` prop.
+
+In the `onSubmit`/form-data-building function, add right after the existing
+`formData.set('droneRole', values.droneRole);` line:
+
+```typescript
+    if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
+```
+
+Replace the existing Drohnengruppe block:
+
+```tsx
+                    <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                      <div className="text-[15px] font-medium text-ink">Drohnengruppe</div>
+                      <Controller
+                        control={control}
+                        name="droneRole"
+                        render={({ field }) => (
+                          <SegmentedControl
+                            aria-label="Drohnengruppe"
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            options={DRONE_ROLE_OPTIONS.map((option) => ({ value: option, label: DRONE_ROLE_LABELS[option] }))}
+                          />
+                        )}
+                      />
+                    </div>
+```
+
+with (the group `<Select>` only renders once a role other than "Kein" is chosen — matching the existing
+Dienstgrad `Select`'s `NONE`-sentinel pattern in this same file, since Radix `Select.Item` can't take a
+literal empty-string value):
+
+```tsx
+                    <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
+                      <div className="text-[15px] font-medium text-ink">Drohnengruppe</div>
+                      <Controller
+                        control={control}
+                        name="droneRole"
+                        render={({ field }) => (
+                          <SegmentedControl
+                            aria-label="Drohnengruppe"
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            options={DRONE_ROLE_OPTIONS.map((option) => ({ value: option, label: DRONE_ROLE_LABELS[option] }))}
+                          />
+                        )}
+                      />
+                    </div>
+                    {droneRole !== 'NONE' && (
+                      <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                        <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
+                        <Controller
+                          control={control}
+                          name="droneGroupId"
+                          render={({ field }) => (
+                            <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
+                              <SelectTrigger id="droneGroupId" className="w-full">
+                                <SelectValue placeholder="Gruppe wählen" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE" disabled>
+                                  Gruppe wählen
+                                </SelectItem>
+                                {droneGroups.map((group) => (
+                                  <SelectItem key={group.id} value={group.id}>
+                                    {group.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    )}
+```
+
+`droneRole` needs to be read via `watch('droneRole')` (check whether this file already destructures
+`watch` from `useForm()` — if not, add it) to drive the conditional render above.
+
+- [ ] **Step 3: `admin/benutzer/actions.ts` — replace the shim**
+
+Replace `syncDroneMembership`'s body:
+
+```typescript
+async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
+  if (droneRole === 'NONE') {
+    await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
+    return;
+  }
+  const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  // ... (shim comment + findFirstOrThrow) ...
+  const droneGroup = await prisma.droneGroup.findFirstOrThrow();
+  await prisma.drohnengruppeMembership.upsert({
+    where: { userId },
+    update: { role },
+    create: { userId, role, droneGroupId: droneGroup.id },
+  });
+}
+```
+
+with:
+
+```typescript
+async function syncDroneMembership(userId: string, droneRole: DroneRoleOption, droneGroupId: string | null) {
+  if (droneRole === 'NONE') {
+    await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
+    return;
+  }
+  if (!droneGroupId) {
+    throw new Error('Drohnengruppe ist erforderlich, wenn eine Rolle gewählt wurde.');
+  }
+  const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
+  await prisma.drohnengruppeMembership.upsert({
+    where: { userId },
+    update: { role, droneGroupId },
+    create: { userId, role, droneGroupId },
+  });
+}
+```
+
+Update both call sites (`createUser`, `updateUser`) from `await syncDroneMembership(user.id,
+data.droneRole);` to `await syncDroneMembership(user.id, data.droneRole, data.droneGroupId);`.
+
+- [ ] **Step 4: `admin/benutzer/page.tsx` — fetch and pass `droneGroups`**
+
+Find the `Promise.all([users, organizations, dienstgrade])` fetch (or however it's currently named/ordered)
+and add a fourth query: `prisma.droneGroup.findMany({ orderBy: { name: 'asc' }, select: { id: true, name:
+true } })`. Pass the result through to `<UserManagementSection droneGroups={...} />` alongside the existing
+`dienstgrade={...}` prop, unfiltered by admin scope — any admin who can reach Benutzerverwaltung at all may
+assign a user to any of the 4 groups (this mirrors the existing `dienstgrade` list, which is also shown
+unfiltered; scoping *which groups* a given Abschnittsadmin may assign into was not part of Issue #10's ask
+and would need its own design discussion, not a silent addition here).
+
+- [ ] **Step 5: `user-management-section.tsx` — thread `droneGroups` through to `UserFormSheet`**
+
+Add `droneGroups: { id: string; name: string }[];` to this component's own props type (alongside the
+existing `dienstgrade` prop) and pass it straight through to `<UserFormSheet droneGroups={droneGroups}
+... />` at its existing render call site (alongside the existing `dienstgrade={dienstgrade}` line).
+
+- [ ] **Step 6: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Create `scripts-tmp-verify-benutzer-dronegroup.ts`:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+async function main() {
+  const groups = await prisma.droneGroup.findMany();
+  const testUser = await prisma.user.findFirstOrThrow({ where: { droneMembership: null } });
+  const targetGroup = groups.find((g) => g.name !== 'AFKDO Purkersdorf')!;
+
+  // Simulates what syncDroneMembership now does with an explicit droneGroupId.
+  await prisma.drohnengruppeMembership.create({
+    data: { userId: testUser.id, role: 'PILOT', droneGroupId: targetGroup.id },
+  });
+
+  const membership = await prisma.drohnengruppeMembership.findUnique({ where: { userId: testUser.id } });
+  console.log('Assigned to the chosen non-default group, not an arbitrary one:', membership?.droneGroupId === targetGroup.id);
+
+  await prisma.drohnengruppeMembership.delete({ where: { userId: testUser.id } });
+}
+
+main().finally(() => prisma.$disconnect());
+```
+
+Run: `npx tsx scripts-tmp-verify-benutzer-dronegroup.ts` — must print `true`. Delete afterward.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lib/validation/user.schema.ts src/components/admin/user-form-sheet.tsx src/app/\(app\)/admin/benutzer/
+git commit -m "Benutzerverwaltung: echte Drohnengruppen-Auswahl statt Notbehelf (Task-2-Review-Fund)"
+```
+
+---
+
+### Task 12: Push-Benachrichtigungs-Zielgruppe abschnitts-/gruppenscoped
+
+**Why this task exists:** Task 7's implementer, while fixing `canViewEvent`'s Abschnitt-scoping,
+independently found the same bug class in a file no task in this plan touches:
+`src/lib/push/audience.ts`'s `resolveEventAudienceUserIds()` — used by the event detail page's
+"Push-Benachrichtigung jetzt senden" button — sends to **every active user in the entire Bezirk**
+for any `isSectionWide` event (`event.isSectionWide ? { isActive: true } : {...}`, no Abschnitt filter
+at all), and to **every Drohnengruppe member across all 4 groups** for any `DROHNENGRUPPE`-category
+event (same ungated `droneMembership: { isNot: null }` query Task 8 already fixes for Kalender
+*visibility*, but never for *push audience*). Confirmed by reading the file directly — this is a real,
+unaddressed gap, not a hypothetical: it means pressing that button on a single Herzogenburg event would
+push-notify every person in the whole Bezirk 17, not just Herzogenburg's members, once real users exist
+across all 7 Abschnitte.
+
+**Files:**
+- Modify: `src/lib/push/audience.ts`
+
+**Interfaces:**
+- Consumes: `getAbschnittOrganizationId` from Task 7, `Event.droneGroupId` from Task 8 (this task must
+  run after Task 8, not before, since it needs the `droneGroupId` field Task 8 adds to `Event`).
+
+- [ ] **Step 1: Fix `resolveEventAudienceUserIds`**
+
+Replace the whole function body:
+
+```typescript
+export async function resolveEventAudienceUserIds(event: {
+  organizationId: string;
+  isSectionWide: boolean;
+  category: string;
+}): Promise<string[]> {
+  if (event.category === 'DROHNENGRUPPE') {
+    const members = await prisma.user.findMany({
+      where: { droneMembership: { isNot: null }, isActive: true },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+
+  const members = await prisma.user.findMany({
+    where: event.isSectionWide ? { isActive: true } : { isActive: true, homeOrganizationId: event.organizationId },
+    select: { id: true },
+  });
+  return members.map((member) => member.id);
+}
+```
+
+with:
+
+```typescript
+export async function resolveEventAudienceUserIds(event: {
+  organizationId: string;
+  isSectionWide: boolean;
+  category: string;
+  droneGroupId: string | null;
+}): Promise<string[]> {
+  if (event.category === 'DROHNENGRUPPE') {
+    const members = await prisma.user.findMany({
+      where: { droneMembership: { droneGroupId: event.droneGroupId ?? undefined }, isActive: true },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+
+  if (!event.isSectionWide) {
+    const members = await prisma.user.findMany({
+      where: { isActive: true, homeOrganizationId: event.organizationId },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+
+  const organization = await prisma.organization.findUniqueOrThrow({
+    where: { id: event.organizationId },
+    select: { type: true, id: true, parentId: true },
+  });
+  const abschnittOrganizationId = getAbschnittOrganizationId(organization);
+  const members = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      homeOrganization: { OR: [{ id: abschnittOrganizationId }, { parentId: abschnittOrganizationId }] },
+    },
+    select: { id: true },
+  });
+  return members.map((member) => member.id);
+}
+```
+
+Add the import: `import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';`.
+
+`droneMembership: { droneGroupId: event.droneGroupId ?? undefined }` — if `event.droneGroupId` is
+somehow `null` on a `DROHNENGRUPPE`-category event (shouldn't happen after Task 8, but defensively:
+`undefined` in a Prisma nested-relation filter means "don't filter on this field", which here would
+incorrectly widen back to all groups) — check this specific edge case in your verification step below
+rather than assuming the `?? undefined` fallback is safe.
+
+- [ ] **Step 2: Update the call site**
+
+Grep for `resolveEventAudienceUserIds(` (expected in the event detail page's `triggerEventPushNotification`
+Server Action or similar). Confirm the `event` object passed in already includes `droneGroupId` — if the
+Prisma query feeding it doesn't `select`/`include` that field yet, add it.
+
+- [ ] **Step 3: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Create `scripts-tmp-verify-push-audience.ts`:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { resolveEventAudienceUserIds } from './src/lib/push/audience';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  const herzogenburg = await prisma.organization.findFirstOrThrow({ where: { name: 'Abschnittsfeuerwehrkommando Herzogenburg' } });
+  const purkersdorfUser = await prisma.user.findFirstOrThrow({ where: { homeOrganization: { name: 'FF Wolfsgraben' } } });
+
+  const audience = await resolveEventAudienceUserIds({
+    organizationId: herzogenburg.id,
+    isSectionWide: true,
+    category: 'ALLGEMEIN',
+    droneGroupId: null,
+  });
+  console.log('Purkersdorf-Nutzer NICHT in Herzogenburg-Push-Zielgruppe:', !audience.includes(purkersdorfUser.id));
+
+  const kirchbergGroup = await prisma.droneGroup.findFirstOrThrow({ where: { name: 'AFKDO Kirchberg' } });
+  const purkersdorfGroup = await prisma.droneGroup.findFirstOrThrow({ where: { name: 'AFKDO Purkersdorf' } });
+  const droneAudience = await resolveEventAudienceUserIds({
+    organizationId: herzogenburg.id,
+    isSectionWide: true,
+    category: 'DROHNENGRUPPE',
+    droneGroupId: kirchbergGroup.id,
+  });
+  // Any existing AFKDO-Purkersdorf drone member must not appear in a Kirchberg-group push audience.
+  const purkersdorfDronePilots = await prisma.user.findMany({ where: { droneMembership: { droneGroupId: purkersdorfGroup.id } }, select: { id: true } });
+  console.log(
+    'AFKDO-Purkersdorf-Piloten NICHT in AFKDO-Kirchberg-Push-Zielgruppe:',
+    purkersdorfDronePilots.every((p) => !droneAudience.includes(p.id)),
+  );
+}
+
+main().finally(() => prisma.$disconnect());
+```
+
+Run: `npx tsx scripts-tmp-verify-push-audience.ts` — both lines must print `true`. Delete the script
+afterward.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/lib/push/audience.ts
+git commit -m "Push: Zielgruppe für abschnittsweite/Drohnengruppen-Termine korrekt gescoped (Task-7-Fund)"
+```
+
+---
+
+### Task 13: Drohnengruppen-scoped Flug-Verwaltungsrecht
+
+**Why this task exists:** Task 9's reviewer confirmed a real, pre-existing-but-now-more-reachable gap:
+`canManageFlight`/`isDroneGroupAdmin` in `src/lib/auth/permissions.ts` grant Admin-Drohnengruppe rights
+globally, not per group — an Admin of Group A can edit/delete a Group B flight if they know or guess its
+`cuid()`. Task 9 didn't widen the exposure (no UI surfaces a foreign flight's id), but it did remove an
+accidental barrier: Task 9's `bearbeiten`-page dropdowns and `updateFlight`'s eligibility checks now scope
+by the flight's OWN drone's group rather than the editing user's group, so a cross-group edit that reaches
+the form no longer gets rejected by the pilot/drone `<select>` options being wrong for the editor's group.
+
+**Files:**
+- Modify: `src/lib/auth/permissions.ts`
+- Modify: call sites of `canManageFlight` (grep for them — expected in `drohnen/[flightId]/actions.ts`
+  or similarly named flight update/delete actions, and the `bearbeiten` page's own gate)
+
+**Interfaces:**
+- Consumes: `DroneFlight.drone.droneGroupId` (via the flight's own drone relation), `user.droneGroupId`.
+
+- [ ] **Step 1: Scope `canManageFlight` by group**
+
+Replace:
+
+```typescript
+export function canManageFlight(user: SessionUser, flight: { registeredById: string }): boolean {
+  return isDroneGroupAdmin(user) || flight.registeredById === user.id;
+}
+```
+
+with:
+
+```typescript
+export function canManageFlight(
+  user: SessionUser,
+  flight: { registeredById: string; droneGroupId: string },
+): boolean {
+  return (isDroneGroupAdmin(user) && user.droneGroupId === flight.droneGroupId) || flight.registeredById === user.id;
+}
+```
+
+`flight.droneGroupId` here is the flight's OWN group — resolved via its `drone.droneGroupId` at each call
+site (a `DroneFlight` has no direct `droneGroupId` column, only through its `Drone` relation), not a new
+schema field. Every call site must pass `{ registeredById: flight.registeredById, droneGroupId:
+flight.drone.droneGroupId }`, which requires that call site's Prisma query to `include`/`select`
+`drone: { select: { droneGroupId: true } }` if it doesn't already.
+
+- [ ] **Step 2: Update every call site**
+
+Grep for `canManageFlight(` and update each one to pass the new shape, adding the `drone` relation to
+whatever query fetches the flight if it's missing.
+
+- [ ] **Step 3: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Write a standalone script confirming: a Group-A drone-admin CAN manage a Group-A flight, CANNOT manage a
+Group-B flight (even though `isDroneGroupAdmin` alone is true for them), and CAN still manage their own
+registered flight regardless of its group (the `flight.registeredById === user.id` branch is unchanged and
+un-scoped — a member editing their own logged flight was never restricted by group and shouldn't become
+so now).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/lib/auth/permissions.ts
+git commit -m "Drohnengruppe: canManageFlight gruppenscoped (Task-9-Review-Fund)"
+```
+
+---
+
+### Task 14: News-Modul — Drohnengruppen-Zielgruppe auf eine konkrete Gruppe einschränken
+
+**Why this task exists:** Task 12's implementer and reviewer both confirmed a real, unaddressed gap:
+`src/lib/push/audience.ts`'s `resolveAudienceUserIds()` (used by the News module, `NewsAudienceType.DROHNENGRUPPE`)
+sends to **every** Drohnengruppe member across all 4 groups — `NewsMessage` has no field to identify a
+*specific* target group, unlike `NewsAudienceType.ORGANIZATION`, which already has `audienceOrgId`.
+Unlike Task 12's Kalender-Push fix (where an `Event` already had a concrete `droneGroupId` to scope by),
+this one genuinely needs new schema + UI, which is why it's its own task rather than a one-line fix.
+**Not a low-priority edge case**: `canManageNews` is `isBezirksAdmin`-gated — a Bezirk-wide right — and 4
+real `DroneGroup`s already exist across different Abschnitte in seed data, so this is reachable by the
+exact admin persona this whole plan introduces, not a remote theoretical case.
+
+**Files:**
+- Modify: `prisma/schema.prisma`
+- Modify: `src/lib/push/audience.ts`
+- Modify: `src/lib/validation/news.schema.ts` (or wherever the News form's zod schema lives — grep for
+  `audienceOrgId` to find it)
+- Modify: `src/components/news/news-form.tsx`
+- Modify: `src/app/(app)/news/actions.ts` (or wherever `NewsMessage` gets created — grep for
+  `prisma.newsMessage.create`)
+
+**Interfaces:**
+- Produces: `NewsMessage.audienceDroneGroupId` (nullable, mirrors the existing `audienceOrgId` pattern).
+
+- [ ] **Step 1: Add `audienceDroneGroupId` to `NewsMessage`**
+
+```prisma
+model NewsMessage {
+  // ...existing fields...
+  audienceDroneGroupId String?
+  audienceDroneGroup    DroneGroup? @relation(fields: [audienceDroneGroupId], references: [id])
+}
+```
+
+Nullable, additive — no backfill needed (existing `DROHNENGRUPPE`-audience `NewsMessage` rows simply keep
+`audienceDroneGroupId: null`, meaning "was sent to all groups," a fact worth preserving for historical
+accuracy rather than erasing). Run `npm run db:migrate`.
+
+- [ ] **Step 2: `resolveAudienceUserIds` — scope by the new field when present**
+
+```typescript
+export async function resolveAudienceUserIds(
+  audienceType: NewsAudienceType,
+  audienceOrgId: string | null,
+  audienceDroneGroupId: string | null,
+): Promise<string[]> {
+  if (audienceType === NewsAudienceType.DROHNENGRUPPE) {
+    const members = await prisma.user.findMany({
+      where: { droneMembership: { droneGroupId: audienceDroneGroupId ?? undefined }, isActive: true },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
+  // ...unchanged ORGANIZATION branch...
+}
+```
+
+Unlike Task 12's fix, `?? undefined` here is the CORRECT, intentional choice (not the bug it was in
+`resolveEventAudienceUserIds`): a `null` `audienceDroneGroupId` genuinely means "every group" for this
+function specifically (preserving old messages' broad-send behavior, per Step 1's rationale), whereas
+Task 12's bug was a group-scoped event ending up with a null id by mistake, not by design.
+
+- [ ] **Step 3: Update every call site of `resolveAudienceUserIds`**
+
+Grep for it (expected in `src/lib/news/send-news.ts`'s `dispatchNewsMessage`) and pass the new third
+argument from the `NewsMessage` row's own `audienceDroneGroupId`.
+
+- [ ] **Step 4: `news-form.tsx` — add the group picker**
+
+Mirror the existing `audienceType === 'ORGANIZATION'` conditional `<select>` block: add a sibling
+`audienceType === 'DROHNENGRUPPE'` block with a `<select {...register('audienceDroneGroupId')}>` listing
+all 4 `DroneGroup`s (plus perhaps an explicit "Alle Gruppen" option mapping to `null`, matching the
+Step 1 backward-compatibility intent — confirm with whoever reviews this task whether "send to all
+groups" should remain a selectable option going forward, or whether it should now always require picking
+one specific group; the brief doesn't mandate an answer here, treat it as an open question to flag in
+your report rather than silently deciding it yourself).
+
+- [ ] **Step 5: Update the zod schema and the create action**
+
+Add `audienceDroneGroupId: z.string().nullable()` to the News form schema, parse it from `FormData`, and
+pass it into `prisma.newsMessage.create({ data: { ..., audienceDroneGroupId } })`.
+
+- [ ] **Step 6: Verify with `tsc` and a live-data script**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+Write a script confirming: a `NewsMessage` with `audienceType: DROHNENGRUPPE` and a specific
+`audienceDroneGroupId` resolves via `resolveAudienceUserIds` to only that group's members; a message
+with `audienceDroneGroupId: null` still resolves to every drone-group member (preserving old behavior).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add prisma/schema.prisma src/lib/push/audience.ts src/lib/validation/news.schema.ts src/components/news/news-form.tsx src/app/\(app\)/news/actions.ts
+git commit -m "News: Drohnengruppen-Zielgruppe auf eine konkrete Gruppe einschraenkbar (Task-12-Review-Fund)"
+```
+
+---
+
+## Final verification (after all 14 tasks)
 
 - [ ] `npx tsc --noEmit` — clean across the whole repo.
 - [ ] `npm run build` — clean production build.

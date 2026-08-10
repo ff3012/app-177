@@ -13,7 +13,10 @@ export default async function DrohnenUnterlagenPage() {
     return <p className="text-neutral-700">Dieser Bereich ist nur für Mitglieder der Drohnengruppe sichtbar.</p>;
   }
 
+  // Scoped auf die eigene Drohnengruppe - vor Task 9 gab es systemweit nur eine einzige Gruppe,
+  // daher fiel eine fehlende droneGroupId-Filterung hier bislang nicht als Leck auf.
   const documents = await prisma.droneDocument.findMany({
+    where: { droneGroupId: user.droneGroupId! },
     select: { id: true, title: true, filename: true, sizeBytes: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   });

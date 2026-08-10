@@ -6,10 +6,18 @@ export interface SessionUser {
   name: string;
   homeOrganizationId: string;
   homeOrganizationType: 'FEUERWEHR' | 'ABSCHNITTSKOMMANDO';
+  // Der Abschnitt (Organization.id vom Typ ABSCHNITTSKOMMANDO), dem homeOrganization angehört - bei
+  // homeOrganizationType === ABSCHNITTSKOMMANDO ist das homeOrganizationId selbst, sonst deren parentId.
+  homeAbschnittOrganizationId: string;
+  // Enthält jetzt sowohl direkte Feuerwehr-Admin-Mitgliedschaften ALS AUCH jede Feuerwehr unter einem
+  // Abschnitt aus abschnittAdminOrgIds (siehe build-session-user.ts) - jede bestehende Prüfung, die
+  // dieses Array liest, profitiert automatisch von der Abschnitts-Vererbung ohne eigene Änderung.
   feuerwehrAdminOrgIds: string[];
-  isAbschnittsAdmin: boolean;
+  abschnittAdminOrgIds: string[];
+  isBezirksAdmin: boolean;
   isAbschnittskommandoMitglied: boolean;
   isDrohnengruppeMember: boolean;
+  droneGroupId: string | null;
   droneGroupRole: 'PILOT' | 'VIEWER' | 'ADMIN' | null;
 }
 

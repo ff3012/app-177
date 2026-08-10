@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageEventsFor, canViewEvent } from '@/lib/auth/permissions';
+import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
 import { EventRsvpButtons } from '@/components/calendar/event-rsvp-buttons';
 import { SendEventPushButton } from '@/components/calendar/send-event-push-button';
@@ -34,7 +35,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
   if (!event) {
     return <p className="text-neutral-700">Termin wurde nicht gefunden.</p>;
   }
-  if (!canViewEvent(user, event)) {
+  if (!canViewEvent(user, { ...event, eventAbschnittOrganizationId: getAbschnittOrganizationId(event.organization) })) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Termin zu sehen.</p>;
   }
 

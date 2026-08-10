@@ -6,7 +6,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
@@ -32,6 +40,23 @@ const RESET_COOLDOWN_MS = 60_000;
 interface OrganizationOption {
   id: string;
   name: string;
+  abschnittName?: string;
+}
+
+/** Gruppiert Feuerwehren nach Abschnitt für das "Heimat-Feuerwehr"-Select unten - dieselbe
+ * Begründung wie OrgSelect (admin/heimatfeuerwehr/org-select.tsx)/groupByAbschnitt
+ * (admin/benutzer/user-management-section.tsx): mit bis zu 124 Feuerwehren (Bezirksadmin) ist eine
+ * flache Liste ohne Gruppierung unbrauchbar. Nur gruppieren, wenn wenigstens ein Eintrag tatsächlich
+ * einen abschnittName mitgibt - ein Feuerwehr-Admin mit 1-2 Optionen sieht weiterhin die schlichte
+ * flache Liste.
+ */
+function groupOrganizationsByAbschnitt(organizations: OrganizationOption[]): Record<string, OrganizationOption[]> {
+  const groups: Record<string, OrganizationOption[]> = {};
+  for (const org of organizations) {
+    const key = org.abschnittName ?? 'Ohne Abschnitt';
+    (groups[key] ??= []).push(org);
+  }
+  return groups;
 }
 
 interface DienstgradOption {
@@ -54,6 +79,7 @@ export interface UserSheetTarget {
   homeOrgName: string;
   adminOrgIds: string[];
   droneRole: DroneRoleOption;
+  droneGroupId: string | null;
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
 }
@@ -64,6 +90,7 @@ interface UserFormSheetProps {
   mode: 'create' | 'edit';
   organizations: OrganizationOption[];
   dienstgrade: DienstgradOption[];
+  droneGroups: { id: string; name: string }[];
   target?: UserSheetTarget;
   onSaved: () => void;
 }
@@ -108,6 +135,7 @@ function buildDefaultValues(
     homeOrganizationId: target?.homeOrganizationId ?? organizations[0]?.id ?? '',
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
+    droneGroupId: target?.droneGroupId ?? null,
     sendWelcomeEmail: true,
   };
 }
@@ -122,7 +150,7 @@ function buildDefaultValues(
  * Reset-Mail-Aktion), die Mehrfachauswahl "Admin für" und den neuen Block "Funktionen und
  * Ausbildung" (Atemschutz + segmentierte Drohnengruppen-Auswahl).
  */
-export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstgrade, target, onSaved }: UserFormSheetProps) {
+export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstgrade, droneGroups, target, onSaved }: UserFormSheetProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
   const [activationLink, setActivationLink] = useState<string | undefined>();
@@ -171,6 +199,7 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
   const sendWelcomeEmail = watch('sendWelcomeEmail');
   const isActive = watch('isActive');
   const email = watch('email');
+  const droneRole = watch('droneRole');
 
   function requestClose(next: boolean) {
     if (!next && isDirty && !activationLink) {
@@ -193,6 +222,7 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
     formData.set('homeOrganizationId', values.homeOrganizationId);
     for (const orgId of values.adminOrgIds) formData.append('adminOrgIds', orgId);
     formData.set('droneRole', values.droneRole);
+    if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
     if (values.sendWelcomeEmail) formData.set('sendWelcomeEmail', 'on');
 
     startTransition(async () => {
@@ -456,11 +486,24 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {organizations.map((org) => (
-                                <SelectItem key={org.id} value={org.id}>
-                                  {org.name}
-                                </SelectItem>
-                              ))}
+                              {organizations.some((org) => Boolean(org.abschnittName))
+                                ? Object.entries(groupOrganizationsByAbschnitt(organizations)).map(
+                                    ([abschnittName, orgs]) => (
+                                      <SelectGroup key={abschnittName}>
+                                        <SelectLabel>{abschnittName}</SelectLabel>
+                                        {orgs.map((org) => (
+                                          <SelectItem key={org.id} value={org.id}>
+                                            {org.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    ),
+                                  )
+                                : organizations.map((org) => (
+                                    <SelectItem key={org.id} value={org.id}>
+                                      {org.name}
+                                    </SelectItem>
+                                  ))}
                             </SelectContent>
                           </Select>
                         )}
@@ -495,7 +538,7 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
                         render={({ field }) => <Switch checked={field.value} onCheckedChange={field.onChange} />}
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                    <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
                       <div className="text-[15px] font-medium text-ink">Drohnengruppe</div>
                       <Controller
                         control={control}
@@ -510,6 +553,32 @@ export function UserFormSheet({ open, onOpenChange, mode, organizations, dienstg
                         )}
                       />
                     </div>
+                    {droneRole !== 'NONE' && (
+                      <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                        <FieldLabel htmlFor="droneGroupId">Gruppe</FieldLabel>
+                        <Controller
+                          control={control}
+                          name="droneGroupId"
+                          render={({ field }) => (
+                            <Select value={field.value || 'NONE'} onValueChange={(value) => field.onChange(value === 'NONE' ? null : value)}>
+                              <SelectTrigger id="droneGroupId" className="w-full">
+                                <SelectValue placeholder="Gruppe wählen" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE" disabled>
+                                  Gruppe wählen
+                                </SelectItem>
+                                {droneGroups.map((group) => (
+                                  <SelectItem key={group.id} value={group.id}>
+                                    {group.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    )}
                   </div>
                 </section>
 

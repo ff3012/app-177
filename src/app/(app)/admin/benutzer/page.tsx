@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { MembershipRole } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
-import { canAccessUserManagementAdmin, isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessUserManagementAdmin, canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { UserManagementSection, type UserRow } from './user-management-section';
 
@@ -32,9 +32,9 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   if (!canAccessUserManagementAdmin(currentUser)) {
     notFound();
   }
-  const fullAdmin = isSiteAdmin(currentUser);
+  const fullAdmin = isBezirksAdmin(currentUser);
 
-  const [users, organizations, dienstgrade] = await Promise.all([
+  const [users, organizations, dienstgrade, allDroneGroups] = await Promise.all([
     prisma.user.findMany({
       where: fullAdmin ? undefined : { homeOrganizationId: { in: currentUser.feuerwehrAdminOrgIds } },
       include: {
@@ -49,9 +49,21 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     prisma.organization.findMany({
       where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
       orderBy: { name: 'asc' },
+      include: { parent: { select: { shortName: true, name: true } } },
     }),
     prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
+    prisma.droneGroup.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, organizationId: true } }),
   ]);
+
+  // Nur die Gruppen anbieten, in die dieser Admin tatsächlich jemanden aufnehmen darf. Vorher wurden
+  // alle Gruppen des Bezirks an jeden Benutzerverwaltungs-Admin (inkl. reiner Feuerwehr-Admins)
+  // ausgeliefert - siehe die Begründung an syncDroneMembership in actions.ts, das dieselbe Prüfung
+  // serverseitig noch einmal durchführt (die eingeschränkte Auswahl hier ist nur Bedienkomfort, keine
+  // Absicherung). canManageDroneGroupFor lässt sich nicht als Prisma-where ausdrücken, daher erst
+  // laden, dann filtern.
+  const droneGroups = allDroneGroups
+    .filter((group) => canManageDroneGroupFor(currentUser, group))
+    .map((group) => ({ id: group.id, name: group.name }));
 
   const rows: UserRow[] = users.map((u) => {
     const adminOrgNames = u.memberships.map((m) => m.organization.shortName ?? m.organization.name);
@@ -72,6 +84,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       adminOrgIds: u.memberships.map((m) => m.organizationId),
       droneLabel: u.droneMembership?.role === 'ADMIN' ? 'Admin' : u.droneMembership ? 'Mitglied' : '–',
       droneRole,
+      droneGroupId: u.droneMembership?.droneGroupId ?? null,
       pushCount: u.pushSubscriptions.length,
       pushDates: u.pushSubscriptions.map((s) => s.createdAt.toISOString()),
       isActive: u.isActive,
@@ -86,8 +99,13 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   return (
     <UserManagementSection
       users={rows}
-      organizations={organizations.map((org) => ({ id: org.id, name: org.shortName ?? org.name }))}
+      organizations={organizations.map((org) => ({
+        id: org.id,
+        name: org.shortName ?? org.name,
+        abschnittName: org.parent?.shortName ?? org.parent?.name,
+      }))}
       dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
+      droneGroups={droneGroups}
       initialQuery={params.q ?? ''}
       initialFeuerwehr={params.feuerwehr ?? 'ALLE'}
       initialRolle={params.rolle ?? 'ALLE'}

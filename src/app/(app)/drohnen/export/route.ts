@@ -15,7 +15,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
   }
 
+  // Scoped auf die eigene Drohnengruppe (über die Drohne, siehe Kommentar in drohnen/page.tsx) -
+  // Admin Drohnengruppe darf hier nur die Flüge der eigenen Gruppe exportieren, nicht systemweit.
   const flights = await prisma.droneFlight.findMany({
+    where: { drone: { droneGroupId: user.droneGroupId! } },
     include: { drone: true, registeredBy: true, pilotUser: true },
     orderBy: { startsAt: 'desc' },
   });

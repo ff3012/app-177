@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canAccessHeimatfeuerwehrAdmin, isSiteAdmin } from '@/lib/auth/permissions';
+import { canAccessHeimatfeuerwehrAdmin, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { cancelVehicleBooking } from '@/app/(app)/meine-feuerwehr/actions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
@@ -110,16 +110,16 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   // Feuerwehr geladen (nicht nur die aktuell ausgewählte), daher NIE mit select-less findMany
   // fetchen - sonst landen z. B. facebookPageAccessToken-Werte fremder Feuerwehren im RSC-Payload
   // dieser Seite (siehe CLAUDE.md "Dashboard Feuerwehrhaus" Sicherheits-Fix).
-  const allowedOrgs = isSiteAdmin(user)
+  const allowedOrgs = isBezirksAdmin(user)
     ? await prisma.organization.findMany({
         where: { type: 'FEUERWEHR' },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, parent: { select: { shortName: true, name: true } } },
       })
     : await prisma.organization.findMany({
         where: { id: { in: user.feuerwehrAdminOrgIds } },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, parent: { select: { shortName: true, name: true } } },
       });
 
   if (allowedOrgs.length === 0) {
@@ -201,7 +201,16 @@ export default async function HeimatfeuerwehrVerwaltungPage({
 
       <AdminMobileTabs items={getAdminNavItems(user)} />
 
-      {allowedOrgs.length > 1 && <OrgSelect organizations={allowedOrgs} selectedId={selectedOrgId} />}
+      {allowedOrgs.length > 1 && (
+        <OrgSelect
+          organizations={allowedOrgs.map((org) => ({
+            id: org.id,
+            name: org.name,
+            abschnittName: org.parent?.shortName ?? org.parent?.name,
+          }))}
+          selectedId={selectedOrgId}
+        />
+      )}
 
       <FunktionenCard
         organizationId={selectedOrgId}

@@ -4,14 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A member-facing web app for the Freiwillige Feuerwehr Abschnitt Purkersdorf (Austria): 9 Feuerwehren + 1
-Abschnittsfeuerwehrkommando (AFKDO), ~200 users. Three modules: **Kalender** (per-org + Abschnitt-wide event
-calendar with .ics export, calendar-grid or list view), **Drohnengruppe** (drone flight log, including a
-QR-code quick-registration flow — see below), and **News** (Web Push notifications to a Feuerwehr or the
-Drohnengruppe, sent immediately or scheduled — see below). Installable as a PWA (manifest + minimal service
-worker) so it can be added to an iOS/Android home screen without an app-store build. All UI copy and
-commit-adjacent docs are German; code identifiers are a German/English mix (keep matching the existing
-convention in a given file).
+A member-facing web app for the Freiwillige Feuerwehr of **Bezirk 17 St. Pölten** (Austria): one Bezirk →
+**7 Abschnitte** (Abschnittsfeuerwehrkommandos: Herzogenburg, Kirchberg/Pielach, Neulengbach, Purkersdorf,
+St. Pölten-West, St. Pölten-Stadt, St. Pölten-Ost) → **124 Feuerwehren/Betriebsfeuerwehren**, plus
+**4 Drohnengruppen**, each anchored at one Abschnitt. It started as a single-Abschnitt app (Abschnitt
+Purkersdorf, 9 Feuerwehren, ~200 users) and was expanded to the full Bezirk — a lot of the history recorded
+further down in this file was written while that flat, single-Abschnitt world still held, so **read the
+"Bezirk / Abschnitt / Feuerwehr hierarchy" section below before writing any query that touches
+`Organization`, `Event` visibility, or Drohnengruppen data**; the hierarchy and its scoping rules override
+any older passage here that contradicts them.
+
+Three modules: **Kalender** (per-org + Abschnitt-wide event calendar with .ics export, calendar-grid or
+list view), **Drohnengruppe** (drone flight log, including a QR-code quick-registration flow — see below),
+and **News** (Web Push notifications to a Feuerwehr or a Drohnengruppe, sent immediately or scheduled — see
+below). Installable as a PWA (manifest + minimal service worker) so it can be added to an iOS/Android home
+screen without an app-store build. All UI copy and commit-adjacent docs are German; code identifiers are a
+German/English mix (keep matching the existing convention in a given file).
+
+Branding is still Purkersdorf-specific in several places (header wordmark, PWA manifest, login page, email
+templates, the public kiosk dashboard) — a known, deliberately deferred follow-up, not a sign that the app
+is still single-Abschnitt.
 
 ## Commands
 
@@ -22,7 +34,7 @@ npm run lint             # next lint
 
 npm run db:migrate      # prisma migrate dev (local) — generates a new migration from schema.prisma changes
 npm run db:deploy       # prisma migrate deploy — applies committed migrations (used in prod, see entrypoint.sh)
-npm run db:seed         # tsx prisma/seed.ts — creates the 9 Feuerwehren, AFKDO org, Drohnen lookups, bootstrap admin
+npm run db:seed         # tsx prisma/seed.ts — 7 Abschnitte + 124 Feuerwehren, 4 Drohnengruppen, Dienstgrade, bootstrap admin
 npm run db:studio       # prisma studio
 ```
 
@@ -114,16 +126,21 @@ same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/clien
   a session is live — e.g. an admin revokes Drohnengruppe access — and this makes that change apply on the
   user's very next request instead of only at their next login). If the user no longer exists or was
   deactivated, `token.id` is cleared, which `getOptionalUser()` treats as logged-out.
-- `build-session-user.ts` computes the `SessionUser` claims object (`isAbschnittsAdmin`,
-  `feuerwehrAdminOrgIds`, `isDrohnengruppeMember`, `droneGroupRole`, etc.) from a `User` + relations. This is
-  the *only* place that shape gets built — both the login path and the per-request refresh path call it.
+- `build-session-user.ts` computes the `SessionUser` claims object (`isBezirksAdmin`,
+  `abschnittAdminOrgIds`, `feuerwehrAdminOrgIds`, `homeAbschnittOrganizationId`, `isDrohnengruppeMember`,
+  `droneGroupId`, `droneGroupRole`, etc.) from a `User` + relations. This is the *only* place that shape
+  gets built — both the login path and the per-request refresh path call it. How the two admin-org arrays
+  differ (and why the direct-membership half must stay type-unfiltered) is documented in the
+  "Bezirk / Abschnitt / Feuerwehr hierarchy" section above — read it before touching this function.
 - `lib/auth/permissions.ts` holds plain, composable predicate functions (`canManageEventsFor`,
   `canViewDroneModule`, `canManageFlight`, ...) — there is no RBAC library and no middleware-level
   fine-grained authorization; every Server Action/page re-checks permissions itself using these functions.
   When adding a new capability, add a function here rather than inlining a condition at the call site.
-- `isSiteAdmin` (Abschnittskommando-Admin) and `isDroneGroupAdmin` (Admin Drohnengruppe) are **independent**
-  rights. Site admin does not imply Drohnengruppe access, by design — see the comment above
-  `canViewDroneModule` for the reasoning if you're tempted to "simplify" this.
+- `isBezirksAdmin` (the former `isSiteAdmin`, renamed and re-scoped when the Bezirk hierarchy landed — every
+  passage below that still says `isSiteAdmin` means this) and `isDroneGroupAdmin` (Admin Drohnengruppe) are
+  **independent** rights. Bezirksadmin does not imply Drohnengruppe *module* access, by design — see the
+  comment above `canViewDroneModule` for the reasoning if you're tempted to "simplify" this. (It does imply
+  the right to *administer* any group via `canManageDroneGroupFor`, which is a different question.)
 - Login rate limiting (`lib/auth/login-throttle.ts`) tracks failures against the `LoginAttempt` table keyed
   by the *submitted* email string, regardless of whether it matches a real account — this is intentional so
   that whether an email gets rate-limited doesn't itself leak account existence. `authorize()` in
@@ -186,16 +203,101 @@ same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/clien
   (redirected to after a successful *link* login, not the code path) shows an iOS-specific note about this
   too, detected via the `user-agent` request header.
 
+### Bezirk / Abschnitt / Feuerwehr hierarchy + Drohnengruppen
+
+The single most important structural fact about this codebase, and the one that most older passages below
+predate. Design rationale:
+`docs/superpowers/specs/2026-08-09-bezirk-abschnitt-drohnengruppen-design.md`.
+
+**Models.** `District` (one row: `number: '17'`, `name: 'St. Pölten'`) → `Organization.districtId`
+(set on the 7 `ABSCHNITTSKOMMANDO` rows only) → `Organization.parentId`, a **self-reference on the same
+table** (`OrgHierarchy`), set on every `FEUERWEHR` row and pointing at its Abschnittskommando. There is no
+separate "Abschnitt" table — `Organization` still carries both types, exactly as before, just with a parent
+link now. `src/lib/organizations/abschnitt.ts`'s `getAbschnittOrganizationId(org)` is the single place that
+resolves "which Abschnitt does this organization belong to" (itself if `ABSCHNITTSKOMMANDO`, else
+`parentId`); it **throws** rather than returning null if a Feuerwehr has no parent, because a silently
+null-propagated Abschnitt id used to surface as a cryptic Prisma validation error deep inside an unrelated
+query.
+
+`DroneGroup` (`name` unique, `organizationId` → the ABSCHNITTSKOMMANDO it's anchored at, plus its own
+`flightNotificationEmail` and `qrToken`) replaces the former single, app-wide Drohnengruppe. Four rows
+today; there is no admin UI to create a fifth — they come from `prisma/seed.ts` / the backfill migration.
+`Drone.name` is unique **per group** (`@@unique([droneGroupId, name])`), no longer globally — two groups may
+both have a "Drohne 1".
+
+**Three permission tiers** (`src/lib/auth/permissions.ts`, no RBAC library — same plain-predicate style as
+everywhere else in this file):
+- **Bezirksadmin** — `User.isBezirksAdmin`, a plain boolean column. Replaces the former `isSiteAdmin`
+  ("Abschnittskommando-Admin") wherever that meant "top of the app". District-wide.
+- **Abschnittsadmin** — an ADMIN `Membership` on an `ABSCHNITTSKOMMANDO` organization, surfaced as
+  `SessionUser.abschnittAdminOrgIds`. Scoped to that one Abschnitt.
+- **Feuerwehr-Admin** — an ADMIN `Membership` on a `FEUERWEHR` organization.
+
+`build-session-user.ts` computes two separate arrays, and the distinction matters:
+- `abschnittAdminOrgIds` — ADMIN memberships **filtered to `ABSCHNITTSKOMMANDO` type only**. Used for
+  "may this person act at Abschnitt level".
+- `feuerwehrAdminOrgIds` — **every** direct ADMIN membership regardless of type (so an Abschnittsadmin's own
+  Abschnitt organization *is* in here), **plus** every `FEUERWEHR` whose `parentId` is in
+  `abschnittAdminOrgIds` (inheritance: an Abschnittsadmin automatically administers all their Feuerwehren).
+  The name is historical; read it as "organizations whose day-to-day admin surfaces this person may use".
+  **Do not re-add a type filter to the direct-membership half.** It was tried and broke two features at
+  once, because the Kalender form's organization picker is built from this array and `event-form.tsx` only
+  renders the "Abschnitt-weiter Termin" checkbox and the Kategorie select when an `ABSCHNITTSKOMMANDO`
+  option is selectable — without it, section-wide and Drohnengruppen events became uncreatable for
+  everyone, and every existing Abschnittskommando-owned event became uneditable (`canManageEventsFor` reads
+  only this array and has no Bezirksadmin bypass, by long-standing design).
+
+**Event visibility is Abschnitt-scoped, not app-wide.** `canViewEvent` (and the identical rule in
+`kalender/page.tsx`'s own query, the per-org `.ics` feed, and `push/audience.ts`) is:
+`event.organizationId === user.homeOrganizationId` **OR** (`event.isSectionWide` **AND** the event's
+Abschnitt equals the viewer's own `homeAbschnittOrganizationId`) — and for `category === 'DROHNENGRUPPE'`,
+**additionally** `event.droneGroupId === user.droneGroupId` plus `canViewDroneModule`. A section-wide event
+never leaves its own Abschnitt. `Event.droneGroupId` is nullable in the schema but is required by
+`eventSchema` whenever the category is `DROHNENGRUPPE` — a drone event with no group would be visible to
+nobody at all, since every check is an exact group-id comparison.
+`canCreateSectionWideEvent(user, abschnittOrganizationId)` takes the **target** Abschnitt and delegates to
+`canManageAbschnittFor`; a blanket "admins some Abschnitt" check is not sufficient and is only used as a
+UI pre-check (`canCreateAnySectionWideEvent`).
+
+**Drohnengruppen data is group-scoped throughout**: drones, `DroneDocument` PDFs, member roster, the QR
+quick-register token, the flight-notification email, News' `DROHNENGRUPPE` audience, and the 90-day
+compliance views. `canManageDroneGroupFor(user, droneGroup)` = Bezirksadmin, or Abschnittsadmin of the
+Abschnitt the group is anchored at, or ADMIN of that same group — it gates `/admin/drohnen` **and** who may
+assign a user *into* a group from Benutzerverwaltung.
+
+**`/admin/*` gating**: `admin/layout.tsx` admits Bezirksadmins, Abschnittsadmins, Feuerwehr-Admins **and**
+pure Drohnengruppen-Admins (someone with no organization admin right at all). It therefore proves almost
+nothing on its own — every `/admin/*` page still needs its own explicit check, and every admin Server
+Action re-checks independently. `lib/admin/nav-items.ts` decides which entries a given tier sees;
+`lib/nav-items.ts`'s `getVerwaltungNavItem()` decides where the top-level "Verwaltung" link points
+(Bezirksadmin → `/admin/benutzer`, org-admin → `/admin/heimatfeuerwehr`, pure Drohnengruppen-Admin →
+`/admin/drohnen`, otherwise no link) and is shared by the desktop nav and the mobile header pill.
+
+**Migrations.** `20260809000000_hierarchie_additive` adds every new column/table nullable;
+`20260809010000_hierarchie_backfill` then does all the data work — creates District 17 and the
+`dronegroup-afkdo-purkersdorf` group, moves every pre-existing membership/document/drone/**event** onto it,
+sets `parentId` on the 9 original Purkersdorf Feuerwehren, and flags the bootstrap admin as Bezirksadmin —
+before tightening the three mandatory columns to `NOT NULL`. The `parentId`/`isBezirksAdmin` writes
+deliberately live in the **migration**, not only in `prisma/seed.ts`: `docker/entrypoint.sh` runs
+`prisma migrate deploy` automatically on container start but never seeds, so anything only the seed does
+does not exist between deploy and someone remembering to run `npm run db:seed` by hand.
+
 ### Data model (`prisma/schema.prisma`)
 
-- `Organization` is one table for both Feuerwehren and the Abschnittskommando (`type` enum), not two tables —
-  keeps every FK (`Membership`, `Event.organizationId`) pointing at a single target.
+- `Organization` is one table for both Feuerwehren and the Abschnittskommandos (`type` enum), not two
+  tables — keeps every FK (`Membership`, `Event.organizationId`) pointing at a single target. Since the
+  Bezirk expansion it also carries `districtId` and the self-referencing `parentId`/`children` hierarchy —
+  see the section above.
 - `Organization.nummer` is the official Niederösterreichische Landesfeuerwehr-Nummer (`String`, required,
   `@unique`) — added specifically so future modules have a stable, human-meaningful identifier to reference a
   Feuerwehr/das AFKDO by, instead of the opaque `cuid()` `id`. Values: AFKDO Purkersdorf `17700`, Gablitz
   `17701`, Mauerbach `17702`, Pressbaum `17703`, Purkersdorf `17704`, Rekawinkel `17706`, Steinbach `17707`,
-  Tullnerbach `17708`, Tullnerbach-Irenental `17709`, Wolfsgraben `17711` — note the gaps at `17705`/`17710`
-  (numbers assigned to Feuerwehren outside this Abschnitt, not a data-entry omission). `prisma/seed.ts`'s
+  Tullnerbach `17708`, Tullnerbach-Irenental `17709`, Wolfsgraben `17711`. Since the Bezirk expansion this
+  is no longer the full list — all 124 Feuerwehren of Bezirk 17 carry their real `nummer`, seeded from
+  `prisma/data/feuerwehren-bezirk-17-raw.json`, and the 6 new Abschnittskommandos follow Purkersdorf's
+  `{Abschnittsnummer}00` convention (`17100`, `17200`, …). The gaps at `17705`/`17710` are still gaps in
+  the Purkersdorf Abschnitt, but those numbers belong to Feuerwehren of **other Abschnitte** that are now
+  in this database too — they are no longer "outside the app". `prisma/seed.ts`'s
   `FEUERWEHR_NAMEN` carries `{name, nummer}` pairs (not just names) and its `upsert`s now actually set
   `nummer` (and `shortName`) in the `update` branch too, not just `create` — unlike the original seed, which
   used `update: {}` everywhere since it only ever needed to be idempotent, not to backfill a newly added
@@ -207,22 +309,30 @@ same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/clien
   sequence for adding a required column to a non-empty table, so `prisma migrate deploy` can run it
   unattended in one shot on both a fresh database and the existing production one.
 - `Membership` (user, org, role=ADMIN) is per-org admin rights. `DrohnengruppeMembership` (role
-  PILOT/ADMIN) is a separate, flat, cross-org table — Drohnengruppe membership has nothing to do with which
-  Feuerwehr someone belongs to.
-- `Event.isSectionWide` + `Event.category` (ALLGEMEIN/DROHNENGRUPPE) together determine visibility:
-  Drohnengruppe-category events are filtered out for anyone who fails `canViewDroneModule`, on both the
-  Kalender page and the `.ics` feeds (the feeds are token-authenticated, not session-authenticated, so they
-  can't check membership — they exclude the Drohnengruppe category entirely instead of trying).
+  PILOT/ADMIN) is a separate table, still cross-org in the sense that it has nothing to do with which
+  Feuerwehr someone belongs to — but **no longer flat**: it carries a mandatory `droneGroupId` (one of the
+  4 `DroneGroup` rows), and every read path is scoped by it. A user has at most one drone membership, hence
+  at most one group (`SessionUser.droneGroupId`).
+- `Event.isSectionWide` + `Event.category` (ALLGEMEIN/DROHNENGRUPPE) + `Event.droneGroupId` together
+  determine visibility — see "Bezirk / Abschnitt / Feuerwehr hierarchy" above for the full rule, which is
+  **Abschnitt-scoped**: `isSectionWide` means "visible across the event's own Abschnitt", never across the
+  whole Bezirk. Drohnengruppe-category events additionally require both `canViewDroneModule` and an exact
+  `droneGroupId` match. The `.ics` feeds are token- rather than session-authenticated and so can't check
+  membership — they exclude the Drohnengruppe category entirely instead of trying, and the per-organization
+  feed applies the same Abschnitt scoping as the Kalender query.
 - `DroneFlight` has two separate `User` relations: `registeredBy` (who logged the entry — controls edit
   rights) and `pilotUser` (who actually flew — a dropdown of current Drohnengruppe members in the form, not
   free text). Don't conflate the two; "can I edit this flight" is based on `registeredBy`, not `pilotUser`.
 - `AppSettings` is a singleton table (always exactly one row, `id = "singleton"`, upserted — never
-  `create`d directly) for admin-configurable values that don't warrant their own table:
-  `droneFlightNotificationEmail` and `droneQuickRegisterToken`. Read/write it only through
-  `src/lib/settings.ts`, not raw Prisma calls at the call site.
+  `create`d directly) for admin-configurable values that don't warrant their own table (system-check
+  recipient, backup/cron timestamps, …). Read/write it only through `src/lib/settings.ts`, not raw Prisma
+  calls at the call site. **Its former `droneFlightNotificationEmail` and `droneQuickRegisterToken` columns
+  are gone** — both moved onto `DroneGroup` (`flightNotificationEmail`, `qrToken`), since they are per-group
+  now, not app-wide.
 - `PushSubscription` (one row per browser/device, keyed by that browser's own `endpoint`) and `NewsMessage`
-  (`audienceType` ORGANIZATION/DROHNENGRUPPE + optional `audienceOrgId`, `scheduledAt`/`sentAt`) back the
-  News module — see below.
+  (`audienceType` ORGANIZATION/DROHNENGRUPPE + optional `audienceOrgId` + optional `audienceDroneGroupId`,
+  `scheduledAt`/`sentAt`) back the News module — see below. For a DROHNENGRUPPE audience, a null
+  `audienceDroneGroupId` deliberately means "all groups"; a set one narrows to that one group.
 - Migrations are committed SQL under `prisma/migrations/`, applied automatically by
   `docker/entrypoint.sh` via `prisma migrate deploy` on every container start. Generate new ones with
   `npm run db:migrate` after editing `schema.prisma`; don't hand-edit already-committed migration files.
@@ -498,7 +608,15 @@ suggested), further Start edits only sync the date, never overwrite a chosen End
 events are cross-org by nature.
 
 The .ics subscription links live in their own "ICS Kalender Import" card in the layout described above (not
-the page header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. Separately,
+the page header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. There
+are two: the per-organization feed (keyed by `Organization.icsToken`, Abschnitt-scoped like the Kalender
+query itself) and a **legacy combined Abschnitts-feed** keyed by the single `ABSCHNITTS_ICS_TOKEN`
+environment variable. That second one has no `Organization` row of its own to scope by, so it is pinned to
+one Abschnitt by `nummer` via `LEGACY_COMBINED_ICS_ABSCHNITT_NUMMER` (`lib/organizations/abschnitt.ts`,
+`'17700'` = Purkersdorf) — both its query and its calendar title — and `kalender/page.tsx` only offers the
+link to users whose own Abschnitt is that one. Don't "generalize" it back to all Abschnitte without giving
+it a real per-Abschnitt token first; before this was pinned it served every Abschnitt's section-wide events
+to everyone under a "Purkersdorf" label. Separately,
 `src/app/(app)/kalender/[eventId]/ics/route.ts` serves a **single-event** .ics download (session-authenticated,
 same organization/category visibility check as the main Kalender query) so a real file response — not a
 `data:` URI — triggers the native "add to calendar" flow on mobile. `components/calendar/add-to-calendar-link.tsx`
@@ -781,8 +899,10 @@ mockup, done first among the four modules; Kalender's equivalent pass ("Kalender
   don't duplicate the email-building logic at either call site again.
 - **QR-code quick registration** (`src/app/drohnen-schnell/[token]/*`): a fully public, no-login page meant
   to be printed as a QR code so a pilot can log a flight on their phone without signing in. Gated purely by
-  a bearer token stored in `AppSettings.droneQuickRegisterToken` (generated/rotated from `/admin/drohnen`,
-  same shape as `Organization.icsToken` — an unguessable capability URL, not a password). The server action
+  a bearer token stored in `DroneGroup.qrToken` — **one token per Drohnengruppe** (it used to be a single
+  app-wide `AppSettings.droneQuickRegisterToken`), generated/rotated from `/admin/drohnen` for whichever
+  group is selected there, and the token itself is what identifies the group the flight belongs to. Same
+  shape as `Organization.icsToken` — an unguessable capability URL, not a password. The server action
   re-checks the token itself (never trusts that the page-level check ran). Flights created this way are
   attributed to a dedicated, `isActive: false` system user (`src/lib/drone/quick-register-user.ts`,
   lazily upserted by email `drohnen-schnellerfassung@system.local`) instead of a real session — this is what
@@ -905,6 +1025,12 @@ App=handgerollt) — kein Versehen, kein geplanter Umbau des restlichen Codes au
   allgemeine Schriftfamilie, Barlow bleibt der Fließtext-Font app-weit.
 
 ### Verwaltung (admin) navigation
+
+> **Superseded in part by the Bezirk hierarchy** — `admin/layout.tsx`'s gate is no longer `isSiteAdmin`-only
+> (that function no longer exists; the equivalent right is now `isBezirksAdmin`). It admits Bezirksadmins,
+> Abschnittsadmins, Feuerwehr-Admins **and** pure Drohnengruppen-Admins, so it proves almost nothing on its
+> own and every page/action must check for itself. See "Bezirk / Abschnitt / Feuerwehr hierarchy" above.
+> The Phase 2–7 narrative below is kept as history; read `isSiteAdmin` in it as `isBezirksAdmin`.
 
 **Phase 2 (Verwaltung-Brief.md)**: `src/app/(app)/admin/layout.tsx` now gates all `/admin/*` pages centrally
 (`requireUser()` + `notFound()` if `!isSiteAdmin(user)`) instead of each page independently returning a plain

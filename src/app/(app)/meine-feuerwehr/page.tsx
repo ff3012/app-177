@@ -122,11 +122,24 @@ export default async function MeineFeuerwehrPage() {
       },
     }),
     // Gleiche Sichtbarkeitsregel wie kalender/page.tsx (eigene Feuerwehr ODER abschnittsweit) -
-    // die DROHNENGRUPPE-Kategorie wird unten zusätzlich nach canViewDroneModule gefiltert, exakt
-    // wie dort. `take: 8` ist ein großzügiger Pool für "Zu erledigen" (≤14 Tage) plus die "Als
-    // Nächstes"-Anzeige (Top 2), nicht die tatsächliche Anzeigegrenze.
+    // die DROHNENGRUPPE-Kategorie wird unten zusätzlich nach canViewDroneModule UND droneGroupId
+    // gefiltert, exakt wie dort (Task 8: Drohnengruppe-Termine sind nur für die betroffene Gruppe
+    // sichtbar, nicht für die gesamte Drohnengruppe/den Bezirk). `take: 8` ist ein großzügiger Pool
+    // für "Zu erledigen" (≤14 Tage) plus die "Als Nächstes"-Anzeige (Top 2), nicht die tatsächliche
+    // Anzeigegrenze.
     prisma.event.findMany({
-      where: { OR: [{ organizationId: user.homeOrganizationId }, { isSectionWide: true }], endsAt: { gte: now } },
+      where: {
+        OR: [
+          { organizationId: user.homeOrganizationId },
+          {
+            isSectionWide: true,
+            organization: {
+              OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
+            },
+          },
+        ],
+        endsAt: { gte: now },
+      },
       orderBy: { startsAt: 'asc' },
       take: 8,
       include: { organization: { select: { shortName: true, name: true } } },
@@ -147,7 +160,9 @@ export default async function MeineFeuerwehrPage() {
     }),
   ]);
 
-  const candidateEvents = candidateEventsRaw.filter((event) => event.category !== 'DROHNENGRUPPE' || droneMember);
+  const candidateEvents = candidateEventsRaw.filter(
+    (event) => event.category !== 'DROHNENGRUPPE' || (droneMember && event.droneGroupId === user.droneGroupId),
+  );
   const candidateIds = candidateEvents.map((event) => event.id);
   const ownRsvps = candidateIds.length
     ? await prisma.terminZusage.findMany({

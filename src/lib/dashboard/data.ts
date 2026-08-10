@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 
 // Obere clamp-Grenze aus Design-Spec §4 ("Termine 4-10") - der Server liefert das Maximum, die
 // HeightFittedList-Komponente (Task 5) blendet je nach gemessener Höhe den Überhang clientseitig aus.
@@ -23,10 +24,22 @@ export interface DashboardEvent {
  * keinen Viewer mit eigenen Rechten, er zeigt alle Kategorien der eigenen Org/des Abschnitts. */
 export async function getDashboardEvents(organizationId: string): Promise<DashboardEvent[]> {
   const now = new Date();
+  const organization = await prisma.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    select: { type: true, id: true, parentId: true },
+  });
+  const abschnittOrganizationId = getAbschnittOrganizationId(organization);
+
   return prisma.event.findMany({
     where: {
       startsAt: { gte: now },
-      OR: [{ organizationId }, { isSectionWide: true }],
+      OR: [
+        { organizationId },
+        {
+          isSectionWide: true,
+          organization: { OR: [{ id: abschnittOrganizationId }, { parentId: abschnittOrganizationId }] },
+        },
+      ],
     },
     orderBy: { startsAt: 'asc' },
     take: MAX_EVENTS,

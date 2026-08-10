@@ -7,11 +7,21 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -41,6 +51,7 @@ export interface UserRow {
   adminOrgIds: string[];
   droneLabel: string;
   droneRole: DroneRoleOption;
+  droneGroupId: string | null;
   pushCount: number;
   pushDates: string[];
   isActive: boolean;
@@ -56,6 +67,20 @@ type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
 interface Organization {
   id: string;
   name: string;
+  abschnittName?: string;
+}
+
+/** Gruppiert Feuerwehren nach Abschnitt für <optgroup>-artige Darstellung in den Feuerwehr-Selects/
+ * -Dropdowns dieser Seite - mit bis zu 124 Feuerwehren (Bezirksadmin) ist eine flache Liste sonst
+ * unbrauchbar. Orgs ohne abschnittName (z. B. ein Feuerwehr-Admin mit 1-2 Optionen) landen unter
+ * "Ohne Abschnitt". */
+function groupByAbschnitt<T extends { abschnittName?: string }>(organizations: T[]): Record<string, T[]> {
+  const groups: Record<string, T[]> = {};
+  for (const org of organizations) {
+    const key = org.abschnittName ?? 'Ohne Abschnitt';
+    (groups[key] ??= []).push(org);
+  }
+  return groups;
 }
 
 interface DienstgradOption {
@@ -160,6 +185,7 @@ export function UserManagementSection({
   users,
   organizations,
   dienstgrade,
+  droneGroups,
   initialQuery,
   initialFeuerwehr,
   initialRolle,
@@ -175,6 +201,7 @@ export function UserManagementSection({
   users: UserRow[];
   organizations: Organization[];
   dienstgrade: DienstgradOption[];
+  droneGroups: { id: string; name: string }[];
   initialQuery: string;
   initialFeuerwehr: string;
   initialRolle: string;
@@ -367,10 +394,15 @@ export function UserManagementSection({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ALLE">Alle Feuerwehren</SelectItem>
-          {organizations.map((org) => (
-            <SelectItem key={org.id} value={org.id}>
-              {org.name}
-            </SelectItem>
+          {Object.entries(groupByAbschnitt(organizations)).map(([abschnittName, orgs]) => (
+            <SelectGroup key={abschnittName}>
+              <SelectLabel>{abschnittName}</SelectLabel>
+              {orgs.map((org) => (
+                <SelectItem key={org.id} value={org.id}>
+                  {org.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           ))}
         </SelectContent>
       </Select>
@@ -450,6 +482,7 @@ export function UserManagementSection({
         homeOrgName: sheetTargetRow.homeOrg,
         adminOrgIds: sheetTargetRow.adminOrgIds,
         droneRole: sheetTargetRow.droneRole,
+        droneGroupId: sheetTargetRow.droneGroupId,
         lastLoginAt: sheetTargetRow.lastLoginAt,
         passwordChangedAt: sheetTargetRow.passwordChangedAt,
         dienstgradId: sheetTargetRow.dienstgradId,
@@ -533,10 +566,15 @@ export function UserManagementSection({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALLE">Alle Feuerwehren</SelectItem>
-            {organizations.map((org) => (
-              <SelectItem key={org.id} value={org.id}>
-                {org.name}
-              </SelectItem>
+            {Object.entries(groupByAbschnitt(organizations)).map(([abschnittName, orgs]) => (
+              <SelectGroup key={abschnittName}>
+                <SelectLabel>{abschnittName}</SelectLabel>
+                {orgs.map((org) => (
+                  <SelectItem key={org.id} value={org.id}>
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             ))}
           </SelectContent>
         </Select>
@@ -617,10 +655,15 @@ export function UserManagementSection({
               Feuerwehr ändern
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              {organizations.map((org) => (
-                <DropdownMenuItem key={org.id} onSelect={() => handleBulkChangeOrg(org.id)}>
-                  {org.name}
-                </DropdownMenuItem>
+              {Object.entries(groupByAbschnitt(organizations)).map(([abschnittName, orgs]) => (
+                <DropdownMenuGroup key={abschnittName}>
+                  <DropdownMenuLabel>{abschnittName}</DropdownMenuLabel>
+                  {orgs.map((org) => (
+                    <DropdownMenuItem key={org.id} onSelect={() => handleBulkChangeOrg(org.id)}>
+                      {org.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -836,6 +879,7 @@ export function UserManagementSection({
         mode={sheetState?.mode ?? 'create'}
         organizations={organizations}
         dienstgrade={dienstgrade}
+        droneGroups={droneGroups}
         target={sheetTarget}
         onSaved={() => {
           setSheetState(null);

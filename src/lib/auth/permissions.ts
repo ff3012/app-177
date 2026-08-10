@@ -1,8 +1,12 @@
 import type { SessionUser } from '@/types/next-auth';
 
-/** Site admin = Admin-Mitgliedschaft beim Abschnittsfeuerwehrkommando. */
-export function isSiteAdmin(user: SessionUser): boolean {
-  return user.isAbschnittsAdmin;
+export function isBezirksAdmin(user: SessionUser): boolean {
+  return user.isBezirksAdmin;
+}
+
+/** Admin des angegebenen Abschnitts (Organization.id vom Typ ABSCHNITTSKOMMANDO), oder Bezirksadmin. */
+export function canManageAbschnittFor(user: SessionUser, abschnittOrganizationId: string): boolean {
+  return isBezirksAdmin(user) || user.abschnittAdminOrgIds.includes(abschnittOrganizationId);
 }
 
 /**
@@ -15,9 +19,24 @@ export function canManageEventsFor(user: SessionUser, organizationId: string): b
   return user.feuerwehrAdminOrgIds.includes(organizationId);
 }
 
-/** Darf einen Abschnitt-weiten (isSectionWide) Termin anlegen. */
-export function canCreateSectionWideEvent(user: SessionUser): boolean {
-  return user.isAbschnittsAdmin;
+/**
+ * Darf einen Abschnitt-weiten (isSectionWide) Termin FÜR DIESEN Abschnitt anlegen/bearbeiten/löschen.
+ * Der Abschnitt ist der des Termin-Eigentümers, aufzulösen über getAbschnittOrganizationId(organization).
+ * Bewusst nicht mehr die pauschale Frage "verwaltet dieser Nutzer IRGENDEINEN Abschnitt": wer Admin von
+ * Abschnitt A ist und zusätzlich eine direkte Feuerwehr-Admin-Mitgliedschaft unter Abschnitt B hat,
+ * konnte damit einen im gesamten Abschnitt B sichtbaren (und pushbaren) Termin anlegen.
+ */
+export function canCreateSectionWideEvent(user: SessionUser, abschnittOrganizationId: string): boolean {
+  return canManageAbschnittFor(user, abschnittOrganizationId);
+}
+
+/**
+ * Reine UI-Vorabprüfung für die Termin-Formularseiten ("überhaupt ein Abschnitt-Recht?"), damit die
+ * Checkbox/Kategorie-Auswahl gar nicht erst gerendert wird. Die eigentliche, abschnittsgenaue
+ * Absicherung ist canCreateSectionWideEvent in den Server Actions - nicht diese Funktion.
+ */
+export function canCreateAnySectionWideEvent(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.abschnittAdminOrgIds.length > 0;
 }
 
 /** Admin Drohnengruppe: eigenes Recht innerhalb der Drohnengruppe, unabhängig vom Abschnittskommando-Admin. */
@@ -48,9 +67,36 @@ export function canViewAllFlights(user: SessionUser): boolean {
   return isDroneGroupAdmin(user);
 }
 
-/** Darf einen bestehenden Flug bearbeiten/löschen: Admin Drohnengruppe oder der Ersteller selbst. */
-export function canManageFlight(user: SessionUser, flight: { registeredById: string }): boolean {
-  return isDroneGroupAdmin(user) || flight.registeredById === user.id;
+/**
+ * Darf einen bestehenden Flug bearbeiten/löschen: Admin Drohnengruppe DER EIGENEN Gruppe (Admin
+ * einer anderen Gruppe hat hier kein Recht, auch wenn er die cuid() des Flugs kennt/errät) oder der
+ * Ersteller selbst - Letzteres bewusst gruppenunabhängig, ein Mitglied durfte seinen eigenen
+ * erfassten Flug schon vor dieser Einschränkung gruppenübergreifend bearbeiten und soll das
+ * weiterhin dürfen. `flight.droneGroupId` ist die Gruppe des Flugs selbst (über seine Drohne
+ * aufgelöst, siehe Kommentar an den Aufrufstellen) - DroneFlight trägt keine eigene droneGroupId-Spalte.
+ */
+export function canManageFlight(
+  user: SessionUser,
+  flight: { registeredById: string; droneGroupId: string },
+): boolean {
+  return (isDroneGroupAdmin(user) && user.droneGroupId === flight.droneGroupId) || flight.registeredById === user.id;
+}
+
+/**
+ * Verwaltung einer Drohnengruppe (QR-Token/Unterlagen/Drohnen/Mitgliederliste dieser Gruppe):
+ * Bezirksadmin, Admin des Abschnitts, an dem die Gruppe verankert ist, oder Admin Drohnengruppe der
+ * eigenen Gruppe. Eigene Funktion statt canManageHeimatfeuerwehrFor wiederzuverwenden, da DroneGroup
+ * keine Organization ist.
+ */
+export function canManageDroneGroupFor(
+  user: SessionUser,
+  droneGroup: { id: string; organizationId: string },
+): boolean {
+  return (
+    isBezirksAdmin(user) ||
+    canManageAbschnittFor(user, droneGroup.organizationId) ||
+    (user.droneGroupRole === 'ADMIN' && user.droneGroupId === droneGroup.id)
+  );
 }
 
 /**
@@ -60,21 +106,33 @@ export function canManageFlight(user: SessionUser, flight: { registeredById: str
  * FF-Admins für ihre eigene Feuerwehr ausgeweitet werden, wenn das gewünscht ist.
  */
 export function canManageNews(user: SessionUser): boolean {
-  return isSiteAdmin(user);
+  return isBezirksAdmin(user);
 }
 
 /**
  * Sichtbarkeit eines einzelnen Termins - identische Regel wie die Kalenderübersicht-Query selbst
- * (eigene Feuerwehr ODER abschnittsweit; Drohnengruppe-Kategorie zusätzlich nur mit Modulzugriff).
+ * (eigene Feuerwehr ODER abschnittsweit INNERHALB DES EIGENEN ABSCHNITTS; Drohnengruppe-Kategorie
+ * zusätzlich nur mit Modulzugriff). `eventAbschnittOrganizationId` muss der Aufrufer selbst via
+ * getAbschnittOrganizationId(event.organization) berechnen - diese Funktion hat keinen DB-Zugriff.
  * Muss bei einer Änderung der Sichtbarkeitsregel in kalender/page.tsx mitgezogen werden.
  */
 export function canViewEvent(
   user: SessionUser,
-  event: { organizationId: string; isSectionWide: boolean; category: string },
+  event: {
+    organizationId: string;
+    isSectionWide: boolean;
+    category: string;
+    eventAbschnittOrganizationId: string;
+    droneGroupId: string | null;
+  },
 ): boolean {
-  const visible = event.organizationId === user.homeOrganizationId || event.isSectionWide;
+  const visible =
+    event.organizationId === user.homeOrganizationId ||
+    (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId);
   if (!visible) return false;
-  if (event.category === 'DROHNENGRUPPE') return canViewDroneModule(user);
+  if (event.category === 'DROHNENGRUPPE') {
+    return canViewDroneModule(user) && event.droneGroupId === user.droneGroupId;
+  }
   return true;
 }
 
@@ -85,13 +143,13 @@ export function canViewEvent(
  * Terminen bewusst nicht, siehe Kommentar über canManageEventsFor).
  */
 export function canManageHeimatfeuerwehrFor(user: SessionUser, organizationId: string): boolean {
-  return isSiteAdmin(user) || canManageEventsFor(user, organizationId);
+  return isBezirksAdmin(user) || canManageEventsFor(user, organizationId);
 }
 
 /** Sichtbarkeit des Verwaltungsmenüs "Heimatfeuerwehr" - Site-Admin ODER Admin von mindestens
  * einer Feuerwehr (auch ohne Abschnittskommando-Admin zu sein). */
 export function canAccessHeimatfeuerwehrAdmin(user: SessionUser): boolean {
-  return isSiteAdmin(user) || user.feuerwehrAdminOrgIds.length > 0;
+  return isBezirksAdmin(user) || user.feuerwehrAdminOrgIds.length > 0 || user.abschnittAdminOrgIds.length > 0;
 }
 
 /**
@@ -111,6 +169,28 @@ export function canManageUsersFor(user: SessionUser, organizationId: string): bo
  * Feuerwehr (analog canAccessHeimatfeuerwehrAdmin). */
 export function canAccessUserManagementAdmin(user: SessionUser): boolean {
   return canAccessHeimatfeuerwehrAdmin(user);
+}
+
+/**
+ * Welche der BESTEHENDEN Admin-Mitgliedschaften eines Benutzers darf `currentUser` beim Speichern des
+ * Benutzerformulars entfernen? Antwort: nur solche, die (a) in der neuen Auswahl nicht mehr vorkommen
+ * UND (b) für eine Organisation gelten, die currentUser selbst verwalten darf.
+ *
+ * Als eigene, reine Funktion herausgezogen, weil die frühere Inline-Variante in
+ * admin/benutzer/actions.ts (`deleteMany({ organizationId: { notIn: adminOrgIds } })`) eine echte
+ * Rechte-Lücke hatte: sie war nur nach userId/role gescoped. Bei leerem nextAdminOrgIds passierte
+ * `canGrantAdminFor([])` leer-wahr und `notIn: []` schloss nichts aus - es wurden ALLE
+ * Admin-Mitgliedschaften des Zielbenutzers gelöscht, auch die für Organisationen außerhalb des
+ * Verwaltungsbereichs des Aufrufers (z. B. ein Abschnittskommando).
+ */
+export function filterRemovableAdminOrgIds(
+  currentUser: SessionUser,
+  currentAdminOrgIds: string[],
+  nextAdminOrgIds: string[],
+): string[] {
+  return currentAdminOrgIds
+    .filter((organizationId) => !nextAdminOrgIds.includes(organizationId))
+    .filter((organizationId) => canManageUsersFor(currentUser, organizationId));
 }
 
 /** Fahrzeug-Buchung stornieren/verwalten: die eigene Buchung, oder Admin der Feuerwehr, der das

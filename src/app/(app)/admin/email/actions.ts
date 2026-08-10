@@ -3,9 +3,9 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
+import { assertPermission, isBezirksAdmin } from '@/lib/auth/permissions';
 import { sendEmail } from '@/lib/email/mailjet';
-import { setDroneFlightNotificationEmail, setSystemCheckNotificationEmail } from '@/lib/settings';
+import { setSystemCheckNotificationEmail } from '@/lib/settings';
 
 export interface TestMailjetState {
   success?: boolean;
@@ -21,7 +21,7 @@ export async function sendTestEmail(
   formData: FormData,
 ): Promise<TestMailjetState> {
   const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  assertPermission(isBezirksAdmin(user));
 
   const parsed = testEmailSchema.safeParse({ recipient: formData.get('recipient') });
   if (!parsed.success) {
@@ -46,32 +46,6 @@ export async function sendTestEmail(
   return { success: true };
 }
 
-export interface DroneFlightEmailState {
-  success?: boolean;
-  error?: string;
-}
-
-const droneFlightEmailSchema = z.object({
-  email: z.string().trim().email('Ungültige E-Mail-Adresse.'),
-});
-
-export async function saveDroneFlightEmail(
-  _prevState: DroneFlightEmailState,
-  formData: FormData,
-): Promise<DroneFlightEmailState> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
-
-  const parsed = droneFlightEmailSchema.safeParse({ email: formData.get('email') });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };
-  }
-
-  await setDroneFlightNotificationEmail(parsed.data.email);
-  revalidatePath('/admin/email');
-  return { success: true };
-}
-
 export interface SystemCheckEmailState {
   success?: boolean;
   error?: string;
@@ -86,7 +60,7 @@ export async function saveSystemCheckEmail(
   formData: FormData,
 ): Promise<SystemCheckEmailState> {
   const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  assertPermission(isBezirksAdmin(user));
 
   const parsed = systemCheckEmailSchema.safeParse({ email: formData.get('email') });
   if (!parsed.success) {

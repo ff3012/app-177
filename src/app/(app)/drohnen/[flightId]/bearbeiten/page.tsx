@@ -10,18 +10,22 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
   const user = await requireUser();
   const { flightId } = await params;
 
-  const [flight, drones, pilots] = await Promise.all([
-    prisma.droneFlight.findUnique({ where: { id: flightId } }),
-    prisma.drone.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
-    listDrohnengruppeMembers(),
-  ]);
+  const flight = await prisma.droneFlight.findUnique({ where: { id: flightId }, include: { drone: true } });
 
   if (!flight) {
     return <p className="text-neutral-700">Flug wurde nicht gefunden.</p>;
   }
-  if (!canManageFlight(user, flight)) {
+  if (!canManageFlight(user, { registeredById: flight.registeredById, droneGroupId: flight.drone.droneGroupId })) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Flug zu bearbeiten.</p>;
   }
+
+  // Dropdown-Optionen bewusst nach der Gruppe DIESES Flugs (über seine Drohne) skaliert, nicht nach
+  // user.droneGroupId - deckungsgleich mit updateFlight's eigener Scoping-Logik (siehe actions.ts).
+  const droneGroupId = flight.drone.droneGroupId;
+  const [drones, pilots] = await Promise.all([
+    prisma.drone.findMany({ where: { isActive: true, droneGroupId }, orderBy: { sortOrder: 'asc' } }),
+    listDrohnengruppeMembers(droneGroupId),
+  ]);
 
   const boundUpdate = updateFlight.bind(null, flight.id);
   const boundDelete = deleteFlight.bind(null, flight.id);

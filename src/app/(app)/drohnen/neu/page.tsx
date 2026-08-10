@@ -12,9 +12,10 @@ export default async function NeuerFlugPage() {
     return <p className="text-neutral-700">Du hast keine Berechtigung, Flüge zu registrieren.</p>;
   }
 
+  const droneGroupId = user.droneGroupId!;
   const [drones, pilots] = await Promise.all([
-    prisma.drone.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
-    listDrohnengruppeMembers(),
+    prisma.drone.findMany({ where: { isActive: true, droneGroupId }, orderBy: { sortOrder: 'asc' } }),
+    listDrohnengruppeMembers(droneGroupId),
   ]);
 
   if (drones.length === 0) {

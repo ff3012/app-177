@@ -6,7 +6,12 @@ import { redirect } from 'next/navigation';
 import { DroneRole, MembershipRole, Prisma, TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageUsersFor } from '@/lib/auth/permissions';
+import {
+  assertPermission,
+  canManageDroneGroupFor,
+  canManageUsersFor,
+  filterRemovableAdminOrgIds,
+} from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
@@ -33,10 +38,32 @@ function canGrantAdminFor(currentUser: SessionUser, adminOrgIds: string[]): bool
   return adminOrgIds.every((organizationId) => canManageUsersFor(currentUser, organizationId));
 }
 
-async function syncAdminMemberships(userId: string, adminOrgIds: string[]) {
-  await prisma.membership.deleteMany({
-    where: { userId, role: MembershipRole.ADMIN, organizationId: { notIn: adminOrgIds } },
+/**
+ * canGrantAdminFor oben deckt nur das HINZUFÜGEN ab. Beim Entfernen wurde vorher pauschal
+ * `deleteMany({ organizationId: { notIn: adminOrgIds } })` ausgeführt - nur nach userId/role gescoped,
+ * ohne zu prüfen, ob der Aufrufer die dabei gelöschte Organisation überhaupt verwalten darf. Bei einem
+ * leeren adminOrgIds-Array (UI-Fehler oder direkter Server-Action-Aufruf) passierte canGrantAdminFor([])
+ * leer-wahr und `notIn: []` schloss nichts aus - es wurden ALLE Admin-Mitgliedschaften des Zielbenutzers
+ * gelöscht, auch die für fremde Organisationen (z. B. ein Abschnittskommando). Daher wird die zu
+ * löschende Menge jetzt explizit ermittelt und auf Organisationen im eigenen Verwaltungsbereich gefiltert:
+ * eine Mitgliedschaft für eine Organisation, über die der Aufrufer kein Recht hat, bleibt unangetastet.
+ */
+async function syncAdminMemberships(currentUser: SessionUser, userId: string, adminOrgIds: string[]) {
+  const existingAdminMemberships = await prisma.membership.findMany({
+    where: { userId, role: MembershipRole.ADMIN },
+    select: { organizationId: true },
   });
+  const removableOrgIds = filterRemovableAdminOrgIds(
+    currentUser,
+    existingAdminMemberships.map((m) => m.organizationId),
+    adminOrgIds,
+  );
+
+  if (removableOrgIds.length > 0) {
+    await prisma.membership.deleteMany({
+      where: { userId, role: MembershipRole.ADMIN, organizationId: { in: removableOrgIds } },
+    });
+  }
   for (const organizationId of adminOrgIds) {
     await prisma.membership.upsert({
       where: { userId_organizationId_role: { userId, organizationId, role: MembershipRole.ADMIN } },
@@ -46,16 +73,62 @@ async function syncAdminMemberships(userId: string, adminOrgIds: string[]) {
   }
 }
 
-async function syncDroneMembership(userId: string, droneRole: DroneRoleOption) {
+/**
+ * Die Drohnengruppe wird vom Client mitgeschickt - ohne eigene Prüfung konnte sich damit JEDER, der
+ * überhaupt in die Benutzerverwaltung kommt (auch ein reiner Feuerwehr-Admin, siehe
+ * canAccessUserManagementAdmin), am eigenen Datensatz die ADMIN-Rolle einer BELIEBIGEN der Gruppen
+ * geben - inklusive einer an einem fremden Abschnitt verankerten - und damit deren Drohnen, Unterlagen,
+ * Mitgliederliste, Benachrichtigungsadresse und den öffentlichen QR-Schnellerfassungs-Token übernehmen.
+ * canManageDroneGroupFor ist dieselbe Funktion, die /admin/drohnen absichert; hier gilt sie für die
+ * Frage "wer darf jemanden IN diese Gruppe aufnehmen/daraus entfernen".
+ *
+ * Geprüft wird nur, wenn sich an der Mitgliedschaft tatsächlich etwas ändert - sonst könnte ein
+ * Feuerwehr-Admin einen Benutzer seiner Feuerwehr, der zufällig in einer fremden Drohnengruppe ist,
+ * überhaupt nicht mehr bearbeiten (das Formular schickt dessen unveränderte Gruppe ja immer mit).
+ * Ändert sich etwas, müssen BEIDE betroffenen Gruppen (bisherige und neue) im Recht des Aufrufers
+ * liegen - sonst ließe sich über droneRole='NONE' eine fremde Gruppenmitgliedschaft entfernen.
+ */
+async function syncDroneMembership(
+  currentUser: SessionUser,
+  userId: string,
+  droneRole: DroneRoleOption,
+  droneGroupId: string | null,
+) {
+  const existing = await prisma.drohnengruppeMembership.findUnique({ where: { userId } });
+  const currentRole: DroneRoleOption = !existing ? 'NONE' : existing.role === DroneRole.ADMIN ? 'ADMIN' : 'PILOT';
+  const currentGroupId = existing?.droneGroupId ?? null;
+  const targetGroupId = droneRole === 'NONE' ? null : droneGroupId;
+
+  if (currentRole === droneRole && currentGroupId === targetGroupId) {
+    return;
+  }
+
+  const affectedGroupIds = Array.from(
+    new Set([currentGroupId, targetGroupId].filter((id): id is string => Boolean(id))),
+  );
+  for (const groupId of affectedGroupIds) {
+    const group = await prisma.droneGroup.findUnique({
+      where: { id: groupId },
+      select: { id: true, organizationId: true },
+    });
+    assertPermission(
+      group !== null && canManageDroneGroupFor(currentUser, group),
+      'Keine Berechtigung, Mitglieder dieser Drohnengruppe zu verwalten.',
+    );
+  }
+
   if (droneRole === 'NONE') {
     await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
     return;
   }
+  if (!droneGroupId) {
+    throw new Error('Drohnengruppe ist erforderlich, wenn eine Rolle gewählt wurde.');
+  }
   const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
   await prisma.drohnengruppeMembership.upsert({
     where: { userId },
-    update: { role },
-    create: { userId, role },
+    update: { role, droneGroupId },
+    create: { userId, role, droneGroupId },
   });
 }
 
@@ -97,8 +170,8 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
     },
   });
 
-  await syncAdminMemberships(user.id, data.adminOrgIds);
-  await syncDroneMembership(user.id, data.droneRole);
+  await syncAdminMemberships(currentUser, user.id, data.adminOrgIds);
+  await syncDroneMembership(currentUser, user.id, data.droneRole, data.droneGroupId);
 
   const token = await createToken(user.id, TokenPurpose.ACTIVATION);
 
@@ -168,8 +241,8 @@ export async function updateUser(
     },
   });
 
-  await syncAdminMemberships(userId, data.adminOrgIds);
-  await syncDroneMembership(userId, data.droneRole);
+  await syncAdminMemberships(currentUser, userId, data.adminOrgIds);
+  await syncDroneMembership(currentUser, userId, data.droneRole, data.droneGroupId);
 
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');

@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
+import { assertPermission, isBezirksAdmin } from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail } from '@/lib/email/templates';
@@ -29,7 +29,7 @@ function baseUrl(): string {
 
 export async function importUsers(_prevState: ImportUsersState, formData: FormData): Promise<ImportUsersState> {
   const currentUser = await requireUser();
-  assertPermission(isSiteAdmin(currentUser));
+  assertPermission(isBezirksAdmin(currentUser));
 
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {

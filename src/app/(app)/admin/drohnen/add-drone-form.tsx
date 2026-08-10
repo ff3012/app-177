@@ -1,12 +1,19 @@
 'use client';
 
 import { useActionState } from 'react';
-import { createDrone, type DroneFormState } from './actions';
+import type { DroneFormState } from './actions';
 
 const initialState: DroneFormState = {};
 
-export function AddDroneForm() {
-  const [state, formAction, pending] = useActionState(createDrone, initialState);
+/** `action` kommt jetzt vorgebunden (createDrone.bind(null, droneGroupId)) von der aufrufenden
+ * Seite statt hier einen fixen, ungruppierten Import zu verwenden - jede Drohnengruppe hat ihr
+ * eigenes Formular mit ihrer eigenen droneGroupId. */
+export function AddDroneForm({
+  action,
+}: {
+  action: (state: DroneFormState, formData: FormData) => Promise<DroneFormState>;
+}) {
+  const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
     <form action={formAction} className="flex items-end gap-3">

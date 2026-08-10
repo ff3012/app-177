@@ -1,31 +1,46 @@
 'use server';
 
+import { randomBytes } from 'crypto';
+import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, isSiteAdmin } from '@/lib/auth/permissions';
-import { generateDroneQuickRegisterToken } from '@/lib/settings';
+import { assertPermission, canManageDroneGroupFor } from '@/lib/auth/permissions';
+
+async function requireDroneGroupAccess(droneGroupId: string) {
+  const user = await requireUser();
+  const droneGroup = await prisma.droneGroup.findUniqueOrThrow({ where: { id: droneGroupId } });
+  assertPermission(canManageDroneGroupFor(user, droneGroup));
+  return { user, droneGroup };
+}
 
 export interface DroneFormState {
   error?: string;
 }
 
-export async function createDrone(_prevState: DroneFormState, formData: FormData): Promise<DroneFormState> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+export async function createDrone(
+  droneGroupId: string,
+  _prevState: DroneFormState,
+  formData: FormData,
+): Promise<DroneFormState> {
+  await requireDroneGroupAccess(droneGroupId);
 
   const name = String(formData.get('name') ?? '').trim();
   if (!name) {
     return { error: 'Name ist erforderlich.' };
   }
 
-  const existing = await prisma.drone.findUnique({ where: { name } });
+  // Eindeutigkeit ist PRO Gruppe (Drone.@@unique([droneGroupId, name]), Task 9 Review-Fix) - eine
+  // globale Suche wäre nicht nur falsch (zwei Gruppen dürfen dieselbe Drohnenbezeichnung haben),
+  // sondern hätte einer fremden Gruppe gegenüber auch verraten, dass sie bereits eine Drohne mit
+  // diesem Namen hat (Existence-Oracle).
+  const existing = await prisma.drone.findUnique({ where: { droneGroupId_name: { droneGroupId, name } } });
   if (existing) {
     return { error: 'Eine Drohne mit diesem Namen existiert bereits.' };
   }
 
-  const count = await prisma.drone.count();
-  await prisma.drone.create({ data: { name, sortOrder: count } });
+  const count = await prisma.drone.count({ where: { droneGroupId } });
+  await prisma.drone.create({ data: { name, sortOrder: count, droneGroupId } });
 
   revalidatePath('/admin/drohnen');
   return {};
@@ -36,15 +51,18 @@ export async function renameDrone(
   _prevState: DroneFormState,
   formData: FormData,
 ): Promise<DroneFormState> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  const drone = await prisma.drone.findUniqueOrThrow({ where: { id: droneId } });
+  await requireDroneGroupAccess(drone.droneGroupId);
 
   const name = String(formData.get('name') ?? '').trim();
   if (!name) {
     return { error: 'Name ist erforderlich.' };
   }
 
-  const existing = await prisma.drone.findUnique({ where: { name } });
+  // Siehe Kommentar in createDrone oben - Eindeutigkeit ist PRO Gruppe, nicht global.
+  const existing = await prisma.drone.findUnique({
+    where: { droneGroupId_name: { droneGroupId: drone.droneGroupId, name } },
+  });
   if (existing && existing.id !== droneId) {
     return { error: 'Eine Drohne mit diesem Namen existiert bereits.' };
   }
@@ -55,22 +73,53 @@ export async function renameDrone(
 }
 
 export async function toggleDroneActive(droneId: string): Promise<void> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
-
-  const drone = await prisma.drone.findUnique({ where: { id: droneId } });
-  if (!drone) return;
+  const drone = await prisma.drone.findUniqueOrThrow({ where: { id: droneId } });
+  await requireDroneGroupAccess(drone.droneGroupId);
 
   await prisma.drone.update({ where: { id: droneId }, data: { isActive: !drone.isActive } });
   revalidatePath('/admin/drohnen');
 }
 
-export async function regenerateQuickRegisterLink(): Promise<void> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+export async function regenerateQuickRegisterLink(droneGroupId: string): Promise<void> {
+  await requireDroneGroupAccess(droneGroupId);
 
-  await generateDroneQuickRegisterToken();
+  const token = randomBytes(24).toString('hex');
+  await prisma.droneGroup.update({ where: { id: droneGroupId }, data: { qrToken: token } });
   revalidatePath('/admin/drohnen');
+}
+
+export interface DroneGroupEmailState {
+  success?: boolean;
+  error?: string;
+}
+
+const flightNotificationEmailSchema = z.union([z.literal(''), z.string().trim().email('Ungültige E-Mail-Adresse.')]);
+
+/**
+ * Ersetzt die frühere singleton-weite `saveDroneFlightEmail` (admin/email) - jede Drohnengruppe hat
+ * jetzt ihre eigene Benachrichtigungsadresse (DroneGroup.flightNotificationEmail). Leere Eingabe ist
+ * gültig (= keine Benachrichtigung für diese Gruppe), gleiches Muster wie
+ * setAtemschutzSachbearbeiter/setFahrzeugReservierungEmail in admin/heimatfeuerwehr/actions.ts.
+ */
+export async function setFlightNotificationEmail(
+  droneGroupId: string,
+  _prevState: DroneGroupEmailState,
+  formData: FormData,
+): Promise<DroneGroupEmailState> {
+  await requireDroneGroupAccess(droneGroupId);
+
+  const parsed = flightNotificationEmailSchema.safeParse(formData.get('email'));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };
+  }
+
+  await prisma.droneGroup.update({
+    where: { id: droneGroupId },
+    data: { flightNotificationEmail: parsed.data || null },
+  });
+
+  revalidatePath('/admin/drohnen');
+  return { success: true };
 }
 
 const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
@@ -80,11 +129,11 @@ export interface DroneDocumentFormState {
 }
 
 export async function uploadDroneDocument(
+  droneGroupId: string,
   _prevState: DroneDocumentFormState,
   formData: FormData,
 ): Promise<DroneDocumentFormState> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  const { user } = await requireDroneGroupAccess(droneGroupId);
 
   const title = String(formData.get('title') ?? '').trim();
   const file = formData.get('file');
@@ -110,6 +159,7 @@ export async function uploadDroneDocument(
       sizeBytes: file.size,
       data,
       uploadedById: user.id,
+      droneGroupId,
     },
   });
 
@@ -119,8 +169,8 @@ export async function uploadDroneDocument(
 }
 
 export async function deleteDroneDocument(documentId: string): Promise<void> {
-  const user = await requireUser();
-  assertPermission(isSiteAdmin(user));
+  const doc = await prisma.droneDocument.findUniqueOrThrow({ where: { id: documentId } });
+  await requireDroneGroupAccess(doc.droneGroupId);
 
   await prisma.droneDocument.delete({ where: { id: documentId } });
   revalidatePath('/admin/drohnen');

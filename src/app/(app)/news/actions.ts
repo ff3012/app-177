@@ -30,6 +30,7 @@ export async function createNewsMessage(_prevState: NewsFormState, formData: For
       body: data.body,
       audienceType: data.audienceType === 'DROHNENGRUPPE' ? NewsAudienceType.DROHNENGRUPPE : NewsAudienceType.ORGANIZATION,
       audienceOrgId: data.audienceType === 'ORGANIZATION' ? data.audienceOrgId || null : null,
+      audienceDroneGroupId: data.audienceType === 'DROHNENGRUPPE' ? data.audienceDroneGroupId || null : null,
       scheduledAt: data.sendMode === 'SCHEDULED' && data.scheduledAt ? new Date(data.scheduledAt) : null,
       createdById: user.id,
     },

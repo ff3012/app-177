@@ -14,15 +14,28 @@ interface OrganizationOption {
   type: 'FEUERWEHR' | 'ABSCHNITTSKOMMANDO';
 }
 
+interface DroneGroupOption {
+  id: string;
+  name: string;
+}
+
 interface EventFormProps {
   organizations: OrganizationOption[];
   canSectionWide: boolean;
+  droneGroupOptions: DroneGroupOption[];
   defaultValues?: Partial<EventInput>;
   action: (prevState: EventFormState, formData: FormData) => Promise<EventFormState>;
   submitLabel: string;
 }
 
-export function EventForm({ organizations, canSectionWide, defaultValues, action, submitLabel }: EventFormProps) {
+export function EventForm({
+  organizations,
+  canSectionWide,
+  droneGroupOptions,
+  defaultValues,
+  action,
+  submitLabel,
+}: EventFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -46,6 +59,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
       organizationId: organizations[0]?.id ?? '',
       isSectionWide: false,
       category: 'ALLGEMEIN',
+      droneGroupId: droneGroupOptions[0]?.id ?? null,
       ...defaultValues,
     },
   });
@@ -55,6 +69,17 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
   const showSectionWideOption = canSectionWide && selectedOrg?.type === 'ABSCHNITTSKOMMANDO';
   const category = watch('category');
   const startsAt = watch('startsAt');
+
+  // "Drohnengruppe" nur anbieten, wenn es überhaupt eine wählbare Gruppe gibt (droneGroupOptions
+  // enthält nur die eigene Gruppe des Nutzers) - sonst entstünde ein Termin ohne droneGroupId, der
+  // für niemanden sichtbar wäre. Bearbeitet man einen bereits als Drohnengruppen-Termin angelegten
+  // Eintrag, bleibt die Option erhalten, damit der aktuelle Wert im Select nicht verlorengeht.
+  const categoryOptions = EVENT_CATEGORIES.filter(
+    (categoryOption) =>
+      categoryOption !== 'DROHNENGRUPPE' ||
+      droneGroupOptions.length > 0 ||
+      defaultValues?.category === 'DROHNENGRUPPE',
+  );
 
   // Drohnengruppe-Termine sind gruppenübergreifend gedacht, daher beim Auswählen automatisch
   // als Abschnitt-weit vorbelegen (Benutzer kann es danach weiterhin manuell abwählen).
@@ -99,6 +124,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
     formData.set('organizationId', values.organizationId);
     if (values.isSectionWide) formData.set('isSectionWide', 'on');
     formData.set('category', values.category);
+    if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
 
     startTransition(async () => {
       const result = await action({}, formData);
@@ -173,7 +199,7 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Kategorie</label>
           <select {...register('category')} className="rounded border border-neutral-300 px-3 py-2">
-            {EVENT_CATEGORIES.map((categoryOption) => (
+            {categoryOptions.map((categoryOption) => (
               <option key={categoryOption} value={categoryOption}>
                 {categoryOption === 'DROHNENGRUPPE' ? 'Drohnengruppe' : 'Allgemein'}
               </option>
@@ -182,6 +208,20 @@ export function EventForm({ organizations, canSectionWide, defaultValues, action
           <p className="text-xs text-neutral-500">
             Kategorie "Drohnengruppe" ist nur für Mitglieder der Drohnengruppe sichtbar.
           </p>
+        </div>
+      )}
+
+      {category === 'DROHNENGRUPPE' && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Drohnengruppe</label>
+          <select {...register('droneGroupId')} className="rounded border border-neutral-300 px-3 py-2">
+            {droneGroupOptions.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          {errors.droneGroupId && <p className="text-sm text-red-700">{errors.droneGroupId.message}</p>}
         </div>
       )}
 

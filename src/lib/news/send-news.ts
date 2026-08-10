@@ -17,7 +17,7 @@ export async function dispatchNewsMessage(newsMessageId: string): Promise<Dispat
     return { sent: 0, recipients: 0 };
   }
 
-  const userIds = await resolveAudienceUserIds(news.audienceType, news.audienceOrgId);
+  const userIds = await resolveAudienceUserIds(news.audienceType, news.audienceOrgId, news.audienceDroneGroupId);
   const subscriptions = userIds.length > 0 ? await prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } }) : [];
 
   const { sent, staleIds } = await sendPushToSubscriptions(subscriptions, { title: news.title, body: news.body });

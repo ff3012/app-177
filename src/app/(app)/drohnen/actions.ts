@@ -19,6 +19,7 @@ export async function createFlight(_prevState: FlightFormState, formData: FormDa
   if (!canRegisterFlight(user)) {
     return { error: 'Keine Berechtigung, Flüge zu registrieren.' };
   }
+  const droneGroupId = user.droneGroupId!;
 
   const parsed = flightSchema.safeParse(parseFlightFormData(formData));
   if (!parsed.success) {
@@ -26,11 +27,11 @@ export async function createFlight(_prevState: FlightFormState, formData: FormDa
   }
   const data = parsed.data;
 
-  if (!(await isEligiblePilot(data.pilotUserId))) {
+  if (!(await isEligiblePilot(data.pilotUserId, droneGroupId))) {
     return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied der Drohnengruppe.'] } };
   }
 
-  if (!(await isActiveDrone(data.droneId))) {
+  if (!(await isActiveDrone(data.droneId, droneGroupId))) {
     return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
@@ -47,7 +48,11 @@ export async function createFlight(_prevState: FlightFormState, formData: FormDa
     include: { drone: true, pilotUser: true, registeredBy: true },
   });
 
-  await notifyDroneFlightCreated(flight);
+  const droneGroup = await prisma.droneGroup.findUnique({
+    where: { id: droneGroupId },
+    select: { flightNotificationEmail: true },
+  });
+  await notifyDroneFlightCreated(flight, droneGroup?.flightNotificationEmail ?? null);
 
   revalidatePath('/drohnen');
   redirect('/drohnen');
@@ -60,11 +65,18 @@ export async function updateFlight(
 ): Promise<FlightFormState> {
   const user = await requireUser();
 
-  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId } });
+  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId }, include: { drone: true } });
   if (!existing) {
     return { error: 'Flug wurde nicht gefunden.' };
   }
-  assertPermission(canManageFlight(user, existing));
+  assertPermission(
+    canManageFlight(user, { registeredById: existing.registeredById, droneGroupId: existing.drone.droneGroupId }),
+  );
+  // Gruppenzugehörigkeit des Flugs ist über seine (unveränderliche) ursprüngliche Drohne definiert -
+  // bewusst nicht user.droneGroupId, da ein Flug beim Bearbeiten innerhalb seiner eigenen Gruppe
+  // bleiben muss, unabhängig davon, wer ihn gerade bearbeitet (siehe canManageFlight, das Admin
+  // Drohnengruppe unabhängig von der Gruppe zulässt).
+  const droneGroupId = existing.drone.droneGroupId;
 
   const parsed = flightSchema.safeParse(parseFlightFormData(formData));
   if (!parsed.success) {
@@ -72,11 +84,11 @@ export async function updateFlight(
   }
   const data = parsed.data;
 
-  if (!(await isEligiblePilot(data.pilotUserId))) {
+  if (!(await isEligiblePilot(data.pilotUserId, droneGroupId))) {
     return { fieldErrors: { pilotUserId: ['Ausgewählter Pilot ist kein aktives Mitglied der Drohnengruppe.'] } };
   }
 
-  if (!(await isActiveDrone(data.droneId))) {
+  if (!(await isActiveDrone(data.droneId, droneGroupId))) {
     return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
@@ -99,11 +111,13 @@ export async function updateFlight(
 export async function deleteFlight(flightId: string): Promise<void> {
   const user = await requireUser();
 
-  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId } });
+  const existing = await prisma.droneFlight.findUnique({ where: { id: flightId }, include: { drone: true } });
   if (!existing) {
     redirect('/drohnen');
   }
-  assertPermission(canManageFlight(user, existing));
+  assertPermission(
+    canManageFlight(user, { registeredById: existing.registeredById, droneGroupId: existing.drone.droneGroupId }),
+  );
 
   await prisma.droneFlight.delete({ where: { id: flightId } });
   revalidatePath('/drohnen');

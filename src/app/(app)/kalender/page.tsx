@@ -5,6 +5,7 @@ import { canManageEventsFor, canViewDroneModule } from '@/lib/auth/permissions';
 import { KalenderWithLayers, type CalendarLayer, type IcsLink } from '@/components/calendar/kalender-with-layers';
 import type { CalendarEventInput } from '@/components/calendar/calendar-view';
 import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
+import { LEGACY_COMBINED_ICS_ABSCHNITT_NUMMER } from '@/lib/organizations/abschnitt';
 import { CollapsingPageTitle } from '@/components/layout/collapsing-page-title';
 
 function baseUrl(): string {
@@ -14,10 +15,24 @@ function baseUrl(): string {
 export default async function KalenderPage() {
   const user = await requireUser();
 
-  const [organization, allEvents] = await Promise.all([
+  const [organization, homeAbschnitt, allEvents] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: user.homeOrganizationId } }),
+    prisma.organization.findUnique({
+      where: { id: user.homeAbschnittOrganizationId },
+      select: { nummer: true },
+    }),
     prisma.event.findMany({
-      where: { OR: [{ organizationId: user.homeOrganizationId }, { isSectionWide: true }] },
+      where: {
+        OR: [
+          { organizationId: user.homeOrganizationId },
+          {
+            isSectionWide: true,
+            organization: {
+              OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
+            },
+          },
+        ],
+      },
       include: { organization: true },
       orderBy: { startsAt: 'asc' },
     }),
@@ -56,7 +71,9 @@ export default async function KalenderPage() {
   }
 
   const calendarEvents: CalendarEventInput[] = allEvents
-    .filter((event) => event.category !== 'DROHNENGRUPPE' || canSeeDroneCategory)
+    .filter(
+      (event) => event.category !== 'DROHNENGRUPPE' || (canSeeDroneCategory && event.droneGroupId === user.droneGroupId),
+    )
     .map((event) => {
       const layer = event.category === 'DROHNENGRUPPE' ? 'drohnengruppe' : event.isSectionWide ? 'abschnitt' : 'own';
       return {
@@ -87,7 +104,13 @@ export default async function KalenderPage() {
       copyText: `${baseUrl()}/kalender/ics/${organization.icsToken}`,
     },
   ];
-  if (combinedIcsToken) {
+  // Der kombinierte Abschnitts-Feed hängt an einem einzigen Umgebungs-Token und liefert ausschließlich
+  // die Termine des Abschnitts Purkersdorf (siehe LEGACY_COMBINED_ICS_ABSCHNITT_NUMMER). Nutzern der
+  // übrigen 6 Abschnitte darf er deshalb gar nicht erst angeboten werden - sie bekämen sonst einen
+  // fremden Kalender unter dem Label "Abschnitt-Kalender".
+  const showCombinedIcsLink = homeAbschnitt?.nummer === LEGACY_COMBINED_ICS_ABSCHNITT_NUMMER;
+
+  if (combinedIcsToken && showCombinedIcsLink) {
     icsLinks.push({
       label: 'Abschnitt-Kalender abonnieren (.ics)',
       href: `/kalender/ics/${combinedIcsToken}`,

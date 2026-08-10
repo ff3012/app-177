@@ -2,11 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from '@/components/ui/command';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 
 interface OrgOption {
   id: string;
   name: string;
+  abschnittName?: string;
+}
+
+/** Gruppiert die (bereits durchsuchte) Feuerwehr-Liste nach Abschnitt, dieselbe Begründung wie
+ * OrgSelect/groupByAbschnitt/groupOrganizationsByAbschnitt an den anderen drei Feuerwehr-Auswahlstellen
+ * dieser Codebase: mit bis zu 124 Feuerwehren (Bezirksadmin) ist eine flache Liste sonst unbrauchbar. */
+function groupByAbschnitt(organizations: OrgOption[]): Record<string, OrgOption[]> {
+  const groups: Record<string, OrgOption[]> = {};
+  for (const org of organizations) {
+    const key = org.abschnittName ?? 'Ohne Abschnitt';
+    (groups[key] ??= []).push(org);
+  }
+  return groups;
 }
 
 /**
@@ -33,6 +46,16 @@ export function AdminOrgMultiSelect({
   const selectedOrgs = useMemo(
     () => organizations.filter((org) => value.includes(org.id)),
     [organizations, value],
+  );
+
+  // Nur gruppieren, wenn wenigstens ein Eintrag tatsächlich einen abschnittName mitgibt - ein
+  // Feuerwehr-Admin mit 1-2 Optionen und keinem abschnittName sieht weiterhin die schlichte flache
+  // Liste (keine "Ohne Abschnitt"-Überschrift für einen einzigen Eintrag), dieselbe Regel wie bei
+  // OrgSelect/user-form-sheet.tsx's Heimat-Feuerwehr-Select.
+  const hasAbschnittGroups = organizations.some((org) => Boolean(org.abschnittName));
+  const filteredOrgs = useMemo(
+    () => organizations.filter((org) => org.name.toLowerCase().includes(search.trim().toLowerCase())),
+    [organizations, search],
   );
 
   function toggle(orgId: string) {
@@ -109,33 +132,35 @@ export function AdminOrgMultiSelect({
           </div>
           <CommandList>
             <CommandEmpty className="py-4 text-sm text-ink-faint">Keine Feuerwehr gefunden.</CommandEmpty>
-            {organizations
-              .filter((org) => org.name.toLowerCase().includes(search.trim().toLowerCase()))
-              .map((org) => {
-                const checked = value.includes(org.id);
-                return (
-                  <CommandItem
-                    key={org.id}
-                    value={org.name}
-                    onSelect={() => toggle(org.id)}
-                    className={checked ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}
-                  >
-                    <span
-                      className={`flex size-[19px] flex-none items-center justify-center rounded ${
-                        checked ? 'bg-brand text-white' : 'border-[1.5px] border-line-strong'
-                      }`}
-                      aria-hidden
+            {Object.entries(groupByAbschnitt(filteredOrgs)).map(([abschnittName, orgs]) => (
+              <CommandGroup key={abschnittName} heading={hasAbschnittGroups ? abschnittName : undefined}>
+                {orgs.map((org) => {
+                  const checked = value.includes(org.id);
+                  return (
+                    <CommandItem
+                      key={org.id}
+                      value={org.name}
+                      onSelect={() => toggle(org.id)}
+                      className={checked ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}
                     >
-                      {checked && (
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3">
-                          <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </span>
-                    <span className="text-[15px] text-ink">{org.name}</span>
-                  </CommandItem>
-                );
-              })}
+                      <span
+                        className={`flex size-[19px] flex-none items-center justify-center rounded ${
+                          checked ? 'bg-brand text-white' : 'border-[1.5px] border-line-strong'
+                        }`}
+                        aria-hidden
+                      >
+                        {checked && (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3">
+                            <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="text-[15px] text-ink">{org.name}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>

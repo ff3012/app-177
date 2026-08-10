@@ -325,8 +325,8 @@ model DrohnengruppeMembership {
   role    DroneRole @default(PILOT)
   addedAt DateTime  @default(now())
 
-  droneGroupId String?
-  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -346,10 +346,11 @@ model DroneGroup {
   flightNotificationEmail String?
   qrToken                 String?  @unique
 
-  memberships DrohnengruppeMembership[]
-  documents   DroneDocument[]
-  drones      Drone[]
-  events      Event[]
+  memberships  DrohnengruppeMembership[]
+  documents    DroneDocument[]
+  drones       Drone[]
+  events       Event[]
+  newsMessages NewsMessage[]
 
   @@index([organizationId])
 }
@@ -427,15 +428,19 @@ model TerminZusage {
 
 model Drone {
   id        String  @id @default(cuid())
-  name      String  @unique
+  name      String
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  droneGroupId String?
-  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
   flights DroneFlight[]
 
+  // Task 9 Review-Fix: war zuvor global @unique - zwei verschiedene Drohnengruppen konnten dadurch
+  // nicht beide eine Drohne "Drohne 1" nennen (fast garantiert zu kollidieren, da das der naheliegende
+  // Name für die jeweils erste Drohne einer neuen Gruppe ist). Eindeutigkeit ist jetzt PRO Gruppe.
+  @@unique([droneGroupId, name])
   @@index([droneGroupId])
 }
 
@@ -444,8 +449,6 @@ model Drone {
  */
 model AppSettings {
   id                           String    @id @default("singleton")
-  droneFlightNotificationEmail String?
-  droneQuickRegisterToken      String?
   systemCheckNotificationEmail String?
   lastNewsCronRunAt            DateTime?
   lastBackupAt                 DateTime?
@@ -487,8 +490,8 @@ model DroneDocument {
   uploadedById String
   createdAt    DateTime @default(now())
 
-  droneGroupId String?
-  droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
   uploadedBy User @relation("DroneDocumentUploadedBy", fields: [uploadedById], references: [id])
 
@@ -528,8 +531,15 @@ model NewsMessage {
   createdById   String
   createdAt     DateTime         @default(now())
 
-  audienceOrg Organization? @relation(fields: [audienceOrgId], references: [id])
-  createdBy   User          @relation("NewsCreatedBy", fields: [createdById], references: [id])
+  // Für audienceType == DROHNENGRUPPE: schränkt den Versand auf eine konkrete Drohnengruppe ein.
+  // Nullable und additiv - null bedeutet weiterhin "alle Gruppen" (siehe resolveAudienceUserIds),
+  // sowohl für historische Zeilen (kein Backfill nötig) als auch als bewusst erhaltene,
+  // weiterhin wählbare Option "Alle Gruppen" im Formular, nicht nur ein Kompatibilitäts-Notbehelf.
+  audienceDroneGroupId String?
+
+  audienceOrg       Organization? @relation(fields: [audienceOrgId], references: [id])
+  audienceDroneGroup DroneGroup?  @relation(fields: [audienceDroneGroupId], references: [id])
+  createdBy         User          @relation("NewsCreatedBy", fields: [createdById], references: [id])
 
   @@index([scheduledAt])
 }
