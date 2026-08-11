@@ -1,24 +1,26 @@
 import ExcelJS from 'exceljs';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { canViewAllFlights } from '@/lib/auth/permissions';
+import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 
 const PURPOSE_LABEL: Record<string, string> = {
   UEBUNG: 'Übung',
   EINSATZ: 'Einsatz',
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await requireUser();
-  if (!canViewAllFlights(user)) {
+  const allowedGroups = await getAllowedDroneGroups(user);
+  if (allowedGroups.length === 0) {
     return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
   }
 
-  // Scoped auf die eigene Drohnengruppe (über die Drohne, siehe Kommentar in drohnen/page.tsx) -
-  // Admin Drohnengruppe darf hier nur die Flüge der eigenen Gruppe exportieren, nicht systemweit.
+  const requestedGroupId = request.nextUrl.searchParams.get('gruppe');
+  const droneGroupId = (requestedGroupId && allowedGroups.find((g) => g.id === requestedGroupId)?.id) || allowedGroups[0].id;
+
   const flights = await prisma.droneFlight.findMany({
-    where: { drone: { droneGroupId: user.droneGroupId! } },
+    where: { drone: { droneGroupId } },
     include: { drone: true, registeredBy: true, pilotUser: true },
     orderBy: { startsAt: 'desc' },
   });
