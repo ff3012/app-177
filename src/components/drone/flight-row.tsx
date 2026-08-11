@@ -47,15 +47,27 @@ export function FlightRow({ flight }: { flight: FlightRowData }) {
     </div>
   );
 
+  const rowStyle = { borderLeft: `5px solid ${stripeColor(flight.purposeLabel)}` };
+
+  // FlightRow ist eine Server-Komponente (kein 'use client') - ein onClick-Handler auf dem <Link>
+  // (selbst eine Client-Komponente) für den nicht-editierbaren Fall wie ursprünglich hier versucht
+  // ("href='#' + preventDefault") ist in Next.js App Router unzulässig ("Event handlers cannot be
+  // passed to Client Component props", bricht das gesamte <main>-Rendering) - stattdessen wie
+  // FlightCard direkt darunter: zwei getrennte Zweige, nur der editierbare rendert einen echten
+  // <Link>, der andere einen reinen <div>-Wrapper ohne jede Navigation/Handler.
+  if (!flight.editable) {
+    return (
+      <div className="hidden border-b border-line pl-0 last:border-0 sm:flex" style={rowStyle}>
+        {content}
+      </div>
+    );
+  }
+
   return (
     <Link
-      href={flight.editable ? `/drohnen/${flight.id}/bearbeiten` : '#'}
+      href={`/drohnen/${flight.id}/bearbeiten`}
       className="hidden border-b border-line pl-0 last:border-0 hover:bg-surface-sunken sm:flex"
-      style={{ borderLeft: `5px solid ${stripeColor(flight.purposeLabel)}` }}
-      aria-disabled={!flight.editable}
-      onClick={(e) => {
-        if (!flight.editable) e.preventDefault();
-      }}
+      style={rowStyle}
     >
       {content}
     </Link>

@@ -4,6 +4,14 @@ import { hashPassword } from '@/lib/password';
 
 const QUICK_REGISTER_EMAIL = 'drohnen-schnellerfassung@system.local';
 
+/** Ob eine erfasste Flug-E-Mail dem technischen QR-Schnellerfassungs-Platzhalter gehört, für die
+ * "Erfasst über Schnellerfassung (QR)"-Herkunftsbeschriftung im Flugbuch (Drohnengruppe-Brief.md
+ * §6) - der einzige Konsument außerhalb dieser Datei, der wissen muss, wann ein registeredBy
+ * dieser technische Platzhalter statt eine echte Person ist. */
+export function isQuickRegisterEmail(email: string): boolean {
+  return email === QUICK_REGISTER_EMAIL;
+}
+
 /**
  * Technischer Platzhalter-Benutzer für Flüge, die über den QR-Code-Schnellerfassungslink
  * angelegt werden (kein echter Pilot, sondern der "registeredBy" Eintrag). isActive=false,
