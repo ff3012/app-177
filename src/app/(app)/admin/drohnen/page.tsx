@@ -10,8 +10,6 @@ import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { getReachableScopes } from '@/lib/admin/scope';
 import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
-import { listDrohnengruppeMembers } from '@/lib/drone/members';
-import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 import { GroupSelect } from './group-select';
 import { AddDroneForm } from './add-drone-form';
 import { RenameDroneForm } from './rename-drone-form';
@@ -51,7 +49,7 @@ export default async function DrohnenVerwaltungPage({
 
   const selectedGroup = (group && allowedGroups.find((g) => g.id === group)) || allowedGroups[0];
 
-  const [drones, documents, members, flightCounts] = await Promise.all([
+  const [drones, documents] = await Promise.all([
     prisma.drone.findMany({ where: { droneGroupId: selectedGroup.id }, orderBy: { sortOrder: 'asc' } }),
     prisma.droneDocument.findMany({
       where: { droneGroupId: selectedGroup.id },
@@ -65,15 +63,8 @@ export default async function DrohnenVerwaltungPage({
       },
       orderBy: { createdAt: 'desc' },
     }),
-    listDrohnengruppeMembers(selectedGroup.id),
-    prisma.droneFlight.groupBy({
-      by: ['pilotUserId'],
-      where: { startsAt: { gte: getNinetyDayCutoff() }, pilotUser: { droneMembership: { droneGroupId: selectedGroup.id } } },
-      _count: { _all: true },
-    }),
   ]);
   const quickRegisterLink = selectedGroup.qrToken ? `${baseUrl()}/drohnen-schnell/${selectedGroup.qrToken}` : null;
-  const countByPilot = new Map(flightCounts.map((c) => [c.pilotUserId, c._count._all]));
 
   const boundRegenerateLink = regenerateQuickRegisterLink.bind(null, selectedGroup.id);
   const boundCreateDrone = createDrone.bind(null, selectedGroup.id);
@@ -91,66 +82,17 @@ export default async function DrohnenVerwaltungPage({
       {allowedGroups.length > 1 && (
         <GroupSelect groups={allowedGroups.map((g) => ({ id: g.id, name: g.name }))} selectedId={selectedGroup.id} />
       )}
-
-      {/* Kein eigenes Sichtbarkeits-Gate mehr für diesen Abschnitt (Task 9 Review-Fix, war zuvor
-          `{canSeeMembers && (...)}` mit `canSeeMembers = true` - toter Code): die eigentliche
-          Berechtigungsgrenze ist bereits `allowedGroups`/canManageDroneGroupFor oben - wer diese
-          Seite für eine Gruppe überhaupt sieht, darf auch deren Compliance-Daten sehen. */}
       <div className="rounded-lg bg-surface p-4 shadow-card">
-        <h2 className="mb-1 text-[15px] font-semibold text-ink">Mitglieder · 90-Tage-Status</h2>
-        <p className="mb-3 text-xs text-ink-faint">
-          Mindestens 3 Flüge in den letzten 90 Tagen. Rolle/Mitgliedschaft ändern über die{' '}
-          <Link href="/admin/benutzer" className="text-brand hover:underline">
-            Benutzerverwaltung
-          </Link>
-          .
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Einsatzbereitschaft</h2>
+        <p className="mb-3 text-sm text-ink-muted">
+          Ampel-Übersicht der BOS1-Piloten dieser Gruppe (90-Tage-Regel) sowie Mitgliederzahl und A2-Zertifikate.
         </p>
-        <Table>
-          <TableHeader>
-            <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Flüge (90 Tage)
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {members.map((member) => {
-              const count = countByPilot.get(member.id) ?? 0;
-              const met = meetsNinetyDayRule(count);
-              return (
-                <TableRow key={member.id} className="border-line">
-                  <TableCell>
-                    <Link href={`/admin/benutzer?edit=${member.id}`} className="text-ink hover:underline">
-                      {member.lastName} {member.firstName}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="font-mono text-ink-muted">{count}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        met
-                          ? 'border-transparent bg-success-subtle text-success-text'
-                          : 'border-transparent bg-danger-subtle text-danger'
-                      }
-                    >
-                      {met ? 'Erfüllt' : 'Offen'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {members.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-ink-muted">
-                  Keine Mitglieder dieser Drohnengruppe hinterlegt.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        <Link
+          href={`/admin/drohnen/einsatzbereitschaft?group=${selectedGroup.id}`}
+          className="inline-block rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+        >
+          Einsatzbereitschaft ansehen
+        </Link>
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
