@@ -25,11 +25,13 @@ export function ImportUsersForm() {
             className="rounded border border-neutral-300 px-3 py-2"
           />
           <p className="text-xs text-neutral-500">
-            Erwartet die Spalten Vorname, Nachname, E-Mail, StbNr, Telefonnummer, Heimat-Feuerwehr — z. B. der{' '}
+            Unterstützt alle Benutzerfelder (Dienstgrad, Admin für, Drohnengruppe/-Rolle, Ausbildungsstufen,
+            Atemschutzgeräteträger, Bezirksadmin, Bezirks-Drohnenadmin, …) — am einfachsten ist der{' '}
             <a href="/admin/benutzer/export" className="text-brand hover:underline">
               Excel-Export
             </a>{' '}
-            als Vorlage. Bereits vorhandene Benutzer (gleiche StbNr + Heimat-Feuerwehr) werden übersprungen.
+            als ausfüllbare Vorlage (gleiche Spaltennamen). Bereits vorhandene Benutzer (gleiche StbNr +
+            Heimat-Feuerwehr) werden übersprungen.
           </p>
         </div>
 
