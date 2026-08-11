@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageDroneGroupFor } from '@/lib/auth/permissions';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { Badge } from '@/components/ui/badge';
