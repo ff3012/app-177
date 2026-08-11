@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
+import { canManageDroneGroupFor } from '@/lib/auth/permissions';
+import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -40,8 +41,7 @@ export default async function DrohnenVerwaltungPage({
   const reachableScopes = await getReachableScopes(user);
   const { group } = await searchParams;
 
-  const allGroups = await prisma.droneGroup.findMany({ orderBy: { name: 'asc' } });
-  const allowedGroups = isBezirksAdmin(user) ? allGroups : allGroups.filter((g) => canManageDroneGroupFor(user, g));
+  const allowedGroups = await getAllowedDroneGroups(user);
 
   if (allowedGroups.length === 0) {
     notFound();

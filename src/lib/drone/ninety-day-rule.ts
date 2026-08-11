@@ -26,3 +26,16 @@ export function getComplianceUntilDate(flightDatesDesc: Date[]): Date | null {
   until.setDate(until.getDate() + NINETY_DAY_WINDOW_DAYS);
   return until;
 }
+
+/**
+ * Tage bis zum Ablauf der 90-Tage-Regel (siehe getComplianceUntilDate), gerundet auf ganze Tage.
+ * null, wenn die Regel aktuell nicht erfüllt ist - dieselbe Bedeutung wie getComplianceUntilDate's
+ * eigener null-Fall, hier nur als Zahl statt als Datum, für die Bernstein-Schwelle in der neuen
+ * Gruppenstatus-Balkenliste (<= 14 Tage = Bernstein statt Grün).
+ */
+export function getDaysUntilExpiry(flightDatesDesc: Date[]): number | null {
+  const until = getComplianceUntilDate(flightDatesDesc);
+  if (!until) return null;
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.ceil((until.getTime() - Date.now()) / msPerDay);
+}
