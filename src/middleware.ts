@@ -15,6 +15,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/wastl',
   '/api/facebook/image',
   '/fahrzeug-reservierung',
+  '/how-to.html',
 ];
 
 export default auth((req) => {
