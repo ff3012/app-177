@@ -889,10 +889,25 @@ own-flights query, same as before this toggle existed.
   bestehende `deleteMany` die gesamte `DrohnengruppeMembership`-Zeile — inklusive aller 5
   Ausbildungsdaten. Das ist eine bewusste Konsequenz der Datenmodell-Entscheidung oben und wird seit dem
   finalen Review über eine clientseitige Warnung in `UserFormSheet` sichtbar gemacht, statt stillschweigend
-  zu passieren. Diese Phase ist reine Datenerfassung — es existiert noch keine Anzeige-/Bereitschafts-UI
-  (Badge, Ampel, bezirksweite Übersicht); das ist das noch nicht gebaute "Einsatzbereitschaft"-Konzept aus
-  `Verwaltung-Filter-Brief.md` §6.1, eine bewusst getrennte, spätere Phase, die diese Daten erst konsumieren
-  wird, sobald sie existiert.
+  zu passieren.
+- **Einsatzbereitschaft (Drohnengruppe)**: das oben als "noch nicht gebaut" beschriebene Konzept aus
+  `Verwaltung-Filter-Brief.md` §6.1 existiert jetzt — eine neue Seite
+  `/admin/drohnen/einsatzbereitschaft`, erreichbar über einen In-Page-Link auf `/admin/drohnen` (kein
+  eigener `AdminSidebarNav`/`AdminMobileTabs`-Eintrag, gleiches Muster wie die "Historie"-Verlinkung bei
+  Fahrzeugen in Heimatfeuerwehr). Berechnet von `src/lib/drone/einsatzbereitschaft.ts`s
+  `getGruppenEinsatzbereitschaft`/`classifyFlightCount`: für jedes Mitglied MIT gesetztem
+  `bos1AusbildungAm` eine Ampel — GRÜN (≥ `NINETY_DAY_REQUIRED_FLIGHTS` Flüge im 90-Tage-Fenster), GELB
+  (genau einer zu wenig), ROT (alles darunter, ohne Unterscheidung zwischen "nie erfüllt" und "abgelaufen")
+  — plus zwei Kennzahlen pro Gruppe (Mitglieder gesamt, Mitglieder mit A2-Zertifikat). Mehrere
+  erreichbare Gruppen (Bezirksadmin/Bezirks-Drohnenadmin) zeigen ein Kachel-Grid mit Drilldown; eine
+  einzelne Gruppe zeigt die Detail-Ansicht direkt. Die zugrunde liegende
+  `prisma.drohnengruppeMembership.findMany`-Abfrage filtert dabei bewusst mit `NOT_DEACTIVATED_WHERE`
+  (`@/lib/auth/user-status`) auf `user` — ohne diesen Filter würde ein DEAKTIVIERTER Ex-Pilot mit
+  weiterhin bestehender `DrohnengruppeMembership`-Zeile (nur das Entziehen der Gruppenrolle löscht diese
+  Zeile, eine bloße Deaktivierung nicht) in `totalMembers`/`a2Count` mitzählen und, falls
+  `bos1AusbildungAm` gesetzt ist, fälschlich ROT-klassifiziert ganz oben in der Dringlichkeitsliste
+  auftauchen — genau der Fehler, den jede andere Drohnengruppen-Mitgliederliste in dieser Codebase
+  (`listDrohnengruppeMembers`) bereits vermeidet.
 
 **Drohnengruppe V2 (Signalrot-Mockup-Angleichung)** — the three items below (`NinetyDayRing`,
 `GroupStatusChart`, `PurposeBadge`) were one pass to bring this module in line with the "Signalrot" design
@@ -1221,19 +1236,16 @@ remaining `/admin/*` pages onto the same shadcn/`AdminMobileTabs`/`getComputedSt
 Action logic changed on any of the three pages.
 
 - **`/admin/drohnen`**: gained a page title, `<AdminMobileTabs/>`, and its drone table restyled onto shadcn
-  `Table`/`Badge` (`RenameDroneForm`/`toggleDroneActive` untouched). New: a "Mitglieder · 90-Tage-Status"
-  section reusing `listDrohnengruppeMembers()` + `getNinetyDayCutoff()`/`meetsNinetyDayRule()` +
-  `prisma.droneFlight.groupBy({by:['pilotUserId'], where:{startsAt:{gte:cutoff}}})` — the *exact* query
-  pattern from `/drohnen/90-tage/page.tsx`, not reinvented — rendered as a `Table`/`Badge` (Erfüllt/Offen)
-  with each row linking to `/admin/benutzer?edit=<id>` for editing rather than adding new member-management
-  actions this page never had. This section is gated on `canViewAllFlights(user)` **in addition to** the
-  page's own `isSiteAdmin` gate from `admin/layout.tsx` — the same reasoning as `GroupStatusChart` on
-  `/drohnen` (see Drohnengruppe V2 above): `isSiteAdmin` and `isDroneGroupAdmin`/`canViewAllFlights` are
-  independent rights, so a site admin who isn't also Admin Drohnengruppe must not automatically see
-  pilot-by-pilot compliance data. Verified live: logged in as the seeded site admin (who lacks
-  `canViewAllFlights`), the section is correctly absent from the rendered page — confirming the gate works,
-  not just that it compiles. The QR-code and Unterlagen cards were restyled onto `bg-surface`/`shadow-card`
-  tokens with no functional change.
+  `Table`/`Badge` (`RenameDroneForm`/`toggleDroneActive` untouched). Originally also gained a
+  "Mitglieder · 90-Tage-Status" section here (`listDrohnengruppeMembers()` +
+  `getNinetyDayCutoff()`/`meetsNinetyDayRule()` + a `prisma.droneFlight.groupBy`, rendered as a binary
+  Erfüllt/Offen `Table`/`Badge` with each row linking to `/admin/benutzer?edit=<id>`), gated on
+  `canViewAllFlights(user)` in addition to the page's own `isSiteAdmin` gate — **this section no longer
+  exists**: commit `6ac93d1` removed it in favor of a link to the dedicated
+  `/admin/drohnen/einsatzbereitschaft` page (see "Einsatzbereitschaft (Drohnengruppe)" under the
+  Drohnengruppe module section above), which supersedes it with a BOS1-aware, three-state Ampel instead of
+  a binary badge. The QR-code and Unterlagen cards were restyled onto `bg-surface`/`shadow-card` tokens
+  with no functional change.
 - **`/admin/email`**: gained a title + `<AdminMobileTabs/>`; its three cards (`DroneFlightEmailForm`/
   `SystemCheckEmailForm`/`TestMailjetForm`, internals untouched) now sit in a `max-w-[640px]` single column
   per the brief's explicit "nicht über die volle Fensterbreite gezogen" — confirmed via
@@ -1493,10 +1505,14 @@ in this app.
   the Atemschutz-Tabelle's member query (`admin/heimatfeuerwehr/page.tsx`), and both
   `listDrohnengruppeMembers()` and `isEligiblePilot()` (`src/lib/drone/members.ts`) - the latter two are
   shared by the flight-registration pilot picker, the write-time eligibility re-check in
-  `createFlight`/`updateFlight`, the 90-Tage-Report, and `/admin/drohnen`'s "Mitglieder · 90-Tage-Status"
-  table, so broadening them once fixes all four consistently rather than only the flight form (confirmed
-  as the desired behavior with the app owner rather than assumed - a never-activated Drohnengruppe member's
-  compliance is legitimately worth tracking in those reports too, not just recordable). Saving Atemschutz
+  `createFlight`/`updateFlight`, and the 90-Tage-Report, so broadening them once fixes all three consistently
+  rather than only the flight form (confirmed as the desired behavior with the app owner rather than assumed
+  - a never-activated Drohnengruppe member's compliance is legitimately worth tracking in those reports too,
+  not just recordable). The Einsatzbereitschaft module (`src/lib/drone/einsatzbereitschaft.ts`, see the
+  Drohnengruppe module section above) came later and applies this same `NOT_DEACTIVATED_WHERE` filter
+  independently to its own `prisma.drohnengruppeMembership.findMany` query - it doesn't call
+  `listDrohnengruppeMembers()` (a deliberate, separately-documented tradeoff, see that section), so it needed
+  its own copy of this guard rather than inheriting it for free. Saving Atemschutz
   dates itself already had no `isActive` gate of its own (`updateAtemschutzStatus` only checks
   `canManageHeimatfeuerwehrFor`) - the bug was purely that the page never surfaced the row/edit-trigger to
   click in the first place, so widening the query alone was the complete fix for that half of the report.

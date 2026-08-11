@@ -2,8 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
-import { getGruppenEinsatzbereitschaft, type EinsatzbereitschaftStatus, type GruppenEinsatzbereitschaft } from '@/lib/drone/einsatzbereitschaft';
+import { canAccessUserManagementAdmin, canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
+import {
+  getGruppenEinsatzbereitschaft,
+  type EinsatzbereitschaftStatus,
+  type GruppenEinsatzbereitschaft,
+  type PilotEinsatzbereitschaft,
+} from '@/lib/drone/einsatzbereitschaft';
 import { NINETY_DAY_REQUIRED_FLIGHTS } from '@/lib/drone/ninety-day-rule';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -42,7 +47,7 @@ function GroupTile({ data, selected }: { data: GruppenEinsatzbereitschaft; selec
       <span className="text-xs text-ink-muted">
         {data.totalMembers} Mitglieder · {data.a2Count} mit A2
       </span>
-      <span className="font-mono text-sm">
+      <span className="font-mono text-sm" title="Einsatzbereit / Bald fällig / Nicht einsatzbereit">
         <span className={STATUS_COUNT_CLASS.GRUEN}>{countByStatus(data, 'GRUEN')}</span>
         {' · '}
         <span className={STATUS_COUNT_CLASS.GELB}>{countByStatus(data, 'GELB')}</span>
@@ -53,7 +58,16 @@ function GroupTile({ data, selected }: { data: GruppenEinsatzbereitschaft; selec
   );
 }
 
-function DetailSection({ data }: { data: GruppenEinsatzbereitschaft }) {
+function PilotName({ pilot, canLinkToUser }: { pilot: PilotEinsatzbereitschaft; canLinkToUser: boolean }) {
+  if (!canLinkToUser) return <>{pilot.name}</>;
+  return (
+    <Link href={`/admin/benutzer?edit=${pilot.id}`} className="hover:underline">
+      {pilot.name}
+    </Link>
+  );
+}
+
+function DetailSection({ data, canLinkToUser }: { data: GruppenEinsatzbereitschaft; canLinkToUser: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-4">
@@ -82,7 +96,9 @@ function DetailSection({ data }: { data: GruppenEinsatzbereitschaft }) {
               {data.pilots.map((pilot) => (
                 <div key={pilot.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="flex flex-col">
-                    <span className="text-sm text-ink">{pilot.name}</span>
+                    <span className="text-sm text-ink">
+                      <PilotName pilot={pilot} canLinkToUser={canLinkToUser} />
+                    </span>
                     <span className="text-xs text-ink-faint">{pilot.flightCount} Flüge (90 Tage)</span>
                   </div>
                   <Badge variant="outline" className={STATUS_CLASS[pilot.status]}>
@@ -108,7 +124,9 @@ function DetailSection({ data }: { data: GruppenEinsatzbereitschaft }) {
                 <TableBody>
                   {data.pilots.map((pilot) => (
                     <TableRow key={pilot.id} className="border-line">
-                      <TableCell className="text-ink">{pilot.name}</TableCell>
+                      <TableCell className="text-ink">
+                        <PilotName pilot={pilot} canLinkToUser={canLinkToUser} />
+                      </TableCell>
                       <TableCell className="font-mono text-ink-muted">{pilot.flightCount}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={STATUS_CLASS[pilot.status]}>
@@ -152,10 +170,12 @@ export default async function EinsatzbereitschaftPage({
     ? tileData.find((d) => d.droneGroupId === selectedGroup.id)!
     : await getGruppenEinsatzbereitschaft(selectedGroup.id);
 
+  const canLinkToUser = canAccessUserManagementAdmin(user);
+
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href="/admin/drohnen" className="text-sm text-brand hover:underline">
+        <Link href={`/admin/drohnen?group=${selectedGroup.id}`} className="text-sm text-brand hover:underline">
           ← Zurück zur Drohnengruppe-Verwaltung
         </Link>
         <h1 className="mt-1 text-[28px] font-bold text-ink">Einsatzbereitschaft</h1>
@@ -169,7 +189,7 @@ export default async function EinsatzbereitschaftPage({
         </div>
       )}
 
-      <DetailSection data={selectedData} />
+      <DetailSection data={selectedData} canLinkToUser={canLinkToUser} />
     </div>
   );
 }

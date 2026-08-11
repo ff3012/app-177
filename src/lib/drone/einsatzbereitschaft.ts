@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { NINETY_DAY_REQUIRED_FLIGHTS, getNinetyDayCutoff } from './ninety-day-rule';
 
 export type EinsatzbereitschaftStatus = 'GRUEN' | 'GELB' | 'ROT';
@@ -44,7 +45,7 @@ export async function getGruppenEinsatzbereitschaft(droneGroupId: string): Promi
   const [droneGroup, memberships, flightCounts] = await Promise.all([
     prisma.droneGroup.findUniqueOrThrow({ where: { id: droneGroupId }, select: { name: true } }),
     prisma.drohnengruppeMembership.findMany({
-      where: { droneGroupId },
+      where: { droneGroupId, user: NOT_DEACTIVATED_WHERE },
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
       select: {
         bos1AusbildungAm: true,
