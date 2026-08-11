@@ -23,22 +23,30 @@ function stripeColor(purposeLabel: string): string {
  * für editierbare Flüge direkt das Bearbeiten-Formular (Flüge haben keine Detail-Zwischenseite wie
  * Kalender-Termine, also kein Einzel-vs-Doppelklick-Unterschied nötig - ein einfacher Link genügt). */
 export function FlightRow({ flight }: { flight: FlightRowData }) {
+  // `w-full` ist notwendig, nicht kosmetisch: `content` ist ein Flex-Item des äußeren Link/div
+  // (`sm:flex`, siehe unten) und Flex-Items wachsen per Default NICHT über ihre eigene Content-
+  // Breite hinaus (flex-grow: 0). Ohne `w-full` bestimmt daher die Länge von Ort/Pilot/Drohne/
+  // Erfasst-von jeder einzelnen Zeile deren Gesamtbreite - der "Bearbeiten"-Button (rechtsbündig
+  // in einer festen Spalte) verschiebt sich dadurch zeilenweise horizontal, je nach Textlänge
+  // (realer, gemeldeter Bug). `overflow-hidden`/`truncate` an den Text-Spalten unten verhindern
+  // zusätzlich, dass ein einzelnes unbrechbares Wort (z. B. ein langer Nachname) seine Spalte über
+  // die vorgesehene Breite hinaus aufdrückt - beide Fixes sind nötig, jeder für sich reicht nicht.
   const content = (
-    <div className="flex items-center gap-[18px] py-3.5 pr-5">
+    <div className="flex w-full items-center gap-[18px] py-3.5 pr-5">
       <div className="w-[62px] shrink-0 text-center">
         <div className="font-condensed text-2xl font-bold leading-none text-ink">{flight.dayNumber}</div>
         <div className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{flight.weekdayLabel}</div>
       </div>
-      <div className="min-w-[120px] flex-1">
+      <div className="min-w-[120px] flex-1 overflow-hidden">
         <div className="mb-1 flex items-center gap-2">
           <span className="text-[17px] font-semibold text-ink">{flight.location}</span>
           <PurposeBadge label={flight.purposeLabel} />
         </div>
-        <div className="text-sm text-ink-muted">
+        <div className="truncate text-sm text-ink-muted">
           {flight.timeLabel} · {flight.pilotName} · {flight.droneName}
         </div>
       </div>
-      <div className="w-[168px] shrink-0 text-xs text-ink-faint">{flight.originLabel}</div>
+      <div className="w-[168px] shrink-0 overflow-hidden text-xs text-ink-faint">{flight.originLabel}</div>
       <div className="flex w-[116px] shrink-0 justify-end">
         {flight.editable && (
           <span className="rounded-md border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink-muted">
