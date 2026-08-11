@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ – Drohnengruppe App</title>
+<meta name="description" content="Häufig gestellte Fragen zur App der Drohnengruppe: Funktionen, Installation auf iOS/Android, Passwort zurücksetzen.">
+<style>
+  :root {
+    --brand: #e4322b;
+    --brand-dark: #c62828;
+    --ink: #1c1c1e;
+    --ink-muted: #52525b;
+    --ink-faint: #8a8a90;
+    --surface: #ffffff;
+    --surface-sunken: #f6f6f7;
+    --line: #e4e4e7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--surface-sunken);
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  header {
+    background: var(--ink);
+    color: #fff;
+    padding: 2.25rem 1.25rem 2rem;
+  }
+  header .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  header .eyebrow {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--brand);
+    background: rgba(228, 50, 43, 0.15);
+    border: 1px solid rgba(228, 50, 43, 0.4);
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    margin-bottom: 0.9rem;
+  }
+  header h1 {
+    margin: 0 0 0.4rem;
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    margin: 0;
+    color: #c9c9cc;
+    font-size: 1rem;
+    max-width: 46ch;
+  }
+  nav.toc {
+    max-width: 720px;
+    margin: -1.1rem auto 0;
+    padding: 0 1.25rem;
+    position: relative;
+  }
+  nav.toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+  nav.toc li + li { border-top: 1px solid var(--line); }
+  nav.toc a {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.85rem 1.1rem;
+    text-decoration: none;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  nav.toc a:hover { background: var(--surface-sunken); }
+  nav.toc .num {
+    flex: none;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2.75rem 1.25rem 4rem;
+  }
+  section.faq {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.75rem 1.5rem 2rem;
+    margin-bottom: 1.75rem;
+    scroll-margin-top: 1rem;
+  }
+  section.faq h2 {
+    font-size: 1.25rem;
+    margin: 0 0 1.1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    color: var(--ink);
+  }
+  section.faq h2 .num {
+    flex: none;
+    color: var(--brand);
+    font-weight: 800;
+  }
+  section.faq h3 {
+    font-size: 0.95rem;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--ink);
+  }
+  section.faq p { margin: 0.5rem 0; color: var(--ink-muted); }
+  section.faq ul, section.faq ol { margin: 0.5rem 0; padding-left: 1.3rem; color: var(--ink-muted); }
+  section.faq li { margin: 0.35rem 0; }
+  section.faq li strong { color: var(--ink); }
+  .platform-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+  @media (min-width: 560px) {
+    .platform-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .platform-card {
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .platform-card .platform-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--brand-dark);
+    margin-bottom: 0.6rem;
+  }
+  .platform-card ol { padding-left: 1.2rem; margin: 0; }
+  .platform-card li { color: var(--ink); font-size: 0.94rem; }
+  code {
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.88em;
+  }
+  .callout {
+    margin-top: 1.1rem;
+    border-left: 3px solid var(--brand);
+    background: rgba(228, 50, 43, 0.06);
+    padding: 0.7rem 0.9rem;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.92rem;
+    color: var(--ink);
+  }
+  .callout strong { color: var(--brand-dark); }
+  footer {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 1.25rem 3rem;
+    color: var(--ink-faint);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  footer a { color: var(--ink-muted); }
+  footer .contact { margin-top: 0.35rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="eyebrow">Drohnengruppe · Häufig gestellte Fragen</span>
+    <h1>FAQ zur App</h1>
+    <p>Kurze Antworten zu den drei häufigsten Fragen rund um die Drohnengruppen-App.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Inhaltsverzeichnis">
+  <ol>
+    <li><a href="#funktionen"><span class="num">1</span> Was kann die App für die Drohnengruppe?</a></li>
+    <li><a href="#homescreen"><span class="num">2</span> Zum Home-Bildschirm hinzufügen (iOS/Android)</a></li>
+    <li><a href="#passwort"><span class="num">3</span> Passwort neu setzen</a></li>
+  </ol>
+</nav>
+
+<main>
+
+  <section class="faq" id="funktionen">
+    <h2><span class="num">1.</span> Was kann die App für die Drohnengruppe?</h2>
+    <p>Die App bündelt die Verwaltung der Drohnengruppe an einem Ort – am Handy genauso wie am PC:</p>
+    <ul>
+      <li><strong>Flugbuch:</strong> jeder Drohnenflug wird mit Pilot, Drohne, Zweck (Einsatz/Übung), Ort und Dauer dokumentiert – übersichtlich nach Monat gruppiert.</li>
+      <li><strong>90-Tage-Regel im Blick:</strong> die App zeigt automatisch, wer die geforderten Flüge innerhalb der letzten 90 Tage erfüllt – als einfache Ampel, für dich selbst und (für Admins) für die ganze Gruppe.</li>
+      <li><strong>Ausbildungsstand:</strong> A1/A3, A2, Stützpunktausbildung, BOS1 und BOS2 werden je Pilot festgehalten und lassen sich in der Flugliste danach filtern.</li>
+      <li><strong>QR-Schnellerfassung:</strong> ein Flug lässt sich direkt am Einsatzort per QR-Code erfassen – ganz ohne Login, praktisch fürs Handy im Feld.</li>
+      <li><strong>Kalender:</strong> Termine der Drohnengruppe erscheinen zusammen mit den Abschnitts-Terminen in einer gemeinsamen Übersicht, inklusive Zu-/Absage.</li>
+      <li><strong>Unterlagen:</strong> Merkblätter, Checklisten und andere PDFs stehen zum Abruf bereit.</li>
+      <li><strong>News per Push:</strong> wichtige Mitteilungen der Drohnengruppe kommen als Benachrichtigung direkt aufs Handy (siehe Frage 2 für die Einrichtung).</li>
+    </ul>
+  </section>
+
+  <section class="faq" id="homescreen">
+    <h2><span class="num">2.</span> Wie füge ich die App zum Home-Bildschirm hinzu?</h2>
+    <p>Die App ist eine <strong>PWA</strong> (Progressive Web App) – sie lässt sich ohne App-Store wie eine echte App aufs Handy holen. Das dauert eine Minute:</p>
+
+    <div class="platform-grid">
+      <div class="platform-card">
+        <div class="platform-title">iPhone / iPad (Safari)</div>
+        <ol>
+          <li>App-Adresse in <strong>Safari</strong> öffnen (muss Safari sein, nicht Chrome)</li>
+          <li>Unten auf das <strong>Teilen-Symbol</strong> ⬆️ tippen</li>
+          <li><strong>„Zum Home-Bildschirm"</strong> auswählen</li>
+          <li>Namen bestätigen und auf <strong>„Hinzufügen"</strong> tippen</li>
+        </ol>
+      </div>
+      <div class="platform-card">
+        <div class="platform-title">Android (Chrome)</div>
+        <ol>
+          <li>App-Adresse in <strong>Chrome</strong> öffnen</li>
+          <li>Oben rechts auf das <strong>Menü ⋮</strong> tippen</li>
+          <li><strong>„App installieren"</strong> bzw. <strong>„Zum Startbildschirm hinzufügen"</strong> wählen</li>
+          <li>Mit <strong>„Installieren"</strong> bestätigen</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Push-Benachrichtigungen auf iPhone:</strong> Diese funktionieren nur, wenn die App zuvor wie oben beschrieben zum Home-Bildschirm hinzugefügt wurde – ein normaler Safari-Tab kann auf iOS keine Benachrichtigungen empfangen. Nach der Installation lässt sich Push im Profilmenü der App aktivieren.
+    </div>
+  </section>
+
+  <section class="faq" id="passwort">
+    <h2><span class="num">3.</span> Wie kann ich mein Passwort neu setzen?</h2>
+    <ol>
+      <li>Auf der Login-Seite auf <strong>„Passwort vergessen?"</strong> klicken</li>
+      <li>Die im Konto hinterlegte <strong>E-Mail-Adresse</strong> eingeben und absenden</li>
+      <li>Eine E-Mail mit einem Link zum Zurücksetzen trifft ein (bitte auch <strong>Spam-/Werbe-Ordner</strong> prüfen)</li>
+      <li>Link öffnen und ein <strong>neues Passwort</strong> vergeben</li>
+    </ol>
+    <h3>Alternative ohne Passwort</h3>
+    <p>Auf der Login-Seite kann statt „Passwort" auch der Tab <strong>„E-Mail Token"</strong> gewählt werden – ein Code bzw. Link wird per E-Mail zugeschickt und ersetzt die Passworteingabe.</p>
+    <div class="callout">
+      Kommt keine E-Mail an, obwohl die Adresse stimmt? Dann bitte an den zuständigen Admin der Drohnengruppe wenden – möglicherweise ist im Konto eine andere E-Mail-Adresse hinterlegt.
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Drohnengruppe App · Feuerwehr Bezirk 17 St. Pölten
+  <div class="contact">Fragen? Florian Krebs · <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a></div>
+</footer>
+
+</body>
+</html>
