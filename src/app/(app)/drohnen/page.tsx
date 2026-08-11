@@ -11,7 +11,7 @@ import {
 } from '@/lib/drone/ninety-day-rule';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { groupFlightsByMonth } from '@/lib/drone/group-flights-by-month';
-import { listDrohnengruppeMembers } from '@/lib/drone/members';
+import { QUALIFICATION_OPTIONS, matchesQualification } from '@/lib/drone/qualification-filter';
 import { isQuickRegisterEmail } from '@/lib/drone/quick-register-user';
 import { MeinStatusCard } from '@/components/drone/mein-status-card';
 import { GroupStatusList, type GroupStatusPilot } from '@/components/drone/group-status-list';
@@ -51,6 +51,7 @@ export default async function DrohnenPage({
     zweck?: string;
     scope?: string;
     take?: string;
+    qualifikation?: string;
   }>;
 }) {
   const user = await requireUser();
@@ -75,6 +76,33 @@ export default async function DrohnenPage({
         select: { id: true, name: true, qrToken: true },
       });
 
+  // Muss VOR filterWhere/where laufen und AUSSERHALB der späteren Promise.all - matchingMemberIds
+  // fließt in dieselbe Flug-Query ein, die weiter unten aus `where` gebaut wird, kann also nicht
+  // parallel zu ihr in derselben Promise.all stehen.
+  const members = isAdmin
+    ? await prisma.drohnengruppeMembership.findMany({
+        where: { droneGroupId: selectedGroup.id },
+        orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
+        select: {
+          a1a3LizenzAm: true,
+          a2LizenzAm: true,
+          stuetzpunktausbildungAm: true,
+          bos1AusbildungAm: true,
+          bos2AusbildungAm: true,
+          user: { select: { id: true, firstName: true, lastName: true } },
+        },
+      })
+    : [];
+
+  const selectedQualifications = (params.qualifikation ?? '').split(',').filter(Boolean);
+  // Der Pilot-Select zeigt bewusst IMMER alle Gruppenmitglieder als Optionen, unabhängig vom
+  // Qualifikations-Filter - dieselbe Unabhängigkeit gilt bereits zwischen allen anderen Filtern
+  // dieser Seite (z. B. schränkt der Zweck-Filter die Drohnen-Optionen auch nicht ein).
+  const pilots = members.map((m) => ({ id: m.user.id, name: `${m.user.lastName} ${m.user.firstName}` }));
+  const groupMembers =
+    selectedQualifications.length > 0 ? members.filter((m) => matchesQualification(m, selectedQualifications)) : members;
+  const matchingMemberIds = new Set(groupMembers.map((m) => m.user.id));
+
   const cutoff = zeitraumCutoff(params.zeitraum ?? '90tage');
   const scope = params.scope === 'MEINE' ? 'MEINE' : 'ALLE';
   const take = Math.max(PAGE_SIZE, Number(params.take) || PAGE_SIZE);
@@ -87,16 +115,19 @@ export default async function DrohnenPage({
     isAdmin && scope === 'MEINE' ? { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] } : {};
 
   const filterWhere = {
-    ...(params.pilot ? { pilotUserId: params.pilot } : {}),
-    ...(params.drohne ? { droneId: params.drohne } : {}),
-    ...(params.zweck === 'EINSATZ' || params.zweck === 'UEBUNG' ? { purpose: params.zweck as 'EINSATZ' | 'UEBUNG' } : {}),
-    ...(cutoff ? { startsAt: { gte: cutoff } } : {}),
-    ...(params.q ? { location: { contains: params.q, mode: 'insensitive' as const } } : {}),
+    AND: [
+      ...(params.pilot ? [{ pilotUserId: params.pilot }] : []),
+      ...(params.drohne ? [{ droneId: params.drohne }] : []),
+      ...(params.zweck === 'EINSATZ' || params.zweck === 'UEBUNG' ? [{ purpose: params.zweck as 'EINSATZ' | 'UEBUNG' }] : []),
+      ...(cutoff ? [{ startsAt: { gte: cutoff } }] : []),
+      ...(params.q ? [{ location: { contains: params.q, mode: 'insensitive' as const } }] : []),
+      ...(selectedQualifications.length > 0 ? [{ pilotUserId: { in: Array.from(matchingMemberIds) } }] : []),
+    ],
   };
 
   const where = { AND: [baseWhere, scopeWhere, filterWhere] };
 
-  const [flights, totalCount, allScopeCount, meineCount, fuerAndereErfasstCount, ownFlightsInWindow, lastOwnFlight, members, groupFlightsInWindow, drones] =
+  const [flights, totalCount, allScopeCount, meineCount, fuerAndereErfasstCount, ownFlightsInWindow, lastOwnFlight, groupFlightsInWindow, drones] =
     await Promise.all([
       prisma.droneFlight.findMany({
         where,
@@ -125,9 +156,6 @@ export default async function DrohnenPage({
         select: { startsAt: true },
       }),
       prisma.droneFlight.findFirst({ where: { pilotUserId: user.id }, orderBy: { startsAt: 'desc' }, select: { startsAt: true } }),
-      // Ein Aufruf, zweifach genutzt: als Gruppenstatus-Mitgliederliste UND als Pilot-Filter-
-      // Optionen (beide brauchten vorher zwei identische listDrohnengruppeMembers-Aufrufe).
-      isAdmin ? listDrohnengruppeMembers(selectedGroup.id) : Promise.resolve([]),
       // Task 3 review fix: die ursprüngliche Brief-Fassung nutzte hier `groupBy` mit nur `_count`
       // und berechnete `daysLeft` für JEDES Gruppenmitglied fälschlich aus `ownFlightsInWindow` -
       // den Flugdaten des GERADE EINGELOGGTEN Admins, nicht denen des jeweiligen Mitglieds. Das hätte
@@ -148,8 +176,6 @@ export default async function DrohnenPage({
       // bestätigt. Die Drohnenliste der eigenen Gruppe ist keine sensible Admin-Information.
       prisma.drone.findMany({ where: { droneGroupId: selectedGroup.id, isActive: true }, orderBy: { sortOrder: 'asc' } }),
     ]);
-  const pilots = members;
-  const groupMembers = members;
 
   const ownFlightCount = ownFlightsInWindow.length;
   const ownRuleMet = meetsNinetyDayRule(ownFlightCount);
@@ -169,12 +195,12 @@ export default async function DrohnenPage({
   }
 
   const groupStatusPilots: GroupStatusPilot[] = groupMembers.map((member) => {
-    const dates = flightDatesByPilot.get(member.id) ?? [];
+    const dates = flightDatesByPilot.get(member.user.id) ?? [];
     const count = dates.length;
     const met = meetsNinetyDayRule(count);
     const daysLeft = met ? getDaysUntilExpiry(dates) : null;
     const status: GroupStatusPilot['status'] = !met ? 'danger' : daysLeft !== null && daysLeft <= 14 ? 'warning' : 'success';
-    return { id: member.id, name: `${member.lastName} ${member.firstName}`, count, status };
+    return { id: member.user.id, name: `${member.user.lastName} ${member.user.firstName}`, count, status };
   });
 
   const flightRows: FlightRowData[] = flights.map((flight) => {
@@ -256,12 +282,13 @@ export default async function DrohnenPage({
             lastFlightAgoLabel={lastOwnFlight ? formatDaysAgo(lastOwnFlight.startsAt) : null}
           />
           <FlightSidebar
-            pilots={pilots.map((p) => ({ id: p.id, name: `${p.lastName} ${p.firstName}` }))}
+            pilots={pilots}
             drones={drones.map((d) => ({ id: d.id, name: d.name }))}
             totalCount={allScopeCount}
             meineCount={meineCount}
             fuerAndereErfasstCount={fuerAndereErfasstCount}
             isAdmin={isAdmin}
+            qualificationOptions={QUALIFICATION_OPTIONS}
           />
           {!isAdmin && (
             <div className="rounded-lg bg-surface p-4 shadow-card">
@@ -299,7 +326,7 @@ export default async function DrohnenPage({
 
           {flights.length === 0 ? (
             <div className="rounded-lg bg-surface p-6 text-center text-sm shadow-card">
-              {params.pilot || params.drohne || params.zweck || params.q ? (
+              {params.pilot || params.drohne || params.zweck || params.q || params.qualifikation ? (
                 <>
                   <p className="mb-2 text-ink-muted">Keine Flüge für diese Filter.</p>
                   <Link href={`/drohnen?gruppe=${selectedGroup.id}`} className="text-brand hover:underline">

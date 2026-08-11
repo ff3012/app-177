@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 
@@ -10,6 +11,7 @@ export interface FlightFilterOptions {
   meineCount: number;
   fuerAndereErfasstCount: number;
   isAdmin: boolean;
+  qualificationOptions: { key: string; label: string }[];
 }
 
 const ZEITRAUM_LABEL: Record<string, string> = {
@@ -25,7 +27,7 @@ const ZEITRAUM_LABEL: Record<string, string> = {
  * (ALLE/MEINE) wird sowohl vom "Meine"-Chip als auch vom "Alle Flüge einsehen"-Umschalter
  * geschrieben/gelesen - ein einziger Wahrheits-Zustand, zwei Bedienelemente (siehe Plan-Spec §3).
  */
-export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAndereErfasstCount, isAdmin }: FlightFilterOptions) {
+export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAndereErfasstCount, isAdmin, qualificationOptions }: FlightFilterOptions) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -35,6 +37,8 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
   const pilot = searchParams.get('pilot') ?? '';
   const drohne = searchParams.get('drohne') ?? '';
   const zeitraum = searchParams.get('zeitraum') ?? '90tage';
+  const [qualificationOpen, setQualificationOpen] = useState(false);
+  const selectedQualifications = (searchParams.get('qualifikation') ?? '').split(',').filter(Boolean);
 
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -45,6 +49,13 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
     }
     params.delete('take');
     router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function toggleQualification(key: string) {
+    const next = selectedQualifications.includes(key)
+      ? selectedQualifications.filter((k) => k !== key)
+      : [...selectedQualifications, key];
+    setParam('qualifikation', next.join(','));
   }
 
   return (
@@ -145,6 +156,35 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
           </select>
         </label>
       </div>
+
+      {isAdmin && (
+        <div className="relative border-t border-line pt-3.5">
+          <button
+            type="button"
+            onClick={() => setQualificationOpen((open) => !open)}
+            className="flex h-[38px] w-full items-center justify-between rounded-md border border-line bg-surface px-2.5 text-sm text-ink"
+          >
+            <span>
+              Qualifikation{selectedQualifications.length > 0 ? ` (${selectedQualifications.length})` : ''}
+            </span>
+            <span className="text-ink-faint">▾</span>
+          </button>
+          {qualificationOpen && (
+            <div className="absolute z-10 mt-1 flex w-full flex-col gap-2 rounded-md border border-line bg-surface p-3 shadow-card">
+              {qualificationOptions.map((option) => (
+                <label key={option.key} className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={selectedQualifications.includes(option.key)}
+                    onChange={() => toggleQualification(option.key)}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5 border-t border-line pt-3.5">
         <span className="text-[11px] font-semibold uppercase tracking-[.13em] text-ink-faint">Zweck</span>
