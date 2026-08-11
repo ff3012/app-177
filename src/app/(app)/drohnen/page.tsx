@@ -74,7 +74,7 @@ export default async function DrohnenPage({
     ? (params.gruppe && allowedGroups.find((g) => g.id === params.gruppe)) || allowedGroups[0]
     : await prisma.droneGroup.findUniqueOrThrow({
         where: { id: user.droneGroupId! },
-        select: { id: true, name: true, qrToken: true },
+        select: { id: true, name: true },
       });
 
   // Muss VOR filterWhere/where laufen und AUSSERHALB der späteren Promise.all - matchingMemberIds
@@ -299,17 +299,6 @@ export default async function DrohnenPage({
                 Sie sehen Ihre eigenen Flüge sowie Flüge, die Sie für andere erfasst haben. Der Gruppenstand ist den
                 Drohnen-Admins vorbehalten.
               </p>
-            </div>
-          )}
-          {selectedGroup.qrToken && (
-            <div className="rounded-lg bg-surface p-4 shadow-card">
-              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[.13em] text-ink-faint">Schnellerfassung</div>
-              <a href={`/drohnen-schnell/${selectedGroup.qrToken}`} className="flex items-center gap-3">
-                <span className="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-md bg-surface-sunken font-mono text-[10px] text-ink-faint">
-                  QR
-                </span>
-                <p className="text-sm text-ink-muted">Am Fahrzeug scannen und Flug direkt eintragen.</p>
-              </a>
             </div>
           )}
         </div>

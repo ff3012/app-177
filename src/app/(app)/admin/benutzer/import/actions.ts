@@ -99,8 +99,8 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
 
     if (!firstName && !lastName && !email && !orgName) continue; // leere Zeile überspringen
 
-    if (!firstName || !lastName || !email || !orgName) {
-      errors.push(`Zeile ${rowNumber}: Vorname, Nachname, E-Mail und Heimat-Feuerwehr sind erforderlich.`);
+    if (!firstName || !lastName || !email || !orgName || !stbNr) {
+      errors.push(`Zeile ${rowNumber}: Vorname, Nachname, E-Mail, Standesbuchnummer und Heimat-Feuerwehr sind erforderlich.`);
       continue;
     }
 
