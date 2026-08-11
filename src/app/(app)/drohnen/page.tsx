@@ -70,7 +70,10 @@ export default async function DrohnenPage({
   // Lookup seiner einen Gruppe.
   const selectedGroup = isAdmin
     ? (params.gruppe && allowedGroups.find((g) => g.id === params.gruppe)) || allowedGroups[0]
-    : await prisma.droneGroup.findUniqueOrThrow({ where: { id: user.droneGroupId! }, select: { id: true, name: true } });
+    : await prisma.droneGroup.findUniqueOrThrow({
+        where: { id: user.droneGroupId! },
+        select: { id: true, name: true, qrToken: true },
+      });
 
   const cutoff = zeitraumCutoff(params.zeitraum ?? '90tage');
   const scope = params.scope === 'MEINE' ? 'MEINE' : 'ALLE';
@@ -93,7 +96,7 @@ export default async function DrohnenPage({
 
   const where = { AND: [baseWhere, scopeWhere, filterWhere] };
 
-  const [flights, totalCount, meineCount, fuerAndereErfasstCount, ownFlightsInWindow, lastOwnFlight, members, groupFlightsInWindow, drones] =
+  const [flights, totalCount, allScopeCount, meineCount, fuerAndereErfasstCount, ownFlightsInWindow, lastOwnFlight, members, groupFlightsInWindow, drones] =
     await Promise.all([
       prisma.droneFlight.findMany({
         where,
@@ -102,6 +105,10 @@ export default async function DrohnenPage({
         take,
       }),
       prisma.droneFlight.count({ where }),
+      // Fix round 1 (task review Finding 1): unabhängig vom gerade aktiven `scope` - die "Alle
+      // {n}"-Chip-Beschriftung in FlightSidebar muss immer die Gesamtzahl der Gruppe (unter den
+      // sonstigen Filtern) zeigen, nicht die durch scope=MEINE bereits eingeschränkte `totalCount`.
+      prisma.droneFlight.count({ where: { AND: [baseWhere, filterWhere] } }),
       isAdmin
         ? prisma.droneFlight.count({
             where: { AND: [{ drone: { droneGroupId: selectedGroup.id } }, { OR: [{ registeredById: user.id }, { pilotUserId: user.id }] }, filterWhere] },
@@ -251,7 +258,7 @@ export default async function DrohnenPage({
           <FlightSidebar
             pilots={pilots.map((p) => ({ id: p.id, name: `${p.lastName} ${p.firstName}` }))}
             drones={drones.map((d) => ({ id: d.id, name: d.name }))}
-            totalCount={totalCount}
+            totalCount={allScopeCount}
             meineCount={meineCount}
             fuerAndereErfasstCount={fuerAndereErfasstCount}
             isAdmin={isAdmin}
@@ -264,6 +271,17 @@ export default async function DrohnenPage({
                 Sie sehen Ihre eigenen Flüge sowie Flüge, die Sie für andere erfasst haben. Der Gruppenstand ist den
                 Drohnen-Admins vorbehalten.
               </p>
+            </div>
+          )}
+          {selectedGroup.qrToken && (
+            <div className="rounded-lg bg-surface p-4 shadow-card">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[.13em] text-ink-faint">Schnellerfassung</div>
+              <div className="flex items-center gap-3">
+                <span className="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-md bg-surface-sunken font-mono text-[10px] text-ink-faint">
+                  QR
+                </span>
+                <p className="text-sm text-ink-muted">Am Fahrzeug scannen und Flug direkt eintragen.</p>
+              </div>
             </div>
           )}
         </div>
