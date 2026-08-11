@@ -55,7 +55,7 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
           type="button"
           onClick={() => setParam('scope', '')}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            scope === 'ALLE' && !zweck ? 'bg-ink text-white' : 'bg-surface-sunken text-ink-muted'
+            scope === 'ALLE' ? 'bg-ink text-white' : 'bg-surface-sunken text-ink-muted'
           }`}
         >
           Alle {totalCount}

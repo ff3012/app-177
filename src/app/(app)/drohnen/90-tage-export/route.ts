@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
+import { canViewDroneModule } from '@/lib/auth/permissions';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { getNinetyDayCutoff, meetsNinetyDayRule } from '@/lib/drone/ninety-day-rule';
 import { listDrohnengruppeMembers } from '@/lib/drone/members';
@@ -11,6 +12,9 @@ import { listDrohnengruppeMembers } from '@/lib/drone/members';
  * anzeigt, jetzt als herunterladbare Datei statt als eigene Seite. */
 export async function GET(request: NextRequest) {
   const user = await requireUser();
+  if (!canViewDroneModule(user)) {
+    return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
+  }
   const allowedGroups = await getAllowedDroneGroups(user);
   if (allowedGroups.length === 0) {
     return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });

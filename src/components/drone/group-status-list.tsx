@@ -24,9 +24,16 @@ const COUNT_TEXT_CLASS: Record<GroupStatusPilot['status'], string> = {
  * bleibt die Liste lesbar"). `status` kommt bereits fertig klassifiziert von der aufrufenden Seite
  * (siehe Task 3) - diese Komponente trifft selbst keine Ampel-Entscheidung, nur Darstellung.
  */
-export function GroupStatusList({ pilots, groupName }: { pilots: GroupStatusPilot[]; groupName: string }) {
+export function GroupStatusList({
+  pilots,
+  groupName,
+  required,
+}: {
+  pilots: GroupStatusPilot[];
+  groupName: string;
+  required: number;
+}) {
   const metCount = pilots.filter((p) => p.status !== 'danger').length;
-  const maxCount = Math.max(1, ...pilots.map((p) => p.count));
 
   return (
     <div className="rounded-lg bg-surface p-4 shadow-card">
@@ -47,7 +54,7 @@ export function GroupStatusList({ pilots, groupName }: { pilots: GroupStatusPilo
               <span className="h-[22px] flex-1 overflow-hidden rounded bg-surface-sunken">
                 <span
                   className={`block h-full ${BAR_CLASS[pilot.status]}`}
-                  style={{ width: `${Math.max(4, (pilot.count / maxCount) * 100)}%` }}
+                  style={{ width: `${Math.min(100, Math.max(4, (pilot.count / required) * 100))}%` }}
                 />
               </span>
               <span className={`w-[46px] shrink-0 text-right text-sm font-semibold ${COUNT_TEXT_CLASS[pilot.status]}`}>

@@ -40,9 +40,11 @@ export function FlightRow({ flight }: { flight: FlightRowData }) {
       </div>
       <div className="w-[168px] shrink-0 text-xs text-ink-faint">{flight.originLabel}</div>
       <div className="flex w-[116px] shrink-0 justify-end">
-        <span className="rounded-md border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink-muted">
-          {flight.editable ? 'Bearbeiten' : 'Öffnen'}
-        </span>
+        {flight.editable && (
+          <span className="rounded-md border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink-muted">
+            Bearbeiten
+          </span>
+        )}
       </div>
     </div>
   );

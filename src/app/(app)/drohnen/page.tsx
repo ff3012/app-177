@@ -89,7 +89,7 @@ export default async function DrohnenPage({
   const filterWhere = {
     ...(params.pilot ? { pilotUserId: params.pilot } : {}),
     ...(params.drohne ? { droneId: params.drohne } : {}),
-    ...(params.zweck ? { purpose: params.zweck as 'EINSATZ' | 'UEBUNG' } : {}),
+    ...(params.zweck === 'EINSATZ' || params.zweck === 'UEBUNG' ? { purpose: params.zweck as 'EINSATZ' | 'UEBUNG' } : {}),
     ...(cutoff ? { startsAt: { gte: cutoff } } : {}),
     ...(params.q ? { location: { contains: params.q, mode: 'insensitive' as const } } : {}),
   };
@@ -199,7 +199,7 @@ export default async function DrohnenPage({
     };
   });
 
-  const monthGroups = groupFlightsByMonth(flights.map((f) => ({ ...f, __row: flightRows.find((r) => r.id === f.id)! })));
+  const monthGroups = groupFlightsByMonth(flightRows.map((r, i) => ({ ...r, startsAt: flights[i].startsAt })));
 
   return (
     <div className="flex flex-col gap-4">
@@ -276,18 +276,24 @@ export default async function DrohnenPage({
           {selectedGroup.qrToken && (
             <div className="rounded-lg bg-surface p-4 shadow-card">
               <div className="mb-3 text-[11px] font-semibold uppercase tracking-[.13em] text-ink-faint">Schnellerfassung</div>
-              <div className="flex items-center gap-3">
+              <a href={`/drohnen-schnell/${selectedGroup.qrToken}`} className="flex items-center gap-3">
                 <span className="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-md bg-surface-sunken font-mono text-[10px] text-ink-faint">
                   QR
                 </span>
                 <p className="text-sm text-ink-muted">Am Fahrzeug scannen und Flug direkt eintragen.</p>
-              </div>
+              </a>
             </div>
           )}
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          {isAdmin && <GroupStatusList pilots={groupStatusPilots} groupName={selectedGroup.name} />}
+          {isAdmin && (
+            <GroupStatusList
+              pilots={groupStatusPilots}
+              groupName={selectedGroup.name}
+              required={NINETY_DAY_REQUIRED_FLIGHTS}
+            />
+          )}
 
           <p className="text-[15px] text-ink-muted">{totalCount} Flüge</p>
 
@@ -319,8 +325,8 @@ export default async function DrohnenPage({
                   <div className="flex flex-col rounded-lg bg-surface shadow-card sm:block">
                     {group.flights.map((f) => (
                       <div key={f.id}>
-                        <FlightRow flight={(f as unknown as { __row: FlightRowData }).__row} />
-                        <FlightCard flight={(f as unknown as { __row: FlightRowData }).__row} />
+                        <FlightRow flight={f} />
+                        <FlightCard flight={f} />
                       </div>
                     ))}
                   </div>
