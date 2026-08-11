@@ -839,18 +839,26 @@ pick e.g. `:12`. The date+select combo makes off-step minutes impossible to sele
 
 ### Drohnengruppe module
 
+> **The Flugbuch-Redesign pass below ("Drohnengruppe Flugbuch-Redesign") superseded most of the
+> concrete file names in this section and in "Drohnengruppe V2"** — `flight-table.tsx`,
+> `ninety-day-ring.tsx`, `group-status-chart.tsx`, and the standalone `/drohnen/90-tage` page are all
+> **deleted**; read `NinetyDayRing`/`GroupStatusChart`/the 90-Tage page below as history, not current
+> files. `PurposeBadge` is the one component from "Drohnengruppe V2" that survived unchanged, still
+> used by the redesign's `FlightRow`/`FlightCard`.
+
 Visibility of the whole module and of *all* flights (vs. just your own + ones you piloted) are separate
 checks — `canViewDroneModule` (module visibility) vs. `canViewAllFlights` (row-level scope, Admin
 Drohnengruppe only). `src/lib/drone/members.ts` (`listDrohnengruppeMembers`) is the shared query for
 "who can be picked as a pilot" — reused by the flight form, the 90-day report, and nowhere else; keep it that
 way rather than duplicating the `where: { droneMembership: { isNot: null } }` filter.
 
-`/drohnen`'s "Alle Flüge einsehen" toggle (`components/drone/flight-table.tsx`, default on) is purely a
-client-side display filter, not a permission boundary: the server query in `page.tsx` already fetches every
-flight whenever `canViewAllFlights(user)` is true, and the toggle just filters that already-loaded array down
-to the current user's own registered/piloted flights when switched off. Only rendered at all when
-`canToggle` (= `canViewAllFlights`) is true — non-admins never see it and always get the server-side-scoped
-own-flights query, same as before this toggle existed.
+`/drohnen`'s "Alle Flüge einsehen" toggle (now in `components/drone/flight-sidebar.tsx`'s
+`FlightSidebar`, default on) is purely a client-side display filter, not a permission boundary: the
+server query in `page.tsx` already fetches every flight whenever `canViewAllFlights(user)` is true, and
+the toggle just filters that already-loaded array down to the current user's own registered/piloted
+flights when switched off. Only rendered at all when `canToggle` (= `canViewAllFlights`) is true —
+non-admins never see it and always get the server-side-scoped own-flights query, same as before this
+toggle existed.
 
 - **Unterlagen (PDFs for members)**: `DroneDocument` stores the PDF bytes directly in Postgres
   (`data Bytes`) rather than on a filesystem/volume — deliberate, since the expected volume is a
@@ -944,6 +952,105 @@ mockup, done first among the four modules; Kalender's equivalent pass ("Kalender
   makes the link create-only: that user can never log in, so nothing it "owns" can be read back or edited
   through this path, only by an Admin Drohnengruppe via the normal UI. Don't route this flow through
   `requireUser()`/a real login — that would reintroduce a shared-session risk the token design avoids.
+  **GitHub issue #14**: the member-facing Flugbuch (`/drohnen`) used to also show a small
+  "Schnellerfassung" card linking to this same URL, next to the Unterlagen/QR card in the sidebar —
+  removed entirely per the issue ("nicht für den Benutzer sichtbar machen"). Creating/rotating the
+  link stays exclusively on `/admin/drohnen`'s own "QR-Code Schnellerfassung" card (unchanged, still
+  fully functional there) — a regular member can still use a link someone else printed/shared, they
+  just no longer discover or copy it from inside their own Flugbuch view. `selectedGroup`'s query in
+  `drohnen/page.tsx` no longer selects `qrToken` at all, since nothing on that page reads it anymore.
+
+**Drohnengruppe Flugbuch-Redesign** — a full rebuild of `/drohnen`, matching the Kalender-Desktop
+visual language (month-grouped list, left sidebar with filters). Replaces the old flat
+`flight-table.tsx`/`ninety-day-ring.tsx`/`group-status-chart.tsx`/standalone `/drohnen/90-tage`
+page (all deleted) with:
+
+- `src/components/drone/flight-row.tsx` (`FlightRow`, desktop `sm:`+, and `FlightCard`, mobile) —
+  a month-grouped card list, each flight a single row: date box, location+`PurposeBadge`+
+  time/pilot/drone line, a fixed-width "Erfasst von …" column, and a right-aligned "Bearbeiten"
+  button. `src/lib/drone/group-flights-by-month.ts`'s `groupFlightsByMonth()` buckets the
+  already-sorted flight list into month cards, mirroring Kalender's own `groupEventsByMonth()`.
+- `src/components/drone/flight-sidebar.tsx` (`FlightSidebar`, client component) — Pilot/Drohne/
+  Zeitraum selects, the Zweck color legend, the "Alle Flüge einsehen" toggle, and (admin-only) the
+  Qualifikations-Filter dropdown described below. Pure URL-state, same `setParam(key, value)`
+  pattern already established for every other filter on this page.
+- `src/components/drone/mein-status-card.tsx` (`MeinStatusCard`) replaces the old `NinetyDayRing` —
+  same 90-day-rule data, restyled as a small sidebar card instead of an SVG ring.
+- `src/components/drone/group-status-list.tsx` (`GroupStatusList`) replaces the old
+  `GroupStatusChart` — a per-pilot bar list (same `canViewAllFlights`-gating as before), now
+  embedded directly above the flight list instead of as a separate chart component.
+- `/drohnen/90-tage-export` (new route) + the existing `/drohnen/export` are how the retired
+  `/drohnen/90-tage` page's content is still reachable — both are Excel downloads now, no more
+  standalone HTML report page. **Both export routes must independently re-check
+  `canViewDroneModule`/`canViewAllFlights`** — a real Critical finding from the final review: they
+  were initially reachable by anyone who could guess the URL, since only the page itself (not the
+  routes) had been gated.
+- **Admin reach widened**: the admin view (Gruppenstatus list, "Alle Flüge einsehen" default-on,
+  Pilot filter, exports) is no longer restricted to only that group's own Admin Drohnengruppe — any
+  Abschnittsadmin or Bezirksadmin also sees the admin view for groups within their reach, via
+  `src/lib/drone/flightbook-groups.ts`'s `getAllowedDroneGroups(user)` (returns every `DroneGroup`
+  the viewer may administer, empty array for a plain member/pilot). `isAdmin` on the page is simply
+  `allowedGroups.length > 0` — no separate boolean, one source of truth for "does this viewer get
+  the admin experience."
+
+**Drohnengruppe Qualifikations-Filter** — an Admin-only, multi-select "Qualifikation" dropdown in
+`FlightSidebar` (a hand-rolled button+checkbox-panel toggle, no shadcn `Popover`/`Command` — this
+module stays hand-rolled per its own established convention) that narrows both the flight list
+and the `GroupStatusList` bar list to pilots matching the selected Ausbildungsstufen, **with AND
+semantics** across multiple selections (a deliberate, non-default choice by the app owner — see
+`src/lib/drone/qualification-filter.ts`'s own comment on `matchesQualification`: selecting
+"BOS1 + A2" collapses to "BOS1" since the stages are sequential, and "Ohne Ausbildung" combined with
+any real stage always yields zero matches, neither treated as an error).
+
+- The filter reads `?qualifikation=` from the URL as a comma-separated list of
+  `Ausbildungsstufe` keys (`@/lib/validation/user.schema`'s `AUSBILDUNGSSTUFEN`), fed into
+  `matchesQualification(membership, selected)` against a purpose-built extended members query in
+  `drohnen/page.tsx` (loads the five training-date fields alongside id/name — **not**
+  `listDrohnengruppeMembers()`, which several other call sites share and which doesn't need these
+  fields) that must run *before* and *outside* the page's later `Promise.all` for the flights query,
+  since the flights query's `pilotUserId: { in: [...matchingMemberIds] } }` filter depends on its
+  result — a circular-dependency bug caught during planning, not after the fact.
+- **BOS1-als-Standardauswahl (Folgeänderung nach dem ersten Live-Test)**: die ursprüngliche Fassung
+  hatte sechs Checkboxen (fünf echte Stufen + eine eigene "Ohne Ausbildung") und eine leere Auswahl
+  bedeutete "kein Filter, zeige alle". Auf Wunsch des App-Betreibers, nachdem er das Feature live
+  gesehen hatte, wurde das geändert: **BOS1 ist jetzt die Standardauswahl bei jedem frischen
+  Seitenaufruf**, und die eigene "Ohne Ausbildung"-Checkbox ist komplett entfernt — "keine Checkbox
+  aktiv" bedeutet jetzt direkt "Ohne Ausbildung" statt "kein Filter" (explizit vom App-Betreiber
+  bestätigt, nicht selbst angenommen). `resolveSelectedQualifications(raw: string | null |
+  undefined)` (`qualification-filter.ts`) ist die EINE gemeinsame Auflösungsstelle für Server
+  (`page.tsx`) und Client (`FlightSidebar`), damit beide nie auseinanderlaufen: Parameter fehlt ganz
+  → `[QUALIFICATION_DEFAULT_KEY]` (= `bos1AusbildungAm`); Parameter ist exakt das `'NONE'`-Sentinel
+  (geschrieben, sobald die letzte echte Checkbox deaktiviert wird) → `['NONE']`; sonst die
+  kommagetrennte, gegen `QUALIFICATION_OPTIONS` gefilterte Liste. `QUALIFICATION_OPTIONS` selbst
+  listet jetzt nur noch die fünf echten Stufen (keine eigene Checkbox mehr für "Ohne Ausbildung") —
+  die UI zeigt automatisch nur fünf Checkboxen, ohne dass die JSX selbst angepasst werden musste. Es
+  gibt seitdem **keinen Weg mehr, über diesen Filter "alle Piloten unabhängig von der Ausbildung"**
+  zu sehen — nur echte Stufen ankreuzen oder den impliziten BOS1-Standard nutzen.
+- **Reale Race Condition (finales Review, behoben)**: `selectedQualifications` wurde ursprünglich
+  direkt aus `useSearchParams()` gelesen; da `router.push` innerhalb eines React-Transitions
+  committet, liefert `useSearchParams()` bei zwei schnell aufeinanderfolgenden Klicks noch den ALTEN
+  Wert, wodurch die zweite Checkbox die erste stillschweigend wieder verwarf. Behoben durch lokalen
+  `useState` als Wahrheitsquelle (synchron innerhalb von `toggleQualification` aktualisiert, bevor
+  der URL-Push feuert), mit einem `useEffect`, der nur bei einer ÄUSSEREN URL-Änderung
+  (Browser-Zurück, geteilter Link) resynchronisiert.
+
+**Bugfix: Bearbeiten-Button im Flugbuch horizontal verschoben** (echter, vom App-Betreiber
+gemeldeter Bug, per Screenshot): `FlightRow`s innerer `content`-Div (die eigentliche
+Spalten-Zeile mit Datum/Ort/Erfasst-von/Bearbeiten) ist ein Flex-Item der äußeren Zeilen-`Link`
+(`sm:flex`) — Flex-Items wachsen per Default NICHT über ihre Content-Breite hinaus
+(`flex-grow: 0`). Ohne ein explizites `w-full` auf `content` bestimmte daher die Länge von
+Ort/Pilot/Drohne/„Erfasst von …" jeder einzelnen Zeile deren Gesamtbreite, wodurch der
+rechtsbündige "Bearbeiten"-Button je nach Textlänge horizontal driftete, statt für alle Zeilen an
+derselben Position zu stehen. Gefixt mit `w-full` auf `content` plus `overflow-hidden`/`truncate`
+auf den beiden variable-Text-Spalten (Ort/Pilot/Drohne-Zeile, "Erfasst von …") als zweite
+Absicherung, damit auch ein einzelnes unbrechbares Wort (z. B. ein langer Nachname) seine Spalte
+nie über die vorgesehene Breite hinaus aufdrücken kann — beide Fixes sind nötig, keiner allein
+reicht. Verifiziert an einer isolierten Reproduktion mit der echten kompilierten Tailwind-CSS
+(nicht im echten `/drohnen` selbst, da dieser Weg über `loading.tsx`/React-Suspense-Streaming läuft
+und in diesem Browser-Automatisierungs-Umfeld — derselbe bereits an vielen Stellen in dieser Datei
+dokumentierte Hydration-Gap — nie über den Lade-Skeleton hinaus rendert): vor dem Fix drifteten drei
+Testzeilen mit stark unterschiedlicher Textlänge um über 400px, mit dem Fix liegen alle drei exakt
+an derselben Position.
 
 ### Verwaltung (shadcn/ui-Grundlage)
 
@@ -1273,14 +1380,30 @@ Action logic changed on any of the three pages.
   button) for the admin to hand over manually; there's no way today to retrieve that link again afterward if
   the admin closes the sheet without copying it (the admin-triggered password-reset email is a separate,
   unrelated flow for existing users, not a way to recover this). `User.stbNr`/`User.phone` (Standesbuchnummer,
-  E.164 phone) are plain optional fields with no DB-level uniqueness — `phone` is only format-validated
+  E.164 phone) are plain fields with no DB-level uniqueness — `phone` is only format-validated
   (`E164_PHONE_REGEX` in `lib/validation/user.schema.ts`), and create mode pre-fills `+43` as a starting point
-  (edit mode leaves it untouched).
+  (edit mode leaves it untouched). **GitHub issue #12**: `stbNr` is now mandatory — enforced in
+  `userSchema` (`.min(1, ...)`, was `.optional().or(z.literal(''))`) and in the Excel bulk import's
+  own required-fields check, both **application-level only**; the DB column stays `String?` (nullable),
+  since tightening it to `NOT NULL` would need a backfill value for any already-existing user with no
+  StbNr, and there's no honest value to backfill with — same "nullable column, form-enforced required"
+  precedent as `VehicleBooking.details`.
+- **GitHub issue #13**: the Heimat-Feuerwehr field in `UserFormSheet` is a searchable combobox
+  (`src/components/admin/org-search-select.tsx`'s `OrgSearchSelect`, `id="homeOrganizationId"
+  triggerClassName="w-full"`), not a plain `<Select>` — with up to 124 Feuerwehren in a Bezirksadmin's
+  list, a flat dropdown had no way to filter by typing. This reuses the exact same component the
+  Abschnitt-/Feuerwehr-**filters** in `user-management-section.tsx` already used (see
+  "Geltungsbereich-Wähler" below) rather than building a new one; `OrgSearchSelect`'s own `allLabel`
+  prop had to become **optional** for this (`allLabel?: string`) — the two filter call sites still pass
+  it (they need an "Alle Feuerwehren" entry, since "no selection" means "no filter" there), but
+  Heimat-Feuerwehr is a mandatory field with no "Alle" concept, so its own call site omits `allLabel`
+  entirely and the component simply skips rendering that list entry. Also added `id`/`triggerClassName`
+  props (both optional, unused by the two pre-existing filter call sites) so the form's `FieldLabel`
+  still associates correctly and the trigger can stretch to the form's full field width.
 - **Excel export/import** (`/admin/benutzer/export`, `/admin/benutzer/import`): both read/write the same
   column set from `lib/admin/user-excel-columns.ts` (`USER_EXCEL_COLUMNS`) — the export is deliberately also
   the import template (same header names), so re-uploading an unmodified export works without edits. Export
-  includes active *and* deactivated users (no `isActive` filter) and extra columns (Admin für, Drohnengruppe,
-  Status) that the import ignores (`USER_IMPORT_COLUMN_KEYS` is the subset it actually reads). Import matches
+  includes active *and* deactivated users (no `isActive` filter). Import matches
   existing users by **StbNr + Heimat-Feuerwehr** (not email) to decide what's a duplicate to skip vs. a new
   row to create; header names are resolved from row 1 rather than assumed to be in a fixed column order.
   Rows are processed independently (one bad row records an error message and moves on, doesn't abort the
@@ -1289,6 +1412,41 @@ Action logic changed on any of the three pages.
   `sendActivationEmail` and instead collects `{name, email, link}` per created user, returned to the client
   and rendered as a list of activation links with copy buttons (same `CopyLinkButton`/link-expiry pattern as
   the single-user form's own Nein path) — there's no per-row toggle, only one setting for the entire upload.
+  **GitHub issue #11 ("auf alle Benutzerfelder erweitern")**: originally `Admin für`/`Drohnengruppe`/
+  `Status` were export-only (`USER_IMPORT_COLUMN_KEYS` was a strict subset of `USER_EXCEL_COLUMNS`'
+  keys) and several fields (Dienstgrad, Atemschutzgeräteträger, the five Ausbildungsstufen dates,
+  Bezirksadmin, Bezirks-Drohnenadmin) weren't represented in Excel at all. Both directions now cover
+  every `UserFormSheet` field except `Status` (a derived display value via `getUserStatus()`, not a
+  raw settable field — still export-only, correctly absent from `USER_IMPORT_COLUMN_KEYS`):
+  - `Drohnengruppe` (group name) and `Drohnengruppen-Rolle` (`DRONE_ROLE_LABEL`: Kein/Mitglied/Admin)
+    are now two separate columns — the old single `droneRole`-keyed "Drohnengruppe" column showed only
+    the role ("Admin"/"Mitglied"/""), never which of the (now four, post-Bezirk-expansion) groups, a
+    real ambiguity this split resolves.
+  - The five Ausbildungsstufen date columns are written/read as **ISO `YYYY-MM-DD`**, deliberately
+    *not* the `de-AT` display format other export-only date columns use elsewhere (e.g.
+    `atemschutz-excel-columns.ts`'s `toLocaleDateString('de-AT')`) — only ISO round-trips losslessly
+    through `new Date(...)` on re-import; `"15.1.2025"` is not a valid `Date` constructor input and
+    would silently become `Invalid Date`.
+  - `findAusbildungsGapError()` (`import/actions.ts`) re-implements userSchema's own sequential-prefix
+    invariant (a stage may only be set if every prior stage is too) standalone, since the bulk import
+    bypasses `userSchema` entirely — without it, a row could set e.g. BOS1 without A1/A3 and violate an
+    invariant every other part of the app assumes holds.
+  - **Admin-rechte-relevante Felder (Bezirksadmin, Bezirks-Drohnenadmin, Admin für) sind bewusst auch
+    per Bulk-Import setzbar** — eine explizite Entscheidung des App-Betreibers (per AskUserQuestion
+    bestätigt) über die sicherere Alternative (nur Export). `importUsers` ist bereits oben auf
+    `isBezirksAdmin` gegated, wofür `canGrantBezirksAdmin`/`canGrantBezirksDrohnenAdmin`
+    (`permissions.ts`) ohnehin unconditionally `true` sind — deshalb schreibt der Bulk-Import diese
+    Felder direkt per Prisma, ohne die granularen Pro-Zeile-Prüfungen aus `actions.ts`
+    (`canGrantAdminFor`/`syncDroneMembership`'s eigene `canManageDroneGroupFor`-Checks) zu wiederholen.
+  - Verifiziert end-to-end gegen die echte Server Action (nicht nur typgeprüft): ein echter Login über
+    den Auth.js-`/api/auth/callback/credentials`-Endpunkt, danach ein echter multipart-Form-POST an
+    `/admin/benutzer/import` über Next.js' No-JS-Progressive-Enhancement-Pfad für Server Actions (der
+    `$ACTION_ID_.../$ACTION_REF_.../$ACTION_KEY`-Hidden-Field-Mechanismus, den ein `<form
+    encType="multipart/form-data" action="">` clientseitig ohne JavaScript nutzt) — bestätigt, dass
+    eine vollständig befüllte Zeile korrekt alle neuen Felder anlegt, eine Zeile mit Ausbildungsstufen-
+    Lücke und eine mit unbekanntem Dienstgrad korrekt mit der erwarteten Fehlermeldung abgelehnt
+    werden, und der Export für einen vollständig befüllten Testbenutzer alle neuen Spalten korrekt
+    zeigt.
 - **Atemschutzgeräteträger-Zuweisung** (`UserFormSheet`, Person section, next to `phone`): a plain
   `istAtemschutzgeraeteTraeger` `Switch`, mirroring `isActive`'s row styling — this is where the boolean
   "IS this person an Atemschutzgeräteträger" gets set now (moved out of Heimatfeuerwehr, see Module 4 above);
@@ -1309,8 +1467,9 @@ Action logic changed on any of the three pages.
   query (`homeOrganizationId: { in: user.feuerwehrAdminOrgIds }`) and the `organizations` list passed down
   (same `{ in: ... }` filter) are scoped — the latter is what actually enforces "a Feuerwehr-Admin can only
   create/move users into their own Feuerwehr and can only grant 'Admin für' on their own Feuerwehr", since
-  `UserFormSheet`'s Heimat-Feuerwehr `<Select>` and "Admin für" checkboxes are built directly from that array,
-  offering no other org as an option in the first place. Every Server Action in `admin/benutzer/actions.ts`
+  `UserFormSheet`'s Heimat-Feuerwehr `OrgSearchSelect` (see GitHub issue #13 above) and "Admin für"
+  `AdminOrgMultiSelect` are built directly from that array, offering no other org as an option in the
+  first place. Every Server Action in `admin/benutzer/actions.ts`
   (`createUser`/`updateUser`/`deleteUser`/`setUserActive`/`sendPasswordResetEmailToUser`/`bulkSetActive`/
   `bulkSetHomeOrganization`) independently re-checks `canManageUsersFor` against every affected user's (and,
   for create/update/bulk-move, the target) `homeOrganizationId` — the scoped UI is a convenience, not the
@@ -1667,14 +1826,42 @@ base for the links it builds. `src/lib/email/escape-html.ts` (`escapeHtml`) is u
 user-controlled values (flight location, feedback message) get interpolated into an email's `htmlPart` —
 `templates.ts` itself predates this and still doesn't escape `firstName`, a known minor gap, but new email
 code should use it. `MAILJET_FROM_EMAIL` is `noreply@ff-wolfsgraben.at` (GitHub issue #5) rather than a
-monitored address, so the three member-facing templates (activation, password reset, login token) each end
+monitored address, so password reset and login token each end
 with a short "bitte nicht antworten, bei Fragen wende dich an florian.krebs@feuerwehr.gv.at" line — the same
 contact address already hardcoded (by design, see below) for in-app feedback. Admin-facing operational mails
 (drone-flight notification, system-check result) don't need this line; the admin who receives them already
-knows who to contact. Every template's sign-off reads "Abschnittsfeuerwehrkommando Purkersdorf" — the
-`Organization` row's actual name for the AFKDO org (`prisma/seed.ts`) — not the informal "Feuerwehr Abschnitt
-Purkersdorf" phrase a couple of templates used until this was flagged as inconsistent; the activation email's
-own "Dein AFKDO Purkersdorf" sign-off is a deliberately different, friendlier phrasing and was left alone.
+knows who to contact. Password reset and login token's sign-off reads "Abschnittsfeuerwehrkommando
+Purkersdorf" — the `Organization` row's actual name for the AFKDO org (`prisma/seed.ts`) — not the informal
+"Feuerwehr Abschnitt Purkersdorf" phrase a couple of templates used until this was flagged as inconsistent.
+
+**Willkommens-Mail (`sendActivationEmail`) — Sonderfall, nicht mehr `wrapHtmlPart`-Standard**: nach
+mehreren Feinschliff-Runden auf ausdrücklichen Wunsch des App-Betreibers weicht dieses eine Template
+inzwischen bewusst vom obigen Muster ab. Betreff und Fließtext wurden im Rahmen der Bezirk-Erweiterung
+von "AFKDO Purkersdorf" auf "BFKDO St. Pölten" umbenannt ("Kalender für alle Termine im Bezirk,
+Abschnitt und Feuerwehr" statt "im Abschnitt Purkersdorf"), die Grußzeile aber in einer Folgerunde
+wieder auf schlicht **"AFKDO Purkersdorf"** zurückgesetzt (ohne "Dein", explizit vom App-Betreiber so
+gewünscht — Text von ihm wörtlich vorgegeben, nicht selbst formuliert). Die alte "bitte nicht
+antworten..."-Zeile ist in dieser einen Mail **ersatzlos entfernt**, ersetzt durch eine eigene
+Fußzeile: "Diese App wird vom Abschnittsfeuerwehrkommando Purkersdorf zur Verfügung gestellt. Fragen
+an Florian Krebs florian.krebs@feuerwehr.gv.at" — auf explizite Nachfrage bestätigt, dass das so
+gewollt ist, trotz `noreply@ff-wolfsgraben.at` als technischem Absender. Password Reset und Login
+Token behalten die alte "bitte nicht antworten"-Zeile unverändert; nur die Willkommens-Mail ist
+davon abgewichen. Beide Mails (Willkommen + Passwort-Reset) verlinken zusätzlich `/how-to.html` (die
+öffentliche FAQ-Seite, siehe unten) über einen neuen `faqLink = ${baseUrl()}/how-to.html`.
+
+**FAQ-Seite (`public/how-to.html`, GitHub-Repo-URL für Vorab-Fassung s. `gh-pages`-Branch)**: eine
+statische, selbstständige HTML-Seite (kein Build-Schritt, keine App-Abhängigkeiten) unter
+`/how-to.html` — Next.js liefert alles unter `public/` unverändert am Wurzelpfad aus. Beantwortet:
+was die App für die Drohnengruppe kann, wie man sie am Handy zum Home-Bildschirm hinzufügt, und wie
+man das Passwort zurücksetzt. **Muss** in `middleware.ts`'s `PUBLIC_PATH_PREFIXES` stehen (`/how-to.
+html`) — ohne den Eintrag hätte die Middleware jeden nicht angemeldeten Aufruf zu `/login`
+umgeleitet, was den eigentlichen Zweck der Seite (u. a. Hilfe bei "Passwort vergessen", also für
+genau die Leute, die sich noch nicht anmelden können) unterlaufen hätte. Vor der Wahl von `public/`
+wurde eine Variante als GitHub Pages (eigener Orphan-Branch `gh-pages` desselben Repos, getrennt von
+`main`, damit die internen Planungsdokumente unter `docs/superpowers/` nicht mitveröffentlicht
+werden) probiert und ist dort weiterhin als Fallback-Kopie erreichbar — die App selbst liefert die
+Seite aber direkt unter der eigenen Domain aus, sodass die E-Mail-Links immer auf `AUTH_URL` zeigen,
+nicht auf eine zweite, separat zu pflegende URL.
 `/admin/email` has a manual "send test email" action for verifying the Mailjet API
 key/sender config without triggering a real activation or reset flow, plus the `droneFlightNotificationEmail`
 and `systemCheckNotificationEmail` settings (`AppSettings`) editable via `DroneFlightEmailForm` and
