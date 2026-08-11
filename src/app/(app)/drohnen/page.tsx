@@ -95,7 +95,9 @@ export default async function DrohnenPage({
       })
     : [];
 
-  const selectedQualifications = (params.qualifikation ?? '').split(',').filter(Boolean);
+  const selectedQualifications = isAdmin
+    ? (params.qualifikation ?? '').split(',').filter((key) => QUALIFICATION_OPTIONS.some((o) => o.key === key))
+    : [];
   // Der Pilot-Select zeigt bewusst IMMER alle Gruppenmitglieder als Optionen, unabhängig vom
   // Qualifikations-Filter - dieselbe Unabhängigkeit gilt bereits zwischen allen anderen Filtern
   // dieser Seite (z. B. schränkt der Zweck-Filter die Drohnen-Optionen auch nicht ein).

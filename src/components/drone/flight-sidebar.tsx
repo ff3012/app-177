@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 
@@ -38,7 +38,25 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
   const drohne = searchParams.get('drohne') ?? '';
   const zeitraum = searchParams.get('zeitraum') ?? '90tage';
   const [qualificationOpen, setQualificationOpen] = useState(false);
-  const selectedQualifications = (searchParams.get('qualifikation') ?? '').split(',').filter(Boolean);
+  const urlQualifications = (searchParams.get('qualifikation') ?? '').split(',').filter(Boolean);
+  const [selectedQualifications, setSelectedQualifications] = useState<string[]>(urlQualifications);
+
+  // Der lokale Zustand ist die Quelle der Wahrheit für aufeinanderfolgende schnelle Klicks (siehe
+  // toggleQualification) - er wird aber trotzdem mit der URL synchron gehalten, falls sich diese
+  // von AUSSEN ändert (z. B. Browser-Zurück, oder ein geteilter Link mit anderem ?qualifikation=).
+  useEffect(() => {
+    setSelectedQualifications(urlQualifications.join(',') === selectedQualifications.join(',') ? selectedQualifications : urlQualifications);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('qualifikation')]);
+
+  useEffect(() => {
+    if (!qualificationOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setQualificationOpen(false);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [qualificationOpen]);
 
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -55,6 +73,7 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
     const next = selectedQualifications.includes(key)
       ? selectedQualifications.filter((k) => k !== key)
       : [...selectedQualifications, key];
+    setSelectedQualifications(next);
     setParam('qualifikation', next.join(','));
   }
 
@@ -162,6 +181,8 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
           <button
             type="button"
             onClick={() => setQualificationOpen((open) => !open)}
+            aria-expanded={qualificationOpen}
+            aria-haspopup="listbox"
             className="flex h-[38px] w-full items-center justify-between rounded-md border border-line bg-surface px-2.5 text-sm text-ink"
           >
             <span>
