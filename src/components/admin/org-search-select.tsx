@@ -17,6 +17,12 @@ export interface OrgSearchSelectOption {
  * Geschlossen zeigt der Trigger entweder den gewählten Namen oder `allLabel` (z. B. "Alle
  * Feuerwehren") - anders als AdminOrgMultiSelects "N von M ausgewählt", da hier höchstens ein
  * Eintrag gewählt sein kann.
+ *
+ * `allLabel` ist bewusst optional: die beiden Filter-Aufrufer (Abschnitt-/Feuerwehr-Filter in
+ * user-management-section.tsx) brauchen einen "Alle ..."-Eintrag, weil "keine Auswahl" dort "kein
+ * Filter" bedeutet. Ein Pflichtfeld wie "Heimat-Feuerwehr" im UserFormSheet hat dagegen kein
+ * "Alle"-Konzept - dort ist immer genau eine echte Organisation ausgewählt - deshalb wird der
+ * "Alle"-Eintrag nur gerendert, wenn `allLabel` übergeben wird.
  */
 export function OrgSearchSelect({
   options,
@@ -25,13 +31,17 @@ export function OrgSearchSelect({
   placeholder,
   allLabel,
   allValue = 'ALLE',
+  id,
+  triggerClassName = '',
 }: {
   options: OrgSearchSelectOption[];
   value: string;
   onChange: (id: string) => void;
   placeholder: string;
-  allLabel: string;
+  allLabel?: string;
   allValue?: string;
+  id?: string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -53,12 +63,13 @@ export function OrgSearchSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          id={id}
           type="button"
           className={`flex h-9 min-w-[10rem] items-center justify-between gap-2 rounded-md border bg-transparent px-3 text-left text-sm transition-colors ${
             open ? 'border-2 border-brand px-[11px]' : 'border-line'
-          }`}
+          } ${triggerClassName}`}
         >
-          <span className={selected ? 'text-ink' : 'text-ink-faint'}>{selected ? selected.name : allLabel}</span>
+          <span className={selected ? 'text-ink' : 'text-ink-faint'}>{selected ? selected.name : allLabel ?? placeholder}</span>
           <span className="flex-none text-ink-faint">{open ? '▴' : '▾'}</span>
         </button>
       </PopoverTrigger>
@@ -69,15 +80,17 @@ export function OrgSearchSelect({
             {filteredOptions.length === 0 && (
               <div className="py-4 text-center text-sm text-ink-faint">Keine Treffer.</div>
             )}
-            <CommandGroup>
-              <CommandItem
-                value={allValue}
-                onSelect={() => select(allValue)}
-                className={value === allValue ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}
-              >
-                {allLabel}
-              </CommandItem>
-            </CommandGroup>
+            {allLabel && (
+              <CommandGroup>
+                <CommandItem
+                  value={allValue}
+                  onSelect={() => select(allValue)}
+                  className={value === allValue ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}
+                >
+                  {allLabel}
+                </CommandItem>
+              </CommandGroup>
+            )}
             {Object.entries(groupByAbschnitt(filteredOptions)).map(([abschnittName, orgs]) => (
               <CommandGroup key={abschnittName} heading={hasAbschnittGroups ? abschnittName : undefined}>
                 {orgs.map((org) => (
