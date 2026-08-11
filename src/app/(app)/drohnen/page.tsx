@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageFlight, canRegisterFlight, canViewDroneModule } from '@/lib/auth/permissions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import {
   NINETY_DAY_REQUIRED_FLIGHTS,
   getComplianceUntilDate,
@@ -81,7 +82,7 @@ export default async function DrohnenPage({
   // parallel zu ihr in derselben Promise.all stehen.
   const members = isAdmin
     ? await prisma.drohnengruppeMembership.findMany({
-        where: { droneGroupId: selectedGroup.id },
+        where: { droneGroupId: selectedGroup.id, user: NOT_DEACTIVATED_WHERE },
         orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
         select: {
           a1a3LizenzAm: true,
