@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
+import { resolveSelectedQualifications, QUALIFICATION_NONE } from '@/lib/drone/qualification-filter';
 
 export interface FlightFilterOptions {
   pilots: { id: string; name: string }[];
@@ -38,7 +39,7 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
   const drohne = searchParams.get('drohne') ?? '';
   const zeitraum = searchParams.get('zeitraum') ?? '90tage';
   const [qualificationOpen, setQualificationOpen] = useState(false);
-  const urlQualifications = (searchParams.get('qualifikation') ?? '').split(',').filter(Boolean);
+  const urlQualifications = resolveSelectedQualifications(searchParams.get('qualifikation'));
   const [selectedQualifications, setSelectedQualifications] = useState<string[]>(urlQualifications);
 
   // Der lokale Zustand ist die Quelle der Wahrheit für aufeinanderfolgende schnelle Klicks (siehe
@@ -70,12 +71,14 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
   }
 
   function toggleQualification(key: string) {
-    const next = selectedQualifications.includes(key)
-      ? selectedQualifications.filter((k) => k !== key)
-      : [...selectedQualifications, key];
-    setSelectedQualifications(next);
-    setParam('qualifikation', next.join(','));
+    const current = selectedQualifications.filter((k) => k !== QUALIFICATION_NONE);
+    const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+    const resolved = next.length === 0 ? [QUALIFICATION_NONE] : next;
+    setSelectedQualifications(resolved);
+    setParam('qualifikation', resolved.join(','));
   }
+
+  const checkedRealCount = selectedQualifications.filter((k) => k !== QUALIFICATION_NONE).length;
 
   return (
     <div className="flex flex-col gap-3.5 rounded-lg bg-surface p-4 shadow-card">
@@ -186,7 +189,7 @@ export function FlightSidebar({ pilots, drones, totalCount, meineCount, fuerAnde
             className="flex h-[38px] w-full items-center justify-between rounded-md border border-line bg-surface px-2.5 text-sm text-ink"
           >
             <span>
-              Qualifikation{selectedQualifications.length > 0 ? ` (${selectedQualifications.length})` : ''}
+              Qualifikation{checkedRealCount > 0 ? ` (${checkedRealCount})` : ''}
             </span>
             <span className="text-ink-faint">▾</span>
           </button>

@@ -12,7 +12,7 @@ import {
 } from '@/lib/drone/ninety-day-rule';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { groupFlightsByMonth } from '@/lib/drone/group-flights-by-month';
-import { QUALIFICATION_OPTIONS, matchesQualification } from '@/lib/drone/qualification-filter';
+import { QUALIFICATION_OPTIONS, matchesQualification, resolveSelectedQualifications } from '@/lib/drone/qualification-filter';
 import { isQuickRegisterEmail } from '@/lib/drone/quick-register-user';
 import { MeinStatusCard } from '@/components/drone/mein-status-card';
 import { GroupStatusList, type GroupStatusPilot } from '@/components/drone/group-status-list';
@@ -95,9 +95,7 @@ export default async function DrohnenPage({
       })
     : [];
 
-  const selectedQualifications = isAdmin
-    ? (params.qualifikation ?? '').split(',').filter((key) => QUALIFICATION_OPTIONS.some((o) => o.key === key))
-    : [];
+  const selectedQualifications = isAdmin ? resolveSelectedQualifications(params.qualifikation) : [];
   // Der Pilot-Select zeigt bewusst IMMER alle Gruppenmitglieder als Optionen, unabhängig vom
   // Qualifikations-Filter - dieselbe Unabhängigkeit gilt bereits zwischen allen anderen Filtern
   // dieser Seite (z. B. schränkt der Zweck-Filter die Drohnen-Optionen auch nicht ein).

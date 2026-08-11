@@ -10,12 +10,38 @@ const QUALIFICATION_LABELS: Record<Ausbildungsstufe, string> = {
   bos2AusbildungAm: 'BOS2 Ausbildung',
 };
 
-export const QUALIFICATION_OPTIONS: { key: Ausbildungsstufe | typeof QUALIFICATION_NONE; label: string }[] = [
-  ...AUSBILDUNGSSTUFEN.map((key) => ({ key, label: QUALIFICATION_LABELS[key] })),
-  { key: QUALIFICATION_NONE, label: 'Ohne Ausbildung' },
-];
+/** Nur die fünf echten Stufen als Checkboxen - "Ohne Ausbildung" hat seit der Vereinfachung keine
+ * eigene Checkbox mehr, siehe resolveSelectedQualifications: der Zustand "keine Checkbox aktiv"
+ * bedeutet jetzt direkt "Ohne Ausbildung", statt "kein Filter". */
+export const QUALIFICATION_OPTIONS: { key: Ausbildungsstufe; label: string }[] = AUSBILDUNGSSTUFEN.map((key) => ({
+  key,
+  label: QUALIFICATION_LABELS[key],
+}));
+
+export const QUALIFICATION_DEFAULT_KEY: Ausbildungsstufe = 'bos1AusbildungAm';
 
 type MembershipDates = Record<Ausbildungsstufe, Date | null>;
+
+/**
+ * Löst den rohen ?qualifikation=-Parameter zur tatsächlichen Auswahl auf - gemeinsame Stelle für
+ * page.tsx (Serverseite, wird direkt an matchesQualification weitergegeben) und
+ * flight-sidebar.tsx (Client-Anfangszustand für die Checkboxen), damit beide nie auseinanderlaufen
+ * können. Drei Fälle:
+ * - Parameter fehlt ganz (noch nie angefasst) -> Standardauswahl BOS1.
+ * - Parameter ist exakt das 'NONE'-Sentinel (geschrieben, wenn der Nutzer die letzte Checkbox
+ *   deaktiviert hat, siehe flight-sidebar.tsx's toggleQualification) -> "Ohne Ausbildung". Bewusst
+ *   [QUALIFICATION_NONE] statt eines leeren Arrays: da keine der fünf echten Stufen-Keys je 'NONE'
+ *   ist, verhält sich `selectedQualifications.includes(irgendeineStufe)` für die Checkbox-Anzeige
+ *   automatisch korrekt (immer false) - kein zweiter, gesondert zu pflegender "leerer" Zustand
+ *   nötig, ein einziges Array deckt beide Verwendungen (Checkbox-Haken UND Filter-Eingabe) ab.
+ * - Sonst: kommagetrennte Liste echter Stufen-Keys, unbekannte/fremde Keys werden stillschweigend
+ *   verworfen statt einen Fehler zu verursachen.
+ */
+export function resolveSelectedQualifications(raw: string | null | undefined): string[] {
+  if (raw === null || raw === undefined) return [QUALIFICATION_DEFAULT_KEY];
+  if (raw === QUALIFICATION_NONE) return [QUALIFICATION_NONE];
+  return raw.split(',').filter((key) => QUALIFICATION_OPTIONS.some((o) => o.key === key));
+}
 
 /**
  * UND-Verknüpfung: ein Mitglied muss ALLE ausgewählten Bedingungen gleichzeitig erfüllen.
