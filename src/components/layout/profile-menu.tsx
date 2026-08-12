@@ -118,7 +118,7 @@ export function ProfileMenu({
         // card's top edge to the bottom edge of the relative container instead (standard
         // dropdown-below-trigger positioning), matching how the mobile fixed-position variant already
         // renders directly under the header.
-        <div className="fixed inset-x-4 top-16 z-40 w-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72">
+        <div className="fixed inset-x-4 top-16 z-40 w-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm text-neutral-900 shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72">
           <p className="font-semibold text-neutral-900">{name}</p>
           <p className="text-neutral-500">{email}</p>
 
