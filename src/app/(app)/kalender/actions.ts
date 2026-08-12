@@ -4,16 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import {
-  assertPermission,
-  canCreateSectionWideEvent,
-  canManageDroneGroupFor,
-  canManageEventsFor,
-} from '@/lib/auth/permissions';
+import { assertPermission, canCreateSectionWideEvent, canManageEvent, canManageEventsFor } from '@/lib/auth/permissions';
 import { eventSchema, parseEventFormData } from '@/lib/validation/event.schema';
 import { deleteEventFromGoogleCalendar, pushEventToGoogleCalendar } from '@/lib/calendar/google-calendar-push';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
-import type { SessionUser } from '@/types/next-auth';
 
 export interface EventFormState {
   error?: string;
@@ -33,22 +27,12 @@ async function resolveAbschnittOrganizationId(organizationId: string): Promise<s
   return getAbschnittOrganizationId(organization);
 }
 
-/**
- * Die Drohnengruppe eines Termins kam bislang ungeprüft aus dem Formular (eventSchema hatte dafür nur
- * ein nacktes z.string().nullable()). Da resolveEventAudienceUserIds die Push-Zielgruppe ausschließlich
- * aus event.droneGroupId ableitet, hätte ein direkter Server-Action-Aufruf damit einen beliebigen Text
- * an sämtliche Mitglieder einer fremden Drohnengruppe pushen können. Erlaubt ist die eigene Gruppe
- * (auch als reines Mitglied) oder eine Gruppe, die der Nutzer ohnehin verwalten darf.
- */
-async function assertMayUseDroneGroup(user: SessionUser, droneGroupId: string): Promise<void> {
-  const group = await prisma.droneGroup.findUnique({
-    where: { id: droneGroupId },
-    select: { id: true, organizationId: true },
-  });
-  assertPermission(
-    group !== null && (user.droneGroupId === group.id || canManageDroneGroupFor(user, group)),
-    'Keine Berechtigung für diese Drohnengruppe.',
-  );
+/** Lädt die Drohnengruppe für eine (ggf. null) droneGroupId - null bleibt null (bezirksweit),
+ * eine gesetzte id, die nicht mehr existiert, wird ebenfalls zu null (canManageEvent lehnt das dann
+ * über den droneGroup===null-Zweig ab, statt mit einem ungefangenen Fehler abzubrechen). */
+async function loadDroneGroup(droneGroupId: string | null) {
+  if (!droneGroupId) return null;
+  return prisma.droneGroup.findUnique({ where: { id: droneGroupId }, select: { id: true, organizationId: true } });
 }
 
 export async function createEvent(_prevState: EventFormState, formData: FormData): Promise<EventFormState> {
@@ -59,6 +43,39 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
   }
   const data = parsed.data;
 
+  if (data.category === 'DROHNENGRUPPE') {
+    const droneGroup = await loadDroneGroup(data.droneGroupId);
+    if (!canManageEvent(user, data, droneGroup)) {
+      return { error: 'Keine Berechtigung, für diese Drohnengruppe Termine anzulegen.' };
+    }
+
+    // organizationId/isSectionWide sind für diese Kategorie keine Formularfelder mehr (siehe
+    // event-form.tsx) - serverseitig abgeleitet: die Organisation der Gruppe, oder bei bezirksweit
+    // (droneGroupId null) der Abschnitt des anlegenden Nutzers, rein als technischer FK-Wert, nicht
+    // als Sichtbarkeitskriterium (siehe canViewEvent, das für DROHNENGRUPPE beide Felder ignoriert).
+    const organizationId = droneGroup ? droneGroup.organizationId : user.homeAbschnittOrganizationId;
+
+    const created = await prisma.event.create({
+      data: {
+        title: data.title,
+        description: data.description || null,
+        location: data.location || null,
+        startsAt: new Date(data.startsAt),
+        endsAt: new Date(data.endsAt),
+        allDay: data.allDay,
+        organizationId,
+        isSectionWide: false,
+        category: data.category,
+        droneGroupId: data.droneGroupId,
+        createdById: user.id,
+      },
+    });
+    await pushEventToGoogleCalendar(created);
+
+    revalidateCalendars();
+    redirect('/kalender');
+  }
+
   if (!canManageEventsFor(user, data.organizationId)) {
     return { error: 'Keine Berechtigung, für diese Organisation Termine anzulegen.' };
   }
@@ -67,9 +84,6 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
     if (!canCreateSectionWideEvent(user, abschnittOrganizationId)) {
       return { error: 'Keine Berechtigung für Abschnitt-weite Termine in diesem Abschnitt.' };
     }
-  }
-  if (data.category === 'DROHNENGRUPPE' && data.droneGroupId) {
-    await assertMayUseDroneGroup(user, data.droneGroupId);
   }
 
   const created = await prisma.event.create({
@@ -83,7 +97,7 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
       category: data.category,
-      droneGroupId: data.category === 'DROHNENGRUPPE' ? data.droneGroupId : null,
+      droneGroupId: null,
       createdById: user.id,
     },
   });
@@ -103,11 +117,17 @@ export async function updateEvent(
   if (!existing) {
     return { error: 'Termin wurde nicht gefunden.' };
   }
-  assertPermission(canManageEventsFor(user, existing.organizationId));
-  if (existing.isSectionWide) {
-    const existingAbschnittOrganizationId = await resolveAbschnittOrganizationId(existing.organizationId);
-    if (!canCreateSectionWideEvent(user, existingAbschnittOrganizationId)) {
-      return { error: 'Keine Berechtigung, diesen Abschnitt-weiten Termin zu bearbeiten.' };
+
+  if (existing.category === 'DROHNENGRUPPE') {
+    const existingDroneGroup = await loadDroneGroup(existing.droneGroupId);
+    assertPermission(canManageEvent(user, existing, existingDroneGroup));
+  } else {
+    assertPermission(canManageEventsFor(user, existing.organizationId));
+    if (existing.isSectionWide) {
+      const existingAbschnittOrganizationId = await resolveAbschnittOrganizationId(existing.organizationId);
+      if (!canCreateSectionWideEvent(user, existingAbschnittOrganizationId)) {
+        return { error: 'Keine Berechtigung, diesen Abschnitt-weiten Termin zu bearbeiten.' };
+      }
     }
   }
   if (existing.vehicleBookingId) {
@@ -123,6 +143,34 @@ export async function updateEvent(
   }
   const data = parsed.data;
 
+  if (data.category === 'DROHNENGRUPPE') {
+    const droneGroup = await loadDroneGroup(data.droneGroupId);
+    if (!canManageEvent(user, data, droneGroup)) {
+      return { error: 'Keine Berechtigung, für diese Drohnengruppe Termine anzulegen.' };
+    }
+
+    const organizationId = droneGroup ? droneGroup.organizationId : user.homeAbschnittOrganizationId;
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        title: data.title,
+        description: data.description || null,
+        location: data.location || null,
+        startsAt: new Date(data.startsAt),
+        endsAt: new Date(data.endsAt),
+        allDay: data.allDay,
+        organizationId,
+        isSectionWide: false,
+        category: data.category,
+        droneGroupId: data.droneGroupId,
+      },
+    });
+    await pushEventToGoogleCalendar(updated);
+
+    revalidateCalendars();
+    redirect('/kalender');
+  }
+
   if (!canManageEventsFor(user, data.organizationId)) {
     return { error: 'Keine Berechtigung, für diese Organisation Termine anzulegen.' };
   }
@@ -131,9 +179,6 @@ export async function updateEvent(
     if (!canCreateSectionWideEvent(user, abschnittOrganizationId)) {
       return { error: 'Keine Berechtigung für Abschnitt-weite Termine in diesem Abschnitt.' };
     }
-  }
-  if (data.category === 'DROHNENGRUPPE' && data.droneGroupId) {
-    await assertMayUseDroneGroup(user, data.droneGroupId);
   }
 
   const updated = await prisma.event.update({
@@ -148,7 +193,7 @@ export async function updateEvent(
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
       category: data.category,
-      droneGroupId: data.category === 'DROHNENGRUPPE' ? data.droneGroupId : null,
+      droneGroupId: null,
     },
   });
   await pushEventToGoogleCalendar(updated);
@@ -163,10 +208,16 @@ export async function deleteEvent(eventId: string): Promise<void> {
   if (!existing) {
     redirect('/kalender');
   }
-  assertPermission(canManageEventsFor(user, existing.organizationId));
-  if (existing.isSectionWide) {
-    const abschnittOrganizationId = await resolveAbschnittOrganizationId(existing.organizationId);
-    assertPermission(canCreateSectionWideEvent(user, abschnittOrganizationId));
+
+  if (existing.category === 'DROHNENGRUPPE') {
+    const droneGroup = await loadDroneGroup(existing.droneGroupId);
+    assertPermission(canManageEvent(user, existing, droneGroup));
+  } else {
+    assertPermission(canManageEventsFor(user, existing.organizationId));
+    if (existing.isSectionWide) {
+      const abschnittOrganizationId = await resolveAbschnittOrganizationId(existing.organizationId);
+      assertPermission(canCreateSectionWideEvent(user, abschnittOrganizationId));
+    }
   }
   assertPermission(
     !existing.vehicleBookingId,
