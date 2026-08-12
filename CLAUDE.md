@@ -250,17 +250,34 @@ everywhere else in this file):
   everyone, and every existing Abschnittskommando-owned event became uneditable (`canManageEventsFor` reads
   only this array and has no Bezirksadmin bypass, by long-standing design).
 
-**Event visibility is Abschnitt-scoped, not app-wide.** `canViewEvent` (and the identical rule in
-`kalender/page.tsx`'s own query, the per-org `.ics` feed, and `push/audience.ts`) is:
-`event.organizationId === user.homeOrganizationId` **OR** (`event.isSectionWide` **AND** the event's
-Abschnitt equals the viewer's own `homeAbschnittOrganizationId`) — and for `category === 'DROHNENGRUPPE'`,
-**additionally** `event.droneGroupId === user.droneGroupId` plus `canViewDroneModule`. A section-wide event
-never leaves its own Abschnitt. `Event.droneGroupId` is nullable in the schema but is required by
-`eventSchema` whenever the category is `DROHNENGRUPPE` — a drone event with no group would be visible to
-nobody at all, since every check is an exact group-id comparison.
+**Event visibility for `category === 'ALLGEMEIN'` is Abschnitt-scoped, not app-wide; `DROHNENGRUPPE` is a
+completely separate, category-first rule.** `canViewEvent` (`src/lib/auth/permissions.ts`, and the identical
+rule mirrored in `kalender/page.tsx`'s own query, `meine-feuerwehr/page.tsx`'s own query, the single-event
+`.ics` route, and `push/audience.ts`) branches on `event.category` first:
+- `ALLGEMEIN`: `event.organizationId === user.homeOrganizationId` **OR** (`event.isSectionWide` **AND** the
+  event's Abschnitt equals the viewer's own `homeAbschnittOrganizationId`). A section-wide event never
+  leaves its own Abschnitt. Unchanged from before the multi-Drohnengruppe plan.
+- `DROHNENGRUPPE`: `canViewDroneModule(user)` **AND** (`event.droneGroupId === null` **OR**
+  `event.droneGroupId === user.droneGroupId`) — completely **independent** of `organizationId`/
+  `isSectionWide`. Those two fields are still populated on a `DROHNENGRUPPE` event (server-derived in
+  `kalender/actions.ts` — the anchor group's organization, or the creator's own Abschnitt for a bezirksweit
+  event), but purely as technical FK/legacy-column values, never read by any visibility check.
+  `event.droneGroupId === null` is a **deliberate sentinel**, not an absent/invalid value: it means
+  "bezirksweit", visible to members of **all 4** Drohnengruppen (same null-means-"all" pattern already used
+  by `NewsMessage.audienceDroneGroupId`) — the combined per-org token `.ics` feeds are the one exception,
+  since they're token- rather than session-authenticated and can't check `canViewDroneModule`, so they
+  exclude the whole `DROHNENGRUPPE` category outright rather than trying to apply this rule.
+- Create/edit/delete/push authorization for an `Event` goes through the separate `canManageEvent(user,
+  event, droneGroup)` function, also category-first: `ALLGEMEIN` still delegates to `canManageEventsFor`
+  unchanged; `DROHNENGRUPPE` with a set `droneGroupId` delegates to `canManageDroneGroupFor` for that
+  specific group (module membership alone is not enough — a plain Pilot/Mitglied without an ADMIN role in
+  that group has no create/edit/delete right); `DROHNENGRUPPE` with `droneGroupId === null` (bezirksweit)
+  requires `canManageBezirksWideDroneEvent` (Bezirksadmin or Bezirks-Drohnenadmin only — not any single
+  group's Admin, not an Abschnittsadmin, since a bezirksweit event crosses group/Abschnitt boundaries).
 `canCreateSectionWideEvent(user, abschnittOrganizationId)` takes the **target** Abschnitt and delegates to
 `canManageAbschnittFor`; a blanket "admins some Abschnitt" check is not sufficient and is only used as a
-UI pre-check (`canCreateAnySectionWideEvent`).
+UI pre-check (`canCreateAnySectionWideEvent`). Both of these two functions are `ALLGEMEIN`-only — they play
+no role for `DROHNENGRUPPE` events, which never carry a meaningful `isSectionWide`.
 
 **Drohnengruppen data is group-scoped throughout**: drones, `DroneDocument` PDFs, member roster, the QR
 quick-register token, the flight-notification email, News' `DROHNENGRUPPE` audience, and the 90-day
@@ -316,13 +333,15 @@ does not exist between deploy and someone remembering to run `npm run db:seed` b
   Feuerwehr someone belongs to — but **no longer flat**: it carries a mandatory `droneGroupId` (one of the
   4 `DroneGroup` rows), and every read path is scoped by it. A user has at most one drone membership, hence
   at most one group (`SessionUser.droneGroupId`).
-- `Event.isSectionWide` + `Event.category` (ALLGEMEIN/DROHNENGRUPPE) + `Event.droneGroupId` together
-  determine visibility — see "Bezirk / Abschnitt / Feuerwehr hierarchy" above for the full rule, which is
-  **Abschnitt-scoped**: `isSectionWide` means "visible across the event's own Abschnitt", never across the
-  whole Bezirk. Drohnengruppe-category events additionally require both `canViewDroneModule` and an exact
-  `droneGroupId` match. The `.ics` feeds are token- rather than session-authenticated and so can't check
-  membership — they exclude the Drohnengruppe category entirely instead of trying, and the per-organization
-  feed applies the same Abschnitt scoping as the Kalender query.
+- `Event.category` (ALLGEMEIN/DROHNENGRUPPE) decides which of two unrelated visibility rules applies — see
+  "Bezirk / Abschnitt / Feuerwehr hierarchy" above for the full rule. For `ALLGEMEIN`, `Event.isSectionWide`
+  is what makes it **Abschnitt-scoped**: `isSectionWide` means "visible across the event's own Abschnitt",
+  never across the whole Bezirk. For `DROHNENGRUPPE`, `isSectionWide`/`organizationId` play no role at all —
+  visibility is `canViewDroneModule` **plus** `Event.droneGroupId` either matching the viewer's own group
+  exactly, or being `null` (a deliberate "bezirksweit, all 4 groups" sentinel, not an absent/invalid value).
+  The `.ics` feeds are token- rather than session-authenticated and so can't check membership — they exclude
+  the Drohnengruppe category entirely instead of trying, and the per-organization feed applies the same
+  Abschnitt scoping as the Kalender query (for its `ALLGEMEIN` events only, by the same token).
 - `DroneFlight` has two separate `User` relations: `registeredBy` (who logged the entry — controls edit
   rights) and `pilotUser` (who actually flew — a dropdown of current Drohnengruppe members in the form, not
   free text). Don't conflate the two; "can I edit this flight" is based on `registeredBy`, not `pilotUser`.

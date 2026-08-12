@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { ZusageStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageEventsFor, canViewEvent } from '@/lib/auth/permissions';
+import { assertPermission, canManageEvent, canViewEvent } from '@/lib/auth/permissions';
 import { rsvpSchema } from '@/lib/validation/rsvp.schema';
 import { sendEventPushNow } from '@/lib/push/send-event-push';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
@@ -66,9 +66,12 @@ export interface EventPushActionState {
 
 /**
  * Löst sofort eine Push-Benachrichtigung mit Termindetails aus. Berechtigung wie beim
- * Bearbeiten/Löschen des Termins selbst (canManageEventsFor) - jeder Admin der besitzenden
+ * Bearbeiten/Löschen des Termins selbst (canManageEvent) - jeder Admin der besitzenden
  * Organisation kann also für seine eigenen Termine Push auslösen, nicht nur der
- * Abschnittskommando-Admin (bewusst anders als canManageNews im News-Modul).
+ * Abschnittskommando-Admin (bewusst anders als canManageNews im News-Modul). Für
+ * DROHNENGRUPPE-Termine verzweigt canManageEvent korrekt nach droneGroupId (eigene Gruppe vs.
+ * bezirksweit) statt der alten, rein organizationId-basierten Regel - siehe die identische
+ * droneGroup-Ladelogik in kalender/[eventId]/page.tsx.
  */
 export async function triggerEventPushNotification(eventId: string): Promise<EventPushActionState> {
   const user = await requireUser();
@@ -77,7 +80,14 @@ export async function triggerEventPushNotification(eventId: string): Promise<Eve
   if (!event) {
     return { error: 'Termin wurde nicht gefunden.' };
   }
-  assertPermission(canManageEventsFor(user, event.organizationId));
+  const droneGroup =
+    event.category === 'DROHNENGRUPPE' && event.droneGroupId
+      ? await prisma.droneGroup.findUnique({
+          where: { id: event.droneGroupId },
+          select: { id: true, organizationId: true },
+        })
+      : null;
+  assertPermission(canManageEvent(user, event, droneGroup));
 
   try {
     const { sent, recipients } = await sendEventPushNow(event);

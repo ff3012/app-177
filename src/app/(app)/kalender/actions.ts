@@ -149,7 +149,11 @@ export async function updateEvent(
       return { error: 'Keine Berechtigung, für diese Drohnengruppe Termine anzulegen.' };
     }
 
-    const organizationId = droneGroup ? droneGroup.organizationId : user.homeAbschnittOrganizationId;
+    // Bewusst NICHT user.homeAbschnittOrganizationId wie bei createEvent: bei einer Bearbeitung gibt
+    // es bereits einen bestehenden Datensatz (existing), dessen organizationId beibehalten werden muss
+    // - sonst würde jede Bearbeitung eines bezirksweiten Termins durch einen ANDEREN Bezirksadmin/
+    // Bezirks-Drohnenadmin dessen Anker-Abschnitt auf den des jeweils speichernden Nutzers verschieben.
+    const organizationId = droneGroup ? droneGroup.organizationId : existing.organizationId;
     const updated = await prisma.event.update({
       where: { id: eventId },
       data: {

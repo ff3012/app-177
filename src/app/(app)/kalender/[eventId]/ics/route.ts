@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { canViewDroneModule } from '@/lib/auth/permissions';
+import { canViewEvent } from '@/lib/auth/permissions';
 import { buildIcsCalendar } from '@/lib/calendar/ics';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 
@@ -18,10 +18,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ eve
   }
 
   const eventAbschnittOrganizationId = getAbschnittOrganizationId(event.organization);
-  const visible =
-    (event.organizationId === user.homeOrganizationId ||
-      (event.isSectionWide && eventAbschnittOrganizationId === user.homeAbschnittOrganizationId)) &&
-    (event.category !== 'DROHNENGRUPPE' || (canViewDroneModule(user) && event.droneGroupId === user.droneGroupId));
+  const visible = canViewEvent(user, { ...event, eventAbschnittOrganizationId });
   if (!visible) {
     return NextResponse.json({ error: 'Kein Zugriff auf diesen Termin.' }, { status: 404 });
   }

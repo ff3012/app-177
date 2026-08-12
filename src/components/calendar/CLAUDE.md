@@ -242,8 +242,12 @@ they're given — desktop's always-visible layout never needs either.
 `ZusageStatus` (ZUGESAGT/ABGESAGT/UNKLAR) plus an optional note (max 200 chars, validated in
 `lib/validation/rsvp.schema.ts`), upserted on re-submit rather than kept as history. `lib/auth/permissions.ts`'s
 `canViewEvent(user, event)` is the single source of truth for "may this user RSVP to / see this event" —
-identical rule to the Kalenderübersicht query itself (own org OR section-wide, Drohnengruppe category
-additionally gated on module access); keep both in sync if the visibility rule ever changes.
+identical rule to the Kalenderübersicht query itself, category-first: `ALLGEMEIN` is own org OR section-wide
+within the same Abschnitt (unchanged); `DROHNENGRUPPE` is `canViewDroneModule` plus `droneGroupId` either
+matching the viewer's own group or being `null` (bezirksweit, visible to all 4 groups) — completely
+independent of `organizationId`/`isSectionWide` for that category. Keep every call site in sync if the
+visibility rule ever changes — see the root `CLAUDE.md`'s "Bezirk / Abschnitt / Feuerwehr hierarchy" section
+for the full rule and the current list of call sites.
 `src/app/(app)/kalender/[eventId]/page.tsx` is a new, separate "Detailansicht" route (distinct from
 `.../bearbeiten`) reachable by anyone who can see the event, not just admins — it shows the read-only event
 info, the `EventRsvpButtons` widget (three status buttons + note field, `withNote` prop toggles the note
@@ -257,10 +261,16 @@ action; a quick toggle omits the `note` argument entirely (not empty string) so 
 previously saved note — see the comment above `noteProvided` in that file before changing this.
 
 The detail page's "Push-Benachrichtigung jetzt senden" button (`SendEventPushButton` +
-`triggerEventPushNotification`) is gated on `canManageEventsFor(user, event.organizationId)` — the same
-right as editing/deleting the event itself, so any Feuerwehr-admin can push for their own org's events, not
-just the Abschnittskommando-Admin. This is a deliberate departure from `canManageNews` (News module,
-Abschnittskommando-Admin only) — explicitly chosen for this feature despite the parallel. It reuses the News
+`triggerEventPushNotification`) is gated on `canManageEvent(user, event, droneGroup)` — the same right as
+editing/deleting the event itself (`droneGroup` loaded the same way `[eventId]/page.tsx`/`bearbeiten/page.tsx`
+already do: only when `event.category === 'DROHNENGRUPPE' && event.droneGroupId`, else `null`), so any
+Feuerwehr-admin can push for their own org's `ALLGEMEIN` events, and any Drohnengruppen-Admin/Bezirksadmin/
+Bezirks-Drohnenadmin can push for their own group's/bezirksweit `DROHNENGRUPPE` events, not just the
+Abschnittskommando-Admin. Before the multi-Drohnengruppe plan this used the flatter `canManageEventsFor(user,
+event.organizationId)`, which both incorrectly blocked a pure Drohnengruppen-/Bezirksadmin (zero
+`feuerwehrAdminOrgIds`) from pushing their own event and incorrectly let an Abschnittsadmin of a bezirksweit
+event's anchor Abschnitt push to all 4 groups. This is a deliberate departure from `canManageNews` (News
+module, Abschnittskommando-Admin only) — explicitly chosen for this feature despite the parallel. It reuses the News
 module's `sendPushToSubscriptions` but resolves its own audience via
 `resolveEventAudienceUserIds`/`sendEventPushNow` (`lib/push/`) rather than `NewsMessage`'s
 ORGANIZATION/DROHNENGRUPPE audience types, since an event can be section-wide without any corresponding
@@ -269,8 +279,38 @@ ORGANIZATION/DROHNENGRUPPE audience types, since an event can be section-wide wi
 `components/calendar/event-form.tsx`: changing Start always carries its date onto Ende; Ende's *time* is only
 auto-suggested (Start + 15 minutes) while Ende has no time of its own yet — once it has one (typed or
 suggested), further Start edits only sync the date, never overwrite a chosen Ende time. Picking category
-"Drohnengruppe" auto-checks "Abschnitt-weiter Termin" (still manually uncheckable) since Drohnengruppe
-events are cross-org by nature.
+"Drohnengruppe" no longer touches "Abschnitt-weiter Termin" at all — that checkbox and the Organisation
+`<select>` are hidden entirely for that category (`!isDroneCategory` guards both), since `organizationId`/
+`isSectionWide` are now server-derived, technical-only values for `DROHNENGRUPPE` events (see
+`kalender/actions.ts`), not part of its visibility rule. An earlier version of this form auto-checked
+"Abschnitt-weiter Termin" when Drohnengruppe was picked — that was removed once the category stopped being
+reachable only via an Abschnittskommando `organizationId` selection; don't reintroduce the auto-check
+without re-reading `canViewEvent`'s current DROHNENGRUPPE branch first, since it's actively inconsistent with
+today's category-first visibility rule.
+
+**`BEZIRKSWEIT_DRONE_GROUP_VALUE`** (`lib/validation/event.schema.ts`, the string `'BEZIRKSWEIT'`): the
+Drohnengruppe `<select>` needs an option for "Alle Drohnengruppen (bezirksweit)", but a real DOM `<select>`
+can never submit a literal `null` — this sentinel string stands in for it in the form's `droneGroupId`
+option list (`getManageableDroneGroupOptions`, `lib/calendar/drone-group-options.ts`, appends it only when
+`canManageBezirksWideDroneEvent(user)`) and in `bearbeiten/page.tsx`'s `defaultValues` (a `null` DB value on
+a `DROHNENGRUPPE` event becomes this sentinel so the `<select>` shows the right pre-selected option).
+`parseEventFormData` (`event.schema.ts`) is the one place that converts it back to a real `null` before
+anything touches the database or `canManageEvent`/`canViewEvent` — those functions only ever see a real
+`string | null`, never this string.
+
+**`canManageEvent(user, event, droneGroup)`** (`lib/auth/permissions.ts`) is the one function that must be
+called, consistently, everywhere create/edit/delete/push authorization for an `Event` is checked — never a
+flat `canManageEventsFor(user, event.organizationId)` for anything that might be a `DROHNENGRUPPE` event,
+since that ignores the group-scoped/bezirksweit rule entirely. Current call sites (`grep -rn
+"canManageEvent(" src/`), keep this list updated when adding a new one:
+- `kalender/actions.ts` — `createEvent`, `updateEvent` (twice: initial permission check against `existing`,
+  and again against the freshly-parsed `data` in case the category/group changed), `deleteEvent`.
+- `kalender/page.tsx` — drives each event's `editable` flag in the Kalenderübersicht/FullCalendar grid.
+- `kalender/[eventId]/page.tsx` — gates the "Bearbeiten" link and the "Push-Benachrichtigung" section.
+- `kalender/[eventId]/bearbeiten/page.tsx` — gates whether the edit form renders at all.
+- `kalender/[eventId]/rsvp-actions.ts` — `triggerEventPushNotification`, the push Server Action itself
+  (fixed to use this function instead of `canManageEventsFor` during the final-review pass that also added
+  this checklist — see the CLAUDE.md history/git log if you need the "before" shape).
 
 The .ics subscription links live in their own "ICS Kalender Import" card in the layout described above (not
 the page header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. There

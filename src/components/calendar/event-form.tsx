@@ -90,7 +90,13 @@ export function EventForm({
   // Abschnittskommando-Organisation erreichbar war - das gilt nicht mehr, Drohnengruppe ist jetzt
   // eine eigenständige Kategorie unabhängig von der Organisation-Auswahl). categoryOptions.length > 1
   // heißt genau "DROHNENGRUPPE ist tatsächlich eine echte Option", da ALLGEMEIN nie herausgefiltert wird.
-  const showCategorySelect = categoryOptions.length > 1;
+  // Zusätzlich organizations.length > 0: ein Nutzer ohne jede eigene Feuerwehr-Admin-Mitgliedschaft
+  // (reiner Bezirksadmin/Bezirks-Drohnenadmin/Admin Drohnengruppe) darf zwar Drohnengruppen-Termine
+  // anlegen, aber "Allgemein" wäre für ihn eine Sackgasse - das Organisation-<select> unten wäre leer
+  // und ein Submit würde an der organizationId-Pflichtfeld-Validierung scheitern. Der Kategorie-Select
+  // wird für ihn deshalb gar nicht erst angeboten; category bleibt fest auf 'DROHNENGRUPPE' (siehe der
+  // Default oben, der genau diesen Fall bereits erkennt).
+  const showCategorySelect = categoryOptions.length > 1 && organizations.length > 0;
   const isDroneCategory = category === 'DROHNENGRUPPE';
 
   // Ende übernimmt bei jeder Änderung von Start automatisch dessen Datum. Solange Ende noch gar

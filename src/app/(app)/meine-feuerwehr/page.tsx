@@ -108,6 +108,9 @@ export default async function MeineFeuerwehrPage() {
   const user = await requireUser();
   const now = new Date();
   const in14Days = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  // Vorab berechnet wie in kalender/page.tsx - die Query selbst braucht eine dritte,
+  // drohnengruppen-eigene OR-Bedingung, sonst würde ein bezirksweiter oder ein Termin einer fremden
+  // (Abschnitt-)Feuerwehr innerhalb der eigenen Drohnengruppe gar nicht erst aus der DB geladen.
   const droneMember = canViewDroneModule(user);
 
   const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures] = await Promise.all([
@@ -121,12 +124,11 @@ export default async function MeineFeuerwehrPage() {
         atemschutzFinnentestAm: true,
       },
     }),
-    // Gleiche Sichtbarkeitsregel wie kalender/page.tsx (eigene Feuerwehr ODER abschnittsweit) -
-    // die DROHNENGRUPPE-Kategorie wird unten zusätzlich nach canViewDroneModule UND droneGroupId
-    // gefiltert, exakt wie dort (Task 8: Drohnengruppe-Termine sind nur für die betroffene Gruppe
-    // sichtbar, nicht für die gesamte Drohnengruppe/den Bezirk). `take: 8` ist ein großzügiger Pool
-    // für "Zu erledigen" (≤14 Tage) plus die "Als Nächstes"-Anzeige (Top 2), nicht die tatsächliche
-    // Anzeigegrenze.
+    // Identische Sichtbarkeitsregel wie kalender/page.tsx: eigene Feuerwehr ODER abschnittsweit ODER
+    // (bei Modulzugriff) DROHNENGRUPPE-Termine der eigenen Gruppe bzw. bezirksweite (droneGroupId
+    // null) - komplett unabhängig von organizationId/isSectionWide, siehe canViewEvent. `take: 8` ist
+    // ein großzügiger Pool für "Zu erledigen" (≤14 Tage) plus die "Als Nächstes"-Anzeige (Top 2),
+    // nicht die tatsächliche Anzeigegrenze.
     prisma.event.findMany({
       where: {
         OR: [
@@ -137,6 +139,9 @@ export default async function MeineFeuerwehrPage() {
               OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
             },
           },
+          ...(droneMember
+            ? [{ category: 'DROHNENGRUPPE' as const, OR: [{ droneGroupId: user.droneGroupId }, { droneGroupId: null }] }]
+            : []),
         ],
         endsAt: { gte: now },
       },
@@ -161,7 +166,9 @@ export default async function MeineFeuerwehrPage() {
   ]);
 
   const candidateEvents = candidateEventsRaw.filter(
-    (event) => event.category !== 'DROHNENGRUPPE' || (droneMember && event.droneGroupId === user.droneGroupId),
+    (event) =>
+      event.category !== 'DROHNENGRUPPE' ||
+      (droneMember && (event.droneGroupId === null || event.droneGroupId === user.droneGroupId)),
   );
   const candidateIds = candidateEvents.map((event) => event.id);
   const ownRsvps = candidateIds.length
