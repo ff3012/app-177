@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageEventsFor, canViewEvent } from '@/lib/auth/permissions';
+import { canManageEvent, canViewEvent } from '@/lib/auth/permissions';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
 import { EventRsvpButtons } from '@/components/calendar/event-rsvp-buttons';
@@ -39,6 +39,19 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
     return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Termin zu sehen.</p>;
   }
 
+  // Vorher: canManageEventsFor(user, event.organizationId) an beiden Stellen unten (Bearbeiten-Link,
+  // Push-Benachrichtigung-Sektion) - das war für Drohnengruppen-Termine falsch (blockte jeden Admin
+  // Drohnengruppe ohne eigene Feuerwehr-Admin-Mitgliedschaft von seinen EIGENEN Gruppen-Terminen).
+  const droneGroup =
+    event.category === 'DROHNENGRUPPE' && event.droneGroupId
+      ? await prisma.droneGroup.findUnique({
+          where: { id: event.droneGroupId },
+          select: { id: true, organizationId: true },
+        })
+      : null;
+  const canManageThisEvent = canManageEvent(user, event, droneGroup);
+  const isDistrictWideDrone = event.category === 'DROHNENGRUPPE' && event.droneGroupId === null;
+
   const zusagen = await prisma.terminZusage.findMany({
     where: { eventId },
     include: { user: { select: { id: true, firstName: true, lastName: true } } },
@@ -53,10 +66,17 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-neutral-900">{event.title}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-lg font-semibold text-neutral-900">{event.title}</h1>
+          {isDistrictWideDrone && (
+            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              Bezirksweit
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <AddToCalendarLink eventId={event.id} />
-          {canManageEventsFor(user, event.organizationId) && !event.vehicleBookingId && !event.icsUid && (
+          {canManageThisEvent && !event.vehicleBookingId && !event.icsUid && (
             <Link href={`/kalender/${event.id}/bearbeiten`} className="text-sm text-brand hover:underline">
               Bearbeiten
             </Link>
@@ -87,7 +107,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
         )}
       </div>
 
-      {canManageEventsFor(user, event.organizationId) && (
+      {canManageThisEvent && (
         <div className="rounded-lg bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-neutral-900">Push-Benachrichtigung</h2>
           <SendEventPushButton eventId={event.id} />
