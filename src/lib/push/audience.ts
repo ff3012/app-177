@@ -43,10 +43,13 @@ export async function resolveAudienceUserIds(
 
 /**
  * Zielgruppe für die "Push-Benachrichtigung jetzt senden"-Option auf der Termin-Detailseite -
- * bewusst dieselbe Sichtbarkeitsregel wie canViewEvent/die Kalenderübersicht-Query (eigene
- * Feuerwehr ODER abschnittsweit, Drohnengruppe-Kategorie zusätzlich nur Mitglieder), nicht die
- * ORGANIZATION/DROHNENGRUPPE-Unterscheidung von NewsMessage, da ein Termin abschnittsweit sein
- * kann, ohne eine eigene NewsAudienceType-Zeile zu haben.
+ * bewusst dieselbe Sichtbarkeitsregel wie canViewEvent/die Kalenderübersicht-Query:
+ * - Kategorie DROHNENGRUPPE ist VÖLLIG UNABHÄNGIG von organizationId/isSectionWide (siehe
+ *   canViewEvent) - Zielgruppe ist ausschließlich über die Drohnengruppen-Mitgliedschaft bestimmt:
+ *   die eine Gruppe (droneGroupId gesetzt) oder JEDE Gruppe (droneGroupId null, bezirksweit).
+ * - Kategorie ALLGEMEIN bleibt bei der alten organisations-/abschnittsbasierten Regel.
+ * Nicht die ORGANIZATION/DROHNENGRUPPE-Unterscheidung von NewsMessage, da ein Termin abschnittsweit
+ * sein kann, ohne eine eigene NewsAudienceType-Zeile zu haben.
  */
 export async function resolveEventAudienceUserIds(event: {
   organizationId: string;
@@ -54,13 +57,22 @@ export async function resolveEventAudienceUserIds(event: {
   category: string;
   droneGroupId: string | null;
 }): Promise<string[]> {
-  // Defensiv: sollte nach Task 8 nie eintreten (jedes DROHNENGRUPPE-Event trägt eine droneGroupId),
-  // aber `droneMembership: { droneGroupId: undefined }` würde in Prisma dieses Feld GAR NICHT
-  // filtern (nested-relation-Filter mit undefined = "kein Filter auf dieses Feld", nicht "kein
-  // Treffer") und damit wieder auf alle Gruppen zurückweiten - exakt der Bug, der hier behoben wird.
-  // Per Live-Test bestätigt (siehe Task-12-Report), nicht nur angenommen: lieber niemanden
-  // benachrichtigen als versehentlich wieder bezirksweit an alle Drohnengruppen zu pushen.
-  if (event.category === 'DROHNENGRUPPE' && !event.droneGroupId) return [];
+  if (event.category === 'DROHNENGRUPPE') {
+    // droneGroupId null bedeutet bezirksweit (alle 4 Gruppen) - genau wie bei canViewEvent und bei
+    // NewsMessage.audienceDroneGroupId (siehe Kommentar dort im Schema), NICHT mehr "niemand". Das
+    // `is: {...}` (statt eines nackten `droneGroupId: ...`) verlangt weiterhin, dass die
+    // droneMembership-Relation überhaupt existiert - ein Feld auf undefined setzen würde Prisma bei
+    // einem verschachtelten Relations-Filter dazu bringen, dieses Feld GAR NICHT zu filtern (siehe
+    // resolveAudienceUserIds oben für den bereits live bestätigten Prisma-Bug dieser Form).
+    const members = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        droneMembership: { is: { droneGroupId: event.droneGroupId ?? undefined } },
+      },
+      select: { id: true },
+    });
+    return members.map((member) => member.id);
+  }
 
   // Die Organisations-/Abschnittshälfte der Sichtbarkeitsregel - identisch zu canViewEvent:
   // eigene Feuerwehr ODER (abschnittsweit UND im selben Abschnitt). Bei einem abschnittsweiten Termin
@@ -79,19 +91,8 @@ export async function resolveEventAudienceUserIds(event: {
     visibilityWhere = { homeOrganizationId: event.organizationId };
   }
 
-  // Bei Kategorie DROHNENGRUPPE kommt die Gruppenbedingung ZUSÄTZLICH zur obigen Hälfte dazu (UND,
-  // nicht STATT) - genau wie in canViewEvent. Vorher wurde nur auf die Gruppe gefiltert, wodurch ein
-  // NICHT abschnittsweiter Drohnengruppen-Termin einer einzelnen Feuerwehr an alle Mitglieder der
-  // Gruppe über alle ihre Feuerwehren hinweg gepusht wurde - also auch an Leute, die den Termin gar
-  // nicht öffnen können.
   const members = await prisma.user.findMany({
-    where: {
-      isActive: true,
-      ...visibilityWhere,
-      ...(event.category === 'DROHNENGRUPPE'
-        ? { droneMembership: { is: { droneGroupId: event.droneGroupId as string } } }
-        : {}),
-    },
+    where: { isActive: true, ...visibilityWhere },
     select: { id: true },
   });
   return members.map((member) => member.id);
