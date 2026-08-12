@@ -3,6 +3,11 @@ import { z } from 'zod';
 export const EVENT_CATEGORIES = ['ALLGEMEIN', 'DROHNENGRUPPE'] as const;
 export type EventCategoryOption = (typeof EVENT_CATEGORIES)[number];
 
+/** Sentinel-Wert für die "Alle Drohnengruppen (bezirksweit)"-Option im Formular-<select> - ein
+ * <select> kann nie ein echtes `null` übermitteln, deshalb dieser String, den parseEventFormData
+ * unten wieder auf `null` zurückführt (== bezirksweit, siehe Event.droneGroupId in schema.prisma). */
+export const BEZIRKSWEIT_DRONE_GROUP_VALUE = 'BEZIRKSWEIT';
+
 export const eventSchema = z
   .object({
     title: z.string().trim().min(1, 'Titel ist erforderlich.').max(200),
@@ -11,7 +16,7 @@ export const eventSchema = z
     startsAt: z.string().min(1, 'Start ist erforderlich.'),
     endsAt: z.string().min(1, 'Ende ist erforderlich.'),
     allDay: z.boolean(),
-    organizationId: z.string().min(1, 'Organisation ist erforderlich.'),
+    organizationId: z.string(),
     isSectionWide: z.boolean(),
     category: z.enum(EVENT_CATEGORIES),
     droneGroupId: z.string().nullable(),
@@ -20,19 +25,22 @@ export const eventSchema = z
     message: 'Ende darf nicht vor dem Start liegen.',
     path: ['endsAt'],
   })
-  // Ein Termin der Kategorie "Drohnengruppe" OHNE Gruppe wäre für niemanden sichtbar (jede
-  // Sichtbarkeits-/Push-Prüfung vergleicht exakt gegen die Gruppe des Nutzers) - er würde also still
-  // im Nichts landen. Serverseitig geprüft, nicht nur über die UI, damit auch ein direkter
-  // Server-Action-Aufruf keine solche Waise anlegen kann.
-  .refine((data) => data.category !== 'DROHNENGRUPPE' || Boolean(data.droneGroupId), {
-    message: 'Für einen Drohnengruppen-Termin muss eine Drohnengruppe gewählt werden.',
-    path: ['droneGroupId'],
+  .refine((data) => data.category === 'DROHNENGRUPPE' || data.organizationId.length > 0, {
+    // Für Kategorie DROHNENGRUPPE wird organizationId serverseitig abgeleitet (siehe
+    // kalender/actions.ts) - das Formular blendet die Organisation-Auswahl für diese Kategorie aus
+    // (siehe event-form.tsx), ein leerer Wert ist dort also erwartet, nicht fehlerhaft.
+    message: 'Organisation ist erforderlich.',
+    path: ['organizationId'],
   });
+// Absichtlich KEIN .refine mehr, das droneGroupId für Kategorie DROHNENGRUPPE als truthy verlangt:
+// `droneGroupId === null` ist für diese Kategorie jetzt ein gültiger, eigener Zustand ("bezirksweit,
+// alle 4 Gruppen" - siehe Design-Spec), kein fehlender Pflichtwert mehr.
 
 export type EventInput = z.infer<typeof eventSchema>;
 
 export function parseEventFormData(formData: FormData) {
   const rawCategory = String(formData.get('category') ?? 'ALLGEMEIN');
+  const rawDroneGroupId = String(formData.get('droneGroupId') ?? '');
   return {
     title: String(formData.get('title') ?? ''),
     description: String(formData.get('description') ?? ''),
@@ -45,6 +53,6 @@ export function parseEventFormData(formData: FormData) {
     category: (EVENT_CATEGORIES as readonly string[]).includes(rawCategory)
       ? (rawCategory as EventCategoryOption)
       : 'ALLGEMEIN',
-    droneGroupId: (formData.get('droneGroupId') as string) || null,
+    droneGroupId: rawDroneGroupId && rawDroneGroupId !== BEZIRKSWEIT_DRONE_GROUP_VALUE ? rawDroneGroupId : null,
   };
 }
