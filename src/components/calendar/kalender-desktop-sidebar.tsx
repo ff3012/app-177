@@ -1,13 +1,11 @@
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
-import { CopyLinkButton } from '@/components/ui/copy-link-button';
-import type { CalendarLayer, IcsLink, StatusFilter } from './kalender-with-layers';
+import type { CalendarLayer, StatusFilter } from './kalender-with-layers';
 
 interface KalenderDesktopSidebarProps {
   layers: CalendarLayer[];
   enabled: Record<string, boolean>;
   onToggle: (key: string, checked: boolean) => void;
   showDrone: boolean;
-  icsLinks: IcsLink[];
   statusFilter: StatusFilter;
   onStatusFilterChange: (filter: StatusFilter) => void;
   openCount: number;
@@ -33,7 +31,6 @@ export function KalenderDesktopSidebar({
   enabled,
   onToggle,
   showDrone,
-  icsLinks,
   statusFilter,
   onStatusFilterChange,
   openCount,
@@ -94,33 +91,6 @@ export function KalenderDesktopSidebar({
             <span className="h-3.5 w-6 shrink-0 rounded" style={{ backgroundColor: '#f2f2f4' }} />
             Offen
           </span>
-        </div>
-      </div>
-
-      <div className="rounded-lg bg-white p-3 shadow-sm">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">ICS Kalender Import</h2>
-        <div className="flex flex-col gap-2 text-sm">
-          {icsLinks.map((link) => (
-            <div key={link.href} className="flex items-center gap-1.5">
-              <svg
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="shrink-0 text-brand"
-                aria-hidden
-              >
-                <rect x="3" y="5" width="18" height="16" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 10h18M8 3v4M16 3v4" strokeLinecap="round" />
-              </svg>
-              <a href={link.href} className="text-brand hover:underline">
-                {link.label}
-              </a>
-              <CopyLinkButton text={link.copyText} />
-            </div>
-          ))}
         </div>
       </div>
     </div>

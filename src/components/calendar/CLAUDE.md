@@ -312,16 +312,33 @@ since that ignores the group-scoped/bezirksweit rule entirely. Current call site
   (fixed to use this function instead of `canManageEventsFor` during the final-review pass that also added
   this checklist — see the CLAUDE.md history/git log if you need the "before" shape).
 
-The .ics subscription links live in their own "ICS Kalender Import" card in the layout described above (not
-the page header) with a copy-to-clipboard button (`components/ui/copy-link-button.tsx`) next to each. There
-are two: the per-organization feed (keyed by `Organization.icsToken`, Abschnitt-scoped like the Kalender
-query itself) and a **legacy combined Abschnitts-feed** keyed by the single `ABSCHNITTS_ICS_TOKEN`
-environment variable. That second one has no `Organization` row of its own to scope by, so it is pinned to
+**Outbound .ics subscribe links — UI removed (security concern), backend routes still live.** The two
+outbound subscribe links (per-organization feed keyed by `Organization.icsToken`, and a **legacy combined
+Abschnitts-feed** keyed by the single `ABSCHNITTS_ICS_TOKEN` environment variable) used to be shown in a
+copy-to-clipboard "ICS Kalender Import" card in both `kalender-filters-content.tsx` (tablet/mobile) and
+`kalender-desktop-sidebar.tsx` (desktop `lg:` sidebar). The app owner flagged this as a security concern
+after Release 2.0.0 went live: both links are pure token-in-URL auth with no session check and no
+expiry/rotation UI (`Organization.icsToken` has no admin page to regenerate it), so a leaked/forwarded link
+grants indefinite, unauthenticated read access to that org's calendar. Per the app owner's explicit choice
+(UI-only removal, not a full kill — see the exchange around this decision), the card and its `icsLinks` prop
+were removed from both components and from `kalender/page.tsx` (which no longer builds the links or queries
+`homeAbschnitt`/`ABSCHNITTS_ICS_TOKEN` for that purpose) and `kalender-with-layers.tsx` (`IcsLink` type
+removed). **The backend route itself (`kalender/ics/[token]/route.ts`) and `Organization.icsToken` are
+deliberately left untouched** — anyone who already had a link subscribed in an external calendar app
+(Google Calendar, Outlook, ...) keeps receiving updates unaffected; only the in-app discoverability/copy
+affordance for *new* subscriptions is gone. If this is ever revisited toward a full fix, that would mean
+disabling/rotating the route's tokens too, which breaks those existing subscriptions — a bigger, deliberately
+deferred decision, not an oversight. `components/ui/copy-link-button.tsx` is unaffected — it's a shared
+component also used elsewhere (activation links, etc.), only these two call sites were removed.
+
+Formerly, that same card also documented: the per-organization feed is Abschnitt-scoped like the Kalender
+query itself; the legacy combined feed has no `Organization` row of its own to scope by, so it is pinned to
 one Abschnitt by `nummer` via `LEGACY_COMBINED_ICS_ABSCHNITT_NUMMER` (`lib/organizations/abschnitt.ts`,
-`'17700'` = Purkersdorf) — both its query and its calendar title — and `kalender/page.tsx` only offers the
-link to users whose own Abschnitt is that one. Don't "generalize" it back to all Abschnitte without giving
-it a real per-Abschnitt token first; before this was pinned it served every Abschnitt's section-wide events
-to everyone under a "Purkersdorf" label. Separately,
+`'17700'` = Purkersdorf) — both its query and its calendar title — and `kalender/page.tsx` used to only
+offer the link to users whose own Abschnitt is that one (that gating logic is gone along with the UI, since
+there's no longer a link to gate). Don't "generalize" the legacy token back to all Abschnitte without giving
+it a real per-Abschnitt token first if this feature is ever reintroduced; before it was pinned it served
+every Abschnitt's section-wide events to everyone under a "Purkersdorf" label. Separately,
 `src/app/(app)/kalender/[eventId]/ics/route.ts` serves a **single-event** .ics download (session-authenticated,
 same organization/category visibility check as the main Kalender query) so a real file response — not a
 `data:` URI — triggers the native "add to calendar" flow on mobile. `components/calendar/add-to-calendar-link.tsx`

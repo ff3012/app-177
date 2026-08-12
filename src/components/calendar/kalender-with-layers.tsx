@@ -13,18 +13,11 @@ export interface CalendarLayer {
   label: string;
 }
 
-export interface IcsLink {
-  label: string;
-  href: string;
-  copyText: string;
-}
-
 export type StatusFilter = 'ALLE' | 'OFFEN' | 'ZUGESAGT';
 
 interface KalenderWithLayersProps {
   events: CalendarEventInput[];
   layers: CalendarLayer[];
-  icsLinks: IcsLink[];
 }
 
 type ViewMode = 'calendar' | 'list';
@@ -65,7 +58,7 @@ function FilterIcon({ hasHiddenLayers }: { hasHiddenLayers: boolean }) {
 // Komponente (KalenderDesktopSidebar) statt KalenderFiltersContent - die Legende entfällt dort
 // zugunsten einer Fußzeile, eine neue "Nur anzeigen"-Statusfilter-Karte kommt dazu. Unterhalb lg:
 // bleibt KalenderFiltersContent (BottomSheet) unverändert und bekommt nie einen statusFilter.
-export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLayersProps) {
+export function KalenderWithLayers({ events, layers }: KalenderWithLayersProps) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(layers.map((layer) => [layer.key, true])),
   );
@@ -130,7 +123,6 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
           enabled={enabled}
           onToggle={handleToggle}
           showDrone={showDrone}
-          icsLinks={icsLinks}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           openCount={openCount}
@@ -143,7 +135,6 @@ export function KalenderWithLayers({ events, layers, icsLinks }: KalenderWithLay
           enabled={enabled}
           onToggle={handleToggle}
           showDrone={showDrone}
-          icsLinks={icsLinks}
         />
       </BottomSheet>
 
