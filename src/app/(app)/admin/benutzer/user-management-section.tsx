@@ -204,7 +204,7 @@ export function UserManagementSection({
   users: UserRow[];
   organizations: Organization[];
   dienstgrade: DienstgradOption[];
-  droneGroups: { id: string; name: string }[];
+  droneGroups: { id: string; name: string; isActive: boolean }[];
   initialQuery: string;
   initialFeuerwehr: string;
   initialRolle: string;
@@ -654,7 +654,7 @@ export function UserManagementSection({
               Feuerwehr ändern
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              {Object.entries(groupByAbschnitt(organizations)).map(([abschnittName, orgs]) => (
+              {Object.entries(groupByAbschnitt(organizations.filter((org) => org.isActive !== false))).map(([abschnittName, orgs]) => (
                 <DropdownMenuGroup key={abschnittName}>
                   <DropdownMenuLabel>{abschnittName}</DropdownMenuLabel>
                   {orgs.map((org) => (

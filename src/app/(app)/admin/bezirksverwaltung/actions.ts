@@ -76,7 +76,7 @@ export async function renameFeuerwehr(
   assertPermission(canManageFeuerwehrenBezirksweit(user));
 
   const existing = await prisma.organization.findUnique({ where: { id: organizationId } });
-  if (!existing) {
+  if (!existing || existing.type !== 'FEUERWEHR') {
     return { error: 'Feuerwehr wurde nicht gefunden.' };
   }
 
@@ -107,6 +107,9 @@ export async function toggleFeuerwehrActive(organizationId: string): Promise<voi
   assertPermission(canManageFeuerwehrenBezirksweit(user));
 
   const existing = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  if (existing.type !== 'FEUERWEHR') {
+    throw new Error('Ungültige Organisation.');
+  }
   await prisma.organization.update({ where: { id: organizationId }, data: { isActive: !existing.isActive } });
   revalidate();
 }

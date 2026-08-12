@@ -75,7 +75,7 @@ interface UserFormSheetProps {
   mode: 'create' | 'edit';
   organizations: OrganizationOption[];
   dienstgrade: DienstgradOption[];
-  droneGroups: { id: string; name: string }[];
+  droneGroups: { id: string; name: string; isActive: boolean }[];
   viewerIsBezirksAdmin: boolean;
   viewerIsBezirksDrohnenAdmin: boolean;
   target?: UserSheetTarget;
@@ -641,11 +641,13 @@ export function UserFormSheet({
                                     <SelectItem value="NONE" disabled>
                                       Gruppe wählen
                                     </SelectItem>
-                                    {droneGroups.map((group) => (
-                                      <SelectItem key={group.id} value={group.id}>
-                                        {group.name}
-                                      </SelectItem>
-                                    ))}
+                                    {droneGroups
+                                      .filter((group) => group.isActive || group.id === target?.droneGroupId)
+                                      .map((group) => (
+                                        <SelectItem key={group.id} value={group.id}>
+                                          {group.isActive ? group.name : `${group.name} (deaktiviert)`}
+                                        </SelectItem>
+                                      ))}
                                   </SelectContent>
                                 </Select>
                               )}

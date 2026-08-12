@@ -71,7 +71,10 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       include: { parent: { select: { id: true, shortName: true, name: true } } },
     }),
     prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
-    prisma.droneGroup.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, organizationId: true } }),
+    prisma.droneGroup.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, organizationId: true, isActive: true },
+    }),
   ]);
 
   // Nur die Gruppen anbieten, in die dieser Admin tatsächlich jemanden aufnehmen darf. Vorher wurden
@@ -82,7 +85,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   // laden, dann filtern.
   const droneGroups = allDroneGroups
     .filter((group) => canManageDroneGroupFor(currentUser, group))
-    .map((group) => ({ id: group.id, name: group.name }));
+    .map((group) => ({ id: group.id, name: group.name, isActive: group.isActive }));
 
   const rows: UserRow[] = users.map((u) => {
     const adminOrgNames = u.memberships.map((m) => m.organization.shortName ?? m.organization.name);
