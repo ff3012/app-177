@@ -22,7 +22,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { UserFormSheet, type UserSheetTarget } from '@/components/admin/user-form-sheet';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
@@ -50,6 +49,7 @@ export interface UserRow {
   homeOrganizationId: string;
   isAdmin: boolean;
   adminFor: string;
+  adminForShort: string;
   adminOrgIds: string[];
   droneLabel: string;
   droneRole: DroneRoleOption;
@@ -108,7 +108,6 @@ const STATUS_BADGE_CLASS: Record<UserStatus, string> = {
   INAKTIV: 'border-transparent bg-warning-subtle text-warning-text',
   DEAKTIVIERT: 'border-transparent bg-danger-subtle text-danger',
 };
-const STATUS_SORT_RANK: Record<UserStatus, number> = { INAKTIV: 0, DEAKTIVIERT: 1, AKTIV: 2 };
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
@@ -124,17 +123,31 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'lastActive', label: 'Zuletzt aktiv' },
 ];
 
-function compareRows(a: UserRow, b: UserRow, key: SortKey): number {
-  switch (key) {
-    case 'pushCount':
-      return a.pushCount - b.pushCount;
-    case 'status':
-      return STATUS_SORT_RANK[getUserStatus(a)] - STATUS_SORT_RANK[getUserStatus(b)];
-    case 'lastActive':
-      return (a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0) - (b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0);
-    default:
-      return a[key].localeCompare(b[key], 'de');
-  }
+/** Benutzerverwaltung-Breite-Brief.md §2: das Spaltenraster ist EINE Konstante, von Kopf- und
+ * Datenzeilen geteilt statt pro Zeile wiederholt. Drei Stufen (Basis/xl=1280px/1600px) statt
+ * Tailwinds Default-Skala, weil der Brief genau bei 1600px eine zusätzliche Stufe verlangt, die es
+ * dort nicht gibt - min-[1600px]: ist Tailwinds Arbitrary-Variant-Syntax für einen Wert außerhalb
+ * der konfigurierten Skala, ohne tailwind.config.ts anzufassen (dieser Breakpoint wird nirgends
+ * sonst gebraucht). Spaltenreihenfolge folgt dem Mockup (Benutzerverwaltung Desktop.dc.html):
+ * Checkbox/Dienstgrad/Name/Feuerwehr/Rolle/[E-Mail/Drohnen]/[Zuletzt aktiv/Push]/Status/Menü -
+ * Status wandert damit hinter Push/Zuletzt-aktiv, anders als in der bisherigen <table>. */
+const USERS_GRID_COLS =
+  'grid-cols-[44px_78px_minmax(190px,1.15fr)_minmax(150px,.9fr)_minmax(210px,1.25fr)_90px_44px] ' +
+  'xl:grid-cols-[44px_78px_minmax(190px,1.15fr)_minmax(150px,.9fr)_minmax(210px,1.25fr)_minmax(230px,1.4fr)_112px_90px_44px] ' +
+  'min-[1600px]:grid-cols-[44px_78px_minmax(190px,1.15fr)_minmax(150px,.9fr)_minmax(210px,1.25fr)_minmax(230px,1.4fr)_112px_128px_76px_90px_44px]';
+const USERS_GRID_ROW = `grid items-center gap-x-3.5 ${USERS_GRID_COLS} px-5`;
+
+function SortHeaderButton({ label, sortKey, active, dir, onClick }: { label: string; sortKey: SortKey; active: boolean; dir: 'asc' | 'desc'; onClick: (key: SortKey) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(sortKey)}
+      className={`text-left text-[11px] font-semibold uppercase tracking-[.08em] hover:text-ink ${active ? 'text-ink' : 'text-ink-muted'}`}
+    >
+      {label}
+      {active ? (dir === 'asc' ? ' ▲' : ' ▼') : ''}
+    </button>
+  );
 }
 
 function formatPushTooltip(dates: string[]): string {
@@ -186,6 +199,7 @@ export function UserManagementSection({
   droneGroups,
   initialQuery,
   initialFeuerwehr,
+  initialDrohnengruppe,
   initialRolle,
   initialStatus,
   initialSort,
@@ -200,6 +214,11 @@ export function UserManagementSection({
   isFullAdmin,
   viewerIsBezirksAdmin,
   viewerIsBezirksDrohnenAdmin,
+  totalUsersCount,
+  totalOrgsCount,
+  filteredCount,
+  page,
+  pageSize,
 }: {
   users: UserRow[];
   organizations: Organization[];
@@ -207,6 +226,7 @@ export function UserManagementSection({
   droneGroups: { id: string; name: string; isActive: boolean }[];
   initialQuery: string;
   initialFeuerwehr: string;
+  initialDrohnengruppe: string;
   initialRolle: string;
   initialStatus: string;
   initialSort: string;
@@ -221,6 +241,11 @@ export function UserManagementSection({
   isFullAdmin: boolean;
   viewerIsBezirksAdmin: boolean;
   viewerIsBezirksDrohnenAdmin: boolean;
+  totalUsersCount: number;
+  totalOrgsCount: number;
+  filteredCount: number;
+  page: number;
+  pageSize: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -238,26 +263,57 @@ export function UserManagementSection({
 
   const [queryInput, setQueryInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
-  const [feuerwehr, setFeuerwehr] = useState(initialFeuerwehr || 'ALLE');
-  const [abschnitt, setAbschnitt] = useState(initialAbschnitt || 'ALLE');
-  const [rolle, setRolle] = useState<SimpleFilter>((initialRolle as SimpleFilter) || 'ALLE');
-  const [status, setStatus] = useState<StatusFilter>((initialStatus as StatusFilter) || 'ALLE');
+  const [feuerwehr, setFeuerwehrState] = useState(initialFeuerwehr || 'ALLE');
+  const [drohnengruppe, setDrohnengruppeState] = useState(initialDrohnengruppe || 'ALLE');
+  const [abschnitt, setAbschnittState] = useState(initialAbschnitt || 'ALLE');
+  const [rolle, setRolleState] = useState<SimpleFilter>((initialRolle as SimpleFilter) || 'ALLE');
+  const [status, setStatusState] = useState<StatusFilter>((initialStatus as StatusFilter) || 'ALLE');
   const [sortKey, setSortKey] = useState<SortKey>(
     SORT_OPTIONS.some((o) => o.key === initialSort) ? (initialSort as SortKey) : 'name',
   );
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialDir);
+  const [pageState, setPageState] = useState(page);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Benutzerverwaltung-Breite-Brief.md §5: Filtern/Sortieren gilt für die GESAMTE (jetzt
+  // serverseitige) Ergebnismenge, nicht nur die aktuell sichtbare Seite - jede Filter-/
+  // Sortier-Änderung setzt die Seite deshalb auf 1 zurück. Nur die Zurück/Weiter-Buttons ändern
+  // pageState ohne diese Funktion.
+  function handleFilterChange() {
+    setPageState(1);
+  }
+
   function handleAbschnittChange(value: string) {
-    setAbschnitt(value);
-    setFeuerwehr('ALLE');
+    setAbschnittState(value);
+    setFeuerwehrState('ALLE');
+    handleFilterChange();
+  }
+  function setFeuerwehr(value: string) {
+    setFeuerwehrState(value);
+    handleFilterChange();
+  }
+  function setDrohnengruppe(value: string) {
+    setDrohnengruppeState(value);
+    handleFilterChange();
+  }
+  function setRolle(value: SimpleFilter) {
+    setRolleState(value);
+    handleFilterChange();
+  }
+  function setStatus(value: StatusFilter) {
+    setStatusState(value);
+    handleFilterChange();
   }
 
   const feuerwehrOptions = useMemo(
     () => (abschnitt === 'ALLE' ? organizations : organizations.filter((org) => org.abschnittId === abschnitt)),
     [organizations, abschnitt],
+  );
+  const drohnengruppeOptions = useMemo(
+    () => droneGroups.map((g) => ({ ...g, label: g.isActive ? g.name : `${g.name} (deaktiviert)` })),
+    [droneGroups],
   );
 
   // Reagiert auf eine Änderung des GELTUNGSBEREICHS selbst (nicht auf eine Änderung dieses Filters) -
@@ -274,22 +330,28 @@ export function UserManagementSection({
     if (!isFullAdmin) return;
     const bereich = searchParams.get('ebene') === 'abschnitt' ? searchParams.get('bereich') : null;
     const match = bereich ? abschnitte.find((a) => a.id === bereich) : undefined;
-    setAbschnitt(match ? match.id : 'ALLE');
-    setFeuerwehr('ALLE');
+    setAbschnittState(match ? match.id : 'ALLE');
+    setFeuerwehrState('ALLE');
+    setPageState(1);
   }, [searchParams, isFullAdmin, abschnitte]);
 
   // Suchfeld 300ms debounced (Verwaltung-Brief.md 3.2), Rest der Filter/Sortierung wirkt sofort.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setQuery(queryInput), 300);
+    debounceRef.current = setTimeout(() => {
+      setQuery(queryInput);
+      setPageState(1);
+    }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [queryInput]);
 
-  // Filter-/Sortierzustand in die URL gespiegelt, damit ein Link teilbar ist (Erstgebrauch von
-  // URL-Sync in dieser Codebase) - reiner Lesezeichen-Mechanismus, kein Server-Refetch-Trigger:
-  // das gefilterte/sortierte Array bleibt komplett clientseitig berechnet (siehe unten).
+  // Filter-/Sortier-/Seitenzustand in die URL gespiegelt (Erstgebrauch von URL-Sync in dieser
+  // Codebase) - seit §5 ist das kein reiner Lesezeichen-Mechanismus mehr, sondern der eigentliche
+  // Auslöser für den serverseitigen Refetch: page.tsx liest genau diese Parameter und baut daraus
+  // where/orderBy/skip/take. router.replace auf eine Route, deren Server Component searchParams
+  // liest, lässt Next.js diese Component serverseitig neu ausführen.
   useEffect(() => {
     const params = new URLSearchParams();
     for (const key of ['ebene', 'bereich']) {
@@ -307,39 +369,16 @@ export function UserManagementSection({
       params.set('abschnitt', 'ALLE');
     }
     if (feuerwehr !== 'ALLE') params.set('feuerwehr', feuerwehr);
+    if (drohnengruppe !== 'ALLE') params.set('drohnengruppe', drohnengruppe);
     if (rolle !== 'ALLE') params.set('rolle', rolle);
     if (status !== 'ALLE') params.set('status', status);
     if (sortKey !== 'name') params.set('sort', sortKey);
     if (sortDir !== 'asc') params.set('dir', sortDir);
+    if (pageState !== 1) params.set('page', String(pageState));
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, abschnitt, feuerwehr, rolle, status, sortKey, sortDir, searchParams]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const abschnittOrgIds = abschnitt === 'ALLE' ? null : new Set([abschnitt, ...feuerwehrOptions.map((o) => o.id)]);
-    return users.filter((u) => {
-      if (abschnittOrgIds && !abschnittOrgIds.has(u.homeOrganizationId)) return false;
-      if (feuerwehr !== 'ALLE' && u.homeOrganizationId !== feuerwehr) return false;
-      if (rolle === 'JA' && !u.isAdmin) return false;
-      if (rolle === 'NEIN' && u.isAdmin) return false;
-      if (status !== 'ALLE' && getUserStatus(u) !== status) return false;
-      if (!q) return true;
-      return [u.name, u.email, u.stbNr, u.phone, u.homeOrg, u.adminFor, u.droneLabel].some((field) =>
-        field.toLowerCase().includes(q),
-      );
-    });
-  }, [users, query, abschnitt, feuerwehrOptions, feuerwehr, rolle, status]);
-
-  const sorted = useMemo(() => {
-    const copy = [...filtered];
-    copy.sort((a, b) => {
-      const cmp = compareRows(a, b, sortKey);
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return copy;
-  }, [filtered, sortKey, sortDir]);
+  }, [query, abschnitt, feuerwehr, drohnengruppe, rolle, status, sortKey, sortDir, pageState, searchParams]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -348,6 +387,7 @@ export function UserManagementSection({
       setSortKey(key);
       setSortDir('asc');
     }
+    handleFilterChange();
   }
 
   function toggleSelected(id: string, checked: boolean) {
@@ -359,13 +399,13 @@ export function UserManagementSection({
     });
   }
 
-  const allVisibleSelected = sorted.length > 0 && sorted.every((u) => selectedIds.has(u.id));
-  const someVisibleSelected = sorted.some((u) => selectedIds.has(u.id));
+  const allVisibleSelected = users.length > 0 && users.every((u) => selectedIds.has(u.id));
+  const someVisibleSelected = users.some((u) => selectedIds.has(u.id));
 
   function toggleSelectAll(checked: boolean) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      for (const u of sorted) {
+      for (const u of users) {
         if (checked) next.add(u.id);
         else next.delete(u.id);
       }
@@ -373,9 +413,13 @@ export function UserManagementSection({
     });
   }
 
-  const activeFilterCount = [abschnitt !== 'ALLE', feuerwehr !== 'ALLE', rolle !== 'ALLE', status !== 'ALLE'].filter(
-    Boolean,
-  ).length;
+  const activeFilterCount = [
+    abschnitt !== 'ALLE',
+    feuerwehr !== 'ALLE',
+    drohnengruppe !== 'ALLE',
+    rolle !== 'ALLE',
+    status !== 'ALLE',
+  ].filter(Boolean).length;
 
   // Verwaltung-Brief.md 5: Filter auf Mobile hinter einem Symbol in der Kopfzeile statt inline -
   // registriert über denselben MobileHeaderContext-Actionslot, den Kalender für sein Filter-Icon
@@ -401,10 +445,12 @@ export function UserManagementSection({
   }, [activeFilterCount]);
 
   function resetFilters() {
-    setAbschnitt('ALLE');
-    setFeuerwehr('ALLE');
-    setRolle('ALLE');
-    setStatus('ALLE');
+    setAbschnittState('ALLE');
+    setFeuerwehrState('ALLE');
+    setDrohnengruppeState('ALLE');
+    setRolleState('ALLE');
+    setStatusState('ALLE');
+    handleFilterChange();
   }
 
   async function handleBulkSetActive(nextActive: boolean) {
@@ -433,15 +479,19 @@ export function UserManagementSection({
     router.refresh();
   }
 
-  const homeOrgCount = useMemo(() => new Set(users.map((u) => u.homeOrganizationId)).size, [users]);
-
   function openEdit(id: string) {
     setSheetState({ mode: 'edit', userId: id });
   }
 
+  const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
+  const rangeFrom = filteredCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeTo = Math.min(page * pageSize, filteredCount);
+
   // Select-Filter + Chips als gemeinsamer JSX-Ausdruck (nicht als eigene Komponente mit
   // Props) - läuft sowohl in der Desktop-Inline-Zeile als auch im mobilen Bottom Sheet
   // unverändert über denselben Closure-Zustand (feuerwehr/rolle/status/...), keine doppelte Logik.
+  // §4: Filterleiste in einer Zeile mit fixen Select-Breiten (176/176/176/148/136px) ab md: - auf
+  // Mobile bleibt jedes Select w-full (siehe Sheet weiter unten), fixe Breiten gelten nur inline.
   const filterControls = (
     <>
       {isFullAdmin && (
@@ -451,6 +501,7 @@ export function UserManagementSection({
           onChange={handleAbschnittChange}
           placeholder="Abschnitt"
           allLabel="Alle Abschnitte"
+          triggerClassName="w-full md:w-[176px]"
         />
       )}
 
@@ -460,10 +511,25 @@ export function UserManagementSection({
         onChange={setFeuerwehr}
         placeholder="Feuerwehr"
         allLabel="Alle Feuerwehren"
+        triggerClassName="w-full md:w-[176px]"
       />
 
+      <Select value={drohnengruppe} onValueChange={setDrohnengruppe}>
+        <SelectTrigger className="w-full md:w-[176px]">
+          <SelectValue placeholder="Drohnengruppe" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALLE">Alle Drohnengruppen</SelectItem>
+          {drohnengruppeOptions.map((g) => (
+            <SelectItem key={g.id} value={g.id}>
+              {g.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
       <Select value={rolle} onValueChange={(value) => setRolle(value as SimpleFilter)}>
-        <SelectTrigger className="w-full md:w-auto">
+        <SelectTrigger className="w-full md:w-[148px]">
           <SelectValue placeholder="Rolle" />
         </SelectTrigger>
         <SelectContent>
@@ -474,7 +540,7 @@ export function UserManagementSection({
       </Select>
 
       <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-        <SelectTrigger className="w-full md:w-auto">
+        <SelectTrigger className="w-full md:w-[136px]">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
@@ -484,51 +550,62 @@ export function UserManagementSection({
           <SelectItem value="DEAKTIVIERT">Deaktiviert</SelectItem>
         </SelectContent>
       </Select>
-
-      <div className="flex flex-wrap items-center gap-2.5">
-        {abschnitt !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => handleAbschnittChange('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {abschnitte.find((a) => a.id === abschnitt)?.name ?? 'Abschnitt'} ✕
-          </button>
-        )}
-        {feuerwehr !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => setFeuerwehr('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {organizations.find((o) => o.id === feuerwehr)?.name ?? 'Feuerwehr'} ✕
-          </button>
-        )}
-        {rolle !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => setRolle('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {rolle === 'JA' ? 'Admin' : 'Mitglied'} ✕
-          </button>
-        )}
-        {status !== 'ALLE' && (
-          <button
-            type="button"
-            onClick={() => setStatus('ALLE')}
-            className="flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs text-ink-muted hover:bg-line"
-          >
-            {STATUS_LABEL[status as UserStatus]} ✕
-          </button>
-        )}
-        {activeFilterCount > 1 && (
-          <button type="button" onClick={resetFilters} className="text-xs font-medium text-brand hover:underline">
-            Alle zurücksetzen
-          </button>
-        )}
-      </div>
     </>
+  );
+
+  const filterChips = (
+    <div className="flex flex-wrap items-center gap-2">
+      {abschnitt !== 'ALLE' && (
+        <button
+          type="button"
+          onClick={() => handleAbschnittChange('ALLE')}
+          className="flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[13px] text-ink-muted hover:bg-line"
+        >
+          {abschnitte.find((a) => a.id === abschnitt)?.name ?? 'Abschnitt'} <span className="text-ink-faint">×</span>
+        </button>
+      )}
+      {feuerwehr !== 'ALLE' && (
+        <button
+          type="button"
+          onClick={() => setFeuerwehr('ALLE')}
+          className="flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[13px] text-ink-muted hover:bg-line"
+        >
+          {organizations.find((o) => o.id === feuerwehr)?.name ?? 'Feuerwehr'} <span className="text-ink-faint">×</span>
+        </button>
+      )}
+      {drohnengruppe !== 'ALLE' && (
+        <button
+          type="button"
+          onClick={() => setDrohnengruppe('ALLE')}
+          className="flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[13px] text-ink-muted hover:bg-line"
+        >
+          {droneGroups.find((g) => g.id === drohnengruppe)?.name ?? 'Drohnengruppe'} <span className="text-ink-faint">×</span>
+        </button>
+      )}
+      {rolle !== 'ALLE' && (
+        <button
+          type="button"
+          onClick={() => setRolle('ALLE')}
+          className="flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[13px] text-ink-muted hover:bg-line"
+        >
+          {rolle === 'JA' ? 'Admin' : 'Mitglied'} <span className="text-ink-faint">×</span>
+        </button>
+      )}
+      {status !== 'ALLE' && (
+        <button
+          type="button"
+          onClick={() => setStatus('ALLE')}
+          className="flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[13px] text-ink-muted hover:bg-line"
+        >
+          Status: {STATUS_LABEL[status as UserStatus]} <span className="text-ink-faint">×</span>
+        </button>
+      )}
+      {activeFilterCount > 0 && (
+        <button type="button" onClick={resetFilters} className="text-[13px] font-semibold text-brand hover:underline">
+          Alle zurücksetzen
+        </button>
+      )}
+    </div>
   );
 
   const sheetTargetRow = sheetState?.mode === 'edit' ? users.find((u) => u.id === sheetState.userId) : undefined;
@@ -566,7 +643,7 @@ export function UserManagementSection({
         <div>
           <h1 className="text-[28px] font-bold text-ink">Benutzer</h1>
           <p className="text-sm text-ink-faint">
-            {users.length} Mitglieder in {homeOrgCount} Feuerwehren
+            {totalUsersCount} Mitglieder in {totalOrgsCount} Feuerwehren · {users.length} angezeigt
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -601,39 +678,46 @@ export function UserManagementSection({
       </div>
       <AdminMobileTabs items={adminNavItems} />
 
-      {/* Verwaltung-Brief.md 5: zwei Kennzahlkarten nebeneinander über der mobilen Kartenliste. */}
+      {/* Verwaltung-Brief.md 5: zwei Kennzahlkarten nebeneinander über der mobilen Kartenliste -
+          seit §5 aus den serverseitigen Gesamtzahlen statt aus dem (jetzt nur noch seitenweise
+          geladenen) users-Array, sonst würde "Mitglieder gesamt" auf Mobile plötzlich nur die
+          aktuelle Seite zeigen. */}
       <div className="flex gap-3 md:hidden">
-        <StatCard label="Mitglieder gesamt" value={users.length} />
-        <StatCard label="Davon inaktiv" value={users.filter((u) => !u.isActive).length} />
+        <StatCard label="Mitglieder gesamt" value={totalUsersCount} />
+        <StatCard label="Auf dieser Seite" value={users.length} />
       </div>
 
-      {/* Suchfeld bleibt auf Mobile inline sichtbar (primärer, meistgenutzter Filter) - nur die
-          drei Select-Filter + Chips wandern hinter das Kopfzeilen-Symbol ins Bottom Sheet, analog
-          zu "Inhalt zuerst, Einstellungen dahinter" aus Mobile-Brief.md/Kalender. */}
-      <div className="relative w-full md:max-w-[320px]">
-        <svg
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
-          aria-hidden
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" strokeLinecap="round" />
-        </svg>
-        <Input
-          type="search"
-          value={queryInput}
-          onChange={(event) => setQueryInput(event.target.value)}
-          placeholder="Benutzer suchen…"
-          className="pl-8"
-        />
+      {/* §4: eine Zeile ab md: - Suchfeld (flex 1 1 340px, max 400px) + fixe Selects, alles in
+          einer weißen Karte über der Tabelle statt frei auf dem Grund. Auf Mobile bleibt das
+          Suchfeld inline sichtbar (primärer Filter), die Selects wandern ins Bottom Sheet. */}
+      <div className="flex flex-col gap-2.5 rounded-lg bg-surface p-3.5 shadow-card md:gap-3">
+        <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-2.5">
+          <div className="relative w-full md:min-w-[220px] md:max-w-[400px] md:flex-[1_1_340px]">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+            </svg>
+            <Input
+              type="search"
+              value={queryInput}
+              onChange={(event) => setQueryInput(event.target.value)}
+              placeholder="Benutzer suchen…"
+              className="pl-8"
+            />
+          </div>
+          <div className="hidden flex-wrap items-center gap-2.5 md:flex">{filterControls}</div>
+        </div>
+        {activeFilterCount > 0 && <div className="hidden md:block">{filterChips}</div>}
       </div>
-
-      <div className="hidden flex-wrap items-center gap-2.5 md:flex">{filterControls}</div>
 
       {someVisibleSelected && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-subtle px-4 py-2.5 text-sm">
@@ -700,7 +784,7 @@ export function UserManagementSection({
         </button>
       </div>
 
-      {users.length === 0 ? (
+      {totalUsersCount === 0 ? (
         // Verwaltung-Brief.md 3.4: "ganz leer" ist ein eigener Zustand, unterscheidet sich von
         // "leer nach Filterung" unten - primäre Aktion ist hier der Import, nicht "zurücksetzen".
         <div className="flex flex-col items-center gap-3 rounded-lg bg-surface p-8 text-center shadow-card">
@@ -722,7 +806,7 @@ export function UserManagementSection({
             </button>
           )}
         </div>
-      ) : sorted.length === 0 ? (
+      ) : filteredCount === 0 ? (
         <div className="rounded-lg bg-surface p-6 text-center text-[15px] text-ink-muted shadow-card">
           Keine Benutzer entsprechen den Filtern.{' '}
           {(activeFilterCount > 0 || query) && (
@@ -741,131 +825,137 @@ export function UserManagementSection({
       ) : (
         <>
           <div className="flex flex-col rounded-lg bg-surface shadow-card md:hidden">
-            {sorted.map((u) => (
+            {users.map((u) => (
               <UserCard key={u.id} user={u} onSelect={openEdit} />
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-lg bg-surface shadow-card md:block">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-                  <TableHead className="w-10">
+          {/* §2/§3: CSS-Grid statt <table>+overflow-x-auto - Textspalten wachsen mit dem Fenster
+              (minmax), Wertspalten bleiben fix. Spaltensichtbarkeit siehe USERS_GRID_COLS. */}
+          <div className="hidden rounded-lg bg-surface shadow-card md:block">
+            <div className={`${USERS_GRID_ROW} border-b-2 border-line-strong py-3`}>
+              <Checkbox
+                checked={allVisibleSelected}
+                onCheckedChange={(checked) => toggleSelectAll(checked === true)}
+                aria-label="Alle auswählen"
+              />
+              <SortHeaderButton label="Grad" sortKey="dienstgrad" active={sortKey === 'dienstgrad'} dir={sortDir} onClick={toggleSort} />
+              <SortHeaderButton label="Name" sortKey="name" active={sortKey === 'name'} dir={sortDir} onClick={toggleSort} />
+              <SortHeaderButton label="Feuerwehr" sortKey="homeOrg" active={sortKey === 'homeOrg'} dir={sortDir} onClick={toggleSort} />
+              <SortHeaderButton label="Rolle" sortKey="adminFor" active={sortKey === 'adminFor'} dir={sortDir} onClick={toggleSort} />
+              <div className="hidden min-w-0 xl:block">
+                <SortHeaderButton label="E-Mail" sortKey="email" active={sortKey === 'email'} dir={sortDir} onClick={toggleSort} />
+              </div>
+              <div className="hidden xl:block">
+                <SortHeaderButton label="Drohnen" sortKey="droneLabel" active={sortKey === 'droneLabel'} dir={sortDir} onClick={toggleSort} />
+              </div>
+              <div className="hidden min-[1600px]:block">
+                <SortHeaderButton label="Zuletzt aktiv" sortKey="lastActive" active={sortKey === 'lastActive'} dir={sortDir} onClick={toggleSort} />
+              </div>
+              <div className="hidden min-[1600px]:block">
+                <SortHeaderButton label="Push" sortKey="pushCount" active={sortKey === 'pushCount'} dir={sortDir} onClick={toggleSort} />
+              </div>
+              <SortHeaderButton label="Status" sortKey="status" active={sortKey === 'status'} dir={sortDir} onClick={toggleSort} />
+              <span />
+            </div>
+
+            {users.map((u) => {
+              const status = getUserStatus(u);
+              const lastLoginDate = u.lastLoginAt ? new Date(u.lastLoginAt) : null;
+              const relative = formatRelativeDate(lastLoginDate, { fallback: '–' });
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => openEdit(u.id)}
+                  className={`${USERS_GRID_ROW} cursor-pointer border-b border-line py-[13px] last:border-0 hover:bg-surface-sunken`}
+                >
+                  <span onClick={(event) => event.stopPropagation()}>
                     <Checkbox
-                      checked={allVisibleSelected}
-                      onCheckedChange={(checked) => toggleSelectAll(checked === true)}
-                      aria-label="Alle auswählen"
+                      checked={selectedIds.has(u.id)}
+                      onCheckedChange={(checked) => toggleSelected(u.id, checked === true)}
+                      aria-label={`${u.name} auswählen`}
                     />
-                  </TableHead>
-                  <TableHead className="w-20">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('dienstgrad')}
-                      className={`text-[11px] font-semibold uppercase tracking-[.08em] hover:text-ink ${
-                        sortKey === 'dienstgrad' ? 'text-ink' : 'text-ink-muted'
-                      }`}
-                    >
-                      Dienstgrad
-                      {sortKey === 'dienstgrad' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                    </button>
-                  </TableHead>
-                  {(['name', 'homeOrg', 'adminFor', 'status'] as SortKey[]).map((key) => {
-                    const option = SORT_OPTIONS.find((o) => o.key === key)!;
-                    const active = key === sortKey;
-                    return (
-                      <TableHead key={key}>
-                        <button
-                          type="button"
-                          onClick={() => toggleSort(key)}
-                          className={`text-[11px] font-semibold uppercase tracking-[.08em] hover:text-ink ${active ? 'text-ink' : 'text-ink-muted'}`}
-                        >
-                          {option.label}
-                          {active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                        </button>
-                      </TableHead>
-                    );
-                  })}
-                  {(['email', 'droneLabel', 'pushCount', 'lastActive'] as SortKey[]).map((key) => {
-                    const option = SORT_OPTIONS.find((o) => o.key === key)!;
-                    const active = key === sortKey;
-                    return (
-                      <TableHead key={key} className="hidden xl:table-cell">
-                        <button
-                          type="button"
-                          onClick={() => toggleSort(key)}
-                          className={`text-[11px] font-semibold uppercase tracking-[.08em] hover:text-ink ${active ? 'text-ink' : 'text-ink-muted'}`}
-                        >
-                          {key === 'pushCount' ? 'Push' : option.label}
-                          {active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                        </button>
-                      </TableHead>
-                    );
-                  })}
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.map((u) => (
-                  <TableRow
-                    key={u.id}
-                    onClick={() => openEdit(u.id)}
-                    className="h-[52px] cursor-pointer border-line hover:bg-surface-sunken"
+                  </span>
+                  <span className="text-ink-muted">{u.dienstgrad || '–'}</span>
+                  <span className="min-w-0">
+                    <div className="font-semibold text-ink">{u.name}</div>
+                    <div className="truncate text-xs text-ink-muted xl:hidden">{u.email}</div>
+                  </span>
+                  <span className="min-w-0 truncate text-ink">{u.homeOrg}</span>
+                  <span className="min-w-0 truncate text-ink-faint" title={u.adminFor}>
+                    {u.adminForShort}
+                  </span>
+                  <span className="hidden min-w-0 truncate font-mono text-[14px] text-ink-muted xl:block" title={u.email}>
+                    {u.email}
+                  </span>
+                  <span className="hidden xl:block">
+                    {u.droneLabel !== '–' ? (
+                      <span className="inline-flex rounded-[5px] bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-muted">
+                        {u.droneLabel}
+                      </span>
+                    ) : (
+                      <span className="text-ink-faint">–</span>
+                    )}
+                  </span>
+                  <span
+                    className={`hidden min-[1600px]:block ${isOlderThanMonths(lastLoginDate, 12) ? 'text-ink-faint' : 'text-ink-muted'}`}
+                    title={relative.title}
                   >
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedIds.has(u.id)}
-                        onCheckedChange={(checked) => toggleSelected(u.id, checked === true)}
-                        aria-label={`${u.name} auswählen`}
-                      />
-                    </TableCell>
-                    <TableCell className="text-ink-muted">{u.dienstgrad || '–'}</TableCell>
-                    <TableCell>
-                      <div className="font-semibold text-ink">{u.name}</div>
-                      <div className="text-xs text-ink-muted xl:hidden">{u.email}</div>
-                    </TableCell>
-                    <TableCell className="text-ink">{u.homeOrg}</TableCell>
-                    <TableCell className="text-ink-faint">{u.adminFor}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={STATUS_BADGE_CLASS[getUserStatus(u)]}>
-                        {STATUS_LABEL[getUserStatus(u)]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden text-ink-muted xl:table-cell">{u.email}</TableCell>
-                    <TableCell className="hidden text-ink-muted xl:table-cell">{u.droneLabel}</TableCell>
-                    <TableCell
-                      className="hidden xl:table-cell"
-                      title={formatPushTooltip(u.pushDates)}
-                    >
-                      {u.pushCount > 0 ? (
-                        <span className="font-medium text-success-text">{u.pushCount}</span>
-                      ) : (
-                        <span className="text-ink-faint">–</span>
-                      )}
-                    </TableCell>
-                    {(() => {
-                      const lastLoginDate = u.lastLoginAt ? new Date(u.lastLoginAt) : null;
-                      const relative = formatRelativeDate(lastLoginDate, { fallback: '–' });
-                      return (
-                        <TableCell
-                          className={`hidden xl:table-cell ${isOlderThanMonths(lastLoginDate, 12) ? 'text-ink-faint' : 'text-ink-muted'}`}
-                          title={relative.title}
-                        >
-                          {relative.label}
-                        </TableCell>
-                      );
-                    })()}
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      <UserRowActions
-                        userId={u.id}
-                        isActive={u.isActive}
-                        isSelf={u.id === currentUserId}
-                        onEdit={() => openEdit(u.id)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    {relative.label}
+                  </span>
+                  <span className="hidden min-[1600px]:block" title={formatPushTooltip(u.pushDates)}>
+                    {u.pushCount > 0 ? (
+                      <span className="font-medium text-success-text">{u.pushCount}</span>
+                    ) : (
+                      <span className="text-ink-faint">–</span>
+                    )}
+                  </span>
+                  <span>
+                    <Badge variant="outline" className={STATUS_BADGE_CLASS[status]}>
+                      {STATUS_LABEL[status]}
+                    </Badge>
+                  </span>
+                  <span onClick={(event) => event.stopPropagation()} className="justify-self-end">
+                    <UserRowActions
+                      userId={u.id}
+                      isActive={u.isActive}
+                      isSelf={u.id === currentUserId}
+                      onEdit={() => openEdit(u.id)}
+                    />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* §5: Fußnote zur Drohnen-Spalte links, Paginierung rechts - Seitengröße fix 50
+              (page.tsx). */}
+          <div className="hidden items-center justify-between gap-5 px-1 md:flex">
+            <span className="text-sm text-ink-faint">
+              Die Spalte „Drohnen" zeigt die Gruppenzuordnung. Jedes Mitglied der Drohnengruppe gehört genau
+              einer Gruppe an.
+            </span>
+            <div className="flex shrink-0 items-center gap-2.5">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPageState(page - 1)}
+                className="rounded-md border border-line px-3.5 py-1.5 text-sm font-medium text-ink-muted hover:bg-surface-sunken disabled:opacity-40"
+              >
+                Zurück
+              </button>
+              <span className="text-sm font-medium text-ink-muted">
+                {rangeFrom}–{rangeTo} von {filteredCount}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPageState(page + 1)}
+                className="rounded-md border border-line px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken disabled:opacity-40"
+              >
+                Weiter
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -896,7 +986,10 @@ export function UserManagementSection({
           <SheetHeader>
             <SheetTitle>Filter</SheetTitle>
           </SheetHeader>
-          <div className="flex flex-col gap-3 px-4 pb-6">{filterControls}</div>
+          <div className="flex flex-col gap-3 px-4 pb-6">
+            {filterControls}
+            {filterChips}
+          </div>
         </SheetContent>
       </Sheet>
 

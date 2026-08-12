@@ -114,6 +114,49 @@ export const getReachableScopes = cache(async (user: SessionUser): Promise<Admin
   return scopes;
 });
 
+/**
+ * Mitgliederzahl je Geltungsbereich für die Kontextzeile des Geltungsbereich-Wählers
+ * (Benutzerverwaltung-Breite-Brief.md §6: "Abschnitt 177 Purkersdorf · 12 Feuerwehren ·
+ * 486 Mitglieder"). Eine einzige groupBy-Abfrage auf User.homeOrganizationId (auf denselben
+ * feuerwehrAdminOrgIds-Scope beschränkt wie jede andere Benutzer-Query in diesem Modul, siehe
+ * admin/benutzer/page.tsx) reicht für ALLE Ebenen - Abschnitt-/Bezirk-Summen werden anschließend in
+ * JS aus den Feuerwehr-Einzelzahlen aufaddiert statt pro Scope eine eigene COUNT-Abfrage zu fahren.
+ * Rückgabe: Map von Organization.id (Feuerwehr oder Abschnittskommando) bzw. dem Sentinel-Key
+ * 'BEZIRK' auf die jeweilige Mitgliederzahl - eine fehlende Zahl (kein Eintrag) bedeutet 0, nicht
+ * unbekannt.
+ */
+export const getScopeMemberCounts = cache(async (user: SessionUser): Promise<Map<string, number>> => {
+  const fullAdmin = isBezirksAdmin(user);
+  const [byHomeOrg, feuerwehren] = await Promise.all([
+    prisma.user.groupBy({
+      by: ['homeOrganizationId'],
+      _count: true,
+      where: fullAdmin ? undefined : { homeOrganizationId: { in: user.feuerwehrAdminOrgIds } },
+    }),
+    prisma.organization.findMany({
+      where: fullAdmin
+        ? { type: 'FEUERWEHR' }
+        : { id: { in: user.feuerwehrAdminOrgIds }, type: 'FEUERWEHR' },
+      select: { id: true, parentId: true },
+    }),
+  ]);
+
+  const counts = new Map<string, number>();
+  let bezirkTotal = 0;
+  for (const row of byHomeOrg) {
+    counts.set(row.homeOrganizationId, row._count);
+    bezirkTotal += row._count;
+  }
+  counts.set('BEZIRK', bezirkTotal);
+
+  for (const feuerwehr of feuerwehren) {
+    if (!feuerwehr.parentId) continue;
+    const own = counts.get(feuerwehr.id) ?? 0;
+    counts.set(feuerwehr.parentId, (counts.get(feuerwehr.parentId) ?? 0) + own);
+  }
+  return counts;
+});
+
 const LEVEL_ORDER: Record<AdminScope['level'], number> = { BEZIRK: 0, ABSCHNITT: 1, FEUERWEHR: 2 };
 
 function sortScopes(scopes: AdminScope[]): AdminScope[] {

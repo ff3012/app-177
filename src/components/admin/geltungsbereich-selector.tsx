@@ -18,19 +18,29 @@ function scopeLabel(scope: AdminScope): string {
   return scope.level === 'BEZIRK' ? BEZIRK_LABEL : scope.name;
 }
 
-function scopeContextLine(scope: AdminScope, reachable: AdminScope[]): string {
+/** Benutzerverwaltung-Breite-Brief.md §6: die Kontextzeile bekommt zusätzlich die
+ * Mitgliederzahl des aktuellen Geltungsbereichs ("Abschnitt 177 Purkersdorf · 12 Feuerwehren ·
+ * 486 Mitglieder") - memberCounts ist optional, damit ein Aufrufer ohne diese Zahl (aktuell keiner
+ * mehr, aber die Komponente bleibt auch ohne sie funktionsfähig) nicht crasht. Fehlender Eintrag in
+ * der Map bedeutet 0 Mitglieder, nicht "unbekannt" (siehe scope.ts). */
+function scopeContextLine(scope: AdminScope, reachable: AdminScope[], memberCounts?: Map<string, number>): string {
+  const memberSuffix = (key: string) => {
+    if (!memberCounts) return '';
+    const count = memberCounts.get(key) ?? 0;
+    return ` · ${count} Mitglied${count === 1 ? '' : 'er'}`;
+  };
   if (scope.level === 'BEZIRK') {
     const abschnitte = reachable.filter((s) => s.level === 'ABSCHNITT').length;
     const feuerwehren = reachable.filter((s) => s.level === 'FEUERWEHR').length;
-    return `${abschnitte} Abschnitte · ${feuerwehren} Feuerwehren`;
+    return `${abschnitte} Abschnitte · ${feuerwehren} Feuerwehren${memberSuffix('BEZIRK')}`;
   }
   if (scope.level === 'ABSCHNITT') {
     const feuerwehren = reachable.filter(
       (s) => s.level === 'FEUERWEHR' && s.abschnittOrganizationId === scope.organizationId,
     ).length;
-    return `${feuerwehren} Feuerwehr${feuerwehren === 1 ? '' : 'en'}`;
+    return `${feuerwehren} Feuerwehr${feuerwehren === 1 ? '' : 'en'}${memberSuffix(scope.organizationId)}`;
   }
-  return '';
+  return memberSuffix(scope.organizationId).replace(/^ · /, '');
 }
 
 function isSameScope(a: AdminScope, b: AdminScope): boolean {
@@ -39,7 +49,13 @@ function isSameScope(a: AdminScope, b: AdminScope): boolean {
   return (a as { organizationId: string }).organizationId === (b as { organizationId: string }).organizationId;
 }
 
-function GeltungsbereichSelectorInner({ reachable }: { reachable: AdminScope[] }) {
+function GeltungsbereichSelectorInner({
+  reachable,
+  memberCounts,
+}: {
+  reachable: AdminScope[];
+  memberCounts?: Map<string, number>;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -125,7 +141,7 @@ function GeltungsbereichSelectorInner({ reachable }: { reachable: AdminScope[] }
               {open ? '▴' : '▾'}
             </span>
           </span>
-          <span className="text-[13px] text-ink-faint">{scopeContextLine(current, reachable)}</span>
+          <span className="text-[13px] text-ink-faint">{scopeContextLine(current, reachable, memberCounts)}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[268px] p-0 shadow-[0_10px_28px_rgba(28,28,30,.14)]">
@@ -186,10 +202,16 @@ function GeltungsbereichSelectorInner({ reachable }: { reachable: AdminScope[] }
  * Layout gerendert wird, das gar kein searchParams erhält (siehe Design-Spec §2). Der
  * Suspense-Wrapper lebt hier, nicht bei jedem Aufrufer, damit niemand vergisst, ihn zu setzen.
  */
-export function GeltungsbereichSelector({ reachable }: { reachable: AdminScope[] }) {
+export function GeltungsbereichSelector({
+  reachable,
+  memberCounts,
+}: {
+  reachable: AdminScope[];
+  memberCounts?: Map<string, number>;
+}) {
   return (
     <Suspense fallback={<div className="h-[58px] border-b border-line" />}>
-      <GeltungsbereichSelectorInner reachable={reachable} />
+      <GeltungsbereichSelectorInner reachable={reachable} memberCounts={memberCounts} />
     </Suspense>
   );
 }

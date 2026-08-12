@@ -29,6 +29,13 @@ import { AdminSidebar } from '@/components/admin/admin-sidebar';
  * Schützt nur den Seiten-Render. Server Actions bleiben unverändert eigenständig durch
  * assertPermission(...) abgesichert (siehe CLAUDE.md) - ein Layout kann einen direkten
  * Server-Action-Aufruf (z. B. aus den Browser-DevTools) nicht verhindern.
+ *
+ * Benutzerverwaltung-Breite-Brief.md §1: flex statt grid, Inhalt flex-1 min-w-0 statt eines
+ * zusätzlichen zentrierten Wrappers - min-w-0 ist nicht optional, ohne es weigert sich das
+ * Flex-Kind zu schrumpfen und eine breite Tabelle erzeugt wieder einen Querscrollbalken. Das
+ * ab md: ergänzte px-7 py-6 (28/24px) übernimmt genau das Innenabstand-Padding, das MainContainer
+ * (components/layout/main-container.tsx) für /admin ab md: bewusst nicht mehr liefert - unterhalb
+ * von md: liefert weiterhin <main> selbst das Padding, hier bleibt es unverändert bei 0.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -37,9 +44,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="md:grid md:grid-cols-[210px_1fr] md:gap-6">
+    <div className="flex md:items-stretch">
       <AdminSidebar user={user} />
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0 flex-1 md:px-7 md:py-6">{children}</div>
     </div>
   );
 }

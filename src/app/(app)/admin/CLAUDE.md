@@ -759,3 +759,100 @@ Einzelauswahl-Variante von `AdminOrgMultiSelect` für genau diesen Filter und de
 `groupByAbschnitt` (`src/lib/admin/group-by-abschnitt.ts`) wurde aus zwei fast identischen
 Abschnitt-Gruppierungen extrahiert, die beide Komponenten teilen.
 
+**Benutzerverwaltung-Breite-Brief.md (Claude Design)** — `/admin` nutzt ab `md:` (768px) nicht mehr
+den app-weiten `max-w-5xl`-Lesecontainer, sondern die volle Fensterbreite; die Benutzertabelle wurde
+von einem `<table>`+`overflow-x-auto` auf ein fluides CSS-Grid umgestellt und Filtern/Sortieren/
+Paginieren laufen seither serverseitig statt clientseitig über ein komplett geladenes
+`UserRow[]`-Array (Verwaltung-Brief.md Phase 3's ursprüngliche Begründung "184 Datensätze
+rechtfertigen kein serverseitiges Filtern" gilt bei 486 Mitgliedern nicht mehr).
+
+- **Container/Layout**: `src/components/layout/main-container.tsx` (neu) ist eine Client-Komponente,
+  die per `usePathname()` erkennt, ob die aktuelle Route unter `/admin` liegt, und nur dort ab `md:`
+  `max-w-5xl`/`mx-auto`/das horizontale Padding von `<main>` wegnimmt - unterhalb von `md:` bleibt
+  `<main>` unverändert (Mobile-Admin ist nicht Teil dieses Briefs, nutzt ohnehin
+  `AdminMobileTabs`/Kartenlisten). `admin/layout.tsx` wechselte von `grid grid-cols-[210px_1fr]` auf
+  `flex` mit `min-w-0` am Inhalts-Container (nicht optional - ohne `min-w-0` weigert sich das
+  Flex-Kind zu schrumpfen und eine breite Tabelle erzeugt wieder einen Querscrollbalken) und ergänzt
+  sein eigenes `md:px-7 md:py-6` genau dort, wo `MainContainer` für `/admin` aufhört, dieses Padding
+  zu liefern. Der app-weite Header (`(app)/layout.tsx`) selbst bleibt bei `max-w-5xl` - dieser Brief
+  betrifft ausdrücklich nur `/admin/**`, nicht die globale Kopfzeile; der dadurch entstehende
+  Breitenunterschied zwischen Header und Admin-Inhalt ist eine bewusst akzeptierte, kleine
+  Design-Inkonsistenz, kein Bug.
+- **Sidebar**: `AdminSidebar` wuchs von 210px auf 246px und ist jetzt `position: sticky; top: 62px`
+  (Höhe des app-weiten Headers) mit `height: calc(100dvh - 62px)` und eigenem `overflow-y-auto` -
+  scrollt beim Scrollen der Tabelle nicht mehr mit. Die Kontextzeile des Geltungsbereich-Wählers
+  ("Abschnitt 177 Purkersdorf · 12 Feuerwehren · **486 Mitglieder**") bekam die fett markierte
+  Mitgliederzahl neu dazu: `scope.ts`'s neue `getScopeMemberCounts(user)` (`cache()`-dedupliziert wie
+  `getReachableScopes`) macht eine einzige `groupBy` auf `User.homeOrganizationId` und addiert die
+  Feuerwehr-Einzelzahlen in JS zu Abschnitts-/Bezirkssummen auf, statt pro Geltungsbereich eine eigene
+  COUNT-Abfrage zu fahren. `GeltungsbereichSelector`'s `memberCounts`-Prop ist optional - nur
+  `AdminSidebar` reicht sie durch, die übrigen (mobilen) Aufrufer zeigen die Kontextzeile weiterhin
+  ohne Mitgliederzahl, das ist für dieses Brief (ausdrücklich Desktop-only) kein Problem.
+- **Tabelle**: `USERS_GRID_COLS`/`USERS_GRID_ROW` in `user-management-section.tsx` sind die EINE
+  geteilte Konstante für Kopf- und Datenzeilen (Brief-Vorgabe). Drei Breiten-Stufen statt Tailwinds
+  Standardskala, weil der Brief genau bei 1600px eine zusätzliche Stufe braucht, die dort nicht
+  existiert - `min-[1600px]:` ist Tailwinds Arbitrary-Variant-Syntax für einen Wert außerhalb der
+  konfigurierten Skala, ohne `tailwind.config.ts` anzufassen (dieser Breakpoint wird sonst nirgends
+  gebraucht). Spaltenreihenfolge folgt dem Mockup (`Benutzerverwaltung Desktop.dc.html`):
+  Checkbox/Dienstgrad/Name/Feuerwehr/Rolle/[E-Mail/Drohnen ab `xl:`=1280px]/[Zuletzt aktiv/Push ab
+  1600px]/Status/Menü - Status wandert damit hinter Push/Zuletzt-aktiv, anders als in der
+  ursprünglichen `<table>`. Rolle und E-Mail sind `truncate` mit vollem Wert im `title`-Tooltip;
+  "Admin für: AFKDO Purkersdorf, AFKDO Herzogenburg" wird dabei zur gekürzten Anzeige "Admin:
+  Purkersdorf, Herzogenburg" (`stripAfkdoPrefix()` in `page.tsx`, nur für diese eine Kurzform-Anzeige
+  - der Tooltip und `UserRow.adminFor` bleiben unverändert der volle Text).
+  - **Bewusst NICHT übernommen**: das Mockup zeigt die "Drohnen"-Spalte als numerisches Abschnitts-
+    Badge (z. B. "177" für die an AFKDO Purkersdorf verankerte Gruppe) statt der bisherigen
+    Admin/Mitglied-Rollenanzeige - der Text-Brief selbst sagt dazu nichts, nur die Spaltenbreite
+    (112px). Da eine Umdeutung des Spalteninhalts eine eigenständige Produktentscheidung wäre (welche
+    Nummer, woher, was bei bezirksweiten/anonymen Gruppen), nicht Teil dieses Layout-Briefs, blieb
+    `droneLabel` (Admin/Mitglied/–) unverändert - nur Breite/Position der Spalte folgen dem Mockup.
+- **Filterleiste**: eine Zeile ab `md:` in einer weißen Karte (Suchfeld `flex-[1_1_340px]
+  max-w-[400px]`, danach Abschnitt/Feuerwehr/Drohnengruppe/Rolle/Status mit festen Breiten
+  176/176/176/148/136px), Chips darunter in derselben Karte. Neu: ein Drohnengruppe-Filter (`?
+  drohnengruppe=`, plain `<Select>` statt `OrgSearchSelect` - bei ~4 Gruppen ist keine Suche nötig,
+  identisch zur Drohnengruppen-Auswahl in der Bezirksverwaltung) - zeigt absichtlich auch deaktivierte
+  Gruppen an (mit "(deaktiviert)"-Suffix), da ein Filter ein bestehendes-Mitglieder-Finden-Werkzeug
+  ist, keine Neuzuordnungs-Auswahlliste (dieselbe Unterscheidung wie bei `OrgSearchSelect`'s
+  Feuerwehr-Filter, der ebenfalls nie nach `isActive` filtert).
+- **Server-seitige Filter/Sortierung/Paginierung** (`page.tsx`): `buildUsersWhere()` übersetzt
+  q/abschnitt/feuerwehr/drohnengruppe/rolle/status 1:1 in Prisma-`where`-Fragmente - Status
+  (AKTIV/INAKTIV/DEAKTIVIERT) ist dabei ein abgeleiteter Wert aus `isActive`+`passwordChangedAt`
+  (dieselbe Regel wie `getUserStatus()`, hier nur direkt als Prisma-Filter statt als JS-Funktion
+  ausgedrückt). Die Namenssuche verknüpft die Suchwörter per UND getrennt über Vor-/Nachname
+  (`buildSearchWhere()`), damit sowohl "Krebs Florian" als auch "Florian Krebs" denselben Benutzer
+  findet - ein einzelnes `contains` gegen "Nachname Vorname" wie zuvor clientseitig ginge nicht, diese
+  Verkettung existiert in der DB nicht. `buildOrderBy()` bildet die bisherigen Sortierspalten auf
+  Prisma-`orderBy` ab - für echte Skalarspalten (Name/E-Mail/StbNr/Telefon/Zuletzt aktiv) 1:1 exakt,
+  für Status zusätzlich mit explizitem `nulls`-Modifikator (sonst würde Postgres NULLs in ASC ans
+  Ende statt an den Anfang sortieren, was die INAKTIV-vor-DEAKTIVIERT-vor-AKTIV-Rangfolge umdrehen
+  würde). Für `adminFor`/`droneLabel`/`dienstgrad` ist die Sortierung eine **bewusst akzeptierte
+  Annäherung** (Anzahl Admin-Mitgliedschaften per `_count`, Drohnengruppen-Rolle, Dienstgrad-
+  Kurzform statt des früher alphabetisch verglichenen, aus einer Relation zusammengesetzten
+  Anzeige-Strings) - Prisma kann keinen über eine Relation aufgebauten String sortieren, nur echte
+  Spalten/Aggregate. Paginierung: fix 50 pro Seite (`PAGE_SIZE`), `skip`/`take` nach einer separaten
+  `count()`-Abfrage auf dieselbe `where`-Klausel; die angeforderte Seite wird auf `totalPages`
+  geklemmt, damit eine veraltete Lesezeichen-URL mit zu hoher Seitenzahl nie eine leere Seite zeigt,
+  obwohl frühere Seiten noch Ergebnisse hätten. "486 Mitglieder in 12 Feuerwehren" in der Kopfzeile
+  ist bewusst die UNGEFILTERTE Gesamtzahl des Verwaltungsbereichs (zwei eigene, vom aktuellen Filter
+  unabhängige Abfragen: `user.count`/`user.groupBy` auf denselben Scope wie jede andere Query hier),
+  während "N angezeigt" und die Paginierungszeile "1–31 von 486" die GEFILTERTE Zahl zeigen - beide
+  Zahlen fallen nur zufällig zusammen, wenn kein Filter aktiv ist.
+- **URL-Zustand**: jede Filter-/Sortier-Änderung setzt `page` auf 1 zurück (sonst würde ein
+  geänderter Filter auf "Seite 3" eines ganz anderen Ergebnisses landen) - nur die Zurück/Weiter-
+  Buttons ändern `page` ohne diesen Reset. Derselbe `router.replace`-URL-Sync-Mechanismus aus
+  Verwaltung-Brief.md Phase 3 ist jetzt nicht mehr nur ein Lesezeichen-Mechanismus, sondern der
+  eigentliche Auslöser für den serverseitigen Refetch (Next.js führt `page.tsx`'s Server Component
+  bei einer `searchParams`-Änderung über dieselbe Route serverseitig neu aus).
+- **Mobile Kennzahlkarten** ("Mitglieder gesamt"/"Auf dieser Seite", `md:hidden`): mussten von
+  `totalUsersCount` statt vom (jetzt nur noch seitenweise geladenen) `users`-Array abgeleitet werden,
+  sonst hätte "Mitglieder gesamt" auf Mobile plötzlich nur die aktuelle Seite gezeigt. Die zweite
+  Kachel zeigt bewusst `users.length` ("Auf dieser Seite") statt einer weiteren, ungefilterten
+  "davon inaktiv"-Zahl - eine korrekte bezirksweite Inaktiv-Zählung hätte eine weitere Abfrage
+  gebraucht, die dieses (ohnehin nicht Teil des Briefs seiende) Mobile-Widget nicht rechtfertigt.
+- **Nicht live verifiziert**: dieselbe, bereits mehrfach in dieser Datei dokumentierte
+  Mehrfach-Worktree-Bindungsschwäche der Dev-Server-Vorschau in dieser Umgebung (der laufende
+  Next-Dev-Prozess zeigte per `Get-CimInstance Win32_Process` auf das node_modules des
+  Haupt-Worktrees, nicht dieses Worktrees) verhinderte auch hier einen echten Browser-Test. Verifiziert
+  wurden statt dessen ein durchgängig fehlerfreier `npx tsc --noEmit` und ein erfolgreicher
+  `npm run build` über die gesamte Änderung.
+

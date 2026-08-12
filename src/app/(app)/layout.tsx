@@ -12,6 +12,7 @@ import { Footer } from '@/components/layout/footer';
 import { MobileHeaderProvider } from '@/components/layout/mobile-header-context';
 import { MobileHeaderTitleSlot } from '@/components/layout/mobile-header-title-slot';
 import { MobileHeaderActionSlot } from '@/components/layout/mobile-header-action-slot';
+import { MainContainer } from '@/components/layout/main-container';
 import { logoutAction } from './logout-action';
 
 /** Startbildschirm-Brief.md §2: "Feuerwehr {Heimatfeuerwehr}", ohne "Freiwillige" - für
@@ -99,9 +100,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
-        <main className="pb-content-safe mx-auto w-full max-w-5xl flex-1 px-5 pt-6 sm:px-4 sm:pb-6">
-          {children}
-        </main>
+        <MainContainer>{children}</MainContainer>
         <div className="hidden sm:block">
           <Footer />
         </div>
