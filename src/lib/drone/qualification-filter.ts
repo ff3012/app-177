@@ -30,6 +30,23 @@ const EXACT_STAGE_KEYS: ReadonlySet<Ausbildungsstufe> = new Set(['a1a3LizenzAm',
 
 type MembershipDates = Record<Ausbildungsstufe, Date | null>;
 
+/**
+ * Höchste tatsächlich erreichte Ausbildungsstufe eines Mitglieds - null, wenn noch keine gesetzt
+ * ist. Verlässt sich auf dieselbe Präfix-Invariante wie userSchema's .superRefine() (eine Stufe ist
+ * nur gesetzt, wenn jede vorangehende es auch ist), daher reicht ein Abbruch beim ersten
+ * ungesetzten Feld statt jede Stufe einzeln zu prüfen. Geteilt zwischen diesem Filter (Einzelvergleich
+ * pro Stufe) und der Einsatzbereitschaft-Auswertung (Verteilung aller Mitglieder über die Stufen),
+ * damit beide nie auseinanderlaufen können.
+ */
+export function getExactStage(membership: MembershipDates): Ausbildungsstufe | null {
+  let current: Ausbildungsstufe | null = null;
+  for (const key of AUSBILDUNGSSTUFEN) {
+    if (membership[key] === null) break;
+    current = key;
+  }
+  return current;
+}
+
 function matchesSingleQualification(membership: MembershipDates, key: string): boolean {
   if (key === QUALIFICATION_NONE) return membership.a1a3LizenzAm === null;
   const stufe = key as Ausbildungsstufe;

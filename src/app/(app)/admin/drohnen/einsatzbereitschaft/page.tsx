@@ -82,6 +82,36 @@ function DetailSection({ data, canLinkToUser }: { data: GruppenEinsatzbereitscha
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Ausbildungsstand</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Jedes Mitglied zählt bei der Stufe, auf der es gerade steht (höchste erreichte Stufe) - Einsatzbereit ist,
+          wer BOS1 erreicht hat.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div>
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-[.06em] text-ink-faint">Nur A1/A3</h3>
+            <span className="font-condensed text-2xl font-bold text-ink">{data.ausbildungsstand.nurA1a3}</span>
+          </div>
+          <div>
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-[.06em] text-ink-faint">Nur A2</h3>
+            <span className="font-condensed text-2xl font-bold text-ink">{data.ausbildungsstand.nurA2}</span>
+          </div>
+          <div>
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-[.06em] text-ink-faint">Nur Stützpunkt</h3>
+            <span className="font-condensed text-2xl font-bold text-ink">{data.ausbildungsstand.nurStuetzpunkt}</span>
+          </div>
+          <div>
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-[.06em] text-ink-faint">Nur BOS1</h3>
+            <span className="font-condensed text-2xl font-bold text-success-text">{data.ausbildungsstand.nurBos1}</span>
+          </div>
+          <div>
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-[.06em] text-ink-faint">Nur BOS2</h3>
+            <span className="font-condensed text-2xl font-bold text-success-text">{data.ausbildungsstand.nurBos2}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Einsatzbereitschaft · {data.droneGroupName}</h2>
         <p className="mb-3 text-xs text-ink-faint">
           Nur Mitglieder mit abgeschlossener BOS1-Ausbildung. Mindestens {NINETY_DAY_REQUIRED_FLIGHTS} Flüge in den
