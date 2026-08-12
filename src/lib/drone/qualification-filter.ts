@@ -20,7 +20,24 @@ export const QUALIFICATION_OPTIONS: { key: Ausbildungsstufe; label: string }[] =
 
 export const QUALIFICATION_DEFAULT_KEY: Ausbildungsstufe = 'bos1AusbildungAm';
 
+/** Diese drei Stufen zeigen beim Ankreuzen NUR Mitglieder, die GENAU hier stehen geblieben sind
+ * (Stufe gesetzt, nächste Stufe nicht) - gedacht, um Ausbildungslücken zu finden ("wer muss noch
+ * ausgebildet werden, um BOS1 zu erreichen"). BOS1/BOS2 bleiben bewusst außen vor und zeigen weiterhin
+ * "hat diese Stufe erreicht" inklusive höherer Stufen - BOS1 ist das Ausbildungsziel, der Filter soll
+ * dort also weiterhin jeden zeigen, der es erreicht hat (auch wer zusätzlich schon BOS2 hat), nicht nur
+ * die, die exakt auf BOS1 stehen geblieben sind. */
+const EXACT_STAGE_KEYS: ReadonlySet<Ausbildungsstufe> = new Set(['a1a3LizenzAm', 'a2LizenzAm', 'stuetzpunktausbildungAm']);
+
 type MembershipDates = Record<Ausbildungsstufe, Date | null>;
+
+function matchesSingleQualification(membership: MembershipDates, key: string): boolean {
+  if (key === QUALIFICATION_NONE) return membership.a1a3LizenzAm === null;
+  const stufe = key as Ausbildungsstufe;
+  if (membership[stufe] === null) return false;
+  if (!EXACT_STAGE_KEYS.has(stufe)) return true;
+  const nextStufe = AUSBILDUNGSSTUFEN[AUSBILDUNGSSTUFEN.indexOf(stufe) + 1];
+  return membership[nextStufe] === null;
+}
 
 /**
  * Löst den rohen ?qualifikation=-Parameter zur tatsächlichen Auswahl auf - gemeinsame Stelle für
@@ -44,16 +61,18 @@ export function resolveSelectedQualifications(raw: string | null | undefined): s
 }
 
 /**
- * UND-Verknüpfung: ein Mitglied muss ALLE ausgewählten Bedingungen gleichzeitig erfüllen.
- * 'NONE' prüft, dass die erste Stufe (a1a3LizenzAm) NICHT gesetzt ist - da die Stufen sequenziell
- * aufeinander aufbauen (A1/A3 -> A2 -> Stützpunktausbildung -> BOS1 -> BOS2), bedeutet ein
- * ungesetztes a1a3LizenzAm automatisch, dass keine der fünf Stufen erreicht ist. Kombinationen wie
- * "BOS1 + A2" kollabieren dadurch praktisch auf "BOS1" (wer BOS1 hat, hat automatisch A2) - keine
- * Sonderbehandlung nötig, nur eine Konsequenz der UND-Logik. Ebenso liefert 'NONE' zusammen mit
- * einer echten Stufe konsequent immer false (widersprüchlich) - auch das bewusst nicht abgefangen.
+ * ODER-Verknüpfung (Folgeänderung: war ursprünglich UND, siehe Git-Historie) - ein Mitglied wird
+ * gezeigt, wenn es AUCH NUR EINE der ausgewählten Bedingungen erfüllt. Für A1/A3, A2 und
+ * Stützpunktausbildung bedeutet "erfüllt" jetzt "genau hier stehen geblieben" (siehe
+ * matchesSingleQualification/EXACT_STAGE_KEYS oben), für BOS1/BOS2 weiterhin "diese Stufe erreicht".
+ * Eine UND-Verknüpfung würde bei den drei "genau hier"-Stufen nie mehr als eine gleichzeitig
+ * erfüllen können (niemand steht an zwei verschiedenen Stufen zugleich), ODER ist daher die einzig
+ * sinnvolle Kombination, sobald mehr als eine dieser drei Checkboxen gleichzeitig aktiv ist -
+ * z. B. "A1/A3 + A2" zeigt dann alle, die entweder bei A1/A3 oder bei A2 stehen geblieben sind.
+ * `selectedQualifications` enthält laut toggleQualification (flight-sidebar.tsx) nie 'NONE' UND eine
+ * echte Stufe gleichzeitig (die UI räumt 'NONE' automatisch aus dem Array, sobald eine echte
+ * Checkbox aktiviert wird) - der Fall wird deshalb nicht gesondert behandelt.
  */
 export function matchesQualification(membership: MembershipDates, selected: string[]): boolean {
-  return selected.every((key) =>
-    key === QUALIFICATION_NONE ? membership.a1a3LizenzAm === null : membership[key as Ausbildungsstufe] !== null,
-  );
+  return selected.some((key) => matchesSingleQualification(membership, key));
 }

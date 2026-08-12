@@ -161,11 +161,21 @@ page (all deleted) with:
 **Drohnengruppe Qualifikations-Filter** — an Admin-only, multi-select "Qualifikation" dropdown in
 `FlightSidebar` (a hand-rolled button+checkbox-panel toggle, no shadcn `Popover`/`Command` — this
 module stays hand-rolled per its own established convention) that narrows both the flight list
-and the `GroupStatusList` bar list to pilots matching the selected Ausbildungsstufen, **with AND
-semantics** across multiple selections (a deliberate, non-default choice by the app owner — see
-`src/lib/drone/qualification-filter.ts`'s own comment on `matchesQualification`: selecting
-"BOS1 + A2" collapses to "BOS1" since the stages are sequential, and "Ohne Ausbildung" combined with
-any real stage always yields zero matches, neither treated as an error).
+and the `GroupStatusList` bar list to pilots matching the selected Ausbildungsstufen.
+
+**Reversed from the original AND design (follow-up change by the app owner)**: A1/A3, A2 and
+Stützpunktausbildung now match "genau hier stehen geblieben" (stage set, next stage NOT set) instead
+of "hat diese Stufe erreicht" — the filter's purpose is finding training gaps ("wer muss noch
+ausgebildet werden, um BOS1 zu erreichen"), so checking A1/A3 must exclude anyone who already
+progressed past it. BOS1/BOS2 deliberately keep the old "reached this stage" (inclusive of higher
+stages) semantics — BOS1 is the training *goal*, so its filter should still show everyone who got
+there, including those who went on to BOS2. `EXACT_STAGE_KEYS` in `qualification-filter.ts` marks
+which three keys get the new "exact stage" treatment. Multiple selections now combine with **OR**,
+not AND (`matchesQualification`'s `.some(...)`, was `.every(...)`) — AND would be useless once two
+"exact stage" checkboxes are both active, since no one can be stuck at two different stages at once;
+"A1/A3 + A2" now shows everyone stuck at either one. `selectedQualifications` never contains `'NONE'`
+together with a real stage key (`toggleQualification` in `flight-sidebar.tsx` clears `'NONE'` the
+moment any real checkbox is turned on), so that combination isn't specially handled.
 
 - The filter reads `?qualifikation=` from the URL as a comma-separated list of
   `Ausbildungsstufe` keys (`@/lib/validation/user.schema`'s `AUSBILDUNGSSTUFEN`), fed into
