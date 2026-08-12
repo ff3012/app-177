@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateAnySectionWideEvent } from '@/lib/auth/permissions';
+import { canCreateAnySectionWideEvent, isBezirksAdmin, isDroneGroupAdmin } from '@/lib/auth/permissions';
+import { getManageableDroneGroupOptions } from '@/lib/calendar/drone-group-options';
 import { EventForm } from '@/components/calendar/event-form';
 import { createEvent } from '../actions';
 
@@ -11,23 +12,26 @@ export default async function NeuerTerminPage({
 }) {
   const user = await requireUser();
 
-  if (user.feuerwehrAdminOrgIds.length === 0) {
+  // Erweitert gegenüber vorher (nur feuerwehrAdminOrgIds.length > 0): ein reiner Admin Drohnengruppe
+  // oder ein reiner Bezirksadmin/Bezirks-Drohnenadmin ohne eigene Feuerwehr-Admin-Mitgliedschaft muss
+  // diese Seite ebenfalls erreichen können, um einen Drohnengruppen- bzw. bezirksweiten Termin
+  // anzulegen (siehe Design-Spec Requirement 3). Ein plain Feuerwehr-Admin bleibt unverändert erlaubt.
+  const canReachPage =
+    user.feuerwehrAdminOrgIds.length > 0 || isDroneGroupAdmin(user) || isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
+  if (!canReachPage) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, Termine anzulegen.</p>;
   }
 
   const { sectionWide } = await searchParams;
   const canSectionWide = canCreateAnySectionWideEvent(user);
 
-  const [organizations, ownDroneGroup] = await Promise.all([
+  const [organizations, droneGroupOptions] = await Promise.all([
     prisma.organization.findMany({
       where: { id: { in: user.feuerwehrAdminOrgIds } },
       orderBy: { name: 'asc' },
     }),
-    user.droneGroupId
-      ? prisma.droneGroup.findUnique({ where: { id: user.droneGroupId }, select: { name: true } })
-      : Promise.resolve(null),
+    getManageableDroneGroupOptions(user),
   ]);
-  const droneGroupOptions = user.droneGroupId && ownDroneGroup ? [{ id: user.droneGroupId, name: ownDroneGroup.name }] : [];
 
   return (
     <div className="flex flex-col gap-4">

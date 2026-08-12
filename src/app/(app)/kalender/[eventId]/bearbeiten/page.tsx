@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateAnySectionWideEvent, canManageEventsFor } from '@/lib/auth/permissions';
+import { canCreateAnySectionWideEvent, canManageEvent } from '@/lib/auth/permissions';
+import { getManageableDroneGroupOptions } from '@/lib/calendar/drone-group-options';
+import { BEZIRKSWEIT_DRONE_GROUP_VALUE } from '@/lib/validation/event.schema';
 import { EventForm } from '@/components/calendar/event-form';
 import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
 import { toDatetimeLocalValue } from '@/lib/format';
@@ -15,7 +17,18 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
   if (!event) {
     return <p className="text-neutral-700">Termin wurde nicht gefunden.</p>;
   }
-  if (!canManageEventsFor(user, event.organizationId)) {
+
+  // Vorher: canManageEventsFor(user, event.organizationId) - das war für Drohnengruppen-Termine
+  // falsch (blockte jeden Admin Drohnengruppe ohne eigene Feuerwehr-Admin-Mitgliedschaft von seinen
+  // EIGENEN Gruppen-Terminen). canManageEvent verzweigt jetzt korrekt nach event.category.
+  const droneGroup =
+    event.category === 'DROHNENGRUPPE' && event.droneGroupId
+      ? await prisma.droneGroup.findUnique({
+          where: { id: event.droneGroupId },
+          select: { id: true, organizationId: true },
+        })
+      : null;
+  if (!canManageEvent(user, event, droneGroup)) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Termin zu bearbeiten.</p>;
   }
   if (event.vehicleBookingId) {
@@ -44,16 +57,13 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
     );
   }
 
-  const [organizations, ownDroneGroup] = await Promise.all([
+  const [organizations, droneGroupOptions] = await Promise.all([
     prisma.organization.findMany({
       where: { id: { in: user.feuerwehrAdminOrgIds } },
       orderBy: { name: 'asc' },
     }),
-    user.droneGroupId
-      ? prisma.droneGroup.findUnique({ where: { id: user.droneGroupId }, select: { name: true } })
-      : Promise.resolve(null),
+    getManageableDroneGroupOptions(user),
   ]);
-  const droneGroupOptions = user.droneGroupId && ownDroneGroup ? [{ id: user.droneGroupId, name: ownDroneGroup.name }] : [];
 
   const boundUpdate = updateEvent.bind(null, event.id);
   const boundDelete = deleteEvent.bind(null, event.id);
@@ -85,7 +95,7 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
           organizationId: event.organizationId,
           isSectionWide: event.isSectionWide,
           category: event.category,
-          droneGroupId: event.droneGroupId,
+          droneGroupId: event.droneGroupId ?? (event.category === 'DROHNENGRUPPE' ? BEZIRKSWEIT_DRONE_GROUP_VALUE : null),
         }}
       />
       <form action={boundDelete}>
