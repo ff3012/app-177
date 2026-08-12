@@ -32,6 +32,13 @@ Abschnitt).
    sonst kein Feuerwehr-/Abschnitts-Amt hat (aktuell blockiert ihn das komplett, siehe Abschnitt 5).
 3. Neuer Termin-Typ „Bezirksweiter Drohnengruppen-Termin": sichtbar für Mitglieder **aller 4** Gruppen,
    anlegbar/bearbeitbar **nur** von Bezirksadmin oder Bezirks-Drohnenadmin.
+4. **Regressions-Schutz, explizit festgehalten:** ein Admin einer einzelnen Heimatfeuerwehr (kein
+   Abschnitts-/Bezirksamt) darf weiterhin allgemeine Termine anlegen — **ausschließlich für seine eigene(n)
+   Feuerwehr(en)**, kein Abschnitt-weiter Termin, kein Drohnengruppen-Termin. Das ist die heutige, bereits
+   korrekte Regel (`canManageEventsFor`/`feuerwehrAdminOrgIds`) und wird durch nichts in diesem Dokument
+   verändert — ausdrücklich hier aufgeführt, weil Abschnitt 4/5 dieselben Dateien anfassen, die diese Regel
+   für die Kategorie „Allgemein" umsetzen, und dieser Fall bei der Umsetzung gezielt gegengeprüft werden
+   muss, nicht nur beiläufig unberührt bleiben soll.
 
 ## 3. Datenmodell — keine Schema-Änderung
 
@@ -164,3 +171,7 @@ sondern ein bezirksweiter Termin").
 - Die Push-Zielgruppe eines bezirksweiten Termins umfasst Mitglieder aller 4 Gruppen; die eines
   gruppenspezifischen Termins weiterhin nur dessen eigene Gruppe.
 - Ein bezirksweiter Termin zeigt das „Bezirksweit"-Label in Liste und Detailseite.
+- **Regressionstest:** ein Admin genau einer Heimatfeuerwehr (keine Abschnitts-/Bezirksrechte, kein
+  Drohnengruppen-Amt) kann weiterhin einen Termin für seine eigene Feuerwehr anlegen und bearbeiten — sieht
+  dabei aber weder die Kategorie-Auswahl noch „Abschnitt-weiter Termin" noch irgendeine Drohnengruppen-Option
+  (unverändert gegenüber heute, da `canSectionWide` für ihn `false` bleibt).
