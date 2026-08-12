@@ -39,6 +39,41 @@
 
 `git pull` + erneut `docker compose -f docker/docker-compose.yml --env-file .env up -d --build` — Migrationen laufen automatisch im Entrypoint, bevor der Server startet.
 
+### Einmaliger manueller Schritt für dieses Deploy: zwei umbenannte Migrationsordner
+
+Bei der Umsetzung von Bezirksverwaltung wurde ein echter, vorbestehender Fehler in der bereits committeten
+Migrations-Historie gefunden und behoben: `20260804090000_vehicle_booking_details` und
+`20260804110000_vehicle_booking_approval` änderten die Tabelle `VehicleBooking`, bevor
+`20260811090000_meine_feuerwehr` sie überhaupt anlegt — bei einer frischen Datenbank (neuer Server, CI,
+frischer Klon) würde `prisma migrate deploy` deshalb mit einem Fehler abbrechen ("the underlying table for
+model VehicleBooking does not exist"). Behoben durch Umbenennen der beiden Ordner auf
+`20260811091000_vehicle_booking_details`/`20260811092000_vehicle_booking_approval` (sortieren jetzt korrekt
+nach `meine_feuerwehr`).
+
+**Auf der Produktionsdatenbank sind diese beiden Migrationen bereits unter den ALTEN Namen angewendet und
+in `_prisma_migrations` entsprechend vermerkt.** Ohne Anpassung dieser Tabelle würde `prisma migrate deploy`
+beim nächsten Deploy die beiden umbenannten Migrationen für "neu, noch nicht angewendet" halten und erneut
+auszuführen versuchen — das schlägt fehl (Spalten/Constraints existieren bereits) und blockiert den
+gesamten Deploy. **Vor dem ersten Deploy, das diesen Commit enthält**, folgendes einmalig gegen die
+Produktionsdatenbank ausführen (z. B. `docker compose -f docker/docker-compose.yml --env-file .env exec
+postgres psql -U ffapp -d ffapp`):
+
+```sql
+UPDATE "_prisma_migrations" SET migration_name = '20260811091000_vehicle_booking_details' WHERE migration_name = '20260804090000_vehicle_booking_details';
+UPDATE "_prisma_migrations" SET migration_name = '20260811092000_vehicle_booking_approval' WHERE migration_name = '20260804110000_vehicle_booking_approval';
+```
+
+Danach `docker compose -f docker/docker-compose.yml --env-file .env exec app npx prisma migrate status`
+zur Kontrolle ausführen — Erwartung: "Database schema is up to date!". Dieser Schritt ist nur EINMALIG
+nötig, für genau dieses eine Deploy; danach ist die Historie dauerhaft korrekt.
+
+**Zweiter, separater Befund (noch nicht behoben, eigener Vorgang):** `prisma migrate status` meldet
+außerdem, dass `20260809010000_hierarchie_backfill` nach dem Anwenden nachträglich verändert wurde
+(Checksumme in `_prisma_migrations` passt nicht mehr zum aktuellen Dateiinhalt - die Datei wurde nach dem
+ersten Anwenden mehrfach für echte Bugfixes bearbeitet, siehe `git log` dieser Datei). Betrifft vermutlich
+auch die Produktionsdatenbank. Muss separat untersucht/behoben werden, bevor eine weitere
+`prisma migrate dev`/`deploy`-Ausführung dagegen verlässlich funktioniert.
+
 ## Backups
 
 `docker/backup.sh` per Cron einrichten (siehe Kommentar im Skript):
