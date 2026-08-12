@@ -100,6 +100,40 @@ export function canManageDroneGroupFor(
   );
 }
 
+/**
+ * Darf den bezirksweiten Drohnengruppen-Termin (droneGroupId === null, sichtbar für alle 4 Gruppen)
+ * anlegen/bearbeiten/löschen: nur Bezirksadmin oder Bezirks-Drohnenadmin - bewusst kein
+ * Abschnittsadmin und kein einzelner Admin Drohnengruppe, weil der Termin über die Grenzen einer
+ * einzelnen Gruppe/eines einzelnen Abschnitts hinausgeht.
+ */
+export function canManageBezirksWideDroneEvent(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
+}
+
+/**
+ * Einheitliche Anlegen/Bearbeiten/Löschen-Berechtigung für einen Termin - kategorieabhängig:
+ * - Kategorie DROHNENGRUPPE, droneGroupId gesetzt: nur canManageDroneGroupFor der jeweiligen Gruppe
+ *   (bewusst NICHT die bloße eigene Mitgliedschaft - ein einfaches Mitglied/Pilot ohne Admin-Rolle
+ *   soll hierüber keine Termine anlegen dürfen, siehe Design-Spec Abschnitt 4.2).
+ * - Kategorie DROHNENGRUPPE, droneGroupId null (bezirksweit): nur canManageBezirksWideDroneEvent.
+ * - Kategorie ALLGEMEIN: unverändert canManageEventsFor - dieser Zweig darf durch die
+ *   Drohnengruppen-Erweiterung nicht angefasst werden, ein Feuerwehr-Admin verwaltet weiterhin
+ *   ausschließlich Termine der eigenen Feuerwehr(en).
+ * `droneGroup` muss der Aufrufer selbst laden (null, wenn droneGroupId null ist oder die Gruppe aus
+ * irgendeinem Grund nicht mehr existiert) - diese Funktion hat keinen DB-Zugriff.
+ */
+export function canManageEvent(
+  user: SessionUser,
+  event: { organizationId: string; category: string; droneGroupId: string | null },
+  droneGroup: { id: string; organizationId: string } | null,
+): boolean {
+  if (event.category === 'DROHNENGRUPPE') {
+    if (event.droneGroupId === null) return canManageBezirksWideDroneEvent(user);
+    return droneGroup !== null && canManageDroneGroupFor(user, droneGroup);
+  }
+  return canManageEventsFor(user, event.organizationId);
+}
+
 /** Wer darf isBezirksAdmin bei einem ANDEREN Benutzer setzen/entziehen - nur bestehende Bezirksadmins. */
 export function canGrantBezirksAdmin(currentUser: SessionUser): boolean {
   return isBezirksAdmin(currentUser);
@@ -126,11 +160,16 @@ export function canManageNews(user: SessionUser): boolean {
 }
 
 /**
- * Sichtbarkeit eines einzelnen Termins - identische Regel wie die Kalenderübersicht-Query selbst
- * (eigene Feuerwehr ODER abschnittsweit INNERHALB DES EIGENEN ABSCHNITTS; Drohnengruppe-Kategorie
- * zusätzlich nur mit Modulzugriff). `eventAbschnittOrganizationId` muss der Aufrufer selbst via
- * getAbschnittOrganizationId(event.organization) berechnen - diese Funktion hat keinen DB-Zugriff.
- * Muss bei einer Änderung der Sichtbarkeitsregel in kalender/page.tsx mitgezogen werden.
+ * Sichtbarkeit eines einzelnen Termins - kategorieabhängig, identische Regel wie die
+ * Kalenderübersicht-Query selbst (muss bei einer Änderung hier immer mitgezogen werden,
+ * siehe kalender/page.tsx):
+ * - Kategorie DROHNENGRUPPE ist VÖLLIG UNABHÄNGIG von organizationId/isSectionWide (die für
+ *   Drohnengruppen-Termine nur noch serverseitig abgeleitete, technische Werte sind, siehe
+ *   kalender/actions.ts) - sichtbar mit Modulzugriff UND (droneGroupId null [bezirksweit, alle 4
+ *   Gruppen] ODER droneGroupId exakt die eigene Gruppe).
+ * - Kategorie ALLGEMEIN bleibt bei der alten Regel: eigene Feuerwehr ODER abschnittsweit
+ *   innerhalb des eigenen Abschnitts. `eventAbschnittOrganizationId` muss der Aufrufer selbst via
+ *   getAbschnittOrganizationId(event.organization) berechnen - diese Funktion hat keinen DB-Zugriff.
  */
 export function canViewEvent(
   user: SessionUser,
@@ -142,14 +181,13 @@ export function canViewEvent(
     droneGroupId: string | null;
   },
 ): boolean {
-  const visible =
-    event.organizationId === user.homeOrganizationId ||
-    (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId);
-  if (!visible) return false;
   if (event.category === 'DROHNENGRUPPE') {
-    return canViewDroneModule(user) && event.droneGroupId === user.droneGroupId;
+    return canViewDroneModule(user) && (event.droneGroupId === null || event.droneGroupId === user.droneGroupId);
   }
-  return true;
+  return (
+    event.organizationId === user.homeOrganizationId ||
+    (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId)
+  );
 }
 
 /**
