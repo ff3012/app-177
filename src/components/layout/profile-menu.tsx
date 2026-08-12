@@ -109,7 +109,16 @@ export function ProfileMenu({
       {open && (
         // z-40: above the mobile bottom tab bar (z-30) - on short screens this dropdown (with the
         // push toggle expanded) can reach far enough down to otherwise sit under the tab bar.
-        <div className="fixed inset-x-4 top-16 z-40 w-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
+        // sm:top-full (not sm:top-auto): this div is an absolutely-positioned child of a
+        // `flex items-center` container - with top/bottom both auto, the browser falls back to the
+        // CSS static-position algorithm, which centers the box against the ~50px-tall header row's
+        // cross-axis. Since the card itself is far taller than that, its top edge landed ~150-200px
+        // above the header (off-screen/behind it), so only the lower portion of the card was ever
+        // visible - reported as "die Karte ist abgeschnitten" on desktop Chrome. top-full anchors the
+        // card's top edge to the bottom edge of the relative container instead (standard
+        // dropdown-below-trigger positioning), matching how the mobile fixed-position variant already
+        // renders directly under the header.
+        <div className="fixed inset-x-4 top-16 z-40 w-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72">
           <p className="font-semibold text-neutral-900">{name}</p>
           <p className="text-neutral-500">{email}</p>
 
