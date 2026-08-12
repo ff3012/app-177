@@ -315,8 +315,11 @@ export function UserFormSheet({
   const passwordChangedAt = target?.passwordChangedAt ? new Date(target.passwordChangedAt) : null;
   const passwordChanged = formatRelativeDate(passwordChangedAt, { fallback: 'Passwort noch nie gesetzt' });
 
+  // lastLoginAt trägt seit der "Zuletzt aktiv"-Erweiterung (auth.config.ts) nicht mehr nur den
+  // letzten Login-Zeitpunkt, sondern wird bei jeder echten Nutzung (gedrosselt) mit-aktualisiert -
+  // Copy hier entsprechend "zuletzt aktiv" statt "zuletzt angemeldet".
   const lastLoginAt = target?.lastLoginAt ? new Date(target.lastLoginAt) : null;
-  const lastLogin = formatRelativeDate(lastLoginAt, { fallback: 'noch nie angemeldet' });
+  const lastLogin = formatRelativeDate(lastLoginAt, { fallback: 'noch nie aktiv' });
 
   return (
     <>
@@ -330,7 +333,7 @@ export function UserFormSheet({
             </SheetTitle>
             {mode === 'edit' && target && (
               <p className="text-[14px] text-ink-muted" title={lastLogin.title}>
-                {target.homeOrgName} · zuletzt angemeldet {lastLogin.label}
+                {target.homeOrgName} · zuletzt aktiv {lastLogin.label}
               </p>
             )}
           </SheetHeader>

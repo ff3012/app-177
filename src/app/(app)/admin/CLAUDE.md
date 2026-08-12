@@ -446,12 +446,26 @@ description emphasizes) rather than a browser/WebFetch flow.
 
 - **Zwei neue Zeitstempel**: `User.lastLoginAt`/`User.passwordChangedAt` (both nullable, additive
   migration `20260802190718_user_last_login_password_changed_at`) - deliberately **not** backfilled from
-  `createdAt` for existing users; an invented value is worse than "unknown". `lastLoginAt` is written in
-  `auth.config.ts`'s `jwt` callback's `if (user)` branch (this branch, per Auth.js's own convention, only
-  runs on an actual fresh sign-in - every other request hits the "no fresh login" branch just below it that
-  re-fetches permissions instead) via a fire-and-forget `prisma.user.updateMany(...).catch(...)` - no
-  `select`, no `await`, so a slow/failed write can never add latency to or block a login, matching the
-  brief's explicit "darf die Anmeldung nie blockieren." `passwordChangedAt` is set in all three places a
+  `createdAt` for existing users; an invented value is worse than "unknown". `lastLoginAt` was originally
+  written only in `auth.config.ts`'s `jwt` callback's `if (user)` branch (a fresh sign-in) via a
+  fire-and-forget `prisma.user.updateMany(...).catch(...)` - no `select`, no `await`, so a slow/failed write
+  can never add latency to or block a login, matching the brief's explicit "darf die Anmeldung nie
+  blockieren."
+  - **Follow-up: "Zuletzt aktiv" auf echte Nutzung statt nur Login umgestellt.** Login-only war für den
+    App-Betreiber "nicht brauchbar" - bei next-auth's Standard-Session-Gültigkeit meldet sich ein Benutzer,
+    der die App täglich nutzt, oft monatelang nicht neu an (nur ein abgelaufener Token erzwingt einen
+    neuen Login), sodass das Feld für lange Zeiträume auf einem veralteten Datum stehen bliebe. Die "kein
+    frischer Login"-Verzweigung desselben `jwt`-Callbacks (die auf praktisch jedem Request läuft, siehe
+    `middleware.ts`'s Matcher) aktualisiert `lastLoginAt` seither zusätzlich bei jeder echten Nutzung -
+    gedrosselt auf höchstens 1x/Stunde (`LAST_ACTIVE_THROTTLE_MS`), da diese Verzweigung sonst auf jedem
+    einzelnen Request eine zusätzliche Schreiblast erzeugen würde; die Drossel-Entscheidung braucht keine
+    weitere DB-Abfrage, weil dieser Zweig `dbUser` (inkl. `lastLoginAt` als normale Skalarspalte) für den
+    Berechtigungs-Refresh ohnehin schon lädt. Die Spalte heißt weiterhin `lastLoginAt` (keine Migration für
+    eine reine Bedeutungserweiterung), trägt jetzt aber "letzter Login ODER letzte echte Nutzung, je nachdem
+    was aktueller ist" - UI-Text dazu wurde von "zuletzt angemeldet" auf "zuletzt aktiv" umbenannt
+    (`user-form-sheet.tsx`'s Sheet-Kopf-Zeile und Fallback-Text "noch nie aktiv"; die Tabellenspalte hieß
+    ohnehin schon "Zuletzt aktiv", keine Änderung dort nötig).
+  `passwordChangedAt` is set in all three places a
   password can actually change: `aktivieren/[token]/actions.ts` (first-time setup),
   `passwort-zuruecksetzen/[token]/actions.ts` (reset-link), and `profile/actions.ts`'s `changePassword`
   (self-service). `src/lib/format.ts`'s new `formatRelativeDate(date, {fallback})` is the single formatter

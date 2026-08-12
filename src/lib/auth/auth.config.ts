@@ -7,6 +7,10 @@ import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsBy
 import { consumeToken, consumeLoginTokenByShortCode } from '@/lib/auth/tokens';
 import type { SessionUser } from '@/types/next-auth';
 
+// Throttle für die "Zuletzt aktiv"-Aktualisierung im jwt()-Callback (siehe dort) - bewusst keine
+// Rate-Limit-Grenze wie RESET_RATE_LIMIT_WINDOW_MS, nur ein Mindestabstand zwischen zwei Writes.
+const LAST_ACTIVE_THROTTLE_MS = 60 * 60 * 1000;
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: 'jwt' },
   pages: {
@@ -83,10 +87,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         Object.assign(token, user as SessionUser);
-        // Nur bei einem frischen Login gesetzt (user ist bei jedem weiteren Request-Refresh
-        // undefined) - Benutzerverwaltung-Brief.md §2: "Zuletzt angemeldet" im Sheet-Kopf/der
-        // Tabelle. updateMany ohne select, damit der Login-Pfad nicht durch einen zusätzlichen
-        // Roundtrip länger wird; ein Fehler hier darf die Anmeldung nie blockieren.
+        // Bei einem frischen Login immer gesetzt, ungethrottelt (ein Login ist ohnehin ein
+        // seltenes Ereignis, kein Grund zu drosseln) - Benutzerverwaltung-Brief.md §2: "Zuletzt
+        // angemeldet"/"Zuletzt aktiv" im Sheet-Kopf/der Tabelle. Der "kein frischer Login"-Zweig
+        // unten aktualisiert denselben Wert zusätzlich (gedrosselt) bei jeder echten Nutzung - siehe
+        // dortigen Kommentar. updateMany ohne select, damit der Login-Pfad nicht durch einen
+        // zusätzlichen Roundtrip länger wird; ein Fehler hier darf die Anmeldung nie blockieren.
         prisma.user
           .updateMany({ where: { id: (user as SessionUser).id }, data: { lastLoginAt: new Date() } })
           .catch((error) => console.error('lastLoginAt konnte nicht aktualisiert werden:', error));
@@ -110,6 +116,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       Object.assign(token, await buildSessionUser(dbUser));
+
+      // "Zuletzt aktiv" in der Benutzerverwaltung soll echte Nutzung zeigen, nicht nur einen
+      // frischen Login - bei der langen Session-/JWT-Gültigkeit (next-auth-Standard) meldet sich
+      // ein Benutzer, der die App täglich nutzt, oft monatelang nicht neu an, sodass lastLoginAt
+      // sonst ewig auf dem Stand des letzten echten Logins einfriert. Dieser Zweig läuft laut
+      // middleware.ts's Matcher auf praktisch jedem Request - ein ungethrotteltes Update hier würde
+      // die Schreiblast auf jeden einzelnen Request verdoppeln, daher nur, wenn der vorhandene Wert
+      // älter als LAST_ACTIVE_THROTTLE_MS ist (dieselbe "throttlen statt jeden Request schreiben"-
+      // Idee wie das bestehende Passwort-Reset-Rate-Limit, nur ohne harte Grenze - hier soll es
+      // einfach nicht schneller als nötig aktualisiert werden). Der Spaltenname `lastLoginAt` bleibt
+      // unverändert (keine Migration nötig für eine reine Bedeutungserweiterung), auch wenn er jetzt
+      // nicht mehr ausschließlich einen Login-Zeitpunkt trägt.
+      const lastActiveIsStale =
+        !dbUser.lastLoginAt || Date.now() - dbUser.lastLoginAt.getTime() > LAST_ACTIVE_THROTTLE_MS;
+      if (lastActiveIsStale) {
+        prisma.user
+          .updateMany({ where: { id: userId }, data: { lastLoginAt: new Date() } })
+          .catch((error) => console.error('lastLoginAt (Zuletzt aktiv) konnte nicht aktualisiert werden:', error));
+      }
+
       return token;
     },
     async session({ session, token }) {
