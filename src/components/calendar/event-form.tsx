@@ -12,6 +12,7 @@ interface OrganizationOption {
   id: string;
   name: string;
   type: 'FEUERWEHR' | 'ABSCHNITTSKOMMANDO';
+  isActive?: boolean;
 }
 
 interface DroneGroupOption {
@@ -192,7 +193,7 @@ export function EventForm({
           <select {...register('organizationId')} className="rounded border border-neutral-300 px-3 py-2">
             {organizations.map((org) => (
               <option key={org.id} value={org.id}>
-                {org.name}
+                {org.isActive === false ? `${org.name} (deaktiviert)` : org.name}
               </option>
             ))}
           </select>

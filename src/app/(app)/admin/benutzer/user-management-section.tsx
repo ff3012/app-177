@@ -78,6 +78,7 @@ interface Organization {
   name: string;
   abschnittName?: string;
   abschnittId?: string;
+  isActive?: boolean;
 }
 
 interface DienstgradOption {

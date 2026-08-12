@@ -59,10 +59,10 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
 
   const [organizations, droneGroupOptions] = await Promise.all([
     prisma.organization.findMany({
-      where: { id: { in: user.feuerwehrAdminOrgIds } },
+      where: { OR: [{ id: { in: user.feuerwehrAdminOrgIds }, isActive: true }, { id: event.organizationId }] },
       orderBy: { name: 'asc' },
     }),
-    getManageableDroneGroupOptions(user),
+    getManageableDroneGroupOptions(user, event.category === 'DROHNENGRUPPE' ? event.droneGroupId : undefined),
   ]);
 
   const boundUpdate = updateEvent.bind(null, event.id);

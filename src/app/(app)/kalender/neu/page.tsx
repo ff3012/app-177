@@ -27,7 +27,7 @@ export default async function NeuerTerminPage({
 
   const [organizations, droneGroupOptions] = await Promise.all([
     prisma.organization.findMany({
-      where: { id: { in: user.feuerwehrAdminOrgIds } },
+      where: { id: { in: user.feuerwehrAdminOrgIds }, isActive: true },
       orderBy: { name: 'asc' },
     }),
     getManageableDroneGroupOptions(user),

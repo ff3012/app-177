@@ -9,6 +9,13 @@ export interface OrgSearchSelectOption {
   id: string;
   name: string;
   abschnittName?: string;
+  /** Bezirksverwaltung: deaktivierte Organisationen werden aus der Liste NEUER Auswahlmöglichkeiten
+   * entfernt (siehe selectableOptions unten), bleiben aber wählbar/sichtbar, wenn sie der aktuell
+   * gesetzte `value` sind - sonst würde ein Formular, das eine inzwischen deaktivierte Feuerwehr
+   * bereits zugeordnet hat, beim Öffnen keine passende Auswahl mehr anzeigen können. Fehlt dieses
+   * Feld (bestehende Aufrufer, die das Konzept nicht kennen), gilt es als aktiv (`!== false`).
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -47,16 +54,26 @@ export function OrgSearchSelect({
   const [search, setSearch] = useState('');
 
   const selected = useMemo(() => options.find((org) => org.id === value), [options, value]);
-  const hasAbschnittGroups = options.some((org) => Boolean(org.abschnittName));
+  // Deaktivierte Organisationen bleiben nur wählbar, wenn sie der aktuell gesetzte Wert sind - siehe
+  // OrgSearchSelectOption.isActive's Kommentar oben.
+  const selectableOptions = useMemo(
+    () => options.filter((org) => org.isActive !== false || org.id === value),
+    [options, value],
+  );
+  const hasAbschnittGroups = selectableOptions.some((org) => Boolean(org.abschnittName));
   const filteredOptions = useMemo(
-    () => options.filter((org) => org.name.toLowerCase().includes(search.trim().toLowerCase())),
-    [options, search],
+    () => selectableOptions.filter((org) => org.name.toLowerCase().includes(search.trim().toLowerCase())),
+    [selectableOptions, search],
   );
 
   function select(id: string) {
     onChange(id);
     setSearch('');
     setOpen(false);
+  }
+
+  function displayName(org: OrgSearchSelectOption): string {
+    return org.isActive === false ? `${org.name} (deaktiviert)` : org.name;
   }
 
   return (
@@ -69,7 +86,9 @@ export function OrgSearchSelect({
             open ? 'border-2 border-brand px-[11px]' : 'border-line'
           } ${triggerClassName}`}
         >
-          <span className={selected ? 'text-ink' : 'text-ink-faint'}>{selected ? selected.name : allLabel ?? placeholder}</span>
+          <span className={selected ? 'text-ink' : 'text-ink-faint'}>
+            {selected ? displayName(selected) : allLabel ?? placeholder}
+          </span>
           <span className="flex-none text-ink-faint">{open ? '▴' : '▾'}</span>
         </button>
       </PopoverTrigger>
@@ -100,7 +119,7 @@ export function OrgSearchSelect({
                     onSelect={() => select(org.id)}
                     className={value === org.id ? 'bg-brand-subtle data-[selected=true]:bg-brand-subtle' : ''}
                   >
-                    {org.name}
+                    {displayName(org)}
                   </CommandItem>
                 ))}
               </CommandGroup>

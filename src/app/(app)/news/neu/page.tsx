@@ -11,8 +11,8 @@ export default async function NeueNewsPage() {
   }
 
   const [organizations, droneGroups] = await Promise.all([
-    prisma.organization.findMany({ orderBy: { name: 'asc' } }),
-    prisma.droneGroup.findMany({ orderBy: { name: 'asc' } }),
+    prisma.organization.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
+    prisma.droneGroup.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
   ]);
 
   return (

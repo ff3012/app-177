@@ -130,6 +130,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
         name: org.shortName ?? org.name,
         abschnittName: org.parent?.shortName ?? org.parent?.name,
         abschnittId: org.parent?.id,
+        isActive: org.isActive,
       }))}
       dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
       droneGroups={droneGroups}
