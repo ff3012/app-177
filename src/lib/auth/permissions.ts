@@ -150,6 +150,33 @@ export function canGrantBezirksDrohnenAdmin(currentUser: SessionUser): boolean {
 }
 
 /**
+ * Sichtbarkeit der Seite /admin/bezirksverwaltung generell - Bezirksadmin ODER Bezirks-Drohnenadmin.
+ * Reines Seiten-Gate: welche der drei Sektionen innerhalb der Seite tatsächlich rendert, entscheiden
+ * canManageFeuerwehrenBezirksweit/canManageDrohnengruppenBezirksweit unten - ein reiner
+ * Bezirks-Drohnenadmin erreicht die Seite über diese Funktion, sieht dort aber ausschließlich den
+ * Drohnengruppen-Abschnitt.
+ */
+export function canAccessBezirksverwaltung(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
+}
+
+/** Feuerwehren-Abschnitt (Anlegen/Umbenennen/Deaktivieren) + Bezirksadmin-Liste - exklusiv Bezirksadmin. */
+export function canManageFeuerwehrenBezirksweit(user: SessionUser): boolean {
+  return isBezirksAdmin(user);
+}
+
+/**
+ * Drohnengruppen-Abschnitt (Anlegen/Umbenennen/Deaktivieren) - Bezirksadmin ODER Bezirks-Drohnenadmin.
+ * Bewusst NICHT canManageDroneGroupFor wiederverwendet: jene Funktion prüft Rechte für eine
+ * BESTEHENDE, bereits verankerte Gruppe (inkl. Abschnittsadmin/Gruppen-Admin) - das Anlegen einer
+ * NEUEN Gruppe ist ein bezirksweiter Strukturakt, bewusst enger gefasst auf die beiden bezirksweiten
+ * Rollen.
+ */
+export function canManageDrohnengruppenBezirksweit(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
+}
+
+/**
  * News/Push-Modul: bewusst auf Abschnittskommando-Admin beschränkt (erste Version) statt
  * feuerwehrAdminOrgIds — eine Push-Nachricht geht direkt an Mobilgeräte, ohne die redaktionelle
  * Kontrolle, die z. B. ein Kalendertermin durch bloße Sichtbarkeit hat. Kann später auf

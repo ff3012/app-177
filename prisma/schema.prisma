@@ -85,6 +85,11 @@ model Organization {
   icsToken  String           @unique @default(cuid())
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  // Bezirksverwaltung: deaktivierte Feuerwehren/Abschnitte bleiben vollständig erhalten (Termine,
+  // Mitgliedschaften, Historie) - isActive=false blendet sie nur aus NEUEN Zuordnungs-Auswahllisten
+  // aus (siehe OrgSearchSelect/event-form.tsx), nie aus bestehenden Verwaltungsansichten. Additiv,
+  // default(true) ist für jede bestehende Zeile korrekt - kein Backfill nötig.
+  isActive  Boolean          @default(true)
 
   // Kontaktadresse für die tägliche Atemschutz-Fristen-Warnung (nur FEUERWEHR-Orgs relevant) -
   // bewusst ein eigenes Feld hier statt eines globalen AppSettings-Eintrags, da jede Heimatfeuerwehr
@@ -351,6 +356,8 @@ model DroneGroup {
   name           String       @unique
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  // Bezirksverwaltung - dieselbe Semantik wie Organization.isActive oben.
+  isActive       Boolean      @default(true)
 
   // Ersetzen die bisherigen AppSettings.droneFlightNotificationEmail/droneQuickRegisterToken
   // (Singleton-Felder) - jetzt pro Gruppe statt app-weit.
