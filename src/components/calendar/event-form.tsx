@@ -58,7 +58,10 @@ export function EventForm({
       allDay: false,
       organizationId: organizations[0]?.id ?? '',
       isSectionWide: false,
-      category: 'ALLGEMEIN',
+      // Ein Nutzer ohne jede eigene Feuerwehr-Admin-Mitgliedschaft (reiner Bezirksadmin/Bezirks-
+      // Drohnenadmin/Admin Drohnengruppe) hat organizations=[] - für den ist "Allgemein" gar keine
+      // sinnvolle Standardauswahl (leeres Organisation-<select>), "Drohnengruppe" dagegen schon.
+      category: organizations.length === 0 && droneGroupOptions.length > 0 ? 'DROHNENGRUPPE' : 'ALLGEMEIN',
       droneGroupId: droneGroupOptions[0]?.id ?? null,
       ...defaultValues,
     },
@@ -70,24 +73,25 @@ export function EventForm({
   const category = watch('category');
   const startsAt = watch('startsAt');
 
-  // "Drohnengruppe" nur anbieten, wenn es überhaupt eine wählbare Gruppe gibt (droneGroupOptions
-  // enthält nur die eigene Gruppe des Nutzers) - sonst entstünde ein Termin ohne droneGroupId, der
-  // für niemanden sichtbar wäre. Bearbeitet man einen bereits als Drohnengruppen-Termin angelegten
-  // Eintrag, bleibt die Option erhalten, damit der aktuelle Wert im Select nicht verlorengeht.
+  // "Drohnengruppe" nur als Kategorie-Option anbieten, wenn es überhaupt eine wählbare Gruppe gibt
+  // (droneGroupOptions kommt bereits vorgefiltert vom Aufrufer - alle Gruppen, die dieser Nutzer
+  // verwalten darf, plus ggf. der bezirksweite Sentinel-Eintrag) - sonst entstünde ein Termin ohne
+  // droneGroupId, der für niemanden sichtbar wäre. Bearbeitet man einen bereits als Drohnengruppen-
+  // Termin angelegten Eintrag, bleibt die Option erhalten, damit der aktuelle Wert im Select nicht
+  // verlorengeht.
   const categoryOptions = EVENT_CATEGORIES.filter(
     (categoryOption) =>
       categoryOption !== 'DROHNENGRUPPE' ||
       droneGroupOptions.length > 0 ||
       defaultValues?.category === 'DROHNENGRUPPE',
   );
-
-  // Drohnengruppe-Termine sind gruppenübergreifend gedacht, daher beim Auswählen automatisch
-  // als Abschnitt-weit vorbelegen (Benutzer kann es danach weiterhin manuell abwählen).
-  useEffect(() => {
-    if (category === 'DROHNENGRUPPE') {
-      setValue('isSectionWide', true);
-    }
-  }, [category, setValue]);
+  // Der Kategorie-Umschalter selbst ist unabhängig von showSectionWideOption sichtbar (früher war er
+  // daran gekoppelt, weil ein Drohnengruppen-Termin nur über eine als Organisation gewählte
+  // Abschnittskommando-Organisation erreichbar war - das gilt nicht mehr, Drohnengruppe ist jetzt
+  // eine eigenständige Kategorie unabhängig von der Organisation-Auswahl). categoryOptions.length > 1
+  // heißt genau "DROHNENGRUPPE ist tatsächlich eine echte Option", da ALLGEMEIN nie herausgefiltert wird.
+  const showCategorySelect = categoryOptions.length > 1;
+  const isDroneCategory = category === 'DROHNENGRUPPE';
 
   // Ende übernimmt bei jeder Änderung von Start automatisch dessen Datum. Solange Ende noch gar
   // keine eigene Uhrzeit hat, wird zusätzlich Start + 15 Minuten als Uhrzeit vorgeschlagen; hat
@@ -176,26 +180,28 @@ export function EventForm({
         Ganztägig
       </label>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-neutral-700">Organisation</label>
-        <select {...register('organizationId')} className="rounded border border-neutral-300 px-3 py-2">
-          {organizations.map((org) => (
-            <option key={org.id} value={org.id}>
-              {org.name}
-            </option>
-          ))}
-        </select>
-        {errors.organizationId && <p className="text-sm text-red-700">{errors.organizationId.message}</p>}
-      </div>
+      {!isDroneCategory && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Organisation</label>
+          <select {...register('organizationId')} className="rounded border border-neutral-300 px-3 py-2">
+            {organizations.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
+          {errors.organizationId && <p className="text-sm text-red-700">{errors.organizationId.message}</p>}
+        </div>
+      )}
 
-      {showSectionWideOption && (
+      {showSectionWideOption && !isDroneCategory && (
         <label className="flex items-center gap-2 text-sm text-neutral-700">
           <input type="checkbox" {...register('isSectionWide')} />
           Abschnitt-weiter Termin (in allen Feuerwehr-Kalendern sichtbar)
         </label>
       )}
 
-      {showSectionWideOption && (
+      {showCategorySelect && (
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Kategorie</label>
           <select {...register('category')} className="rounded border border-neutral-300 px-3 py-2">
@@ -211,7 +217,7 @@ export function EventForm({
         </div>
       )}
 
-      {category === 'DROHNENGRUPPE' && (
+      {isDroneCategory && (
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Drohnengruppe</label>
           <select {...register('droneGroupId')} className="rounded border border-neutral-300 px-3 py-2">
@@ -221,7 +227,6 @@ export function EventForm({
               </option>
             ))}
           </select>
-          {errors.droneGroupId && <p className="text-sm text-red-700">{errors.droneGroupId.message}</p>}
         </div>
       )}
 
