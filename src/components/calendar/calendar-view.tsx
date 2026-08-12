@@ -28,6 +28,7 @@ export interface CalendarEventInput {
   myRsvpStatus?: 'ZUGESAGT' | 'ABGESAGT' | 'UNKLAR' | null;
   rsvpCounts?: { ZUGESAGT: number; ABGESAGT: number; UNKLAR: number };
   isVehicleBooking?: boolean;
+  isDistrictWideDrone?: boolean;
 }
 
 function formatEventTime(event: CalendarEventInput) {
