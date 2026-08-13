@@ -346,6 +346,55 @@ links to it from wherever an event is actually visible: the list view (icon per 
 event-detail popup (non-editable events only show up there), and the edit page (editable events navigate
 straight there instead, so the popup never renders for them).
 
+**Kalender-Ort-Auftrag.md (Metazeile zeigt Ort statt Instanz)** — the meta line under an event's title
+(previously always the organizing "Instanz" — "Wolfsgraben", "AFKDO Purkersdorf") now shows the event's
+**location** (`Event.location`, an existing, already-fetched field — no migration, no new field) instead,
+since knowing which Feuerwehr organized a drill tells a reader nothing about where they actually need to
+drive to. `event-list-view.tsx` gained two shared helpers, `locationMetaText()` (plain string, for `title`
+tooltips) and `<LocationMeta event={event}/>` (JSX, same rule with the Instanz portion colored `#aeaeb2`
+when shown) — both implement one rule:
+- Location present, event's own layer is `'own'` (i.e. a plain event belonging directly to the viewer's own
+  home Feuerwehr, not section-wide/Drohnengruppe) → location only. The Instanz is dropped specifically
+  because `layer === 'own'` is the exact same condition that already produces the "own Feuerwehr" color
+  stripe elsewhere in this view — showing the Instanz too would just repeat what that stripe already says.
+  This reuses the pre-existing `layer` field rather than adding a new "is this the viewer's home org" check
+  or comparing organization names (fragile — `shortName` isn't unique) or ids (would've meant threading a
+  new `organizationId`/viewer-home-org-id pair through `CalendarEventInput` for no reason, when `layer` was
+  already exactly this signal).
+- Location present, layer is `'abschnitt'` or `'drohnengruppe'` → `{Ort} · {Instanz}`, Instanz in `#aeaeb2`
+  (this hex value is used as a Tailwind arbitrary-value class, `text-[#aeaeb2]`, not the shadcn/Verwaltung
+  module's `text-ink-faint` token — Kalender has never adopted that token system, see the root CLAUDE.md's
+  "Verwaltung=shadcn, Rest der App=handgerollt" note, so introducing it here for one color would be an
+  inconsistent one-off; the raw hex matches this file's own existing convention of inline hex values, e.g.
+  `RsvpCountChips`'s `style={{backgroundColor: '#eaf6f0'}}`).
+- No location → Instanz alone, unstyled (never an empty line — the Instanz always exists).
+
+Applied at all three list-rendering surfaces in `event-list-view.tsx`: `DesktopEventRow` (`lg:`+, prepends
+`{formatStartTime(event)} · `, but **only for the non-vehicle-booking branch** — the brief explicitly said
+leave Fahrzeug-Reservierungen unchanged, so `event.isVehicleBooking` still renders the old time-range +
+Instanz line verbatim), `EventCard` (mobile, no time prefix — the card header already shows the time above
+this line, per the brief's explicit mobile rule) and `EventListRow` (the tablet-only 640–1023px table,
+*not* explicitly covered by the brief's two named surfaces — "Browser" in Kalender-Ort-Auftrag.md means the
+existing `lg:`+ "Kalender Browser.dc.html" desktop view specifically, not "any browser," and "App" means the
+mobile card view; see the exchange around this task for that reading — but applying the identical logic to
+this third, in-between surface too was a small, low-risk consistency call so a tablet-width user wouldn't
+see the old Instanz-only line while both neighboring breakpoints show the new rule; its column header
+changed from "Organisation" to "Ort" to match, since labeling a physical location "Organisation" would be
+its own new confusion). Truncation is a single `truncate` (single-line ellipsis) on the containing element
+with a `title` from `locationMetaText()` for the full value — deliberately NOT a flex layout with
+independent shrink priorities for Ort vs. Instanz: since Ort always renders first and Instanz (when shown)
+always comes last, a single-line `truncate` container naturally clips from the tail first, which already
+satisfies the brief's "Instanz kürzt zuerst, nie der Ort" requirement as a side effect of render order, with
+no extra layout logic needed.
+
+**.ics `LOCATION:` field** — the brief's task 5 asked to verify the outgoing `.ics` feeds actually include
+the location, since for a subscriber the private calendar entry is the only record of where to go. Checked,
+not changed: `lib/calendar/ics.ts`'s `buildIcsCalendar()` already passes `location: event.location ??
+undefined` into `ical-generator` for every event, and both outgoing `.ics` routes (the per-organization/
+legacy token feed above, and the single-event download at `kalender/[eventId]/ics/route.ts`) already call
+that same shared builder — so every exported `.ics` file already carries `LOCATION:` when the event has one;
+no code change was needed here.
+
 **Externer ICS-Kalenderimport (5-Minuten-Sync)** — the reverse direction of the .ics links above: a
 Feuerwehr can point at an *external* read-only .ics feed (e.g. a Google Calendar "public/basic.ics" share
 link) and have its events mirrored into that Feuerwehr's own Kalender automatically, requested so members

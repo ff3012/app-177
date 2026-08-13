@@ -28,6 +28,41 @@ function formatTimeRange(event: CalendarEventInput): string {
 }
 
 /**
+ * Kalender-Ort-Auftrag.md: die Metazeile zeigt den ORT statt der ausführenden Instanz - wer den
+ * Kalender liest, will wissen, wohin er fahren muss, nicht welche Feuerwehr den Termin angelegt hat.
+ * Fällt auf die Instanz zurück, wenn kein Ort erfasst ist (nie eine leere Zeile). Die Instanz entfällt
+ * ganz, wenn sie die eigene Heimatfeuerwehr ist - dort ist sie redundant mit dem Farbstreifen der
+ * Ebene (`layer === 'own'`, exakt dieselbe Bedingung, die schon den Farbstreifen bestimmt - kein
+ * separater Organisations-Abgleich nötig). Reine Textbausteine (für `title`-Tooltips); die farbige
+ * Darstellung kommt aus `LocationMeta` darunter.
+ */
+function locationMetaText(event: CalendarEventInput): string {
+  const location = event.location?.trim();
+  if (!location) return event.organizationName ?? '';
+  if (event.layer === 'own' || !event.organizationName) return location;
+  return `${location} · ${event.organizationName}`;
+}
+
+/** Rendert dieselbe Regel wie `locationMetaText`, aber mit der Instanz in ink-faint (#aeaeb2), wenn
+ * sie neben dem Ort steht - nur Text, kein eigener Truncate/Title, das übernimmt der jeweilige
+ * Aufrufer (Zeit-Präfix auf Desktop, Tabellenzelle auf Tablet, eigene Zeile auf Mobile unterscheiden
+ * sich in der Umgebung, nicht in dieser Logik). Kürzt selbst nicht - ein einzeiliger `truncate` am
+ * Aufrufer schneidet ohnehin zuerst am Ende ab, wo hier die Instanz steht, nie den vorangestellten
+ * Ort - siehe Kalender-Ort-Auftrag.md Punkt 4 ("zuerst wird die Instanz gekürzt, nie der Ort").
+ */
+function LocationMeta({ event }: { event: CalendarEventInput }) {
+  const location = event.location?.trim();
+  if (!location) return <>{event.organizationName ?? '–'}</>;
+  if (event.layer === 'own' || !event.organizationName) return <>{location}</>;
+  return (
+    <>
+      {location}
+      <span className="text-[#aeaeb2]"> · {event.organizationName}</span>
+    </>
+  );
+}
+
+/**
  * Ein Klick öffnet für JEDEN Benutzer (auch ohne Bearbeitungsrecht) die Detailansicht - ein
  * Doppelklick springt für editierbare Termine stattdessen direkt zum Bearbeiten-Formular. Da der
  * Browser bei einem Doppelklick trotzdem zuerst zwei einzelne click-Events feuert, wird der
@@ -81,7 +116,9 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
         )}
         {event.title}
       </td>
-      <td className="break-words px-3 py-1">{event.organizationName ?? '–'}</td>
+      <td className="truncate px-3 py-1" title={locationMetaText(event)}>
+        <LocationMeta event={event} />
+      </td>
       <td className="px-3 py-1">
         <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
       </td>
@@ -139,7 +176,9 @@ function EventCard({ event }: { event: CalendarEventInput }) {
           )}
           {event.title}
         </span>
-        <div className="text-sm text-neutral-500">{event.organizationName ?? '–'}</div>
+        <div className="truncate text-sm text-neutral-500" title={locationMetaText(event)}>
+          <LocationMeta event={event} />
+        </div>
         <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
           <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
             Zusage & Details
@@ -273,9 +312,24 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
               {event.title}
             </Link>
           </div>
-          <div className="text-sm text-neutral-500">
-            {event.isVehicleBooking ? formatTimeRange(event) : formatStartTime(event)}
-            {event.organizationName ? ` · ${event.organizationName}` : ''}
+          <div
+            className="truncate text-sm text-neutral-500"
+            title={
+              event.isVehicleBooking
+                ? `${formatTimeRange(event)}${event.organizationName ? ` · ${event.organizationName}` : ''}`
+                : `${formatStartTime(event)} · ${locationMetaText(event)}`
+            }
+          >
+            {event.isVehicleBooking ? (
+              <>
+                {formatTimeRange(event)}
+                {event.organizationName ? ` · ${event.organizationName}` : ''}
+              </>
+            ) : (
+              <>
+                {formatStartTime(event)} · <LocationMeta event={event} />
+              </>
+            )}
           </div>
         </div>
 
@@ -441,7 +495,7 @@ export function EventListView({
               <th className="w-[8%] px-3 py-1.5">Start</th>
               <th className="w-[10%] px-3 py-1.5">Tag</th>
               <th className="w-[27%] px-3 py-1.5">Betreff</th>
-              <th className="w-[13%] px-3 py-1.5">Organisation</th>
+              <th className="w-[13%] px-3 py-1.5">Ort</th>
               <th className="w-[16%] px-3 py-1.5">Zusagen</th>
               <th className="w-[15%] px-3 py-1.5" />
             </tr>
