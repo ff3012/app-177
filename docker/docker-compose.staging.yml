@@ -27,6 +27,10 @@ services:
       dockerfile: docker/Dockerfile
     environment:
       TZ: Europe/Vienna
+      # Nur hier gesetzt (nie in Prods docker-compose.yml) - lässt den App-Header orange mit
+      # "DEVELOPMENT"-Schriftzug statt dunkel/AFKDO-Purkersdorf-Wortmarke rendern, siehe
+      # src/app/(app)/layout.tsx's isDevStage.
+      APP_STAGE: dev
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}

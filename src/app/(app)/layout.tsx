@@ -22,6 +22,11 @@ function buildMobileHeaderLabel(org: { name: string; shortName: string | null; t
   return `Feuerwehr ${org.shortName ?? org.name}`;
 }
 
+// Gesetzt nur in docker-compose.staging.yml (APP_STAGE: dev) - in Prod nie gesetzt, daher dort
+// immer false. Rein visuell: unterscheidet den dunklen Header von app-177 vom orangen Header von
+// dev.app-177, damit auf einen Blick klar ist, in welcher Umgebung man sich befindet.
+const isDevStage = process.env.APP_STAGE === 'dev';
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
@@ -56,7 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Initialen-Avatar) sind über sm:hidden ausgeblendet; Desktop-Elemente (Nav, Wortmarke,
             zweites Wappen rechts, Abmelden) über hidden sm:* wiederhergestellt - exakt der bisherige
             Desktop-Zustand, nur nicht mehr über flex-col/sm:flex-row erzwungen. */}
-        <header className="pt-safe bg-[#1c1c1e] text-white">
+        <header className={`pt-safe text-white ${isDevStage ? 'bg-[#c2410c]' : 'bg-[#1c1c1e]'}`}>
           <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-5 sm:h-auto sm:px-4 sm:py-3">
             <div className="flex min-w-0 items-center gap-2 sm:gap-6">
               {/* Startbildschirm-Brief.md §2: Wappen sitzt nur noch in der Tab-Bar (Wappen-Home-Tab),
@@ -64,6 +69,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   entfällt deshalb hier ersatzlos. */}
               <MobileHeaderTitleSlot fallback={mobileHeaderLabel} />
               <span className="hidden text-sm font-semibold text-white sm:inline">AFKDO Purkersdorf</span>
+              {isDevStage && (
+                <span className="shrink-0 rounded-full bg-black/25 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                  <span className="sm:hidden">DEV</span>
+                  <span className="hidden sm:inline">DEVELOPMENT</span>
+                </span>
+              )}
               <Nav user={user} />
             </div>
             <div className="flex shrink-0 items-center gap-1 text-sm text-neutral-200 sm:gap-3">
