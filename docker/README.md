@@ -310,3 +310,138 @@ chrome.exe --kiosk --noerrdialogs --disable-session-crashed-bubble "https://<dom
 Die Seite lädt sich selbst alle 5 Minuten neu (`<meta http-equiv="refresh">`) - kein zusätzlicher
 Neustart-Mechanismus nötig. Kein Zoom/Skalierung erforderlich, das Layout passt sich der tatsächlichen
 Displayauflösung automatisch an.
+
+## Zweiter Stack für eine Test-/Dev-Umgebung (dev.app-177.ff-wolfsgraben.at)
+
+Nach Release 2.0.0 (echte Nutzer in Produktion) sollte eine neue Änderung nicht mehr direkt gegen Prod
+getestet werden. Dieser Abschnitt richtet einen **zweiten, komplett eigenständigen Stack** auf demselben
+Hetzner-Server ein: eigener Checkout-Ordner, eigene Postgres-Datenbank, eigenes `.env`, erreichbar über
+eine eigene Subdomain. Der bestehende Produktions-Caddy übernimmt weiterhin **beide** Domains - ein
+zweiter Caddy-Container würde mit dem bestehenden auf Port 80/443 kollidieren.
+
+**Nicht zu verwechseln** mit der bereits vorhandenen `docker-compose.dev.yml` im Repo-Root - die startet
+nur eine lokale Postgres-Instanz für `npm run dev` auf dem eigenen Rechner, kein vollständiger,
+öffentlich erreichbarer Stack. Die Dateien hier heißen deshalb bewusst `*.staging.*`, um Verwechslungen
+zu vermeiden, auch wenn die Umgebung selbst im Alltag "Dev-Server" genannt wird.
+
+### 1. Voraussetzungen
+
+- **DNS**: einen A-Record für `dev.app-177.ff-wolfsgraben.at` anlegen, der auf dieselbe Server-IP zeigt
+  wie der bestehende Prod-Record. Ohne diesen Eintrag kann Caddy später kein Let's-Encrypt-Zertifikat
+  für die neue Subdomain ausstellen.
+- **Serverkapazität** prüfen (`free -h`, `df -h`) - ein zweiter Next.js- + Postgres-Container läuft
+  dauerhaft parallel zu Prod, nicht nur während eines Tests.
+
+### 2. Zweiten Checkout anlegen
+
+```bash
+git clone <dasselbe Repo-Remote wie /opt/app-177> /opt/app-177-dev
+cd /opt/app-177-dev
+cp .env.staging.example .env
+```
+
+`.env` jetzt ausfüllen - **jeder Wert muss sich von der Produktions-`.env` unterscheiden** (siehe die
+Kommentare in `.env.staging.example` für die Begründung je Variable, insbesondere die Mailjet-Warnung:
+echte E-Mail-Versendung an echte Mitglieder nur vermeiden, indem diese Umgebung ausschließlich mit
+`prisma/seed.ts`-Testdaten läuft, nie mit einer Kopie der echten Produktionsdatenbank).
+
+### 3. Gemeinsames Docker-Netzwerk für Prod-Caddy ↔ Dev-App
+
+Einmalig anlegen:
+
+```bash
+docker network create caddy_net
+```
+
+Der **bestehende** Prod-Stack muss diesem Netzwerk zusätzlich beitreten, damit sein Caddy den neuen
+Dev-App-Container erreichen kann. In `/opt/app-177/docker/docker-compose.yml` beim `caddy`-Service
+ergänzen:
+
+```yaml
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - default
+      - caddy_net          # neu
+    depends_on:
+      - app
+    restart: unless-stopped
+
+networks:                  # neu
+  caddy_net:
+    external: true
+```
+
+Danach NUR den Caddy-Container neu erstellen (Prod-App/-Postgres bleiben unberührt, kurze Unterbrechung
+im Sekundenbereich beim Neustart von Caddy selbst):
+
+```bash
+cd /opt/app-177
+docker compose -f docker/docker-compose.yml --env-file .env up -d caddy
+```
+
+### 4. Dev-Stack starten
+
+`docker/docker-compose.staging.yml` ist bereits im Repo vorbereitet (App + eigene Postgres, kein
+eigener Caddy, tritt `caddy_net` selbst bei). Immer mit einem **eigenen Projektnamen** starten, damit
+Container/Volumes nie mit Prod kollidieren:
+
+```bash
+cd /opt/app-177-dev
+docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env up -d --build
+docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env exec app node node_modules/tsx/dist/cli.mjs prisma/seed.ts
+```
+
+### 5. Caddy: neue Subdomain eintragen
+
+Auf dem Server die **echte** Caddyfile bearbeiten (nicht die Platzhalter-Vorlage im Repo,
+`docker/Caddyfile` - die echte Domain wird laut bestehender Konvention nie committet, siehe oben) und
+einen zweiten Site-Block ergänzen:
+
+```
+dev.app-177.ff-wolfsgraben.at {
+	reverse_proxy app177-dev-app:3000
+}
+```
+
+`app177-dev-app` ist der explizite `container_name` aus `docker-compose.staging.yml` - bewusst nicht der
+generische Servicename `app`, da der sonst mit dem gleichnamigen Servicenamen des Prod-Stacks auf dem
+gemeinsamen `caddy_net` mehrdeutig wäre. Danach Caddy ohne Neustart/Downtime neu laden:
+
+```bash
+cd /opt/app-177
+docker compose -f docker/docker-compose.yml --env-file .env exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+`https://dev.app-177.ff-wolfsgraben.at` sollte jetzt erreichbar sein (Caddy stellt beim ersten Aufruf
+automatisch ein eigenes Let's-Encrypt-Zertifikat für die neue Subdomain aus - vorausgesetzt der
+DNS-Eintrag aus Schritt 1 ist bereits gesetzt). Login mit `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` aus
+der Dev-`.env` testen.
+
+### 6. Laufende Nutzung
+
+Eine neue Änderung testen, ohne Prod anzufassen:
+
+```bash
+cd /opt/app-177-dev
+git checkout <feature-branch>   # oder: git pull für main
+docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env up -d --build
+```
+
+Erst nach erfolgreichem Test in `/opt/app-177` wie gewohnt nach `main` mergen und dort separat
+deployen (`git pull` + `docker compose -f docker/docker-compose.yml --env-file .env up -d --build`) -
+die beiden Checkouts/Stacks beeinflussen sich nie gegenseitig.
+
+**Bewusst nicht eingerichtet**: keiner der host-seitigen Cronjobs (`backup.sh`,
+`send-scheduled-news.sh`, `system-check-email.sh`, `atemschutz-warnung-email.sh`,
+`facebook-fetch.sh`, `kalender-ics-sync.sh`) läuft standardmäßig für diesen Stack - die würden sonst
+unnötig externe Dienste (Mailjet, S3, Facebook) mit Testdaten treffen. Nur gezielt und temporär
+einrichten, wenn ein cron-gesteuertes Feature selbst getestet werden soll, und danach wieder aus der
+Dev-Crontab entfernen.

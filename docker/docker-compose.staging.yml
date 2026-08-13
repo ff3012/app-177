@@ -1,0 +1,66 @@
+# Zweiter, komplett eigenständiger Stack für eine Test-/Dev-Umgebung auf demselben Hetzner-Server
+# wie die Produktion - eigene Postgres, eigenes .env, eigener Checkout-Ordner. Bewusst KEIN eigener
+# Caddy-Service hier: der bestehende Produktions-Caddy belegt bereits Port 80/443 exklusiv, ein
+# zweiter Caddy-Container würde kollidieren. Stattdessen erreicht der bestehende Prod-Caddy diesen
+# App-Container über das gemeinsame externe Netzwerk "caddy_net" (siehe docker/README.md,
+# "Zweiter Stack für eine Test-/Dev-Umgebung") - dafür muss Prod-Caddy diesem Netzwerk einmalig
+# zusätzlich beitreten, siehe dieselbe Anleitung.
+#
+# Immer mit einem EIGENEN Projektnamen starten, damit Container/Volumes/Netzwerke nie mit dem
+# Prod-Stack kollidieren, z. B. aus einem eigenen Checkout /opt/app-177-dev heraus:
+#   docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env up -d --build
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      TZ: Europe/Vienna
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL}
+      ABSCHNITTS_ICS_TOKEN: ${ABSCHNITTS_ICS_TOKEN}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      MAILJET_API_KEY: ${MAILJET_API_KEY}
+      MAILJET_API_SECRET: ${MAILJET_API_SECRET}
+      MAILJET_FROM_EMAIL: ${MAILJET_FROM_EMAIL}
+      MAILJET_FROM_NAME: ${MAILJET_FROM_NAME:-AFKDO Purkersdorf (Test)}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
+      CRON_SECRET: ${CRON_SECRET}
+      # Bewusst keine S3_*-Variablen - eine Test-/Dev-Umgebung braucht kein Off-Box-Backup ihrer
+      # eigenen Wegwerfdaten. backup.sh wird auf diesem Stack ohnehin nicht per Cron eingerichtet.
+    container_name: app177-dev-app
+    networks:
+      - default
+      - caddy_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    expose:
+      - '3000'
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+
+networks:
+  caddy_net:
+    external: true
