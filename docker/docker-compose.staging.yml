@@ -9,8 +9,19 @@
 # Immer mit einem EIGENEN Projektnamen starten, damit Container/Volumes/Netzwerke nie mit dem
 # Prod-Stack kollidieren, z. B. aus einem eigenen Checkout /opt/app-177-dev heraus:
 #   docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env up -d --build
+#
+# WICHTIG: der App-Service heißt hier bewusst "dev-app", NICHT "app" (obwohl der Prod-Compose-Service
+# "app" heißt). Grund: Docker Compose vergibt einem Service auf JEDEM Netzwerk, dem er beitritt,
+# automatisch einen DNS-Alias gleich dem Service-Namen - auch auf dem gemeinsamen externen "caddy_net".
+# Würde dieser Service hier ebenfalls "app" heißen, gäbe es auf "caddy_net" zwei Container mit Alias
+# "app" (Prod-App + Dev-App), und Caddy (das sowohl an Prods eigenem Netzwerk als auch an "caddy_net"
+# hängt) könnte "app:3000" nicht mehr eindeutig auflösen - das hat in der Praxis dazu geführt, dass
+# echte Prod-Aufrufe von app-177.ff-wolfsgraben.at zeitweise beim Dev-Container landeten (erkennbar an
+# einem Redirect auf dev.app-177..., ausgelöst durch dessen abweichende AUTH_URL), aber nur solange
+# der Dev-Stack lief. Die dev-eigene Caddyfile-Zeile spricht diesen Service ohnehin über den fixen
+# container_name "app177-dev-app" an, nicht über den Service-Namen - siehe docker/README.md.
 services:
-  app:
+  dev-app:
     build:
       context: ..
       dockerfile: docker/Dockerfile

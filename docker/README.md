@@ -396,7 +396,7 @@ Container/Volumes nie mit Prod kollidieren:
 ```bash
 cd /opt/app-177-dev
 docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env up -d --build
-docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env exec app node node_modules/tsx/dist/cli.mjs prisma/seed.ts
+docker compose -p app177-dev -f docker/docker-compose.staging.yml --env-file .env exec dev-app node node_modules/tsx/dist/cli.mjs prisma/seed.ts
 ```
 
 ### 5. Caddy: neue Subdomain eintragen
@@ -411,9 +411,15 @@ dev.app-177.ff-wolfsgraben.at {
 }
 ```
 
-`app177-dev-app` ist der explizite `container_name` aus `docker-compose.staging.yml` - bewusst nicht der
-generische Servicename `app`, da der sonst mit dem gleichnamigen Servicenamen des Prod-Stacks auf dem
-gemeinsamen `caddy_net` mehrdeutig wäre. Danach Caddy ohne Neustart/Downtime neu laden:
+`app177-dev-app` ist der explizite `container_name` aus `docker-compose.staging.yml`. Der Compose-Service
+selbst heißt dort bewusst `dev-app`, nicht `app` - reicht nicht, das nur in dieser `reverse_proxy`-Zeile zu
+vermeiden: Docker Compose vergibt jedem Service auf **jedem** Netzwerk, dem er beitritt, automatisch einen
+DNS-Alias gleich dem Service-Namen, auch auf `caddy_net`. Hieße der Dev-Service ebenfalls `app`, gäbe es auf
+`caddy_net` zwei Container mit Alias `app`, und Prod-Caddys eigene `reverse_proxy app:3000`-Zeile (die ja
+den *Prod*-App-Container meint) würde uneindeutig - das ist real passiert: Prod-Aufrufe von
+app-177.ff-wolfsgraben.at landeten zeitweise beim Dev-Container und wurden auf dev.app-177... umgeleitet
+(dessen abweichende `AUTH_URL`), aber nur solange der Dev-Stack lief. Danach Caddy ohne Neustart/Downtime
+neu laden:
 
 ```bash
 cd /opt/app-177
