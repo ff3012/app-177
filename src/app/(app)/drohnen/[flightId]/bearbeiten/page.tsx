@@ -10,12 +10,21 @@ export default async function FlugBearbeitenPage({ params }: { params: Promise<{
   const user = await requireUser();
   const { flightId } = await params;
 
-  const flight = await prisma.droneFlight.findUnique({ where: { id: flightId }, include: { drone: true } });
+  const flight = await prisma.droneFlight.findUnique({
+    where: { id: flightId },
+    include: { drone: { include: { droneGroup: true } } },
+  });
 
   if (!flight) {
     return <p className="text-neutral-700">Flug wurde nicht gefunden.</p>;
   }
-  if (!canManageFlight(user, { registeredById: flight.registeredById, droneGroupId: flight.drone.droneGroupId })) {
+  if (
+    !canManageFlight(user, {
+      registeredById: flight.registeredById,
+      droneGroupId: flight.drone.droneGroupId,
+      organizationId: flight.drone.droneGroup.organizationId,
+    })
+  ) {
     return <p className="text-neutral-700">Du hast keine Berechtigung, diesen Flug zu bearbeiten.</p>;
   }
 

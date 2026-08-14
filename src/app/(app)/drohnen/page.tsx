@@ -132,7 +132,7 @@ export default async function DrohnenPage({
     await Promise.all([
       prisma.droneFlight.findMany({
         where,
-        include: { drone: true, registeredBy: true, pilotUser: true },
+        include: { drone: { include: { droneGroup: true } }, registeredBy: true, pilotUser: true },
         orderBy: { startsAt: 'desc' },
         take,
       }),
@@ -222,7 +222,11 @@ export default async function DrohnenPage({
       droneName: flight.drone.name,
       purposeLabel,
       originLabel,
-      editable: canManageFlight(user, { registeredById: flight.registeredById, droneGroupId: flight.drone.droneGroupId }),
+      editable: canManageFlight(user, {
+        registeredById: flight.registeredById,
+        droneGroupId: flight.drone.droneGroupId,
+        organizationId: flight.drone.droneGroup.organizationId,
+      }),
     };
   });
 

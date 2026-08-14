@@ -157,6 +157,24 @@ page (all deleted) with:
   the viewer may administer, empty array for a plain member/pilot). `isAdmin` on the page is simply
   `allowedGroups.length > 0` — no separate boolean, one source of truth for "does this viewer get
   the admin experience."
+- **Flug erstellen/bearbeiten/löschen gruppenübergreifend für Admins** (Fix, gefunden während einer
+  Debugging-Session zu einem gelöschten Flug): `canManageFlight` prüfte ursprünglich nur
+  `isDroneGroupAdmin(user) && user.droneGroupId === flight.droneGroupId` — ein Bezirksadmin/Bezirks-
+  Drohnenadmin/Abschnittsadmin ohne eigene Mitgliedschaft in der jeweiligen Gruppe konnte fremde
+  Flüge dadurch weder bearbeiten noch löschen, obwohl er die Gruppe selbst über
+  `canManageDroneGroupFor` sonst überall verwalten darf. `canManageFlight` delegiert jetzt an genau
+  diese Funktion (`canManageDroneGroupFor(user, {id: droneGroupId, organizationId}) ||
+  flight.registeredById === user.id`) — dafür brauchen alle Aufrufstellen jetzt zusätzlich
+  `drone.droneGroup.organizationId`, nicht mehr nur `drone.droneGroupId`. Symmetrisch dazu regelt
+  die neue `canRegisterFlightFor(user, droneGroup)` (`user.droneGroupId === droneGroup.id ||
+  canManageDroneGroupFor(user, droneGroup)`) das Erstellen: `/drohnen/neu` hat jetzt denselben
+  Gruppenwechsel-Pillen wie `/drohnen` (`getAllowedDroneGroups`), und `createFlight` nimmt die
+  Ziel-`droneGroupId` als gebundenes erstes Server-Action-Argument (`.bind(null, droneGroupId)`,
+  gleiches Muster wie `updateFlight`/`deleteFlight`s `flightId`-Bindung) statt sie aus
+  `user.droneGroupId` abzuleiten. `canViewDroneModule` bekam dafür zusätzlich einen
+  `isBezirksDrohnenAdmin`-Bypass (bewusst NICHT `isBezirksAdmin` — das bleibt laut der bestehenden
+  Sicherheitsentscheidung oben ausgeschlossen), da ein reiner Bezirks-Drohnenadmin ohne eigene
+  `DrohnengruppeMembership` sonst nie über die allererste Prüfung der Seite hinausgekommen wäre.
 
 **Drohnengruppe Qualifikations-Filter** — an Admin-only, multi-select "Qualifikation" dropdown in
 `FlightSidebar` (a hand-rolled button+checkbox-panel toggle, no shadcn `Popover`/`Command` — this

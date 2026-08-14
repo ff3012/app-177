@@ -45,18 +45,32 @@ export function isDroneGroupAdmin(user: SessionUser): boolean {
 }
 
 /**
- * Sichtbarkeit des gesamten Drohnengruppe-Moduls: NUR "Mitglied Drohnengruppe" oder "Admin
- * Drohnengruppe" (isDrohnengruppeMember deckt beide Rollen ab, da es unabhängig von role gesetzt
- * wird). Bewusst KEINE Ausnahme mehr für Abschnittskommando-Mitglieder/-Admins ohne explizite
+ * Sichtbarkeit des gesamten Drohnengruppe-Moduls: "Mitglied Drohnengruppe"/"Admin Drohnengruppe"
+ * (isDrohnengruppeMember deckt beide Rollen ab, da es unabhängig von role gesetzt wird) ODER
+ * Bezirks-Drohnenadmin. Bewusst KEINE Ausnahme für Bezirksadmin oder Abschnittsadmin ohne eigene
  * Drohnengruppen-Rolle — bewusste Sicherheitsentscheidung, siehe Security-Review der Drohnengruppe.
+ * isBezirksDrohnenAdmin ist davon unbenommen: anders als der generische Bezirks-/Abschnittsadmin ist
+ * das eine eigens für die Drohnengruppen-Verwaltung vergebene Rolle (siehe canManageDroneGroupFor),
+ * die ohne diese Ausnahme selbst nie über die erste Zeile dieser Funktion hinauskäme, wenn ihr
+ * Inhaber (noch) kein persönliches DrohnengruppeMembership hat.
  */
 export function canViewDroneModule(user: SessionUser): boolean {
-  return user.isDrohnengruppeMember;
+  return user.isDrohnengruppeMember || user.isBezirksDrohnenAdmin;
 }
 
 /** Darf einen neuen Flug registrieren (wird immer unter der eigenen registeredById angelegt). */
 export function canRegisterFlight(user: SessionUser): boolean {
   return canViewDroneModule(user);
+}
+
+/**
+ * Darf für eine KONKRETE Drohnengruppe einen Flug registrieren: eigenes Mitglied dieser Gruppe
+ * (jede Rolle) oder wer sie verwalten darf (canManageDroneGroupFor) - Letzteres, damit ein
+ * Bezirksadmin/Bezirks-Drohnenadmin/Abschnittsadmin auch ohne eigene Mitgliedschaft in fremden
+ * Gruppen Flüge erfassen kann, z. B. um einen telefonisch gemeldeten Flug nachzutragen.
+ */
+export function canRegisterFlightFor(user: SessionUser, droneGroup: { id: string; organizationId: string }): boolean {
+  return user.droneGroupId === droneGroup.id || canManageDroneGroupFor(user, droneGroup);
 }
 
 /**
@@ -68,18 +82,22 @@ export function canViewAllFlights(user: SessionUser): boolean {
 }
 
 /**
- * Darf einen bestehenden Flug bearbeiten/löschen: Admin Drohnengruppe DER EIGENEN Gruppe (Admin
- * einer anderen Gruppe hat hier kein Recht, auch wenn er die cuid() des Flugs kennt/errät) oder der
- * Ersteller selbst - Letzteres bewusst gruppenunabhängig, ein Mitglied durfte seinen eigenen
- * erfassten Flug schon vor dieser Einschränkung gruppenübergreifend bearbeiten und soll das
- * weiterhin dürfen. `flight.droneGroupId` ist die Gruppe des Flugs selbst (über seine Drohne
- * aufgelöst, siehe Kommentar an den Aufrufstellen) - DroneFlight trägt keine eigene droneGroupId-Spalte.
+ * Darf einen bestehenden Flug bearbeiten/löschen: wer die Drohnengruppe DES FLUGS verwalten darf
+ * (canManageDroneGroupFor - Bezirksadmin, Bezirks-Drohnenadmin, Abschnittsadmin des verankerten
+ * Abschnitts, oder Admin Drohnengruppe der eigenen Gruppe) oder der Ersteller selbst - Letzteres
+ * bewusst gruppenunabhängig, ein Mitglied durfte seinen eigenen erfassten Flug schon vor dieser
+ * Einschränkung gruppenübergreifend bearbeiten und soll das weiterhin dürfen. `flight.droneGroupId`/
+ * `organizationId` sind die Gruppe des Flugs selbst (über seine Drohne aufgelöst, siehe Kommentar an
+ * den Aufrufstellen) - DroneFlight trägt keine eigenen Spalten dafür.
  */
 export function canManageFlight(
   user: SessionUser,
-  flight: { registeredById: string; droneGroupId: string },
+  flight: { registeredById: string; droneGroupId: string; organizationId: string },
 ): boolean {
-  return (isDroneGroupAdmin(user) && user.droneGroupId === flight.droneGroupId) || flight.registeredById === user.id;
+  return (
+    canManageDroneGroupFor(user, { id: flight.droneGroupId, organizationId: flight.organizationId }) ||
+    flight.registeredById === user.id
+  );
 }
 
 /**
