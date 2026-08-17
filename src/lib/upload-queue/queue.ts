@@ -152,10 +152,14 @@ export async function removeUpload(id: string): Promise<void> {
   await notifyListeners();
 }
 
-// Sobald die Verbindung wechselt (WLAN <-> Mobilfunk) oder der Browser wieder online ist, erneut
-// versuchen - pausierte Einträge werden in uploadOne selbst wieder auf 'queued' geprüft, nicht hier.
-// Nur auf dem Client registrieren (dieses Modul wird nie serverseitig ausgeführt, aber 'use client'
-// allein verhindert nicht, dass ein SSR-Preload-Pass das Modul einmal ohne DOM lädt).
+// Achtung, kein Auto-Resume: processQueue() wählt ausschließlich Einträge mit status:'queued' aus, also
+// hat dieses 'online'/'change'-Event auf einen pausierten Eintrag (egal ob manuell via pauseUpload oder
+// wifi-bedingt via uploadOne) keinerlei Wirkung - er bleibt 'paused', bis explizit retryUpload() darauf
+// aufgerufen wird (Task 6s "Fortsetzen"-Button). Ob ein wifi-bedingt pausierter Eintrag stattdessen bei
+// Netzwerkwechsel automatisch wieder aufgenommen werden soll, ist eine bewusst offen gelassene
+// UX-Designfrage für Task 6, keine hier "vergessene" Verdrahtung. Nur auf dem Client registrieren
+// (dieses Modul wird nie serverseitig ausgeführt, aber 'use client' allein verhindert nicht, dass ein
+// SSR-Preload-Pass das Modul einmal ohne DOM lädt).
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => void processQueue());
   const connection = (navigator as unknown as { connection?: EventTarget }).connection;

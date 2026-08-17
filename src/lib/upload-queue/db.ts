@@ -41,6 +41,15 @@ export function getUploadQueueDb(): Promise<IDBPDatabase<UploadQueueDBSchema>> {
         const store = db.createObjectStore('uploads', { keyPath: 'id' });
         store.createIndex('by-incident', 'incidentId');
       },
+    }).catch((error) => {
+      // Ohne dieses Zurücksetzen würde ein einmalig fehlgeschlagenes openDB() (z. B. Private-Browsing-
+      // Modus ohne IndexedDB-Unterstützung, oder ein momentanes Speicherkontingent-Problem) dbPromise
+      // dauerhaft auf ein abgelehntes Promise fixieren - jeder spätere Aufruf von getUploadQueueDb()
+      // würde für den Rest der Seiten-Lebensdauer dieselbe Ablehnung liefern, selbst wenn die Ursache
+      // längst behoben ist. Stattdessen: dbPromise zurücksetzen, damit der nächste Aufruf einen frischen
+      // Versuch startet, und den ursprünglichen Fehler an den aktuellen Aufrufer weiterreichen.
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise;
