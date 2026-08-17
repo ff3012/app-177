@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { enqueuePhotos } from '@/lib/upload-queue/queue';
 import { MAX_INCIDENT_PHOTOS_PER_BATCH } from '@/lib/validation/incident-photo';
@@ -16,21 +16,37 @@ export function PhotoUploadSheet({ incidentId, open, onClose, onQueued }: PhotoU
   const [wifiOnly, setWifiOnly] = useState(true);
   const [publicRelease, setPublicRelease] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
+  const [error, setError] = useState<string | undefined>();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
   const filesInputRef = useRef<HTMLInputElement>(null);
 
-  function handleFiles(fileList: FileList | null) {
+  // HTMLInputElement.files is never null for a type="file" input (an untouched input has an empty
+  // FileList, not null), so a `??` fallback chain across the three refs always resolves to the first
+  // one regardless of which was actually used. Instead, whenever one input gains a selection, clear the
+  // other two so at most one ever holds files at a time - submit() then just picks whichever is non-empty.
+  function handleFiles(fileList: FileList | null, sourceRef: RefObject<HTMLInputElement | null>) {
     if (!fileList || fileList.length === 0) return;
+    for (const ref of [cameraInputRef, libraryInputRef, filesInputRef]) {
+      if (ref !== sourceRef && ref.current) ref.current.value = '';
+    }
+    setError(undefined);
     setSelectedCount(Math.min(fileList.length, MAX_INCIDENT_PHOTOS_PER_BATCH));
   }
 
-  async function submit(fileList: FileList | null) {
+  async function submit() {
+    const fileList = [cameraInputRef, libraryInputRef, filesInputRef]
+      .map((ref) => ref.current?.files)
+      .find((files) => files && files.length > 0);
     if (!fileList || fileList.length === 0) return;
     const files = Array.from(fileList).slice(0, MAX_INCIDENT_PHOTOS_PER_BATCH);
-    await enqueuePhotos(incidentId, files, { publicRelease, wifiOnly });
-    onQueued();
-    onClose();
+    try {
+      await enqueuePhotos(incidentId, files, { publicRelease, wifiOnly });
+      onQueued();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fotos konnten nicht zur Warteschlange hinzugefügt werden.');
+    }
   }
 
   return (
@@ -66,7 +82,7 @@ export function PhotoUploadSheet({ incidentId, open, onClose, onQueued }: PhotoU
           accept="image/*"
           capture="environment"
           className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={(e) => handleFiles(e.target.files, cameraInputRef)}
         />
         <input
           ref={libraryInputRef}
@@ -74,9 +90,16 @@ export function PhotoUploadSheet({ incidentId, open, onClose, onQueued }: PhotoU
           accept="image/*"
           multiple
           className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={(e) => handleFiles(e.target.files, libraryInputRef)}
         />
-        <input ref={filesInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+        <input
+          ref={filesInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files, filesInputRef)}
+        />
 
         <label className="flex min-h-11 items-center justify-between gap-3 text-sm text-neutral-900">
           <span>
@@ -96,10 +119,12 @@ export function PhotoUploadSheet({ incidentId, open, onClose, onQueued }: PhotoU
           Kennzeichen gilt die Datenschutzregelung der Wehr.
         </p>
 
+        {error && <p className="text-sm text-red-700">{error}</p>}
+
         <button
           type="button"
           disabled={selectedCount === 0}
-          onClick={() => submit(cameraInputRef.current?.files ?? libraryInputRef.current?.files ?? filesInputRef.current?.files ?? null)}
+          onClick={() => submit()}
           className="min-h-[52px] rounded-lg bg-brand font-medium text-white disabled:opacity-40"
         >
           {selectedCount > 0 ? `${selectedCount} Fotos übertragen` : 'Fotos auswählen'}
