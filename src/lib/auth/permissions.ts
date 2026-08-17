@@ -265,6 +265,45 @@ export function canManageUsersFor(user: SessionUser, organizationId: string): bo
 }
 
 /**
+ * Sichtbarkeit von Einsätzen/Fotos einer Feuerwehr (Foto-Upload-Brief.md §3) - jedes Mitglied
+ * dieser Feuerwehr (gleiche homeOrganizationId) ODER wer sie administrativ verwaltet
+ * (canManageHeimatfeuerwehrFor). Fotos hochladen nutzt exakt dieselbe Regel ("keine
+ * Einschränkung" laut Brief) - kein separates canUploadIncidentPhotoFor nötig.
+ */
+export function canViewIncidentsFor(user: SessionUser, fireDepartmentId: string): boolean {
+  return user.homeOrganizationId === fireDepartmentId || canManageHeimatfeuerwehrFor(user, fireDepartmentId);
+}
+
+/**
+ * Einsatz anlegen/bearbeiten/löschen - laut App-Betreiber (Chat-Rückfrage, nicht im ursprünglichen
+ * Brief) dieselbe Regel wie canViewIncidentsFor: jedes Mitglied der Feuerwehr darf, keine
+ * Rollen-Einschränkung ("Kommandant/Einsatzleiter/Schriftführer" aus dem Brief wurde bewusst NICHT
+ * umgesetzt, da dieses Projekt keine solche Rollentabelle kennt). Eigene, benannte Funktion statt
+ * canViewIncidentsFor direkt an den Aufrufstellen wiederzuverwenden, falls sich das künftig doch
+ * trennt - gleiches Muster wie canManageUsersFor/canManageHeimatfeuerwehrFor in diesem Projekt.
+ */
+export function canManageIncidentsFor(user: SessionUser, fireDepartmentId: string): boolean {
+  return canViewIncidentsFor(user, fireDepartmentId);
+}
+
+/** Foto löschen - der Uploader selbst ODER ein Admin der Feuerwehr (canManageHeimatfeuerwehrFor),
+ * NICHT jedes beliebige Mitglied (anders als canViewIncidentsFor/canManageIncidentsFor). */
+export function canDeleteIncidentPhoto(
+  user: SessionUser,
+  photo: { uploadedById: string },
+  fireDepartmentId: string,
+): boolean {
+  return photo.uploadedById === user.id || canManageHeimatfeuerwehrFor(user, fireDepartmentId);
+}
+
+/** Freigabe "für Öffentlichkeitsarbeit" umschalten - laut Brief-Tabelle NUR der Uploader selbst,
+ * bewusst OHNE Admin-Ausnahme (anders als canDeleteIncidentPhoto) - ein Admin darf ein fremdes Foto
+ * zwar löschen, aber nicht in dessen Namen für die Öffentlichkeitsarbeit freigeben. */
+export function canTogglePhotoRelease(user: SessionUser, photo: { uploadedById: string }): boolean {
+  return photo.uploadedById === user.id;
+}
+
+/**
  * Darf currentUser den DATENSATZ von targetUser überhaupt anfassen (bearbeiten, aktivieren/
  * deaktivieren, Feuerwehr wechseln, löschen, Passwort-Reset auslösen) - zusätzlich zur reinen
  * Org-Zugehörigkeits-Prüfung (canManageUsersFor) auch die RECHTESTUFE des Ziels selbst. Ohne das:
