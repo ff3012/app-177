@@ -148,6 +148,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
+      // Security-Review N2: eine Passwortänderung beendete bisher keine andere laufende Sitzung -
+      // ein verlorenes/gestohlenes Handy mit offener PWA blieb bis zu 30 Tage (Auth.js-Standard-
+      // Sitzungsdauer) angemeldet, selbst wenn das Passwort von einem anderen Gerät aus geändert
+      // wurde. `token.iat` (Sekunden seit Epoch, von Auth.js/jose bei JEDEM Encode automatisch
+      // gesetzt) spiegelt, wann DIESES konkrete Cookie zuletzt (neu) ausgestellt wurde - ein Cookie,
+      // das seit einer späteren Passwortänderung nie wieder present war, trägt weiterhin sein altes
+      // iat. Dieselbe Behandlung wie oben (id leeren) statt eines separaten Fehlerpfads, da
+      // getOptionalUser() genau das schon als "nicht angemeldet" interpretiert.
+      if (dbUser.passwordChangedAt && typeof token.iat === 'number' && token.iat * 1000 < dbUser.passwordChangedAt.getTime()) {
+        token.id = undefined;
+        return token;
+      }
+
       Object.assign(token, await buildSessionUser(dbUser));
 
       // "Zuletzt aktiv" in der Benutzerverwaltung soll echte Nutzung zeigen, nicht nur einen
