@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import sharp from 'sharp';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageHeimatfeuerwehrFor } from '@/lib/auth/permissions';
@@ -10,6 +11,7 @@ import { atemschutzSchema, parseAtemschutzFormData } from '@/lib/validation/atem
 import { syncIcsCalendarForOrganization } from '@/lib/calendar/ics-import';
 import { verifyServiceAccountCredentials } from '@/lib/calendar/google-calendar-push';
 import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
+import { ALLOWED_WAPPEN_MIME_TYPES } from '@/lib/organizations/wappen';
 
 export interface VehicleFormState {
   error?: string;
@@ -194,9 +196,22 @@ export interface WappenUploadState {
 }
 
 const MAX_WAPPEN_SIZE_BYTES = 2 * 1024 * 1024;
+const WAPPEN_OUTPUT_MIME_TYPE = 'image/png';
 
 /** Wappen-Bild für die mobile Tab-Bar/Startbildschirm (Startbildschirm-Brief.md §3) - Bytes in
- * Postgres, analog zum PDF-Upload in admin/drohnen/actions.ts (uploadDroneDocument). */
+ * Postgres, analog zum PDF-Upload in admin/drohnen/actions.ts (uploadDroneDocument).
+ *
+ * Security-Review S3: der Client-gesetzte Multipart-Content-Type ist nur die erste, nicht die
+ * einzige Prüfung - `image/svg+xml` erfüllte die frühere `startsWith('image/')`-Prüfung ebenso,
+ * und die Auslieferungsroute gab die Bytes unverändert mit genau diesem Content-Type zurück, was
+ * eingebettetes `<script>` im Session-Kontext jedes angemeldeten Benutzers ausgeführt hätte. Die
+ * Allowlist schließt SVG (und alles andere) aus, und das Bild wird zusätzlich mit dem ohnehin
+ * vorhandenen `sharp` neu encodiert (immer als PNG) statt die Original-Bytes zu übernehmen - das
+ * entfernt eingebetteten Inhalt zuverlässig, unabhängig davon, was die Datei tatsächlich enthielt,
+ * und schlägt für eine Datei, die trotz passendem MIME-Typ kein echtes Bild ist, kontrolliert fehl
+ * statt sie unverändert zu speichern. `wappenImageMimeType` ist damit ab jetzt immer der von uns
+ * selbst gesetzte, feste Wert - nie mehr der vom Client behauptete.
+ */
 export async function setOrganizationWappen(
   organizationId: string,
   _prevState: WappenUploadState,
@@ -209,17 +224,30 @@ export async function setOrganizationWappen(
   if (!(file instanceof File) || file.size === 0) {
     return { error: 'Bitte eine Bilddatei auswählen.' };
   }
-  if (!file.type.startsWith('image/')) {
-    return { error: 'Nur Bilddateien sind erlaubt.' };
+  if (!ALLOWED_WAPPEN_MIME_TYPES.includes(file.type)) {
+    return { error: 'Nur PNG-, JPEG- oder WebP-Bilder sind erlaubt.' };
   }
   if (file.size > MAX_WAPPEN_SIZE_BYTES) {
     return { error: 'Die Datei ist zu groß (maximal 2 MB).' };
   }
 
-  const data = Buffer.from(await file.arrayBuffer());
+  let data: Uint8Array<ArrayBuffer>;
+  try {
+    const reencoded = await sharp(Buffer.from(await file.arrayBuffer())).png().toBuffer();
+    // sharp's toBuffer() types its result as Buffer<ArrayBufferLike> (could in principle be
+    // backed by a SharedArrayBuffer), while Prisma's Bytes field wants Uint8Array<ArrayBuffer> -
+    // copying into a freshly allocated, definitely-plain ArrayBuffer sidesteps the mismatch
+    // without any unsafe cast.
+    const freshBuffer = new ArrayBuffer(reencoded.byteLength);
+    data = new Uint8Array(freshBuffer);
+    data.set(reencoded);
+  } catch {
+    return { error: 'Datei konnte nicht als Bild gelesen werden.' };
+  }
+
   await prisma.organization.update({
     where: { id: organizationId },
-    data: { wappenImageData: data, wappenImageMimeType: file.type },
+    data: { wappenImageData: data, wappenImageMimeType: WAPPEN_OUTPUT_MIME_TYPE },
   });
 
   revalidatePath('/admin/heimatfeuerwehr');
