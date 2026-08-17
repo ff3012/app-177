@@ -20,7 +20,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ inc
   if (!photo || photo.incidentId !== incidentId || !canViewIncidentsFor(user, photo.incident.fireDepartmentId)) {
     return NextResponse.json({ error: 'Kein Zugriff.' }, { status: 404 });
   }
-  if (photo.status !== 'PENDING') {
+
+  // Atomarer Claim statt reinem Lesen+Schreiben - verhindert, dass zwei nahezu gleichzeitige
+  // complete-Aufrufe für dasselbe Foto (z. B. ein Client-Retry) beide die PENDING-Prüfung bestehen und
+  // beide Vorschauen hochladen/auf READY setzen. Gleiches Muster wie consumeToken() in
+  // lib/auth/tokens.ts und die Fahrzeug-Reservierung-TOCTOU-Behebung: updateMany mit dem alten Status
+  // in der where-Klausel, count === 0 heißt "wurde bereits von woanders beansprucht".
+  const claimed = await prisma.incidentPhoto.updateMany({
+    where: { id: photo.id, status: 'PENDING' },
+    data: { status: 'UPLOADING' },
+  });
+  if (claimed.count === 0) {
     return NextResponse.json({ error: 'Foto wurde bereits verarbeitet.' }, { status: 409 });
   }
 
@@ -28,6 +38,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ inc
 
   const head = await headPhotoObject(photo.storageKey);
   if (!head) {
+    // Kein failPhoto (kein Objekt zum Löschen vorhanden) - stattdessen zurück auf PENDING statt bei
+    // UPLOADING hängen zu bleiben, da dieser Fall "Client hat complete zu früh aufgerufen, Upload läuft
+    // noch" bedeutet und ein späterer echter Retry sonst fälschlich den 409-Zweig oben träfe.
+    await prisma.incidentPhoto.update({ where: { id: photo.id }, data: { status: 'PENDING' } });
     return NextResponse.json({ error: 'Objekt wurde nicht gefunden - Upload unvollständig.' }, { status: 400 });
   }
   if (head.contentLength > MAX_INCIDENT_PHOTO_BYTES) {

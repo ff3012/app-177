@@ -47,6 +47,9 @@ services:
       CRON_SECRET: ${CRON_SECRET}
       # Bewusst keine S3_*-Variablen - eine Test-/Dev-Umgebung braucht kein Off-Box-Backup ihrer
       # eigenen Wegwerfdaten. backup.sh wird auf diesem Stack ohnehin nicht per Cron eingerichtet.
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_PHOTOS_BUCKET: ${S3_PHOTOS_BUCKET}
     container_name: app177-dev-app
     networks:

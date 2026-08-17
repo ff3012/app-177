@@ -70,8 +70,9 @@ enum IncidentKind {
 }
 
 // PENDING: IncidentPhoto-Zeile angelegt, aber noch kein Objekt im Bucket (siehe presign-Route).
-// UPLOADING wird aktuell nicht serverseitig gesetzt (der Client verwaltet seinen eigenen Warteschlangen-
-// Status lokal in IndexedDB) - bleibt als Enum-Wert für eine mögliche künftige Serverseite-Anzeige.
+// UPLOADING: complete-Route hat die Zeile atomar von PENDING beansprucht (updateMany-Guard gegen einen
+// gleichzeitigen zweiten complete-Aufruf für dasselbe Foto, z. B. einen Client-Retry) und verarbeitet sie
+// gerade (Download, sharp-Dekodierung, Vorschau-Ableitung) - siehe complete/route.ts.
 // READY: complete-Route hat das Original erfolgreich dekodiert, Vorschauen abgeleitet.
 // FAILED: complete ist fehlgeschlagen (kein echtes Bild, zu groß, ...) - Objekt wurde bereits gelöscht.
 enum PhotoStatus {
