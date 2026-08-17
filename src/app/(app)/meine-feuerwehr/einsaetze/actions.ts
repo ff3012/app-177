@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageIncidentsFor } from '@/lib/auth/permissions';
+import { canManageIncidentsFor, canDeleteIncidentPhoto, canTogglePhotoRelease } from '@/lib/auth/permissions';
 import { incidentSchema, parseIncidentFormData } from '@/lib/validation/incident.schema';
+import { deletePhotoObjects } from '@/lib/storage/incident-photos-s3';
 
 export interface IncidentFormState {
   error?: string;
@@ -119,4 +120,28 @@ export async function deleteIncident(incidentId: string): Promise<void> {
   revalidatePath('/meine-feuerwehr');
   revalidatePath('/meine-feuerwehr/einsaetze');
   redirect('/meine-feuerwehr/einsaetze');
+}
+
+export async function deleteIncidentPhoto(photoId: string, incidentId: string): Promise<void> {
+  const user = await requireUser();
+  const photo = await prisma.incidentPhoto.findUnique({ where: { id: photoId }, include: { incident: true } });
+  if (!photo || photo.incidentId !== incidentId) throw new Error('Foto wurde nicht gefunden.');
+  if (!canDeleteIncidentPhoto(user, photo, photo.incident.fireDepartmentId)) throw new Error('Kein Zugriff.');
+
+  const keys = [photo.storageKey, photo.previewKey, photo.thumbnailKey].filter((key): key is string => key !== null);
+  await deletePhotoObjects(keys);
+  await prisma.incidentPhoto.delete({ where: { id: photoId } });
+
+  revalidatePath(`/meine-feuerwehr/einsaetze/${incidentId}`);
+  revalidatePath('/meine-feuerwehr');
+}
+
+export async function setIncidentPhotoPublicRelease(photoId: string, incidentId: string, publicRelease: boolean): Promise<void> {
+  const user = await requireUser();
+  const photo = await prisma.incidentPhoto.findUnique({ where: { id: photoId } });
+  if (!photo || photo.incidentId !== incidentId) throw new Error('Foto wurde nicht gefunden.');
+  if (!canTogglePhotoRelease(user, photo)) throw new Error('Kein Zugriff.');
+
+  await prisma.incidentPhoto.update({ where: { id: photoId }, data: { publicRelease } });
+  revalidatePath(`/meine-feuerwehr/einsaetze/${incidentId}`);
 }
