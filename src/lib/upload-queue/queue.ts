@@ -2,6 +2,10 @@
 
 import { getUploadQueueDb, type QueuedUpload } from './db';
 
+// Re-exportiert, damit Aufrufer (z. B. incident-photo-gallery.tsx) den Typ zusammen mit den
+// Queue-Funktionen aus diesem einen Modul importieren können, statt zusätzlich './db' zu kennen.
+export type { QueuedUpload };
+
 const MAX_PARALLEL_UPLOADS = 3;
 
 type Listener = (uploads: QueuedUpload[]) => void;
