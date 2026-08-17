@@ -225,7 +225,7 @@ export async function setOrganizationWappen(
     return { error: 'Bitte eine Bilddatei auswählen.' };
   }
   if (!ALLOWED_WAPPEN_MIME_TYPES.includes(file.type)) {
-    return { error: 'Nur PNG-, JPEG- oder WebP-Bilder sind erlaubt.' };
+    return { error: 'Nur PNG-, JPEG-, WebP- oder GIF-Bilder sind erlaubt.' };
   }
   if (file.size > MAX_WAPPEN_SIZE_BYTES) {
     return { error: 'Die Datei ist zu groß (maximal 2 MB).' };
