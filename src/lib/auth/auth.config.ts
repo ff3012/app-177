@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getDummyPasswordHash, verifyPassword } from '@/lib/password';
 import { buildSessionUser, findUserWithRelationsByEmail, findUserWithRelationsById } from '@/lib/auth/build-session-user';
 import { consumeToken, consumeLoginTokenByShortCode } from '@/lib/auth/tokens';
+import { checkLoginThrottle, recordFailedLogin, resetLoginAttempts } from '@/lib/auth/login-throttle';
 import type { SessionUser } from '@/types/next-auth';
 
 // Throttle für die "Zuletzt aktiv"-Aktualisierung im jwt()-Callback (siehe dort) - bewusst keine
@@ -28,17 +29,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (typeof email !== 'string' || typeof password !== 'string') {
           return null;
         }
+        const normalizedEmail = email.toLowerCase().trim();
 
-        const user = await findUserWithRelationsByEmail(email.toLowerCase().trim());
+        // Security-Review S1/N1: dies ist die tatsächliche Sicherheitsgrenze, nicht nur die
+        // Vorab-Prüfung in login/actions.ts's loginAction. Auth.js stellt mit
+        // /api/auth/callback/credentials einen eigenen, öffentlichen Endpunkt bereit, der
+        // authorize() direkt aufruft und dabei loginAction/checkLoginThrottle komplett umgeht -
+        // ohne die Prüfung hier war die gesamte LoginAttempt-Drosselung über diesen Weg
+        // wirkungslos. loginAction's eigener Vorab-Check bleibt zusätzlich bestehen (frühere,
+        // freundlichere Fehlermeldung mit Minutenangabe), ist aber ab jetzt nur noch Komfort.
+        const throttle = await checkLoginThrottle(normalizedEmail);
+        if (throttle.locked) {
+          return null;
+        }
+
+        const user = await findUserWithRelationsByEmail(normalizedEmail);
         // Always run a real bcrypt.compare, against the user's hash if found or a dummy hash
         // otherwise, so a nonexistent email doesn't return measurably faster (timing/enumeration).
         const hashToCompare = user?.passwordHash ?? (await getDummyPasswordHash());
         const passwordValid = await verifyPassword(password, hashToCompare);
 
         if (!user || !user.isActive || !passwordValid) {
+          await recordFailedLogin(normalizedEmail);
           return null;
         }
 
+        await resetLoginAttempts(normalizedEmail);
         return await buildSessionUser(user);
       },
     }),
@@ -63,9 +79,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         let consumedUser: { id: string } | null = null;
         if (typeof rawToken === 'string' && rawToken) {
+          // Der lange Token ist selbst die hochentropische Absicherung (SHA-256-Lookup gegen einen
+          // 32+ Byte langen Zufallswert) - unbrauchbar für Brute-Force, daher hier bewusst keine
+          // E-Mail-Drosselung nötig, analog zur bestehenden Begründung in login/token/[token]/actions.ts.
           consumedUser = await consumeToken(rawToken, TokenPurpose.LOGIN);
         } else if (typeof email === 'string' && email && typeof shortCode === 'string' && shortCode) {
-          consumedUser = await consumeLoginTokenByShortCode(email.toLowerCase().trim(), shortCode);
+          const normalizedEmail = email.toLowerCase().trim();
+          // Security-Review S1/N1: derselbe Bypass wie beim Passwort-Provider oben, hier sogar
+          // schärfer - der 6-stellige Code hat nur 10^6 Kombinationen. Ohne diese Prüfung ließ sich
+          // /api/auth/callback/email-token direkt und parallel für 000000-999999 aufrufen, ganz ohne
+          // die Drosselung aus confirmLoginWithToken zu durchlaufen.
+          const throttle = await checkLoginThrottle(normalizedEmail);
+          if (throttle.locked) {
+            return null;
+          }
+          consumedUser = await consumeLoginTokenByShortCode(normalizedEmail, shortCode);
+          if (!consumedUser) {
+            await recordFailedLogin(normalizedEmail);
+            return null;
+          }
+          await resetLoginAttempts(normalizedEmail);
         }
         if (!consumedUser) {
           return null;

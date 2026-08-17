@@ -11,6 +11,7 @@ import {
   canGrantBezirksAdmin,
   canGrantBezirksDrohnenAdmin,
   canManageDroneGroupFor,
+  canManageUserRecord,
   canManageUsersFor,
   filterRemovableAdminOrgIds,
 } from '@/lib/auth/permissions';
@@ -255,8 +256,11 @@ export async function updateUser(
   }
   // Berechtigung gilt sowohl für die BISHERIGE als auch (falls geändert) die NEUE Heimat-Feuerwehr -
   // ein Feuerwehr-Admin darf einen Benutzer weder verwalten, der nicht zu seiner Feuerwehr gehört,
-  // noch ihn zu einer fremden Feuerwehr verschieben.
-  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
+  // noch ihn zu einer fremden Feuerwehr verschieben. canManageUserRecord prüft zusätzlich die
+  // RECHTESTUFE des Ziels (Security-Review S1) - reines canManageUsersFor hätte einem
+  // Feuerwehr-Admin erlaubt, einen zufällig in seiner Feuerwehr befindlichen Bezirksadmin über eine
+  // E-Mail-Änderung + Passwort-Reset zu übernehmen, ohne die Bezirksadmin-Checkbox anzurühren.
+  assertPermission(canManageUserRecord(currentUser, targetUser));
 
   const raw = parseUserFormData(formData);
   const parsed = userSchema.safeParse(raw);
@@ -327,7 +331,9 @@ export async function sendPasswordResetEmailToUser(userId: string): Promise<Pass
   if (!targetUser) {
     return { error: 'Benutzer wurde nicht gefunden.' };
   }
-  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
+  // Security-Review S1: canManageUserRecord statt canManageUsersFor - siehe Kommentar in updateUser.
+  // Über diesen Weg ließe sich sonst ein Passwort-Reset für ein fremdes Bezirksadmin-Konto auslösen.
+  assertPermission(canManageUserRecord(currentUser, targetUser));
 
   // Benutzerverwaltung-Brief.md §3: höchstens drei Reset-Mails je Benutzer und Stunde. Zählt jede
   // in der letzten Stunde erzeugte PASSWORD_RESET-Token-Zeile für diesen Benutzer - unabhängig
@@ -378,7 +384,9 @@ export async function setUserActive(userId: string, isActive: boolean): Promise<
   if (!targetUser) {
     return { error: 'Benutzer wurde nicht gefunden.' };
   }
-  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
+  // Security-Review S1: canManageUserRecord statt canManageUsersFor - sonst könnte ein
+  // Feuerwehr-Admin ein fremdes Bezirksadmin-Konto stilllegen (oder wieder aktivieren).
+  assertPermission(canManageUserRecord(currentUser, targetUser));
 
   if (currentUser.id === userId && !isActive) {
     return { error: 'Du kannst dein eigenes Konto nicht deaktivieren.' };
@@ -400,9 +408,11 @@ export async function bulkSetActive(userIds: string[], isActive: boolean): Promi
 
   const targetUsers = await prisma.user.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, homeOrganizationId: true },
+    select: { id: true, homeOrganizationId: true, isBezirksAdmin: true, isBezirksDrohnenAdmin: true },
   });
-  assertPermission(targetUsers.every((u) => canManageUsersFor(currentUser, u.homeOrganizationId)));
+  // Security-Review S1: canManageUserRecord statt canManageUsersFor - sonst könnte ein
+  // Feuerwehr-Admin per direktem Server-Action-Aufruf einen fremden Bezirksadmin aussperren.
+  assertPermission(targetUsers.every((u) => canManageUserRecord(currentUser, u)));
 
   const targetIds = isActive ? userIds : userIds.filter((id) => id !== currentUser.id);
   if (targetIds.length === 0) {
@@ -428,9 +438,11 @@ export async function bulkSetHomeOrganization(userIds: string[], organizationId:
 
   const targetUsers = await prisma.user.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, homeOrganizationId: true },
+    select: { id: true, homeOrganizationId: true, isBezirksAdmin: true, isBezirksDrohnenAdmin: true },
   });
-  assertPermission(targetUsers.every((u) => canManageUsersFor(currentUser, u.homeOrganizationId)));
+  // Security-Review S1: canManageUserRecord statt canManageUsersFor - dieser Aufruf hatte
+  // zusätzlich KEINE Selbstausnahme wie die anderen fünf Aktionen und war damit besonders scharf.
+  assertPermission(targetUsers.every((u) => canManageUserRecord(currentUser, u)));
 
   await prisma.user.updateMany({ where: { id: { in: userIds } }, data: { homeOrganizationId: organizationId } });
   revalidatePath('/admin/benutzer');
@@ -456,7 +468,9 @@ export async function deleteUser(
   if (!targetUser) {
     return { error: 'Benutzer wurde nicht gefunden.' };
   }
-  assertPermission(canManageUsersFor(currentUser, targetUser.homeOrganizationId));
+  // Security-Review S1: canManageUserRecord statt canManageUsersFor - sonst könnte ein
+  // Feuerwehr-Admin einen fremden Bezirksadmin löschen.
+  assertPermission(canManageUserRecord(currentUser, targetUser));
 
   try {
     await prisma.user.delete({ where: { id: userId } });

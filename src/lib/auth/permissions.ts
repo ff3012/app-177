@@ -264,6 +264,32 @@ export function canManageUsersFor(user: SessionUser, organizationId: string): bo
   return canManageHeimatfeuerwehrFor(user, organizationId);
 }
 
+/**
+ * Darf currentUser den DATENSATZ von targetUser überhaupt anfassen (bearbeiten, aktivieren/
+ * deaktivieren, Feuerwehr wechseln, löschen, Passwort-Reset auslösen) - zusätzlich zur reinen
+ * Org-Zugehörigkeits-Prüfung (canManageUsersFor) auch die RECHTESTUFE des Ziels selbst. Ohne das:
+ * ein Feuerwehr-Admin, der zufällig dieselbe Heimatfeuerwehr wie ein Bezirksadmin/Bezirks-
+ * Drohnenadmin verwaltet, durfte dessen Datensatz genauso anfassen wie den jedes anderen
+ * Mitglieds seiner Feuerwehr - inklusive E-Mail-Adresse ändern + Passwort-Reset auslösen, ohne
+ * die Bezirksadmin-Checkbox selbst je anzurühren (die einzige Stelle, die bisher eine
+ * Eskalations-Prüfung auslöste). Security-Review S1, verifiziert an admin/benutzer/actions.ts.
+ */
+export function canManageUserRecord(
+  currentUser: SessionUser,
+  targetUser: { homeOrganizationId: string; isBezirksAdmin: boolean; isBezirksDrohnenAdmin: boolean },
+): boolean {
+  if (!canManageUsersFor(currentUser, targetUser.homeOrganizationId)) {
+    return false;
+  }
+  if (targetUser.isBezirksAdmin && !isBezirksAdmin(currentUser)) {
+    return false;
+  }
+  if (targetUser.isBezirksDrohnenAdmin && !canGrantBezirksDrohnenAdmin(currentUser)) {
+    return false;
+  }
+  return true;
+}
+
 /** Sichtbarkeit des Verwaltungsmenüs "Benutzer" - Site-Admin ODER Admin von mindestens einer
  * Feuerwehr (analog canAccessHeimatfeuerwehrAdmin). */
 export function canAccessUserManagementAdmin(user: SessionUser): boolean {

@@ -7,8 +7,6 @@ import { signIn } from '@/lib/auth/auth.config';
 import { isAuthError, isNextRedirectError } from '@/lib/auth/is-auth-error';
 import {
   checkLoginThrottle,
-  recordFailedLogin,
-  resetLoginAttempts,
   checkLoginTokenThrottle,
   recordLoginTokenRequest,
   resetLoginTokenThrottle,
@@ -26,6 +24,11 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const callbackUrl = formData.get('callbackUrl');
   const email = typeof emailRaw === 'string' ? emailRaw.toLowerCase().trim() : '';
 
+  // Reiner Vorab-Check für eine frühe, freundliche Fehlermeldung mit Minutenangabe - die eigentliche
+  // Sicherheitsgrenze (inkl. recordFailedLogin/resetLoginAttempts) sitzt seit Security-Review N1 in
+  // authorize() selbst (auth.config.ts), da nur dort auch ein direkter Aufruf von
+  // /api/auth/callback/credentials zwingend vorbeikommt. Hier daher bewusst KEIN
+  // recordFailedLogin/resetLoginAttempts mehr - das würde jeden Versuch doppelt zählen.
   const throttle = await checkLoginThrottle(email);
   if (throttle.locked) {
     return {
@@ -39,15 +42,12 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
       password,
       redirectTo: typeof callbackUrl === 'string' && callbackUrl.length > 0 ? callbackUrl : '/meine-feuerwehr',
     });
-    await resetLoginAttempts(email);
     return {};
   } catch (error) {
     if (isNextRedirectError(error)) {
-      await resetLoginAttempts(email);
       throw error;
     }
     if (isAuthError(error)) {
-      await recordFailedLogin(email);
       return { error: 'E-Mail oder Passwort ist falsch.' };
     }
     throw error;
@@ -152,6 +152,8 @@ export async function confirmLoginWithToken(_prevState: LoginTokenState, formDat
     return { error: 'Bitte E-Mail-Adresse und Code eingeben.' };
   }
 
+  // Wie in loginAction oben: nur noch ein lesender Vorab-Check für die freundliche Meldung -
+  // recordFailedLogin/resetLoginAttempts laufen seit Security-Review N1 in authorize() selbst.
   const throttle = await checkLoginThrottle(email);
   if (throttle.locked) {
     return { error: `Zu viele Fehlversuche. Bitte in ${throttle.minutesRemaining} Minute(n) erneut versuchen.` };
@@ -159,16 +161,13 @@ export async function confirmLoginWithToken(_prevState: LoginTokenState, formDat
 
   try {
     await signIn('email-token', { email, shortCode, redirectTo: '/meine-feuerwehr' });
-    await resetLoginAttempts(email);
     await resetLoginTokenThrottle(email);
     return {};
   } catch (error) {
     if (isNextRedirectError(error)) {
-      await resetLoginAttempts(email);
       throw error;
     }
     if (isAuthError(error)) {
-      await recordFailedLogin(email);
       return { error: 'E-Mail-Adresse oder Code ist falsch, abgelaufen oder bereits verwendet.' };
     }
     throw error;
