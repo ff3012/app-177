@@ -18,6 +18,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ pho
   if (!body?.fileName || !body.mimeType || typeof body.byteSize !== 'number') {
     return NextResponse.json({ error: 'Ungültige Anfrage.' }, { status: 400 });
   }
+  if (body.mimeType === 'image/heic' || body.mimeType === 'image/heif') {
+    return NextResponse.json(
+      {
+        error:
+          "HEIC-Fotos werden derzeit nicht unterstützt. Bitte am iPhone unter Einstellungen > Kamera > Formate auf 'Maximale Kompatibilität' umstellen, oder ein JPEG/PNG hochladen.",
+      },
+      { status: 400 },
+    );
+  }
   if (!ALLOWED_PHOTO_MIME_TYPES.includes(body.mimeType)) {
     return NextResponse.json({ error: 'Dateityp nicht erlaubt.' }, { status: 400 });
   }

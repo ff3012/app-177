@@ -49,10 +49,23 @@ export function PhotoUploadSheet({ photoUploadId, open, onClose, onUploaded }: P
     function handleBeforeUnload(event: BeforeUnloadEvent) {
       if (!anyInFlight) return;
       event.preventDefault();
+      event.returnValue = '';
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [anyInFlight]);
+
+  // I2 (finaler Review): das Sheet unmountet nie (siehe generationRef-Kommentar oben), daher
+  // überlebt `items`/`running` über mehrere Öffnen/Schließen-Zyklen hinweg. Ohne diesen Reset
+  // würde ein erneutes Öffnen nach einem abgeschlossenen Batch (z. B. "+ Hinzufügen" nach
+  // erfolgreichem Upload) eine eingefrorene "8 von 8 übertragen"-Ansicht zeigen, ohne Möglichkeit
+  // weitere Fotos auszuwählen (die Auswahl-Buttons rendern nur bei items.length === 0).
+  useEffect(() => {
+    if (open) {
+      setItems([]);
+      setRunning(false);
+    }
+  }, [open]);
 
   function handleFiles(fileList: FileList | null, sourceRef: React.RefObject<HTMLInputElement | null>) {
     if (!fileList || fileList.length === 0) return;
@@ -139,6 +152,7 @@ export function PhotoUploadSheet({ photoUploadId, open, onClose, onUploaded }: P
       // selbst beendet und ihre verspäteten State-Updates ignoriert werden) und die echten
       // presign-/complete-fetch- sowie PUT-XHR-Requests der aktuellen Generation abbrechen.
       generationRef.current += 1;
+      activeCountRef.current = 0;
       abortControllerRef.current?.abort();
       setRunning(false);
     }

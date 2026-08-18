@@ -6,7 +6,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   // https://*.exo.io: Exoscale SOS (S3-compatible object storage) - Einsatzfoto-Vorschauen/
   // -Thumbnails werden über eine session-geprüfte Route ausgeliefert, die auf eine kurzlebige
-  // presigned S3-URL redirected (siehe api/incidents/[incidentId]/photos/[photoId]/route.ts) -
+  // presigned S3-URL redirected (siehe api/photo-uploads/[photoUploadId]/photos/[photoId]/route.ts) -
   // Browser werten img-src auch gegen die REDIRECT-Ziel-URL aus, nicht nur die ursprüngliche
   // gleiche-Origin-Anfrage. Bewusst eine statische Wildcard auf die Exoscale-Domain, nicht aus
   // process.env.S3_ENDPOINT_URL zur Config-Ladezeit abgeleitet - siehe root CLAUDE.md, dieses
@@ -16,8 +16,8 @@ const CONTENT_SECURITY_POLICY = [
   // (die Domain ändert sich nur, wenn Exoscale selbst seine Domain ändert).
   "img-src 'self' data: https://*.exo.io",
   "font-src 'self' data:",
-  // https://*.exo.io: derselbe Exoscale-SOS-Bucket - die Upload-Warteschlange (lib/upload-queue/
-  // queue.ts) lädt Originale per presigned PUT direkt vom Client zu S3 hoch, kein Server-Proxy.
+  // https://*.exo.io: derselbe Exoscale-SOS-Bucket - der Foto-Upload (lib/photo-upload/
+  // foreground-upload.ts) lädt Originale per presigned PUT direkt vom Client zu S3 hoch, kein Server-Proxy.
   "connect-src 'self' https://*.exo.io",
   "frame-ancestors 'none'",
   "base-uri 'self'",

@@ -315,13 +315,13 @@ CRON_TZ=Europe/Vienna
 ## Einsatzfotos: CORS-Konfiguration des `app-177-pictures`-Buckets (einmalige manuelle Einrichtung)
 
 Der Foto-Upload lädt Originale per Browser-`XMLHttpRequest PUT` **direkt** gegen
-`https://sos-<zone>.exo.io/...` hoch (presigned URL, siehe `src/lib/upload-queue/queue.ts`), nicht über
+`https://sos-<zone>.exo.io/...` hoch (presigned URL, siehe `src/lib/photo-upload/foreground-upload.ts`), nicht über
 einen App-Server-Umweg. Ein cross-origin `PUT` mit gesetztem `Content-Type`-Header löst im Browser einen
 CORS-Preflight (`OPTIONS`) aus - ohne eine passende CORS-Konfiguration auf dem Bucket lehnt Exoscale SOS
 diesen Preflight ab und jeder Foto-Upload schlägt fehl, komplett unabhängig davon, ob
 `S3_ACCESS_KEY`/`S3_SECRET_KEY`/`S3_ENDPOINT_URL`/`S3_PHOTOS_BUCKET` korrekt gesetzt sind. Das ist eine
 reine Bucket-seitige Einstellung bei Exoscale - Anwendungscode kann sie nicht setzen, die CSP-Freigabe für
-den Exoscale-Origin (bereits erledigt, siehe `next.config.ts`) betrifft nur den Browser-seitigen
+den Exoscale-Origin (bereits erledigt, siehe `next.config.mjs`) betrifft nur den Browser-seitigen
 Content-Security-Policy-Block und hat mit CORS nichts zu tun.
 
 **Einmalig manuell einzurichten** (Exoscale-Konsole → Object Storage → Bucket `app-177-pictures` → CORS,
@@ -351,7 +351,7 @@ gegen den echten Bucket auftritt"-Symptom.
 
 Wie beim Backup-Bucket gilt außerdem: der `app-177-pictures`-Bucket selbst muss **komplett privat** bleiben
 (keine öffentliche Bucket-Policy) - Fotos sind ausschließlich über die session-geschützte
-`/api/incidents/[incidentId]/photos/[photoId]`-Route mit kurzlebigen presigned GET-URLs erreichbar, nie über
+`/api/photo-uploads/[photoUploadId]/photos/[photoId]`-Route mit kurzlebigen presigned GET-URLs erreichbar, nie über
 eine dauerhafte öffentliche URL (siehe Design-Spec Abschnitt 4). Die CORS-Konfiguration oben ändert daran
 nichts - sie erlaubt nur Browser-seitige `PUT`/`GET`-Requests von der App aus, keine öffentliche Lesbarkeit.
 

@@ -49,7 +49,7 @@ export async function uploadOnePhoto(
     xhr.onabort = () => reject(new DOMException('Hochladen abgebrochen.', 'AbortError'));
     if (signal) {
       if (signal.aborted) {
-        xhr.abort();
+        reject(new DOMException('Hochladen abgebrochen.', 'AbortError'));
         return;
       }
       signal.addEventListener('abort', () => xhr.abort());

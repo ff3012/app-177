@@ -1,6 +1,6 @@
-export const ALLOWED_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+export const ALLOWED_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-export const ALLOWED_SHARP_PHOTO_FORMATS = ['jpeg', 'png', 'webp', 'gif', 'heif'];
+export const ALLOWED_SHARP_PHOTO_FORMATS = ['jpeg', 'png', 'webp', 'gif'];
 
 export const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 export const MAX_PHOTOS_PER_BATCH = 30;
@@ -15,9 +15,6 @@ export function extensionForMimeType(mimeType: string): string {
       return 'webp';
     case 'image/gif':
       return 'gif';
-    case 'image/heic':
-    case 'image/heif':
-      return 'heic';
     default:
       return 'bin';
   }
