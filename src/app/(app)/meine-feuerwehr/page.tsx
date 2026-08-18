@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageEventsFor, canManageHeimatfeuerwehrFor, canViewDroneModule } from '@/lib/auth/permissions';
+import { canManageEventsFor, canManageHeimatfeuerwehrFor, canManageIncidentsFor, canViewDroneModule } from '@/lib/auth/permissions';
 import { getExpiryStatus, getFinnentestExpiryDate, type AtemschutzExpiryStatus } from '@/lib/heimatfeuerwehr/atemschutz-status';
 import {
   NINETY_DAY_REQUIRED_FLIGHTS,
@@ -10,6 +10,7 @@ import {
   meetsNinetyDayRule,
 } from '@/lib/drone/ninety-day-rule';
 import { HomeTodoList, type HomeEventCardData, type StaticTodoItemData } from '@/components/home/home-todo-list';
+import { RecentIncidentsBlock } from '@/components/incidents/recent-incidents-block';
 import { cancelVehicleBooking } from './actions';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
@@ -113,7 +114,7 @@ export default async function MeineFeuerwehrPage() {
   // (Abschnitt-)Feuerwehr innerhalb der eigenen Drohnengruppe gar nicht erst aus der DB geladen.
   const droneMember = canViewDroneModule(user);
 
-  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures] = await Promise.all([
+  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures, recentIncidents] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: {
@@ -162,6 +163,15 @@ export default async function MeineFeuerwehrPage() {
     prisma.organization.findUniqueOrThrow({
       where: { id: user.homeOrganizationId },
       select: { featureAtemschutz: true },
+    }),
+    // 24-Stunden-Block (Startbildschirm-Brief.md §6.1) - bewusst dieselbe fireDepartmentId-Scoping wie
+    // canViewIncidentsFor (homeOrganizationId), aber hier direkt in der Query statt über die
+    // Permission-Funktion, da diese Query schon vor dem Laden von `user`s Berechtigungsobjekt läuft und
+    // ausschließlich die eigene Feuerwehr zeigt (kein Admin-Fall wie bei canViewIncidentsFor nötig).
+    prisma.incident.findMany({
+      where: { fireDepartmentId: user.homeOrganizationId, alarmedAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      orderBy: { alarmedAt: 'desc' },
+      include: { photos: { where: { status: 'READY' }, orderBy: { createdAt: 'asc' }, take: 4 }, _count: { select: { photos: true } } },
     }),
   ]);
 
@@ -305,6 +315,15 @@ export default async function MeineFeuerwehrPage() {
 
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
+      {canManageIncidentsFor(user, user.homeOrganizationId) && (
+        <Link
+          href="/meine-feuerwehr/einsaetze/neu"
+          className="flex min-h-12 items-center justify-center rounded-lg border-2 border-brand text-sm font-semibold text-brand"
+        >
+          Einsatz erfassen
+        </Link>
+      )}
+
       <div className={droneMember ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
         <Link href="/meine-feuerwehr/buchen" className="flex min-h-[74px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
           <span className="text-[15px] font-semibold text-[#1c1c1e]">Fahrzeug Reservierungen</span>
@@ -317,6 +336,20 @@ export default async function MeineFeuerwehrPage() {
           </Link>
         )}
       </div>
+
+      {recentIncidents.length > 0 && (
+        <RecentIncidentsBlock
+          incidents={recentIncidents.map((incident) => ({
+            id: incident.id,
+            kind: incident.kind,
+            keyword: incident.keyword,
+            location: incident.location,
+            alarmedAt: incident.alarmedAt.toISOString(),
+            photoIds: incident.photos.map((p) => p.id),
+            totalPhotoCount: incident._count.photos,
+          }))}
+        />
+      )}
 
       {standDerWehr && (
         <div className="flex flex-col gap-2.5">
