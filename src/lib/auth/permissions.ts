@@ -265,42 +265,36 @@ export function canManageUsersFor(user: SessionUser, organizationId: string): bo
 }
 
 /**
- * Sichtbarkeit von Einsätzen/Fotos einer Feuerwehr (Foto-Upload-Brief.md §3) - jedes Mitglied
+ * Sichtbarkeit von Foto Uploads/Fotos einer Feuerwehr (Foto-Upload-Brief.md §2) - jedes Mitglied
  * dieser Feuerwehr (gleiche homeOrganizationId) ODER wer sie administrativ verwaltet
- * (canManageHeimatfeuerwehrFor). Fotos hochladen nutzt exakt dieselbe Regel ("keine
- * Einschränkung" laut Brief) - kein separates canUploadIncidentPhotoFor nötig.
+ * (canManageHeimatfeuerwehrFor). Fotos hochladen nutzt exakt dieselbe Regel - kein separates
+ * canUploadPhotoFor nötig.
  */
-export function canViewIncidentsFor(user: SessionUser, fireDepartmentId: string): boolean {
+export function canViewPhotoUploadsFor(user: SessionUser, fireDepartmentId: string): boolean {
   return user.homeOrganizationId === fireDepartmentId || canManageHeimatfeuerwehrFor(user, fireDepartmentId);
 }
 
 /**
- * Einsatz anlegen/bearbeiten/löschen - laut App-Betreiber (Chat-Rückfrage, nicht im ursprünglichen
- * Brief) dieselbe Regel wie canViewIncidentsFor: jedes Mitglied der Feuerwehr darf, keine
- * Rollen-Einschränkung ("Kommandant/Einsatzleiter/Schriftführer" aus dem Brief wurde bewusst NICHT
- * umgesetzt, da dieses Projekt keine solche Rollentabelle kennt). Eigene, benannte Funktion statt
- * canViewIncidentsFor direkt an den Aufrufstellen wiederzuverwenden, falls sich das künftig doch
- * trennt - gleiches Muster wie canManageUsersFor/canManageHeimatfeuerwehrFor in diesem Projekt.
+ * Foto Upload anlegen/bearbeiten/löschen - laut App-Betreiber (Chat-Rückfrage, der Brief nennt
+ * weiterhin "Kommandant/Einsatzleiter/Schriftführer") dieselbe Regel wie canViewPhotoUploadsFor:
+ * jedes Mitglied der Feuerwehr darf, keine Rollen-Einschränkung, da dieses Projekt keine
+ * Rollentabelle kennt. Eigene, benannte Funktion statt canViewPhotoUploadsFor direkt an den
+ * Aufrufstellen wiederzuverwenden, falls sich das künftig doch trennt - gleiches Muster wie
+ * canManageUsersFor/canManageHeimatfeuerwehrFor in diesem Projekt.
  */
-export function canManageIncidentsFor(user: SessionUser, fireDepartmentId: string): boolean {
-  return canViewIncidentsFor(user, fireDepartmentId);
+export function canManagePhotoUploadsFor(user: SessionUser, fireDepartmentId: string): boolean {
+  return canViewPhotoUploadsFor(user, fireDepartmentId);
 }
 
 /** Foto löschen - der Uploader selbst ODER ein Admin der Feuerwehr (canManageHeimatfeuerwehrFor),
- * NICHT jedes beliebige Mitglied (anders als canViewIncidentsFor/canManageIncidentsFor). */
-export function canDeleteIncidentPhoto(
+ * NICHT jedes beliebige Mitglied (anders als canViewPhotoUploadsFor/canManagePhotoUploadsFor). Kein
+ * canTogglePhotoRelease-Gegenstück mehr nötig - es gibt kein Freigabe-Feld. */
+export function canDeletePhoto(
   user: SessionUser,
   photo: { uploadedById: string },
   fireDepartmentId: string,
 ): boolean {
   return photo.uploadedById === user.id || canManageHeimatfeuerwehrFor(user, fireDepartmentId);
-}
-
-/** Freigabe "für Öffentlichkeitsarbeit" umschalten - laut Brief-Tabelle NUR der Uploader selbst,
- * bewusst OHNE Admin-Ausnahme (anders als canDeleteIncidentPhoto) - ein Admin darf ein fremdes Foto
- * zwar löschen, aber nicht in dessen Namen für die Öffentlichkeitsarbeit freigeben. */
-export function canTogglePhotoRelease(user: SessionUser, photo: { uploadedById: string }): boolean {
-  return photo.uploadedById === user.id;
 }
 
 /**

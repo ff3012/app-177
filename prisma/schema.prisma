@@ -62,17 +62,15 @@ enum VehicleBookingStatus {
   ABGELEHNT
 }
 
-enum IncidentKind {
-  TECHNISCH
-  BRAND
-  SCHADSTOFF
+enum PhotoUploadKind {
+  EINSATZ
+  UEBUNG
   SONSTIGES
 }
 
-// PENDING: IncidentPhoto-Zeile angelegt, aber noch kein Objekt im Bucket (siehe presign-Route).
-// UPLOADING: complete-Route hat die Zeile atomar von PENDING beansprucht (updateMany-Guard gegen einen
-// gleichzeitigen zweiten complete-Aufruf für dasselbe Foto, z. B. einen Client-Retry) und verarbeitet sie
-// gerade (Download, sharp-Dekodierung, Vorschau-Ableitung) - siehe complete/route.ts.
+// PENDING: Photo-Zeile angelegt, aber noch kein Objekt im Bucket (siehe presign-Route).
+// UPLOADING: atomarer Claim während des complete-Schritts (siehe complete-Route) - verhindert einen
+// doppelten complete-Aufruf für dieselbe Datei.
 // READY: complete-Route hat das Original erfolgreich dekodiert, Vorschauen abgeleitet.
 // FAILED: complete ist fehlgeschlagen (kein echtes Bild, zu groß, ...) - Objekt wurde bereits gelöscht.
 enum PhotoStatus {
@@ -174,7 +172,7 @@ model Organization {
   events       Event[]
   newsMessages NewsMessage[]
   vehicles     Vehicle[]
-  incidents    Incident[]
+  photoUploads PhotoUpload[]
 
   dashboardTokens   DashboardToken[]
   facebookPostCache FacebookPostCache?
@@ -243,9 +241,8 @@ model User {
   dienstgradId String?
   dienstgrad   Dienstgrad? @relation(fields: [dienstgradId], references: [id])
 
-  createdIncidents        Incident[]
-  incidentCrewMemberships IncidentCrewMember[]
-  uploadedIncidentPhotos  IncidentPhoto[]
+  createdPhotoUploads PhotoUpload[]
+  uploadedPhotos      Photo[]
 
   // Bezirksweites, von jeder Organisation unabhängiges Admin-Recht (siehe permissions.ts) - ersetzt
   // die bisherige globale Wirkung von isSiteAdmin, die mit mehreren Abschnitten nicht mehr korrekt
@@ -602,9 +599,8 @@ model Vehicle {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  organization     Organization      @relation(fields: [organizationId], references: [id])
-  bookings         VehicleBooking[]
-  incidentVehicles IncidentVehicle[]
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  bookings     VehicleBooking[]
 
   @@index([organizationId])
 }
@@ -653,86 +649,56 @@ model VehicleBooking {
   @@index([vehicleId, startsAt])
 }
 
-// ---------- Module 5: Einsätze erfassen und Fotos hochladen ----------
+// ---------- Module 5: Fotos hochladen ----------
 
-// Ein Einsatz einer Feuerwehr (Foto-Upload-Brief.md). Gehört immer genau EINER Feuerwehr - keine
-// Abschnitts-weite Sichtbarkeit, anders als Event.isSectionWide. Jedes Mitglied der Feuerwehr darf
-// anlegen/bearbeiten/löschen (siehe canManageIncidentsFor) - keine Kommandant/Einsatzleiter-
-// Rollenprüfung, da dieses Projekt keine solche Rollenunterscheidung kennt (nur Dienstgrad, eine
-// reine Anzeige-Tabelle ohne Berechtigungslogik).
-model Incident {
-  id               String       @id @default(cuid())
+// Ein "Anlass" zum Sammeln von Fotos (Foto-Upload-Brief.md, vereinfachte Fassung) - bewusst KEINE
+// Einsatzdokumentation: kein Ort, keine Einsatzzeiten, keine Mannschaftserfassung. Genau drei
+// Nutzerfelder: kind, description, occurredOn. Gehört immer genau EINER Feuerwehr. Jedes Mitglied
+// der Feuerwehr darf anlegen/bearbeiten/löschen (siehe canManagePhotoUploadsFor) - keine
+// Rollen-Einschränkung, da dieses Projekt keine Rollentabelle kennt (nur Dienstgrad, eine reine
+// Anzeige-Tabelle ohne Berechtigungslogik).
+model PhotoUpload {
+  id               String          @id @default(cuid())
   fireDepartmentId String
-  fireDepartment   Organization @relation(fields: [fireDepartmentId], references: [id])
-  kind             IncidentKind
-  keyword          String
-  location         String
-  alarmedAt        DateTime
-  endedAt          DateTime?
-  crewCount        Int?
+  fireDepartment   Organization    @relation(fields: [fireDepartmentId], references: [id])
+  kind             PhotoUploadKind
+  description      String
+  occurredOn       DateTime
   createdById      String
-  createdBy        User         @relation(fields: [createdById], references: [id])
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  createdBy        User            @relation(fields: [createdById], references: [id])
+  createdAt        DateTime        @default(now())
 
-  vehicles    IncidentVehicle[]
-  crewMembers IncidentCrewMember[]
-  photos      IncidentPhoto[]
+  photos Photo[]
 
   @@index([fireDepartmentId])
-  @@index([alarmedAt])
+  @@index([createdAt])
 }
 
-// Reine Join-Tabelle für die Mehrfachauswahl "Fahrzeuge" (Brief §4.5/6.2) - Vehicle existiert
-// bereits (meine-feuerwehr/Fuhrpark), keine Änderung an Vehicle selbst nötig außer der
-// Gegenrichtungs-Relation unten.
-model IncidentVehicle {
-  incidentId String
-  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  vehicleId  String
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-
-  @@id([incidentId, vehicleId])
-}
-
-// Brief §4.5 "Mannschaft - Anzahl plus optionale Personenauswahl": Incident.crewCount ist die
-// eigenständige, immer vorhandene Zahl - diese Tabelle ist eine zusätzliche, unabhängige
-// Anreicherung (muss nicht mit crewCount übereinstimmen, z. B. "12 Mann" bekannt, aber nur 4 Namen
-// erfasst).
-model IncidentCrewMember {
-  incidentId String
-  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-
-  @@id([incidentId, userId])
-}
-
-// Ein hochgeladenes Einsatzfoto. storageKey/previewKey/thumbnailKey sind S3-Objektschlüssel im
-// Bucket app-177-pictures (siehe lib/storage/incident-photos-s3.ts) - NICHT die Bilddaten selbst,
-// anders als DroneDocument/FacebookPostImage/Organization.wappenImageData (Bytes in Postgres). Das
-// Original bleibt byteidentisch im Bucket; previewKey/thumbnailKey sind abgeleitete WebP-Objekte,
-// beide null solange status != READY.
-model IncidentPhoto {
+// Ein hochgeladenes Foto. storageKey/previewKey/thumbKey sind S3-Objektschlüssel im Bucket
+// app-177-pictures (siehe lib/storage/photo-uploads-s3.ts) - NICHT die Bilddaten selbst. Das
+// Original bleibt byteidentisch im Bucket; previewKey/thumbKey sind abgeleitete WebP-Objekte, beide
+// null solange status != READY. KEIN publicRelease-Feld - die Fotorechte gehen laut
+// Feststellungstext beim Anlegen automatisch mit dem Hochladen an die Feuerwehr über, kein Schalter,
+// keine Filterung danach nötig.
+model Photo {
   id            String      @id @default(cuid())
-  incidentId    String
-  incident      Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  photoUploadId String
+  photoUpload   PhotoUpload @relation(fields: [photoUploadId], references: [id], onDelete: Cascade)
   uploadedById  String
   uploadedBy    User        @relation(fields: [uploadedById], references: [id])
   storageKey    String
   previewKey    String?
-  thumbnailKey  String?
+  thumbKey      String?
   originalName  String
   mimeType      String
   byteSize      Int
   width         Int?
   height        Int?
   takenAt       DateTime?
-  publicRelease Boolean     @default(false)
   status        PhotoStatus @default(PENDING)
   createdAt     DateTime    @default(now())
 
-  @@index([incidentId])
+  @@index([photoUploadId])
   @@index([status, createdAt])
 }
 
