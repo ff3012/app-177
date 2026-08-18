@@ -21,6 +21,20 @@ export function PhotoUploadSheet({ photoUploadId, open, onClose, onUploaded }: P
   const libraryInputRef = useRef<HTMLInputElement>(null);
   const filesInputRef = useRef<HTMLInputElement>(null);
   const activeCountRef = useRef(0);
+  // Fix Runde 1 (Task-5-Review, Important finding): BottomSheet unmountet nie (nur `if (!open)
+  // return null`), d. h. dieser Komponenten-State überlebt Öffnen/Schließen. Ohne generationRef
+  // würde ein Schließen währenddessen (handleAttemptClose) die noch laufende processQueue-
+  // Polling-Schleife nicht stoppen - sie liefe im Hintergrund weiter, bis ihre eigenen (echten,
+  // noch offenen) Netzwerk-Requests von selbst durchlaufen, und `running` bliebe so lange
+  // fälschlich `true`, was den Übertragen-Button einer neu ausgewählten Stapel-Auswahl blockiert.
+  // generationRef wird bei jedem "verlassenen" Schließen erhöht; jede laufende/neue processQueue-
+  // Instanz merkt sich beim Start ihre eigene Generation und bricht ihre Schleife ab bzw. ignoriert
+  // ihre eigenen State-Updates, sobald sie nicht mehr der aktuellen Generation entspricht.
+  const generationRef = useRef(0);
+  // Bricht die tatsächlichen presign-/complete-fetch- und PUT-XHR-Requests der aktuellen
+  // Generation ab, damit die Rückfrage-Meldung ("Laufende Übertragungen werden abgebrochen")
+  // stimmt, statt Übertragungen im Hintergrund einfach fertiglaufen zu lassen.
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const anyInFlight = items.some((item) => item.status === 'pending' || item.status === 'uploading');
 
@@ -53,32 +67,47 @@ export function PhotoUploadSheet({ photoUploadId, open, onClose, onUploaded }: P
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
 
-  async function runItem(item: UploadItem) {
-    updateItem(item.id, { status: 'uploading', error: undefined, uploadedBytes: 0 });
+  // Wie updateItem, aber wird nur innerhalb einer laufenden processQueue-Instanz nach einem
+  // `await` verwendet - also genau dort, wo zwischen Auslösen und Ankommen des Updates beliebig
+  // viel Zeit vergangen sein kann und das Sheet in der Zwischenzeit "verlassen" worden sein könnte
+  // (siehe generationRef oben). Ein Update aus einer inzwischen verlassenen Generation wird
+  // stillschweigend verworfen, statt auf einer längst nicht mehr sichtbaren Foto-Liste zu landen.
+  function updateItemIfCurrent(generation: number, id: string, patch: Partial<UploadItem>) {
+    if (generation !== generationRef.current) return;
+    updateItem(id, patch);
+  }
+
+  async function runItem(item: UploadItem, generation: number, signal: AbortSignal) {
+    updateItemIfCurrent(generation, item.id, { status: 'uploading', error: undefined, uploadedBytes: 0 });
     try {
-      await uploadOnePhoto(photoUploadId, item.file, (bytes) => updateItem(item.id, { uploadedBytes: bytes }));
-      updateItem(item.id, { status: 'done', uploadedBytes: item.file.size });
+      await uploadOnePhoto(photoUploadId, item.file, (bytes) => updateItemIfCurrent(generation, item.id, { uploadedBytes: bytes }), signal);
+      updateItemIfCurrent(generation, item.id, { status: 'done', uploadedBytes: item.file.size });
     } catch (error) {
-      updateItem(item.id, { status: 'failed', error: error instanceof Error ? error.message : 'Unbekannter Fehler.' });
+      updateItemIfCurrent(generation, item.id, { status: 'failed', error: error instanceof Error ? error.message : 'Unbekannter Fehler.' });
     }
   }
 
   async function processQueue(currentItems: UploadItem[]) {
+    const myGeneration = generationRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setRunning(true);
     let pool = currentItems;
     while (true) {
+      if (generationRef.current !== myGeneration) return; // Sheet wurde währenddessen verlassen - Schleife stillschweigend beenden.
       const pending = pool.filter((item) => item.status === 'pending');
       if (pending.length === 0 && activeCountRef.current === 0) break;
       for (const item of pending) {
         if (activeCountRef.current >= MAX_PARALLEL) break;
         activeCountRef.current += 1;
-        void runItem(item).finally(() => {
+        void runItem(item, myGeneration, controller.signal).finally(() => {
           activeCountRef.current -= 1;
         });
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
       pool = await new Promise<UploadItem[]>((resolve) => setItems((latest) => (resolve(latest), latest)));
     }
+    if (generationRef.current !== myGeneration) return;
     setRunning(false);
     onUploaded();
   }
@@ -92,12 +121,26 @@ export function PhotoUploadSheet({ photoUploadId, open, onClose, onUploaded }: P
     const item = items.find((entry) => entry.id === id);
     if (!item) return;
     updateItem(id, { status: 'pending' });
-    void processQueue(items.map((entry) => (entry.id === id ? { ...entry, status: 'pending' } : entry)));
+    // Läuft bereits eine processQueue-Instanz (andere Fotos desselben Stapels noch in Arbeit),
+    // holt deren eigene Polling-Schleife das gerade auf 'pending' gesetzte Foto von selbst beim
+    // nächsten Durchlauf ab - ein zweiter, parallel laufender processQueue-Aufruf würde sich
+    // sonst denselben activeCountRef/items-State teilen und am Ende beide unabhängig
+    // onUploaded() auslösen (Minor Finding aus dem Task-5-Review).
+    if (!running) {
+      void processQueue(items.map((entry) => (entry.id === id ? { ...entry, status: 'pending' } : entry)));
+    }
   }
 
   function handleAttemptClose() {
     if (anyInFlight) {
       if (!window.confirm('Es laufen noch Übertragungen. Wirklich verlassen? Laufende Übertragungen werden abgebrochen.')) return;
+      // Ab hier hat der Nutzer bestätigt, dass laufende Übertragungen abgebrochen werden - das muss
+      // auch tatsächlich stimmen: neue Generation markieren (damit die alte Polling-Schleife sich
+      // selbst beendet und ihre verspäteten State-Updates ignoriert werden) und die echten
+      // presign-/complete-fetch- sowie PUT-XHR-Requests der aktuellen Generation abbrechen.
+      generationRef.current += 1;
+      abortControllerRef.current?.abort();
+      setRunning(false);
     }
     setItems([]);
     onClose();
