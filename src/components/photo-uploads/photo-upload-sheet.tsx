@@ -214,7 +214,7 @@ export function PhotoUploadSheet({ photoUploadId, open, onClose, onUploaded }: P
         </div>
         <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
           Fotos werden unverändert gespeichert — samt Aufnahmezeit und, falls im Bild vorhanden, Standortdaten. Bei Personen und Kennzeichen gilt
-          die Datenschutzregelung der Wehr.
+          die Datenschutzregelung der Wehr. Der gesamte Foto Upload wird automatisch nach 96 Stunden gelöscht.
         </p>
 
         {items.length > 0 && !running && doneCount < items.length && (

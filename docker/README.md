@@ -295,16 +295,26 @@ CRON_TZ=Europe/Vienna
 */5 * * * * /opt/app-177/docker/kalender-ics-sync.sh >> /var/log/ffapp-kalender-ics-sync.log 2>&1
 ```
 
-## Tägliche Aufräumung verwaister PENDING/UPLOADING-Foto-Uploads
+## Tägliche Aufräumung: 96h-Speicherbegrenzung und verwaiste PENDING/UPLOADING-Foto-Uploads
 
-`docker/photo-cleanup.sh` ruft `/api/cron/photo-cleanup` auf, das
-`Photo`-Zeilen löscht, die seit mehr als 24 Stunden auf `status: PENDING` oder
-`status: UPLOADING` stehen - PENDING: ein abgebrochener Upload, bei dem der Client presign
-aufgerufen, den PUT/complete-Ablauf aber nie beendet hat; UPLOADING: ein Absturz/Timeout während der
-serverseitigen Nachbearbeitung (S3-Download, Vorschau-Generierung, Vorschau-Upload) nach dem PUT.
-Löscht sowohl die (ggf. gar nicht existierenden) S3-Objekte - Original UND beide Vorschaubilder,
-falls bereits erzeugt - als auch die DB-Zeile; ein einzelner S3-Fehler blockiert dabei nicht die
-Aufräumung der übrigen Zeilen. Täglich um 04:00 österreichischer Zeit einrichten:
+`docker/photo-cleanup.sh` ruft `/api/cron/photo-cleanup` auf, das zwei unabhängige Aufräum-Durchläufe
+macht:
+
+1. **96h-Speicherbegrenzung** (Foto-Upload-Brief: reine, kurzlebige Foto-Sammlung, keine dauerhafte
+   Einsatzdokumentation): jeder komplette `PhotoUpload` - samt aller zugehörigen `Photo`-Zeilen,
+   unabhängig von deren `status` - wird 96 Stunden nach `PhotoUpload.createdAt` gelöscht, damit der
+   Exoscale-S3-Bucket nicht unbegrenzt wächst. Das UI zeigt den genauen Löschzeitpunkt auf der
+   Foto-Upload-Detailseite an.
+2. **Verwaiste PENDING/UPLOADING-Fotos** (unverändert gegenüber vorher): `Photo`-Zeilen, die seit mehr
+   als 24 Stunden auf `status: PENDING` oder `status: UPLOADING` stehen - PENDING: ein abgebrochener
+   Upload, bei dem der Client presign aufgerufen, den PUT/complete-Ablauf aber nie beendet hat;
+   UPLOADING: ein Absturz/Timeout während der serverseitigen Nachbearbeitung (S3-Download,
+   Vorschau-Generierung, Vorschau-Upload) nach dem PUT. Fängt nur noch Fälle zwischen 24h und 96h ab,
+   da Durchlauf 1 für alles ab 96h ohnehin schon den ganzen Foto Upload entfernt hat.
+
+Beide Durchläufe löschen zuerst die (ggf. gar nicht existierenden) S3-Objekte - Original UND beide
+Vorschaubilder, falls bereits erzeugt - dann die DB-Zeile(n); ein einzelner S3-Fehler blockiert dabei
+nicht die Aufräumung der übrigen Zeilen. Täglich um 04:00 österreichischer Zeit einrichten:
 
 ```bash
 crontab -e
