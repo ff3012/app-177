@@ -171,7 +171,14 @@ export default async function MeineFeuerwehrPage() {
     prisma.incident.findMany({
       where: { fireDepartmentId: user.homeOrganizationId, alarmedAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
       orderBy: { alarmedAt: 'desc' },
-      include: { photos: { where: { status: 'READY' }, orderBy: { createdAt: 'asc' }, take: 4 }, _count: { select: { photos: true } } },
+      include: {
+        photos: { where: { status: 'READY' }, orderBy: { createdAt: 'asc' }, take: 4 },
+        // Auf denselben READY-Filter wie die photos-Sub-Query oben scoped, sonst würde die "+N"-Badge
+        // in RecentIncidentsBlock auch noch nicht sichtbare PENDING/UPLOADING/FAILED-Fotos mitzählen
+        // und einen Nutzer auf angeblich weitere anklickbare Fotos hinweisen, die es (ein FAILED-Foto
+        // ggf. nie) gar nicht gibt.
+        _count: { select: { photos: { where: { status: 'READY' } } } },
+      },
     }),
   ]);
 
