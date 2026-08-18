@@ -295,6 +295,21 @@ CRON_TZ=Europe/Vienna
 */5 * * * * /opt/app-177/docker/kalender-ics-sync.sh >> /var/log/ffapp-kalender-ics-sync.log 2>&1
 ```
 
+## Tägliche Aufräumung verwaister PENDING-Einsatzfotos
+
+`docker/incident-photo-cleanup.sh` ruft `/api/cron/incident-photo-cleanup` auf, das
+`IncidentPhoto`-Zeilen löscht, die seit mehr als 24 Stunden auf `status: PENDING` stehen - ein
+abgebrochener Upload, bei dem der Client presign aufgerufen, den PUT/complete-Ablauf aber nie
+beendet hat. Löscht sowohl das (ggf. gar nicht existierende) S3-Objekt als auch die DB-Zeile;
+ein einzelner S3-Fehler blockiert dabei nicht die Aufräumung der übrigen Zeilen. Täglich um 04:00
+österreichischer Zeit einrichten:
+
+```bash
+crontab -e
+CRON_TZ=Europe/Vienna
+0 4 * * * /opt/app-177/docker/incident-photo-cleanup.sh >> /var/log/ffapp-incident-photo-cleanup.log 2>&1
+```
+
 ## Dashboard Feuerwehrhaus (Kiosk-Screen)
 
 Der öffentliche Kiosk-Screen (`/dashboard/[token]`, Issue #8) läuft auf einem gewöhnlichen Windows-PC im
@@ -447,7 +462,8 @@ die beiden Checkouts/Stacks beeinflussen sich nie gegenseitig.
 
 **Bewusst nicht eingerichtet**: keiner der host-seitigen Cronjobs (`backup.sh`,
 `send-scheduled-news.sh`, `system-check-email.sh`, `atemschutz-warnung-email.sh`,
-`facebook-fetch.sh`, `kalender-ics-sync.sh`) läuft standardmäßig für diesen Stack - die würden sonst
+`facebook-fetch.sh`, `kalender-ics-sync.sh`, `incident-photo-cleanup.sh`) läuft standardmäßig für
+diesen Stack - die würden sonst
 unnötig externe Dienste (Mailjet, S3, Facebook) mit Testdaten treffen. Nur gezielt und temporär
 einrichten, wenn ein cron-gesteuertes Feature selbst getestet werden soll, und danach wieder aus der
 Dev-Crontab entfernen.
