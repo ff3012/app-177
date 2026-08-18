@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { subscribeToUploadQueue, retryUpload, type QueuedUpload } from '@/lib/upload-queue/queue';
 import { deleteIncidentPhoto, setIncidentPhotoPublicRelease } from '@/app/(app)/meine-feuerwehr/einsaetze/actions';
 
@@ -19,6 +20,11 @@ interface IncidentPhotoGalleryProps {
   photos: PhotoData[];
   currentUserId: string;
   canManage: boolean;
+  // Echt admin-beschränkt (Bezirksadmin ODER ADMIN-Membership dieser Feuerwehr) - anders als canManage
+  // oben, das laut Task 1 bewusst "jedes Mitglied darf" bedeutet (canManageIncidentsFor ===
+  // canViewIncidentsFor) und daher NICHT als Gate für die Foto-Lösch-Berechtigung taugt.
+  // canDeleteIncidentPhoto erlaubt nur den Uploader selbst oder einen echten Feuerwehr-Admin.
+  isFeuerwehrAdmin: boolean;
 }
 
 function initials(name: string): string {
@@ -34,11 +40,36 @@ function formatBytes(byteSize: number): string {
   return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function IncidentPhotoGallery({ incidentId, photos, currentUserId, canManage }: IncidentPhotoGalleryProps) {
+export function IncidentPhotoGallery({
+  incidentId,
+  photos,
+  currentUserId,
+  canManage,
+  isFeuerwehrAdmin,
+}: IncidentPhotoGalleryProps) {
   const [queue, setQueue] = useState<QueuedUpload[]>([]);
   const [selected, setSelected] = useState<PhotoData | null>(null);
+  const router = useRouter();
+  // Merkt sich, welche Warteschlangen-Einträge bereits als 'done' gesehen wurden, damit
+  // router.refresh() für einen frisch fertiggestellten Upload genau einmal aufgerufen wird (nicht bei
+  // jedem weiteren Queue-Update, z. B. Fortschritts-Ticks anderer noch laufender Uploads).
+  const seenDoneIds = useRef(new Set<string>());
 
-  useEffect(() => subscribeToUploadQueue(incidentId, setQueue), [incidentId]);
+  useEffect(
+    () =>
+      subscribeToUploadQueue(incidentId, (uploads) => {
+        setQueue(uploads);
+        const newlyDone = uploads.filter((entry) => entry.status === 'done' && !seenDoneIds.current.has(entry.id));
+        if (newlyDone.length > 0) {
+          for (const entry of newlyDone) seenDoneIds.current.add(entry.id);
+          // Ein fertiger Upload erreicht 'done' erst NACHDEM sein complete-Aufruf den Foto-Status auf
+          // READY gesetzt hat (siehe queue.ts's uploadOne) - erst dann taucht das Foto überhaupt in der
+          // vom Server geladenen photos-Liste auf, die diese Komponente sonst nie von sich aus neu lädt.
+          router.refresh();
+        }
+      }),
+    [incidentId, router],
+  );
 
   const inProgress = queue.filter((entry) => entry.status !== 'done');
   const totalBytes = inProgress.reduce((sum, entry) => sum + entry.byteSize, 0);
@@ -124,7 +155,7 @@ export function IncidentPhotoGallery({ incidentId, photos, currentUserId, canMan
                 />
               </label>
             )}
-            {(selected.uploadedById === currentUserId || canManage) && (
+            {(selected.uploadedById === currentUserId || isFeuerwehrAdmin) && (
               <button
                 type="button"
                 onClick={() => {

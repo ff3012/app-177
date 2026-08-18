@@ -8,6 +8,10 @@ import { IncidentPhotoGallery } from '@/components/incidents/incident-photo-gall
 interface IncidentDetailClientProps {
   incidentId: string;
   canManage: boolean;
+  // Separat von canManage: canManage ist laut Task 1 bewusst "jedes Mitglied darf" (siehe
+  // canManageIncidentsFor), taugt also nicht als Gate für die Foto-Lösch-Berechtigung in der Galerie,
+  // die echt admin-beschränkt sein muss (canDeleteIncidentPhoto: Uploader ODER Feuerwehr-Admin).
+  isFeuerwehrAdmin: boolean;
   currentUserId: string;
   photos: {
     id: string;
@@ -20,7 +24,13 @@ interface IncidentDetailClientProps {
   }[];
 }
 
-export function IncidentDetailClient({ incidentId, canManage, currentUserId, photos }: IncidentDetailClientProps) {
+export function IncidentDetailClient({
+  incidentId,
+  canManage,
+  isFeuerwehrAdmin,
+  currentUserId,
+  photos,
+}: IncidentDetailClientProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const router = useRouter();
 
@@ -33,7 +43,13 @@ export function IncidentDetailClient({ incidentId, canManage, currentUserId, pho
         </button>
       </div>
 
-      <IncidentPhotoGallery incidentId={incidentId} photos={photos} currentUserId={currentUserId} canManage={canManage} />
+      <IncidentPhotoGallery
+        incidentId={incidentId}
+        photos={photos}
+        currentUserId={currentUserId}
+        canManage={canManage}
+        isFeuerwehrAdmin={isFeuerwehrAdmin}
+      />
 
       <PhotoUploadSheet
         incidentId={incidentId}

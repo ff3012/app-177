@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canViewIncidentsFor, canManageIncidentsFor } from '@/lib/auth/permissions';
+import { canViewIncidentsFor, canManageIncidentsFor, canManageHeimatfeuerwehrFor } from '@/lib/auth/permissions';
 import { INCIDENT_KIND_LABELS } from '@/lib/validation/incident.schema';
 import { IncidentDetailClient } from './incident-detail-client';
 
@@ -24,6 +24,12 @@ export default async function EinsatzDetailPage({ params }: { params: Promise<{ 
   if (!incident || !canViewIncidentsFor(user, incident.fireDepartmentId)) notFound();
 
   const canManage = canManageIncidentsFor(user, incident.fireDepartmentId);
+  // Eigener, echt admin-beschränkter Wert für die Foto-Lösch-Berechtigung in der Galerie -
+  // canManage/canManageIncidentsFor ist laut Task 1 bewusst identisch zu canViewIncidentsFor ("jedes
+  // Mitglied darf"), taugt also nicht als "ist Admin"-Gate für canDeleteIncidentPhoto (Uploader ODER
+  // echter Feuerwehr-Admin, NICHT jedes Mitglied). canManageHeimatfeuerwehrFor ist die tatsächliche
+  // Admin-Prüfung (Bezirksadmin ODER ADMIN-Membership dieser Feuerwehr).
+  const isFeuerwehrAdmin = canManageHeimatfeuerwehrFor(user, incident.fireDepartmentId);
 
   return (
     <div className="flex flex-col gap-5">
@@ -72,6 +78,7 @@ export default async function EinsatzDetailPage({ params }: { params: Promise<{ 
       <IncidentDetailClient
         incidentId={incident.id}
         canManage={canManage}
+        isFeuerwehrAdmin={isFeuerwehrAdmin}
         currentUserId={user.id}
         photos={incident.photos.map((photo) => ({
           id: photo.id,
