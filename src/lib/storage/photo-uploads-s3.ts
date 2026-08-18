@@ -10,7 +10,7 @@ function regionFromEndpoint(endpointUrl: string): string {
 
 let cachedClient: S3Client | null = null;
 
-export function getIncidentPhotosS3Client(): S3Client {
+export function getPhotoUploadsS3Client(): S3Client {
   if (cachedClient) return cachedClient;
   const endpoint = process.env.S3_ENDPOINT_URL;
   const accessKeyId = process.env.S3_ACCESS_KEY;
@@ -33,20 +33,17 @@ function getPhotosBucket(): string {
   return bucket;
 }
 
-/** Presigned PUT für den direkten Client->S3-Upload des Originals - 15 Minuten Gültigkeit (deutlich
- * länger als die 60 Sekunden der Download-URLs unten), da ein 50-MB-Original über eine langsame
- * mobile Verbindung realistisch mehrere Minuten braucht. */
+/** Presigned PUT für den direkten Client->S3-Upload des Originals - 15 Minuten Gültigkeit. */
 export async function presignPhotoUpload(storageKey: string, contentType: string): Promise<string> {
-  const client = getIncidentPhotosS3Client();
+  const client = getPhotoUploadsS3Client();
   const command = new PutObjectCommand({ Bucket: getPhotosBucket(), Key: storageKey, ContentType: contentType });
   return getSignedUrl(client, command, { expiresIn: 900 });
 }
 
-/** Presigned GET für Downloads/Vorschauen - siehe Foto-Upload-Brief.md §4.2: NIE eine dauerhafte
- * URL, jede Anfrage geht über die session-geprüfte Route (Task 4), die diese Funktion erst NACH der
- * Berechtigungsprüfung aufruft. 60 Sekunden reichen für den unmittelbaren 307-Redirect. */
+/** Presigned GET für Downloads/Vorschauen - nie eine dauerhafte URL, jede Anfrage geht über die
+ * session-geprüfte Route (Task 4), die diese Funktion erst NACH der Berechtigungsprüfung aufruft. */
 export async function presignPhotoDownload(storageKey: string, options?: { contentDisposition?: string }): Promise<string> {
-  const client = getIncidentPhotosS3Client();
+  const client = getPhotoUploadsS3Client();
   const command = new GetObjectCommand({
     Bucket: getPhotosBucket(),
     Key: storageKey,
@@ -56,7 +53,7 @@ export async function presignPhotoDownload(storageKey: string, options?: { conte
 }
 
 export async function headPhotoObject(storageKey: string): Promise<{ contentLength: number } | null> {
-  const client = getIncidentPhotosS3Client();
+  const client = getPhotoUploadsS3Client();
   try {
     const result = await client.send(new HeadObjectCommand({ Bucket: getPhotosBucket(), Key: storageKey }));
     return { contentLength: result.ContentLength ?? 0 };
@@ -66,25 +63,21 @@ export async function headPhotoObject(storageKey: string): Promise<{ contentLeng
 }
 
 export async function getPhotoObjectBytes(storageKey: string): Promise<Buffer> {
-  const client = getIncidentPhotosS3Client();
+  const client = getPhotoUploadsS3Client();
   const result = await client.send(new GetObjectCommand({ Bucket: getPhotosBucket(), Key: storageKey }));
   const chunks: Uint8Array[] = [];
-  // @aws-sdk/client-s3's Body ist im Node-Laufzeitkontext ein Readable-Stream, kein Web-Stream.
   for await (const chunk of result.Body as AsyncIterable<Uint8Array>) chunks.push(chunk);
   return Buffer.concat(chunks);
 }
 
 export async function putPreviewObject(storageKey: string, body: Buffer, contentType: string): Promise<void> {
-  const client = getIncidentPhotosS3Client();
+  const client = getPhotoUploadsS3Client();
   await client.send(new PutObjectCommand({ Bucket: getPhotosBucket(), Key: storageKey, Body: body, ContentType: contentType }));
 }
 
-/** Löscht bis zu drei Objekte (Original + zwei Vorschauen) in einem Aufruf - DeleteObjects statt
- * dreier einzelner DeleteObject-Aufrufe. Nicht existierende Schlüssel verursachen keinen Fehler
- * (S3-Semantik), daher ist kein vorheriges HeadObject nötig. */
 export async function deletePhotoObjects(storageKeys: string[]): Promise<void> {
   if (storageKeys.length === 0) return;
-  const client = getIncidentPhotosS3Client();
+  const client = getPhotoUploadsS3Client();
   await client.send(
     new DeleteObjectsCommand({
       Bucket: getPhotosBucket(),
