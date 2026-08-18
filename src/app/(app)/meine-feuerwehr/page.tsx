@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageEventsFor, canManageHeimatfeuerwehrFor, canManageIncidentsFor, canViewDroneModule } from '@/lib/auth/permissions';
+import { canManageEventsFor, canManageHeimatfeuerwehrFor, canManagePhotoUploadsFor, canViewDroneModule } from '@/lib/auth/permissions';
 import { getExpiryStatus, getFinnentestExpiryDate, type AtemschutzExpiryStatus } from '@/lib/heimatfeuerwehr/atemschutz-status';
 import {
   NINETY_DAY_REQUIRED_FLIGHTS,
@@ -10,7 +10,7 @@ import {
   meetsNinetyDayRule,
 } from '@/lib/drone/ninety-day-rule';
 import { HomeTodoList, type HomeEventCardData, type StaticTodoItemData } from '@/components/home/home-todo-list';
-import { RecentIncidentsBlock } from '@/components/incidents/recent-incidents-block';
+import { RecentPhotoUploadsBlock } from '@/components/photo-uploads/recent-photo-uploads-block';
 import { cancelVehicleBooking } from './actions';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
@@ -114,7 +114,7 @@ export default async function MeineFeuerwehrPage() {
   // (Abschnitt-)Feuerwehr innerhalb der eigenen Drohnengruppe gar nicht erst aus der DB geladen.
   const droneMember = canViewDroneModule(user);
 
-  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures, recentIncidents] = await Promise.all([
+  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures, recentPhotoUploads] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: {
@@ -164,19 +164,16 @@ export default async function MeineFeuerwehrPage() {
       where: { id: user.homeOrganizationId },
       select: { featureAtemschutz: true },
     }),
-    // 24-Stunden-Block (Startbildschirm-Brief.md §6.1) - bewusst dieselbe fireDepartmentId-Scoping wie
-    // canViewIncidentsFor (homeOrganizationId), aber hier direkt in der Query statt über die
-    // Permission-Funktion, da diese Query schon vor dem Laden von `user`s Berechtigungsobjekt läuft und
-    // ausschließlich die eigene Feuerwehr zeigt (kein Admin-Fall wie bei canViewIncidentsFor nötig).
-    prisma.incident.findMany({
-      where: { fireDepartmentId: user.homeOrganizationId, alarmedAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
-      orderBy: { alarmedAt: 'desc' },
+    // 24-Stunden-Block (Foto-Upload-Brief.md §3) - bewusst dieselbe fireDepartmentId-Scoping wie
+    // canViewPhotoUploadsFor (homeOrganizationId), aber hier direkt in der Query, da diese Query
+    // schon vor dem Laden von `user`s Berechtigungsobjekt läuft und ausschließlich die eigene
+    // Feuerwehr zeigt (kein Admin-Fall nötig).
+    prisma.photoUpload.findMany({
+      where: { fireDepartmentId: user.homeOrganizationId, createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      orderBy: { createdAt: 'desc' },
       include: {
+        createdBy: { select: { firstName: true, lastName: true } },
         photos: { where: { status: 'READY' }, orderBy: { createdAt: 'asc' }, take: 4 },
-        // Auf denselben READY-Filter wie die photos-Sub-Query oben scoped, sonst würde die "+N"-Badge
-        // in RecentIncidentsBlock auch noch nicht sichtbare PENDING/UPLOADING/FAILED-Fotos mitzählen
-        // und einen Nutzer auf angeblich weitere anklickbare Fotos hinweisen, die es (ein FAILED-Foto
-        // ggf. nie) gar nicht gibt.
         _count: { select: { photos: { where: { status: 'READY' } } } },
       },
     }),
@@ -322,22 +319,16 @@ export default async function MeineFeuerwehrPage() {
 
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
-      {/* Findet I5 (Final-Review): /meine-feuerwehr/einsaetze war von nirgendwo im Nav/Startbildschirm
-         erreichbar - ein Mitglied, das einen Einsatz älter als 24h suchte (also nicht mehr im
-         RecentIncidentsBlock unten sichtbar), hatte keinen Weg dorthin. Dieser Link steht bewusst hier
-         (nicht nur im RecentIncidentsBlock-Header), da er unabhängig davon sichtbar bleiben muss, ob der
-         24h-Block überhaupt rendert - genau der Fall, in dem die Liste am nötigsten gebraucht wird.
-         canManageIncidentsFor ist laut Task 1 identisch mit canViewIncidentsFor (jedes Mitglied darf). */}
-      {canManageIncidentsFor(user, user.homeOrganizationId) && (
+      {canManagePhotoUploadsFor(user, user.homeOrganizationId) && (
         <div className="flex items-center gap-3">
           <Link
-            href="/meine-feuerwehr/einsaetze/neu"
+            href="/foto-uploads/neu"
             className="flex min-h-12 flex-1 items-center justify-center rounded-lg border-2 border-brand text-sm font-semibold text-brand"
           >
-            Einsatz erfassen
+            Foto Upload
           </Link>
-          <Link href="/meine-feuerwehr/einsaetze" className="text-sm font-medium text-neutral-600 hover:underline">
-            Alle Einsätze
+          <Link href="/foto-uploads" className="text-sm font-medium text-neutral-600 hover:underline">
+            Alle Foto Uploads
           </Link>
         </div>
       )}
@@ -355,16 +346,16 @@ export default async function MeineFeuerwehrPage() {
         )}
       </div>
 
-      {recentIncidents.length > 0 && (
-        <RecentIncidentsBlock
-          incidents={recentIncidents.map((incident) => ({
-            id: incident.id,
-            kind: incident.kind,
-            keyword: incident.keyword,
-            location: incident.location,
-            alarmedAt: incident.alarmedAt.toISOString(),
-            photoIds: incident.photos.map((p) => p.id),
-            totalPhotoCount: incident._count.photos,
+      {recentPhotoUploads.length > 0 && (
+        <RecentPhotoUploadsBlock
+          photoUploads={recentPhotoUploads.map((photoUpload) => ({
+            id: photoUpload.id,
+            kind: photoUpload.kind,
+            description: photoUpload.description,
+            createdAt: photoUpload.createdAt.toISOString(),
+            createdByName: `${photoUpload.createdBy.firstName} ${photoUpload.createdBy.lastName}`,
+            photoIds: photoUpload.photos.map((p) => p.id),
+            totalPhotoCount: photoUpload._count.photos,
           }))}
         />
       )}
