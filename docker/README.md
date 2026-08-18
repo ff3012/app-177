@@ -295,10 +295,10 @@ CRON_TZ=Europe/Vienna
 */5 * * * * /opt/app-177/docker/kalender-ics-sync.sh >> /var/log/ffapp-kalender-ics-sync.log 2>&1
 ```
 
-## Tägliche Aufräumung verwaister PENDING/UPLOADING-Einsatzfotos
+## Tägliche Aufräumung verwaister PENDING/UPLOADING-Foto-Uploads
 
-`docker/incident-photo-cleanup.sh` ruft `/api/cron/incident-photo-cleanup` auf, das
-`IncidentPhoto`-Zeilen löscht, die seit mehr als 24 Stunden auf `status: PENDING` oder
+`docker/photo-cleanup.sh` ruft `/api/cron/photo-cleanup` auf, das
+`Photo`-Zeilen löscht, die seit mehr als 24 Stunden auf `status: PENDING` oder
 `status: UPLOADING` stehen - PENDING: ein abgebrochener Upload, bei dem der Client presign
 aufgerufen, den PUT/complete-Ablauf aber nie beendet hat; UPLOADING: ein Absturz/Timeout während der
 serverseitigen Nachbearbeitung (S3-Download, Vorschau-Generierung, Vorschau-Upload) nach dem PUT.
@@ -309,7 +309,7 @@ Aufräumung der übrigen Zeilen. Täglich um 04:00 österreichischer Zeit einric
 ```bash
 crontab -e
 CRON_TZ=Europe/Vienna
-0 4 * * * /opt/app-177/docker/incident-photo-cleanup.sh >> /var/log/ffapp-incident-photo-cleanup.log 2>&1
+0 4 * * * /opt/app-177/docker/photo-cleanup.sh >> /var/log/ffapp-photo-cleanup.log 2>&1
 ```
 
 ## Einsatzfotos: CORS-Konfiguration des `app-177-pictures`-Buckets (einmalige manuelle Einrichtung)
@@ -507,7 +507,7 @@ die beiden Checkouts/Stacks beeinflussen sich nie gegenseitig.
 
 **Bewusst nicht eingerichtet**: keiner der host-seitigen Cronjobs (`backup.sh`,
 `send-scheduled-news.sh`, `system-check-email.sh`, `atemschutz-warnung-email.sh`,
-`facebook-fetch.sh`, `kalender-ics-sync.sh`, `incident-photo-cleanup.sh`) läuft standardmäßig für
+`facebook-fetch.sh`, `kalender-ics-sync.sh`, `photo-cleanup.sh`) läuft standardmäßig für
 diesen Stack - die würden sonst
 unnötig externe Dienste (Mailjet, S3, Facebook) mit Testdaten treffen. Nur gezielt und temporär
 einrichten, wenn ein cron-gesteuertes Feature selbst getestet werden soll, und danach wieder aus der
