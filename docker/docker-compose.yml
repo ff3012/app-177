@@ -65,8 +65,20 @@ services:
     depends_on:
       - app
     restart: unless-stopped
+    # caddy_net: external network shared with the dev/staging stack (docker-compose.staging.yml),
+    # so this Caddy instance can also reverse_proxy dev.app-177... to the dev stack's app container
+    # (see docker/README.md "Zweiter Stack für eine Test-/Dev-Umgebung"). Applied live on the
+    # server when the dev stack was set up (2026-08-13) but never committed until now - was the
+    # one uncommitted local change blocking `git pull` on the production checkout.
+    networks:
+      - default
+      - caddy_net
 
 volumes:
   pgdata:
   caddy_data:
   caddy_config:
+
+networks:
+  caddy_net:
+    external: true
