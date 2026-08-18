@@ -13,6 +13,17 @@ type Listener = (uploads: QueuedUpload[]) => void;
 const listeners = new Set<Listener>();
 let activeUploads = 0;
 
+// Post-Re-Review-Fix: mit RecentIncidentsBlock's Ein-Abo-pro-Einsatz (Findet I3) und der
+// Stuck-Upload-Recovery (Findet I1) konnte derselbe 'queued'-Eintrag von mehreren, zeitgleich
+// laufenden processQueue()-Aufrufen aufgegriffen werden - jeder liest denselben IndexedDB-Snapshot,
+// bevor der jeweils andere den Status auf 'uploading' zurückgeschrieben hat. Das bereits vorhandene
+// activeUploads deckelt nur die *Parallelität* (max. 3 gleichzeitig), verhindert aber nicht, dass
+// derselbe Eintrag zweimal gestartet wird - Ergebnis wären doppelte Presign-Aufrufe, doppelte
+// IncidentPhoto-Zeilen und doppelte S3-Objekte für einen einzigen vom Nutzer ausgewählten File. Dieses
+// Set ist die eigentliche Absicherung dagegen, unabhängig davon, wie viele Stellen processQueue()
+// aufrufen (Subscriptions, enqueuePhotos, online-/connection.change-Events).
+const inFlightIds = new Set<string>();
+
 async function notifyListeners(): Promise<void> {
   const db = await getUploadQueueDb();
   const all = await db.getAll('uploads');
@@ -53,11 +64,27 @@ function ensureStuckUploadsRecovered(): Promise<void> {
   return recoveryPromise;
 }
 
+// Post-Re-Review-Fix: RecentIncidentsBlock ruft subscribeToUploadQueue() einmal PRO angezeigtem
+// Einsatz auf (siehe Findet I3 oben) - vor diesem Fix hängte jeder dieser Aufrufe ein eigenes
+// .then(() => processQueue()) an ensureStuckUploadsRecovered() an. Die Recovery selbst war zwar schon
+// memoisiert, der anschließende processQueue()-Aufruf aber nicht, lief also bei N gleichzeitig
+// angezeigten Einsätzen N-mal unabhängig voneinander an - reine Verschwendung, die durch den
+// inFlightIds-Guard unten zwar unschädlich gemacht, aber nicht vermieden wird. Gleiches
+// Memoisierungs-Muster wie ensureStuckUploadsRecovered() selbst: einmal pro Modul-Ladezyklus.
+let initialProcessQueuePromise: Promise<void> | null = null;
+
+function ensureInitialProcessQueue(): Promise<void> {
+  if (!initialProcessQueuePromise) {
+    initialProcessQueuePromise = ensureStuckUploadsRecovered().then(() => processQueue());
+  }
+  return initialProcessQueuePromise;
+}
+
 export function subscribeToUploadQueue(incidentId: string, listener: Listener): () => void {
   const scoped: Listener = (all) => listener(all.filter((entry) => entry.incidentId === incidentId));
   listeners.add(scoped);
   void notifyListeners();
-  void ensureStuckUploadsRecovered().then(() => processQueue());
+  void ensureInitialProcessQueue();
   return () => listeners.delete(scoped);
 }
 
@@ -162,12 +189,20 @@ async function uploadOne(entry: QueuedUpload): Promise<void> {
 export async function processQueue(): Promise<void> {
   const db = await getUploadQueueDb();
   const all = await db.getAll('uploads');
-  const queued = all.filter((entry) => entry.status === 'queued');
+  // Guard-Check und -Eintragung passieren absichtlich synchron direkt nach dem einzigen await oben, in
+  // derselben Schleife wie das Starten der Uploads (kein weiterer await dazwischen) - so kann ein zweiter,
+  // zeitgleich laufender processQueue()-Aufruf, dessen eigenes await db.getAll() kurz danach aufwacht,
+  // niemals denselben Eintrag noch als "nicht in Flight" vorfinden: sobald dieser Durchlauf hier einmal zu
+  // laufen beginnt, läuft er ohne Unterbrechung bis zum Schleifenende durch (JS ist single-threaded, und
+  // uploadOne() wird bewusst nicht awaited).
+  const queued = all.filter((entry) => entry.status === 'queued' && !inFlightIds.has(entry.id));
   for (const entry of queued) {
     if (activeUploads >= MAX_PARALLEL_UPLOADS) break;
+    inFlightIds.add(entry.id);
     activeUploads += 1;
     void uploadOne(entry).finally(() => {
       activeUploads -= 1;
+      inFlightIds.delete(entry.id);
       void processQueue();
     });
   }
