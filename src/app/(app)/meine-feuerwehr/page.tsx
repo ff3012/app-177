@@ -322,13 +322,24 @@ export default async function MeineFeuerwehrPage() {
 
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
+      {/* Findet I5 (Final-Review): /meine-feuerwehr/einsaetze war von nirgendwo im Nav/Startbildschirm
+         erreichbar - ein Mitglied, das einen Einsatz älter als 24h suchte (also nicht mehr im
+         RecentIncidentsBlock unten sichtbar), hatte keinen Weg dorthin. Dieser Link steht bewusst hier
+         (nicht nur im RecentIncidentsBlock-Header), da er unabhängig davon sichtbar bleiben muss, ob der
+         24h-Block überhaupt rendert - genau der Fall, in dem die Liste am nötigsten gebraucht wird.
+         canManageIncidentsFor ist laut Task 1 identisch mit canViewIncidentsFor (jedes Mitglied darf). */}
       {canManageIncidentsFor(user, user.homeOrganizationId) && (
-        <Link
-          href="/meine-feuerwehr/einsaetze/neu"
-          className="flex min-h-12 items-center justify-center rounded-lg border-2 border-brand text-sm font-semibold text-brand"
-        >
-          Einsatz erfassen
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/meine-feuerwehr/einsaetze/neu"
+            className="flex min-h-12 flex-1 items-center justify-center rounded-lg border-2 border-brand text-sm font-semibold text-brand"
+          >
+            Einsatz erfassen
+          </Link>
+          <Link href="/meine-feuerwehr/einsaetze" className="text-sm font-medium text-neutral-600 hover:underline">
+            Alle Einsätze
+          </Link>
+        </div>
       )}
 
       <div className={droneMember ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>

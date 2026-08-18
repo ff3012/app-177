@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageIncidentsFor } from '@/lib/auth/permissions';
 import { IncidentForm } from '@/components/incidents/incident-form';
+import { DeleteIncidentButton } from '@/components/incidents/delete-incident-button';
 import { updateIncident } from '../../actions';
 
 function toLocalInputValue(date: Date): string {
@@ -59,6 +60,14 @@ export default async function EinsatzBearbeitenPage({ params }: { params: Promis
         action={boundUpdate}
         submitLabel="Änderungen speichern"
       />
+      {/* Findet I4 (Final-Review): kein UI rief deleteIncident je auf. Gate ist bereits durch die
+         notFound()-Prüfung oben (canManageIncidentsFor) sichergestellt - keine zusätzliche Prüfung nötig.
+         pb-44 (dieselbe Reserve wie IncidentForm's eigener Footer-Clearance, siehe C1) verhindert, dass
+         dieser Button unterhalb sm: hinter IncidentForm's fixed Footer + der MobileTabBar verschwindet,
+         da er als einziges Element NACH dem <form> außerhalb von dessen eigener Footer-Clearance liegt. */}
+      <div className="pb-44 sm:pb-0">
+        <DeleteIncidentButton incidentId={incident.id} />
+      </div>
     </div>
   );
 }

@@ -19,10 +19,45 @@ async function notifyListeners(): Promise<void> {
   for (const listener of listeners) listener(all);
 }
 
+// Findet I1 (Final-Review): processQueue() wählt ausschließlich status:'queued' aus - ein Eintrag, der
+// beim App-Schließen/Reload mitten im Transfer bei 'uploading' hängen blieb, würde sonst für immer
+// unauffindbar bleiben (die Fortschrittsanzeige zeigt ihn mit eingefrorenen uploadedBytes, "Erneut
+// versuchen" erscheint nur für 'failed'). activeUploads startet nach einem frischen Seitenaufruf immer bei
+// 0, also kann zu diesem Zeitpunkt nichts mehr legitim 'uploading' sein - jeder solche Eintrag ist ein
+// Überbleibsel eines abgebrochenen vorherigen Ladevorgangs und wird einmalig pro Modul-Ladezyklus auf
+// 'queued' zurückgesetzt, bevor processQueue() erneut angestoßen wird.
+let recoveryPromise: Promise<void> | null = null;
+
+async function recoverStuckUploads(): Promise<void> {
+  const db = await getUploadQueueDb();
+  const all = await db.getAll('uploads');
+  const stuck = all.filter((entry) => entry.status === 'uploading');
+  for (const entry of stuck) {
+    await db.put('uploads', { ...entry, status: 'queued', error: undefined });
+  }
+  if (stuck.length > 0) await notifyListeners();
+}
+
+// Memoisiertes Promise statt eines simplen Boolean-Flags, damit mehrere gleichzeitige Aufrufer (z. B.
+// mehrere gleichzeitig gemountete Komponenten, die alle subscribeToUploadQueue/enqueuePhotos aufrufen)
+// dieselbe eine Wiederherstellung abwarten, statt sie mehrfach parallel auszuführen. Bei einem Fehler wird
+// das Promise zurückgesetzt (gleiches Muster wie getUploadQueueDb() in db.ts), damit ein späterer Aufruf
+// einen neuen Versuch starten kann.
+function ensureStuckUploadsRecovered(): Promise<void> {
+  if (!recoveryPromise) {
+    recoveryPromise = recoverStuckUploads().catch((error) => {
+      recoveryPromise = null;
+      throw error;
+    });
+  }
+  return recoveryPromise;
+}
+
 export function subscribeToUploadQueue(incidentId: string, listener: Listener): () => void {
   const scoped: Listener = (all) => listener(all.filter((entry) => entry.incidentId === incidentId));
   listeners.add(scoped);
   void notifyListeners();
+  void ensureStuckUploadsRecovered().then(() => processQueue());
   return () => listeners.delete(scoped);
 }
 
@@ -50,6 +85,7 @@ export async function enqueuePhotos(
   files: File[],
   options: { publicRelease: boolean; wifiOnly: boolean },
 ): Promise<void> {
+  void ensureStuckUploadsRecovered();
   const db = await getUploadQueueDb();
   const tx = db.transaction('uploads', 'readwrite');
   for (const file of files) {

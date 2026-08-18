@@ -9,10 +9,14 @@ export default async function EinsaetzeListePage() {
   const user = await requireUser();
   if (!canViewIncidentsFor(user, user.homeOrganizationId)) notFound();
 
+  // Findet I6 (Final-Review): dieselbe _count-Überzähl-Falle, die auf dem Startbildschirm bereits einmal
+  // gefunden und behoben wurde (siehe meine-feuerwehr/page.tsx's identischer Kommentar) - ein
+  // unfiltrierter _count zählt auch PENDING/UPLOADING/FAILED-Fotos mit, die für den Nutzer nirgendwo
+  // sichtbar sind.
   const incidents = await prisma.incident.findMany({
     where: { fireDepartmentId: user.homeOrganizationId },
     orderBy: { alarmedAt: 'desc' },
-    include: { _count: { select: { photos: true } } },
+    include: { _count: { select: { photos: { where: { status: 'READY' } } } } },
   });
 
   const canManage = canManageIncidentsFor(user, user.homeOrganizationId);

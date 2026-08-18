@@ -117,7 +117,7 @@ export function IncidentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5 pb-24">
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5 pb-44 sm:pb-0">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-neutral-700">Einsatzart</label>
         <div className="grid grid-cols-2 gap-2">
@@ -212,7 +212,12 @@ export function IncidentForm({
 
       {serverError && <p className="text-sm text-red-700">{serverError}</p>}
 
-      <div className="fixed inset-x-0 bottom-0 flex justify-center border-t border-neutral-200 bg-white p-4 pb-safe-tabbar sm:static sm:border-0 sm:bg-transparent sm:p-0">
+      {/* Findet C1 (Final-Review): MobileTabBar (z-30, fixed, h-[86px]) verdeckt diesen Footer sonst
+         vollständig unterhalb sm: - z-40 liegt über der Tab-Bar (aber unter BottomSheet/Modal-Overlays,
+         die z-50 nutzen), und bottom-[86px] hebt den Footer komplett über die Tab-Bar hinaus, statt sich
+         nur auf pb-safe-tabbar (reine Safe-Area-Inset-Ergänzung, deckt NICHT die Tab-Bar-Höhe ab) zu
+         verlassen. */}
+      <div className="fixed inset-x-0 bottom-[86px] z-40 flex justify-center border-t border-neutral-200 bg-white p-4 sm:static sm:bottom-0 sm:z-auto sm:border-0 sm:bg-transparent sm:p-0">
         <div className="flex w-full max-w-lg items-center gap-3">
           <button
             type="submit"

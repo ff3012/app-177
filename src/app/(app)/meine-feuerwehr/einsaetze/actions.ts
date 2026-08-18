@@ -111,10 +111,21 @@ export async function deleteIncident(incidentId: string): Promise<void> {
   const existing = await prisma.incident.findUnique({ where: { id: incidentId }, select: { fireDepartmentId: true } });
   if (!existing || !canManageIncidentsFor(user, existing.fireDepartmentId)) throw new Error('Kein Zugriff.');
 
-  // Fotos werden HIER bewusst nicht aus S3 gelöscht - deleteIncidentPhoto (Task 4) ist der einzige
-  // Ort, der S3-Objekte löscht. Ein gelöschter Einsatz lässt seine Foto-Objekte (aktuell) verwaist im
-  // Bucket zurück; siehe Task 4's Abschlusskommentar für die bewusste Begründung, das nicht in dieser
-  // Iteration zu lösen.
+  // Findet I8 (Final-Review): dieser Kommentar beschrieb vormals ein bewusstes Auslassen der
+  // S3-Aufräumung - das war ein echtes Datenschutz-Problem (Fotos können laut dem Upload-Sheet
+  // "Personen und Kennzeichen" zeigen) und ist jetzt behoben, exakt nach demselben Muster wie
+  // deleteIncidentPhoto oben: Storage-Keys ALLER Fotos dieses Einsatzes vor dem kaskadierenden
+  // DB-Delete einsammeln (danach existieren die IncidentPhoto-Zeilen nicht mehr, aus denen sich die
+  // verwaisten Keys sonst nie mehr rekonstruieren ließen) und in einem Aufruf löschen.
+  const photos = await prisma.incidentPhoto.findMany({
+    where: { incidentId },
+    select: { storageKey: true, previewKey: true, thumbnailKey: true },
+  });
+  const keys = photos
+    .flatMap((photo) => [photo.storageKey, photo.previewKey, photo.thumbnailKey])
+    .filter((key): key is string => key !== null);
+  await deletePhotoObjects(keys);
+
   await prisma.incident.delete({ where: { id: incidentId } });
 
   revalidatePath('/meine-feuerwehr');

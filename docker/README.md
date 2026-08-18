@@ -295,20 +295,65 @@ CRON_TZ=Europe/Vienna
 */5 * * * * /opt/app-177/docker/kalender-ics-sync.sh >> /var/log/ffapp-kalender-ics-sync.log 2>&1
 ```
 
-## Tägliche Aufräumung verwaister PENDING-Einsatzfotos
+## Tägliche Aufräumung verwaister PENDING/UPLOADING-Einsatzfotos
 
 `docker/incident-photo-cleanup.sh` ruft `/api/cron/incident-photo-cleanup` auf, das
-`IncidentPhoto`-Zeilen löscht, die seit mehr als 24 Stunden auf `status: PENDING` stehen - ein
-abgebrochener Upload, bei dem der Client presign aufgerufen, den PUT/complete-Ablauf aber nie
-beendet hat. Löscht sowohl das (ggf. gar nicht existierende) S3-Objekt als auch die DB-Zeile;
-ein einzelner S3-Fehler blockiert dabei nicht die Aufräumung der übrigen Zeilen. Täglich um 04:00
-österreichischer Zeit einrichten:
+`IncidentPhoto`-Zeilen löscht, die seit mehr als 24 Stunden auf `status: PENDING` oder
+`status: UPLOADING` stehen - PENDING: ein abgebrochener Upload, bei dem der Client presign
+aufgerufen, den PUT/complete-Ablauf aber nie beendet hat; UPLOADING: ein Absturz/Timeout während der
+serverseitigen Nachbearbeitung (S3-Download, Vorschau-Generierung, Vorschau-Upload) nach dem PUT.
+Löscht sowohl die (ggf. gar nicht existierenden) S3-Objekte - Original UND beide Vorschaubilder,
+falls bereits erzeugt - als auch die DB-Zeile; ein einzelner S3-Fehler blockiert dabei nicht die
+Aufräumung der übrigen Zeilen. Täglich um 04:00 österreichischer Zeit einrichten:
 
 ```bash
 crontab -e
 CRON_TZ=Europe/Vienna
 0 4 * * * /opt/app-177/docker/incident-photo-cleanup.sh >> /var/log/ffapp-incident-photo-cleanup.log 2>&1
 ```
+
+## Einsatzfotos: CORS-Konfiguration des `app-177-pictures`-Buckets (einmalige manuelle Einrichtung)
+
+Der Foto-Upload lädt Originale per Browser-`XMLHttpRequest PUT` **direkt** gegen
+`https://sos-<zone>.exo.io/...` hoch (presigned URL, siehe `src/lib/upload-queue/queue.ts`), nicht über
+einen App-Server-Umweg. Ein cross-origin `PUT` mit gesetztem `Content-Type`-Header löst im Browser einen
+CORS-Preflight (`OPTIONS`) aus - ohne eine passende CORS-Konfiguration auf dem Bucket lehnt Exoscale SOS
+diesen Preflight ab und jeder Foto-Upload schlägt fehl, komplett unabhängig davon, ob
+`S3_ACCESS_KEY`/`S3_SECRET_KEY`/`S3_ENDPOINT_URL`/`S3_PHOTOS_BUCKET` korrekt gesetzt sind. Das ist eine
+reine Bucket-seitige Einstellung bei Exoscale - Anwendungscode kann sie nicht setzen, die CSP-Freigabe für
+den Exoscale-Origin (bereits erledigt, siehe `next.config.ts`) betrifft nur den Browser-seitigen
+Content-Security-Policy-Block und hat mit CORS nichts zu tun.
+
+**Einmalig manuell einzurichten** (Exoscale-Konsole → Object Storage → Bucket `app-177-pictures` → CORS,
+oder per AWS-CLI gegen den S3-kompatiblen Endpunkt, analog zum Backup-Bucket-Setup oben):
+
+```bash
+aws --endpoint-url https://sos-at-vie-1.exo.io s3api put-bucket-cors \
+  --bucket app-177-pictures \
+  --cors-configuration '{
+    "CORSRules": [
+      {
+        "AllowedOrigins": ["https://<produktions-domain>", "https://dev.app-177.ff-wolfsgraben.at"],
+        "AllowedMethods": ["PUT", "GET"],
+        "AllowedHeaders": ["content-type"],
+        "MaxAgeSeconds": 3000
+      }
+    ]
+  }'
+```
+
+`AllowedOrigins` muss die tatsächlichen Origins der App enthalten (Produktion und, falls dort auch real
+gegen S3 getestet wird, die Dev-Subdomain) - `content-type` muss in `AllowedHeaders` stehen, da der Client
+diesen Header beim `PUT` explizit setzt. Ohne diesen Schritt schlägt jeder Foto-Upload mit einem
+CORS-Fehler in der Browser-Konsole fehl, obwohl Server-seitige Logs (presign, complete) unauffällig
+aussehen - ein typisches "funktioniert lokal nicht reproduzierbar, weil der Fehler nur im echten Browser
+gegen den echten Bucket auftritt"-Symptom.
+
+Wie beim Backup-Bucket gilt außerdem: der `app-177-pictures`-Bucket selbst muss **komplett privat** bleiben
+(keine öffentliche Bucket-Policy) - Fotos sind ausschließlich über die session-geschützte
+`/api/incidents/[incidentId]/photos/[photoId]`-Route mit kurzlebigen presigned GET-URLs erreichbar, nie über
+eine dauerhafte öffentliche URL (siehe Design-Spec Abschnitt 4). Die CORS-Konfiguration oben ändert daran
+nichts - sie erlaubt nur Browser-seitige `PUT`/`GET`-Requests von der App aus, keine öffentliche Lesbarkeit.
 
 ## Dashboard Feuerwehrhaus (Kiosk-Screen)
 

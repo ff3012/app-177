@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { subscribeToUploadQueue, retryUpload, type QueuedUpload } from '@/lib/upload-queue/queue';
+import { subscribeToUploadQueue, retryUpload, removeUpload, type QueuedUpload } from '@/lib/upload-queue/queue';
 import { deleteIncidentPhoto, setIncidentPhotoPublicRelease } from '@/app/(app)/meine-feuerwehr/einsaetze/actions';
+
+// Findet I2 (Final-Review): Zeitspanne, die ein 'done'-Eintrag nach Fertigstellung noch sichtbar in der
+// lokalen Warteschlangen-Anzeige bleibt, bevor er per removeUpload aus IndexedDB entfernt wird - lang
+// genug, dass der Nutzer den "fertig"-Zustand kurz sieht, kurz genug, dass hochgeladene File-Blobs (laut
+// Foto-Upload-Sheet 4-12 MB je Original) nicht unbegrenzt im Browser-Speicher verbleiben.
+const DONE_ENTRY_CLEANUP_DELAY_MS = 1500;
 
 interface PhotoData {
   id: string;
@@ -49,6 +55,7 @@ export function IncidentPhotoGallery({
 }: IncidentPhotoGalleryProps) {
   const [queue, setQueue] = useState<QueuedUpload[]>([]);
   const [selected, setSelected] = useState<PhotoData | null>(null);
+  const [actionError, setActionError] = useState<string | undefined>();
   const router = useRouter();
   // Merkt sich, welche Warteschlangen-Einträge bereits als 'done' gesehen wurden, damit
   // router.refresh() für einen frisch fertiggestellten Upload genau einmal aufgerufen wird (nicht bei
@@ -66,6 +73,13 @@ export function IncidentPhotoGallery({
           // READY gesetzt hat (siehe queue.ts's uploadOne) - erst dann taucht das Foto überhaupt in der
           // vom Server geladenen photos-Liste auf, die diese Komponente sonst nie von sich aus neu lädt.
           router.refresh();
+          // Findet I2 (Final-Review): 'done'-Einträge wurden nie aus IndexedDB entfernt, wodurch jeder
+          // hochgeladene File-Blob (4-12 MB) dauerhaft im Browser verblieb und queue.length/doneCount
+          // jeden historischen Upload dieses Einsatzes mitzählten. Kurze Verzögerung, damit der Nutzer den
+          // "fertig"-Zustand noch kurz sieht, bevor der Eintrag verschwindet.
+          for (const entry of newlyDone) {
+            setTimeout(() => void removeUpload(entry.id), DONE_ENTRY_CLEANUP_DELAY_MS);
+          }
         }
       }),
     [incidentId, router],
@@ -82,15 +96,19 @@ export function IncidentPhotoGallery({
         <div className="rounded-lg bg-neutral-50 p-3 text-sm text-neutral-700">
           {doneCount} von {queue.length} Fotos übertragen · {(uploadedBytes / (1024 * 1024)).toFixed(1)} MB von{' '}
           {(totalBytes / (1024 * 1024)).toFixed(1)} MB
-          {inProgress.some((entry) => entry.status === 'failed') && (
+          {/* Findet I2 (Final-Review): 'paused'-Einträge (WLAN-Warteschleife, uploadOne in queue.ts) wurden
+             hier bisher gar nicht angezeigt - der Nutzer sah nur einen eingefrorenen Fortschritt ohne
+             Erklärung und ohne Möglichkeit fortzusetzen. Jetzt zusammen mit 'failed' gerendert, jeweils mit
+             ihrem Grund/Fehlertext und einem Button, der beide Fälle über dasselbe retryUpload() auflöst. */}
+          {inProgress.some((entry) => entry.status === 'failed' || entry.status === 'paused') && (
             <ul className="mt-2 flex flex-col gap-1">
               {inProgress
-                .filter((entry) => entry.status === 'failed')
+                .filter((entry) => entry.status === 'failed' || entry.status === 'paused')
                 .map((entry) => (
                   <li key={entry.id} className="flex items-center justify-between gap-2">
                     <span className="truncate">{entry.fileName}: {entry.error}</span>
                     <button type="button" onClick={() => retryUpload(entry.id)} className="text-brand hover:underline">
-                      Erneut versuchen
+                      {entry.status === 'paused' ? 'Fortsetzen' : 'Erneut versuchen'}
                     </button>
                   </li>
                 ))}
@@ -127,7 +145,13 @@ export function IncidentPhotoGallery({
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/90 p-4" onClick={() => setSelected(null)}>
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/90 p-4"
+          onClick={() => {
+            setSelected(null);
+            setActionError(undefined);
+          }}
+        >
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto rounded-xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
             {/* eslint-disable-next-line @next/next/no-img-element -- siehe Kommentar oben */}
             <img
@@ -150,24 +174,52 @@ export function IncidentPhotoGallery({
                 <input
                   type="checkbox"
                   defaultChecked={selected.publicRelease}
-                  onChange={(e) => setIncidentPhotoPublicRelease(selected.id, incidentId, e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setActionError(undefined);
+                    setIncidentPhotoPublicRelease(selected.id, incidentId, checked).catch((err) => {
+                      setActionError(
+                        err instanceof Error ? err.message : 'Freigabe konnte nicht geändert werden.',
+                      );
+                      // Checkbox visuell zurücksetzen, da defaultChecked bei einem unkontrollierten Input
+                      // nicht automatisch mit dem tatsächlichen (unveränderten) Server-Zustand
+                      // zurücksynchronisiert - ohne dies würde die Checkbox einen Erfolg vortäuschen.
+                      e.target.checked = !checked;
+                    });
+                  }}
                   className="h-5 w-5"
                 />
               </label>
             )}
+            {actionError && <p className="text-sm text-red-700">{actionError}</p>}
             {(selected.uploadedById === currentUserId || isFeuerwehrAdmin) && (
               <button
                 type="button"
                 onClick={() => {
                   if (!confirm('Foto wirklich löschen?')) return;
-                  void deleteIncidentPhoto(selected.id, incidentId).then(() => setSelected(null));
+                  setActionError(undefined);
+                  // Findet I9 (Final-Review): kein .catch bedeutete, dass ein S3-Fehler (z. B.
+                  // deletePhotoObjects wirft, weil S3 nicht erreichbar ist) als unhandled promise
+                  // rejection endete - das Overlay blieb offen, ohne jede Rückmeldung an den Nutzer.
+                  void deleteIncidentPhoto(selected.id, incidentId)
+                    .then(() => setSelected(null))
+                    .catch((err) => {
+                      setActionError(err instanceof Error ? err.message : 'Foto konnte nicht gelöscht werden.');
+                    });
                 }}
                 className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700"
               >
                 Löschen
               </button>
             )}
-            <button type="button" onClick={() => setSelected(null)} className="text-sm text-neutral-500">
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(null);
+                setActionError(undefined);
+              }}
+              className="text-sm text-neutral-500"
+            >
               Schließen
             </button>
           </div>
