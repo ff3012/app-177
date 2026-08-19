@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageEvent, canViewEvent } from '@/lib/auth/permissions';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
+import { formatDateTimeDDMMYYYY } from '@/lib/format';
 import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
 import { EventRsvpButtons } from '@/components/calendar/event-rsvp-buttons';
 import { SendEventPushButton } from '@/components/calendar/send-event-push-button';
@@ -19,6 +20,13 @@ const STATUS_BADGE_CLASS: Record<RsvpStatusOption, string> = {
   ABGESAGT: 'bg-red-100 text-red-800',
   UNKLAR: 'bg-neutral-200 text-neutral-700',
 };
+
+function formatRsvpTimestampLabel(zusage: { status: RsvpStatusOption; createdAt: Date; updatedAt: Date }): string {
+  const changed = zusage.createdAt.getTime() !== zusage.updatedAt.getTime();
+  return changed
+    ? `Zuletzt geändert am ${formatDateTimeDDMMYYYY(zusage.updatedAt)}`
+    : `${STATUS_LABEL[zusage.status]} am ${formatDateTimeDDMMYYYY(zusage.createdAt)}`;
+}
 
 function formatEventTime(startsAt: Date, endsAt: Date, allDay: boolean): string {
   if (allDay) return 'Ganztägig';
@@ -117,6 +125,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
       {!event.vehicleBookingId && (
         <div className="rounded-lg bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-neutral-900">Meine Zusage</h2>
+          {ownZusage && <p className="mb-2 text-xs text-neutral-500">{formatRsvpTimestampLabel(ownZusage)}</p>}
           <EventRsvpButtons
             eventId={event.id}
             initialStatus={ownZusage?.status ?? null}
@@ -143,14 +152,17 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
           ) : (
             <ul className="flex flex-col gap-1.5 text-sm">
               {zusagen.map((zusage) => (
-                <li key={zusage.id} className="flex flex-wrap items-baseline gap-2">
-                  <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS_BADGE_CLASS[zusage.status]}`}>
-                    {STATUS_LABEL[zusage.status]}
-                  </span>
-                  <span className="text-neutral-800">
-                    {zusage.user.firstName} {zusage.user.lastName}
-                  </span>
-                  {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}“</span>}
+                <li key={zusage.id} className="flex flex-col gap-0.5">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS_BADGE_CLASS[zusage.status]}`}>
+                      {STATUS_LABEL[zusage.status]}
+                    </span>
+                    <span className="text-neutral-800">
+                      {zusage.user.firstName} {zusage.user.lastName}
+                    </span>
+                    {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}"</span>}
+                  </div>
+                  <span className="text-xs text-neutral-400">{formatRsvpTimestampLabel(zusage)}</span>
                 </li>
               ))}
             </ul>

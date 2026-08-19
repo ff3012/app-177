@@ -64,6 +64,25 @@ export function formatRelativeDate(date: Date | null, options: { fallback: strin
   return { label: date.toLocaleDateString('de-AT', { timeZone: VIENNA_TIME_ZONE }), title };
 }
 
+/** Formats a Date as "DD-MM-YYYY HH:MM" in Europe/Vienna time - used for RSVP-Zeitstempel
+ * (Kalender-Termindetailseite, GitHub issue #16). No built-in Intl locale produces this exact
+ * dash-separated, day-first order, so the formatted parts are read individually and reassembled.
+ * `hourCycle: 'h23'` (not `hour12: false`) avoids a known Node/ICU quirk that renders midnight
+ * as "24:00" instead of "00:00" under hour12: false. */
+export function formatDateTimeDDMMYYYY(date: Date): string {
+  const parts = new Intl.DateTimeFormat('de-AT', {
+    timeZone: VIENNA_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('day')}-${get('month')}-${get('year')} ${get('hour')}:${get('minute')}`;
+}
+
 /** True if date is null or more than 12 months in the past - used to mute stale "zuletzt aktiv"
  * table entries (Benutzerverwaltung-Brief.md §2, Tabellenspalte). */
 export function isOlderThanMonths(date: Date | null, months: number): boolean {
