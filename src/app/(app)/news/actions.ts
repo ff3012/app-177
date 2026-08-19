@@ -2,21 +2,26 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { NewsAudienceType } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageNews } from '@/lib/auth/permissions';
+import {
+  assertPermission,
+  canSendAnyNews,
+  canSendBezirksWideDroneNews,
+  canSendNewsToDroneGroup,
+  canSendNewsToFireDepartment,
+} from '@/lib/auth/permissions';
 import { newsSchema, parseNewsFormData } from '@/lib/validation/news.schema';
-import { dispatchNewsMessage } from '@/lib/news/send-news';
+import { dispatchNewsPost } from '@/lib/news/dispatch-news';
 
 export interface NewsFormState {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;
 }
 
-export async function createNewsMessage(_prevState: NewsFormState, formData: FormData): Promise<NewsFormState> {
+export async function createNewsPost(_prevState: NewsFormState, formData: FormData): Promise<NewsFormState> {
   const user = await requireUser();
-  assertPermission(canManageNews(user));
+  assertPermission(canSendAnyNews(user));
 
   const parsed = newsSchema.safeParse(parseNewsFormData(formData));
   if (!parsed.success) {
@@ -24,13 +29,32 @@ export async function createNewsMessage(_prevState: NewsFormState, formData: For
   }
   const data = parsed.data;
 
-  const news = await prisma.newsMessage.create({
+  if (data.audience === 'FIRE_DEPARTMENT') {
+    if (!canSendNewsToFireDepartment(user, data.fireDepartmentId!)) {
+      return { error: 'Kein Senderecht für diese Feuerwehr.' };
+    }
+  } else {
+    const droneGroupId = data.droneGroupId || null;
+    if (droneGroupId === null) {
+      if (!canSendBezirksWideDroneNews(user)) {
+        return { error: 'Kein Senderecht für eine bezirksweite Drohnengruppen-Nachricht.' };
+      }
+    } else {
+      const droneGroup = await prisma.droneGroup.findUnique({ where: { id: droneGroupId }, select: { id: true, organizationId: true } });
+      if (!droneGroup || !canSendNewsToDroneGroup(user, droneGroup)) {
+        return { error: 'Kein Senderecht für diese Drohnengruppe.' };
+      }
+    }
+  }
+
+  const post = await prisma.newsPost.create({
     data: {
       title: data.title,
       body: data.body,
-      audienceType: data.audienceType === 'DROHNENGRUPPE' ? NewsAudienceType.DROHNENGRUPPE : NewsAudienceType.ORGANIZATION,
-      audienceOrgId: data.audienceType === 'ORGANIZATION' ? data.audienceOrgId || null : null,
-      audienceDroneGroupId: data.audienceType === 'DROHNENGRUPPE' ? data.audienceDroneGroupId || null : null,
+      audience: data.audience,
+      fireDepartmentId: data.audience === 'FIRE_DEPARTMENT' ? data.fireDepartmentId || null : null,
+      droneGroupId: data.audience === 'DRONE_GROUP' ? data.droneGroupId || null : null,
+      eventId: data.eventId || null,
       scheduledAt: data.sendMode === 'SCHEDULED' && data.scheduledAt ? new Date(data.scheduledAt) : null,
       createdById: user.id,
     },
@@ -38,15 +62,14 @@ export async function createNewsMessage(_prevState: NewsFormState, formData: For
 
   if (data.sendMode === 'NOW') {
     try {
-      await dispatchNewsMessage(news.id);
+      await dispatchNewsPost(post.id);
     } catch (error) {
       console.error('News-Versand fehlgeschlagen:', error);
-      return {
-        error: 'News wurde gespeichert, aber der Versand ist fehlgeschlagen. Bitte Push-Konfiguration prüfen.',
-      };
+      return { error: 'News wurde gespeichert, aber der Versand ist fehlgeschlagen. Bitte Push-Konfiguration prüfen.' };
     }
   }
 
   revalidatePath('/news');
+  revalidatePath('/meine-feuerwehr');
   redirect('/news');
 }

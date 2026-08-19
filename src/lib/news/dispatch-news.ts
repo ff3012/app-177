@@ -1,23 +1,18 @@
 import { prisma } from '@/lib/db/prisma';
 import { resolveNewsAudienceUserIds } from '@/lib/news/audience';
 import { sendPushToSubscriptions } from '@/lib/push/web-push-client';
+import { truncateForPush } from '@/lib/news/truncate-for-push';
 
 export interface DispatchResult {
   sent: number;
   recipients: number;
 }
 
-const PUSH_TRUNCATE_LENGTH = 170;
-
-/** Kürzt an der letzten Wortgrenze vor maxLength (nie mitten im Wort) und hängt eine Ellipse an - die
- * volle Nutzlast würde bei langen Texten das 4-KB-Payload-Limit von Web Push riskieren, und ein
- * Abschneiden mitten im Wort sähe auf dem Sperrbildschirm kaputt aus. */
-export function truncateForPush(body: string, maxLength = PUSH_TRUNCATE_LENGTH): string {
-  if (body.length <= maxLength) return body;
-  const cut = body.slice(0, maxLength);
-  const lastSpace = cut.lastIndexOf(' ');
-  return `${cut.slice(0, lastSpace > 0 ? lastSpace : maxLength)}…`;
-}
+// truncateForPush selbst lebt in ./truncate-for-push.ts (import-frei, sicher für Client-Bundles) -
+// hier nur re-exportiert, damit bestehender Code, der sie aus dispatch-news.ts importiert, weiter
+// funktioniert. Neue Aufrufstellen (insbesondere aus 'use client'-Komponenten) sollten direkt aus
+// truncate-for-push.ts importieren, siehe Kommentar dort.
+export { truncateForPush };
 
 /** Löst die Zielgruppe auf, versendet per Web-Push an alle registrierten Geräte (mit data.url für das
  * Sprungziel des Push-Klicks) und markiert den Beitrag als gesendet. Idempotent: bereits gesendete

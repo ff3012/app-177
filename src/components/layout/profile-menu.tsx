@@ -19,7 +19,7 @@ interface ProfileMenuProps {
    * Meine Feuerwehr, Drohnengruppe) - News (bislang Teil der permissionsgetriebenen Nav-Liste)
    * braucht auf Mobile deshalb eine neue Anlaufstelle. Desktop erreicht News weiterhin unverändert
    * über <Nav>, daher ist der Link hier unten sm:hidden. */
-  canManageNews: boolean;
+  canSendAnyNews: boolean;
   unreadNewsCount: number;
   vapidPublicKey: string | null;
   logoutAction: () => Promise<void>;
@@ -32,7 +32,7 @@ export function ProfileMenu({
   isSiteAdmin,
   adminOrganizationNames,
   isDrohnengruppeMember,
-  canManageNews,
+  canSendAnyNews,
   unreadNewsCount,
   vapidPublicKey,
   logoutAction,
@@ -183,7 +183,7 @@ export function ProfileMenu({
             )}
           </div>
 
-          {canManageNews && (
+          {canSendAnyNews && (
             <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
               <Link
                 href="/news"

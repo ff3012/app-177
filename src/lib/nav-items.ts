@@ -1,7 +1,7 @@
 import type { SessionUser } from '@/types/next-auth';
 import {
   canAccessHeimatfeuerwehrAdmin,
-  canManageNews,
+  canSendAnyNews,
   canViewDroneModule,
   isBezirksAdmin,
   isDroneGroupAdmin,
@@ -25,7 +25,7 @@ export function getNavItems(user: SessionUser): NavItem[] {
     items.push({ href: '/drohnen', label: 'Drohnengruppe' });
   }
 
-  if (canManageNews(user)) {
+  if (canSendAnyNews(user)) {
     items.push({ href: '/news', label: 'News' });
   }
 

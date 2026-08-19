@@ -101,7 +101,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 isSiteAdmin={isBezirksAdmin(user)}
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}
-                canManageNews={canSendAnyNews(user)}
+                canSendAnyNews={canSendAnyNews(user)}
                 unreadNewsCount={unreadNewsCount}
                 vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
                 logoutAction={logoutAction}

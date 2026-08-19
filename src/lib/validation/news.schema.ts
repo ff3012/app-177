@@ -1,27 +1,27 @@
 import { z } from 'zod';
 
-export const NEWS_AUDIENCE_TYPES = ['ORGANIZATION', 'DROHNENGRUPPE'] as const;
-export type NewsAudienceTypeOption = (typeof NEWS_AUDIENCE_TYPES)[number];
+export const NEWS_AUDIENCES = ['FIRE_DEPARTMENT', 'DRONE_GROUP'] as const;
+export type NewsAudienceOption = (typeof NEWS_AUDIENCES)[number];
 
-export const NEWS_SEND_MODES = ['NOW', 'SCHEDULED'] as const;
+export const NEWS_SEND_MODES = ['DRAFT', 'SCHEDULED', 'NOW'] as const;
 export type NewsSendMode = (typeof NEWS_SEND_MODES)[number];
 
 export const newsSchema = z
   .object({
-    title: z.string().trim().min(1, 'Titel ist erforderlich.').max(100),
-    body: z.string().trim().min(1, 'Text ist erforderlich.').max(500),
-    audienceType: z.enum(NEWS_AUDIENCE_TYPES),
-    audienceOrgId: z.string().optional().or(z.literal('')),
-    // Leer/"" bedeutet "Alle Gruppen" (mappt auf null) - bewusst weiterhin eine gültige Auswahl,
-    // nicht nur ein Kompatibilitäts-Notbehelf für alte Zeilen (siehe NewsMessage.audienceDroneGroupId
-    // im Schema). Deshalb kein .refine, das hier eine konkrete Gruppe erzwingt.
-    audienceDroneGroupId: z.string().nullable().optional().or(z.literal('')),
+    title: z.string().trim().min(1, 'Titel ist erforderlich.').max(65),
+    body: z.string().trim().min(1, 'Text ist erforderlich.'),
+    audience: z.enum(NEWS_AUDIENCES),
+    fireDepartmentId: z.string().optional().or(z.literal('')),
+    // Leer bedeutet "Alle Gruppen" (mappt serverseitig auf null) - eine bewusst weiterhin gültige
+    // Auswahl, kein Kompatibilitäts-Notbehelf (siehe NewsPost.droneGroupId im Schema).
+    droneGroupId: z.string().nullable().optional().or(z.literal('')),
+    eventId: z.string().optional().or(z.literal('')),
     sendMode: z.enum(NEWS_SEND_MODES),
     scheduledAt: z.string().optional().or(z.literal('')),
   })
-  .refine((data) => data.audienceType !== 'ORGANIZATION' || Boolean(data.audienceOrgId), {
+  .refine((data) => data.audience !== 'FIRE_DEPARTMENT' || Boolean(data.fireDepartmentId), {
     message: 'Feuerwehr ist erforderlich.',
-    path: ['audienceOrgId'],
+    path: ['fireDepartmentId'],
   })
   .refine((data) => data.sendMode !== 'SCHEDULED' || Boolean(data.scheduledAt), {
     message: 'Datum/Uhrzeit ist erforderlich.',
@@ -34,10 +34,11 @@ export function parseNewsFormData(formData: FormData) {
   return {
     title: String(formData.get('title') ?? ''),
     body: String(formData.get('body') ?? ''),
-    audienceType: String(formData.get('audienceType') ?? 'ORGANIZATION'),
-    audienceOrgId: String(formData.get('audienceOrgId') ?? ''),
-    audienceDroneGroupId: String(formData.get('audienceDroneGroupId') ?? ''),
-    sendMode: String(formData.get('sendMode') ?? 'NOW'),
+    audience: String(formData.get('audience') ?? 'FIRE_DEPARTMENT'),
+    fireDepartmentId: String(formData.get('fireDepartmentId') ?? ''),
+    droneGroupId: String(formData.get('droneGroupId') ?? ''),
+    eventId: String(formData.get('eventId') ?? ''),
+    sendMode: String(formData.get('sendMode') ?? 'DRAFT'),
     scheduledAt: String(formData.get('scheduledAt') ?? ''),
   };
 }
