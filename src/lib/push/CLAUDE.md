@@ -9,6 +9,20 @@ notification-click deep-link target) and `/news/[newsPostId]/bearbeiten` (edit, 
 `NewsPost` and send push notifications to installed devices. This is Web Push (VAPID), not a native push
 service (no APNs/FCM integration) — it rides entirely on the PWA infrastructure already in place.
 
+**Reading is open to every member, on both mobile and desktop — this is not an admin-only module.**
+Only composing/managing posts is gated by the three-tier permission model below. This tripped up two
+real, live-reported bugs after the News rework shipped, both fixed and worth knowing about before
+touching nav/permission code near this module again:
+- `src/lib/nav-items.ts`'s `getNavItems()` used to gate the desktop `<Nav>`'s "News" entry on
+  `canSendAnyNews`, a leftover from the pre-rework, Bezirksadmin-only module — a plain member had no
+  way to find `/news` from the nav bar even though the page itself was already fully readable. The
+  entry is now unconditional, the same as "Meine Feuerwehr". `MobileTabBar` never had a News tab in
+  the first place (by design — News is deliberately not a 4th mobile tab; reachable there via the
+  header bell and the `/meine-feuerwehr` home card instead).
+- Don't reintroduce a `canSendAnyNews`/`canManageNewsPost`-style check anywhere on the *reading* path
+  (`/news`, `/news/[newsPostId]`, `getVisibleNews`, `getUnreadNewsCount`) — visibility is governed
+  solely by `buildVisibilityWhere` (below), which already correctly scopes by recipient circle.
+
 **Three-tier send-permission model** (`src/lib/auth/permissions.ts`, no RBAC library — plain predicate
 functions, same style as the rest of the app): a `NewsPost.audience` is either `FIRE_DEPARTMENT`
 (`fireDepartmentId` set) or `DRONE_GROUP` (`droneGroupId` set, or `null` meaning "bezirksweit, all 4
@@ -69,9 +83,32 @@ groups" — the same null-sentinel pattern used elsewhere for Drohnengruppen dat
   admin-visible warning for a missing cron job today.
 - `public/sw.js` handles `push` (shows the notification, passing through `payload.data` so `.url` survives
   onto the notification object) and `notificationclick` (reads `event.notification.data?.url`, falling back
-  to `/kalender` for the older, News-independent Kalender-Sofortversand which carries no `data.url`; an
-  already-open window is `focus()`ed **and** explicitly `navigate()`d to that URL, since `focus()` alone
-  leaves the previously-open page unchanged — only `self.clients.openWindow(url)` is used when no window is
-  open) — both required for anything to actually appear on screen and route correctly; the manifest/
-  offline-cache parts of the service worker are unrelated and untouched by this.
+  to `/kalender` for the older, News-independent Kalender-Sofortversand which carries no `data.url`). For an
+  already-open matching window: `existing.focus().then(() => existing.navigate(url)).catch(() =>
+  self.clients.openWindow(url))` — `focus()` alone leaves the previously-open page unchanged, and
+  `navigate()` can reject for a window not controlled by this service worker (e.g. a tab loaded before the
+  SW took control), which without the `.catch()` fallback would silently strand the user on the stale page —
+  exactly the original reported bug this whole feature exists to fix. `self.clients.openWindow(url)` is used
+  directly when no matching window is open at all. The manifest/offline-cache parts of the service worker
+  are unrelated and untouched by this.
+- **"Alle gelesen"** (`markAllNewsRead()` in `src/app/(app)/news/actions.ts`, wired to a button next to the
+  unread count on `/news`): marks every currently-visible unread post read in one `newsRead.createMany({
+  skipDuplicates: true })` call, not a loop of per-post upserts.
+- **Bell-badge staleness after opening a post, a real live-reported bug**: `/news/[newsPostId]/page.tsx`
+  upserts the `NewsRead` row during the page's server render, not inside a Server Action or Route Handler —
+  `revalidatePath()` is disallowed during render (same Next.js restriction documented on
+  `vehicle-booking-decision.ts`'s identical pattern), so a normal `<Link>` visit from `/news` or the home
+  card left the Next.js Router Cache serving the `(app)` layout's now-stale bell badge until some unrelated
+  navigation happened to refresh it. Fixed with `src/components/news/refresh-after-mark-read.tsx`, a tiny
+  client component rendered on the detail page that calls `router.refresh()` once on mount — don't remove it
+  as "dead code" or replace the read-tracking with a client-triggered Server Action instead; the design spec
+  deliberately requires the read to be recorded at render time, not on a client-side event.
+- **`/news/neu`'s event picker is scoped to the sender's own allowed orgs/groups**, not every upcoming
+  district-wide event — `neu/page.tsx` builds the `Event` query's `where` from `allowedFireDepartments`/
+  `allowedDroneGroups`/`canSendBezirksweit` (computed first), and both `createNewsPost` and `updateNewsPost`
+  re-validate a submitted `eventId` actually belongs to the post's own audience/org/group before accepting
+  it. Without this, a Feuerwehr-Admin would receive other Abschnitte's event titles/dates in their own
+  compose form (a `canViewEvent` would never grant them that in `/kalender`), and at full Bezirk scale the
+  unfiltered `take: 50` upcoming-events query would frequently push a sender's own upcoming event past the
+  cutoff entirely.
 

@@ -27,10 +27,15 @@ kein App-Store-Build nötig.
   (Ausbildungsstufen). Ein QR-Code-Link (nur von Drohnengruppen-Admins in der Verwaltung erzeugbar)
   erlaubt das Registrieren eines Flugs ohne Login. Optional: E-Mail-Benachrichtigung bei neuen
   Flügen.
-- **News** – Push-Benachrichtigung an eine Feuerwehr oder eine Drohnengruppe, sofort oder
-  terminiert. Glocken-Icon in der Kopfzeile zeigt grün/rot, ob am aktuellen Gerät Push aktiviert
-  ist; Aktivierung selbst läuft über das Profilmenü. Auf iPhone/iPad nur nutzbar, wenn die App zuvor
-  über "Zum Home-Bildschirm" installiert wurde (iOS-Einschränkung, keine App-Beschränkung).
+- **News** – Nachrichten an eine Feuerwehr oder eine Drohnengruppe, sofort, terminiert oder als
+  Entwurf; Senden bleibt Admin-Rechten vorbehalten (Feuerwehr-Admin/Drohnengruppen-Admin/
+  Bezirksadmin je nach Empfängerkreis), **Lesen ist für jedes Mitglied offen** – auf Mobile wie am
+  Desktop. Ein Tippen auf die Push-Benachrichtigung öffnet direkt die vollständige Nachricht statt
+  nur den Startbildschirm. Glocken-Icon in der Kopfzeile zeigt sowohl den Ungelesen-Zähler als auch
+  grün/rot, ob am aktuellen Gerät Push aktiviert ist; Aktivierung selbst läuft über das Profilmenü. Auf
+  iPhone/iPad ist Push nur nutzbar, wenn die App zuvor über "Zum Home-Bildschirm" installiert wurde
+  (iOS-Einschränkung, keine App-Beschränkung) – die Nachrichten selbst bleiben aber auch ohne Push
+  über `/news` lesbar.
 - **Verwaltung** – je nach Rolle (Bezirksadmin/Abschnittsadmin/Feuerwehr-Admin/Admin Drohnengruppe)
   ein Teil von: Benutzerverwaltung (Suche, sortierbare Spalten, Excel-Export/Import mit allen
   Benutzerfeldern, Passwort-Reset-E-Mail, Willkommen-E-Mail optional abschaltbar), Heimatfeuerwehr
