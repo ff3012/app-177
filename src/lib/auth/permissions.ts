@@ -1,4 +1,5 @@
 import type { SessionUser } from '@/types/next-auth';
+import type { NewsAudience } from '@prisma/client';
 
 export function isBezirksAdmin(user: SessionUser): boolean {
   return user.isBezirksAdmin;
@@ -195,13 +196,48 @@ export function canManageDrohnengruppenBezirksweit(user: SessionUser): boolean {
 }
 
 /**
- * News/Push-Modul: bewusst auf Abschnittskommando-Admin beschränkt (erste Version) statt
- * feuerwehrAdminOrgIds — eine Push-Nachricht geht direkt an Mobilgeräte, ohne die redaktionelle
- * Kontrolle, die z. B. ein Kalendertermin durch bloße Sichtbarkeit hat. Kann später auf
- * FF-Admins für ihre eigene Feuerwehr ausgeweitet werden, wenn das gewünscht ist.
+ * News-Modul: Senderecht für eine konkrete Feuerwehr - Admin dieser Feuerwehr (canManageHeimatfeuerwehrFor,
+ * das bereits Bezirksadmin miteinschließt) statt der bisherigen, ausschließlich auf Bezirksadmin
+ * beschränkten Regel (siehe git-history dieser Datei für den alten Kommentar dazu) - explizit mit dem
+ * App-Betreiber als gewünschte Rechte-Ausweitung bestätigt.
  */
-export function canManageNews(user: SessionUser): boolean {
-  return isBezirksAdmin(user);
+export function canSendNewsToFireDepartment(user: SessionUser, fireDepartmentId: string): boolean {
+  return canManageHeimatfeuerwehrFor(user, fireDepartmentId);
+}
+
+/** News-Modul: Senderecht für eine konkrete Drohnengruppe - identische Regel wie canManageDroneGroupFor
+ * (Bezirksadmin, Bezirks-Drohnenadmin, Abschnittsadmin des verankerten Abschnitts, oder Admin dieser
+ * Gruppe). */
+export function canSendNewsToDroneGroup(user: SessionUser, droneGroup: { id: string; organizationId: string }): boolean {
+  return canManageDroneGroupFor(user, droneGroup);
+}
+
+/** News-Modul: Senderecht für eine bezirksweite Drohnengruppen-News (droneGroupId leer = alle Gruppen) -
+ * bewusst enger als canSendNewsToDroneGroup für eine einzelne Gruppe, exakt dieselbe Einschränkung wie
+ * canManageBezirksWideDroneEvent im Kalender-Modul: ein einzelner Gruppen-Admin soll nicht über die
+ * Grenzen seiner eigenen Gruppe hinaus an alle vier Gruppen senden dürfen. */
+export function canSendBezirksWideDroneNews(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
+}
+
+/** News-Modul: Beitrag bearbeiten/löschen - Ersteller ODER Admin des Empfängerkreises. droneGroup ist
+ * ein bereits geladenes Objekt ({id, organizationId}), NIE ein impliziter zweiter Prisma-Aufruf hier
+ * drinnen - exakt dasselbe Muster wie canManageEvent(user, event, droneGroup) im Kalender-Modul. */
+export function canManageNewsPost(
+  user: SessionUser,
+  post: { createdById: string; audience: NewsAudience; fireDepartmentId: string | null; droneGroupId: string | null },
+  droneGroup: { id: string; organizationId: string } | null,
+): boolean {
+  if (post.createdById === user.id) return true;
+  if (post.audience === 'FIRE_DEPARTMENT') return canSendNewsToFireDepartment(user, post.fireDepartmentId!);
+  if (post.droneGroupId === null) return canSendBezirksWideDroneNews(user);
+  return droneGroup !== null && canSendNewsToDroneGroup(user, droneGroup);
+}
+
+/** News-Modul: darf IRGENDEINEN Empfängerkreis ansprechen - steuert nur, ob "Verfassen"/die
+ * Entwürfe-Verwaltung überhaupt sichtbar sind, keine Autorisierung für eine konkrete Aktion. */
+export function canSendAnyNews(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin || user.feuerwehrAdminOrgIds.length > 0 || user.droneGroupRole === 'ADMIN';
 }
 
 /**

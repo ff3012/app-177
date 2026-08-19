@@ -47,9 +47,9 @@ enum ZusageStatus {
   UNKLAR
 }
 
-enum NewsAudienceType {
-  ORGANIZATION
-  DROHNENGRUPPE
+enum NewsAudience {
+  FIRE_DEPARTMENT
+  DRONE_GROUP
 }
 
 // Freigabe-Status einer Fahrzeug-Reservierung (Fahrzeug-Reservierung-Freigabe) - OFFEN ist der
@@ -170,7 +170,7 @@ model Organization {
   members      User[]        @relation("HomeOrganization")
   memberships  Membership[]
   events       Event[]
-  newsMessages NewsMessage[]
+  newsPosts    NewsPost[]
   vehicles     Vehicle[]
   photoUploads PhotoUpload[]
 
@@ -262,7 +262,8 @@ model User {
   pilotedFlights         DroneFlight[]            @relation("FlightPilot")
   passwordTokens         PasswordToken[]
   pushSubscriptions      PushSubscription[]
-  newsMessagesCreated    NewsMessage[]            @relation("NewsCreatedBy")
+  newsPostsCreated       NewsPost[]               @relation("NewsPostCreatedBy")
+  newsReads              NewsRead[]
   terminZusagen          TerminZusage[]
   droneDocumentsUploaded DroneDocument[]          @relation("DroneDocumentUploadedBy")
   vehicleBookings        VehicleBooking[]
@@ -390,7 +391,7 @@ model DroneGroup {
   documents    DroneDocument[]
   drones       Drone[]
   events       Event[]
-  newsMessages NewsMessage[]
+  newsPosts    NewsPost[]
 
   @@index([organizationId])
 }
@@ -440,6 +441,7 @@ model Event {
   organization Organization   @relation(fields: [organizationId], references: [id])
   createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])
   zusagen      TerminZusage[]
+  newsPosts    NewsPost[]
 
   @@unique([organizationId, icsUid])
   @@index([organizationId, startsAt])
@@ -557,31 +559,39 @@ model PushSubscription {
   @@index([userId])
 }
 
-// Eine Push-Nachricht an eine Zielgruppe (eine Feuerwehr oder die Drohnengruppe), sofort oder
-// terminiert. scheduledAt=null + sentAt gesetzt bedeutet "sofort gesendet"; scheduledAt gesetzt +
-// sentAt=null bedeutet "wartet auf den Versand-Cronjob".
-model NewsMessage {
-  id            String           @id @default(cuid())
-  title         String
-  body          String
-  audienceType  NewsAudienceType
-  audienceOrgId String?
-  scheduledAt   DateTime?
-  sentAt        DateTime?
-  createdById   String
-  createdAt     DateTime         @default(now())
+model NewsPost {
+  id               String       @id @default(cuid())
+  audience         NewsAudience
+  fireDepartmentId String?
+  droneGroupId     String?
+  title            String
+  body             String
+  eventId          String?
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  createdById      String
+  createdAt        DateTime     @default(now())
 
-  // Für audienceType == DROHNENGRUPPE: schränkt den Versand auf eine konkrete Drohnengruppe ein.
-  // Nullable und additiv - null bedeutet weiterhin "alle Gruppen" (siehe resolveAudienceUserIds),
-  // sowohl für historische Zeilen (kein Backfill nötig) als auch als bewusst erhaltene,
-  // weiterhin wählbare Option "Alle Gruppen" im Formular, nicht nur ein Kompatibilitäts-Notbehelf.
-  audienceDroneGroupId String?
-
-  audienceOrg        Organization? @relation(fields: [audienceOrgId], references: [id])
-  audienceDroneGroup DroneGroup?   @relation(fields: [audienceDroneGroupId], references: [id])
-  createdBy          User          @relation("NewsCreatedBy", fields: [createdById], references: [id])
+  fireDepartment Organization? @relation(fields: [fireDepartmentId], references: [id])
+  droneGroup     DroneGroup?   @relation(fields: [droneGroupId], references: [id])
+  event          Event?        @relation(fields: [eventId], references: [id])
+  createdBy      User          @relation("NewsPostCreatedBy", fields: [createdById], references: [id])
+  reads          NewsRead[]
 
   @@index([scheduledAt])
+  @@index([fireDepartmentId])
+  @@index([droneGroupId])
+}
+
+model NewsRead {
+  newsPostId String
+  userId     String
+  readAt     DateTime @default(now())
+
+  newsPost NewsPost @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([newsPostId, userId])
 }
 
 // ---------- Module 4: Meine Feuerwehr (Fuhrpark) ----------
