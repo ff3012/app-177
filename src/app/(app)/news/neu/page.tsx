@@ -5,12 +5,28 @@ import { canSendAnyNews, canSendNewsToFireDepartment, canSendNewsToDroneGroup, c
 import { NewsForm } from '@/components/news/news-form';
 import { createNewsPost } from '../actions';
 
-async function getFireDepartmentStats(organizationId: string) {
-  const memberCount = await prisma.user.count({ where: { homeOrganizationId: organizationId, isActive: true } });
-  const pushCount = await prisma.user.count({
-    where: { homeOrganizationId: organizationId, isActive: true, pushSubscriptions: { some: {} } },
-  });
-  return { memberCount, pushCount };
+/** Batched statt einer Query pro Feuerwehr - ein Bezirksadmin darf an alle ~124 Feuerwehren senden,
+ * eine Schleife mit getFireDepartmentStats(orgId) pro Feuerwehr wäre ~250 gleichzeitige COUNT-Abfragen
+ * bei jedem Laden dieser Seite gewesen. */
+async function getFireDepartmentStatsMap(organizationIds: string[]): Promise<Map<string, { memberCount: number; pushCount: number }>> {
+  const stats = new Map<string, { memberCount: number; pushCount: number }>(organizationIds.map((id) => [id, { memberCount: 0, pushCount: 0 }]));
+  if (organizationIds.length === 0) return stats;
+
+  const [memberCounts, pushCounts] = await Promise.all([
+    prisma.user.groupBy({
+      by: ['homeOrganizationId'],
+      where: { homeOrganizationId: { in: organizationIds }, isActive: true },
+      _count: { _all: true },
+    }),
+    prisma.user.groupBy({
+      by: ['homeOrganizationId'],
+      where: { homeOrganizationId: { in: organizationIds }, isActive: true, pushSubscriptions: { some: {} } },
+      _count: { _all: true },
+    }),
+  ]);
+  for (const row of memberCounts) stats.get(row.homeOrganizationId)!.memberCount = row._count._all;
+  for (const row of pushCounts) stats.get(row.homeOrganizationId)!.pushCount = row._count._all;
+  return stats;
 }
 
 async function getDroneGroupStats(droneGroupId: string | null) {
@@ -35,9 +51,8 @@ export default async function NeueNewsPage() {
   const allowedDroneGroups = allDroneGroups.filter((group) => canSendNewsToDroneGroup(user, { id: group.id, organizationId: group.organizationId }));
   const canSendBezirksweit = canSendBezirksWideDroneNews(user);
 
-  const fireDepartments = await Promise.all(
-    allowedFireDepartments.map(async (org) => ({ id: org.id, name: org.name, ...(await getFireDepartmentStats(org.id)) })),
-  );
+  const fireDepartmentStats = await getFireDepartmentStatsMap(allowedFireDepartments.map((org) => org.id));
+  const fireDepartments = allowedFireDepartments.map((org) => ({ id: org.id, name: org.name, ...fireDepartmentStats.get(org.id)! }));
   const droneGroups = await Promise.all(
     allowedDroneGroups.map(async (group) => ({ id: group.id, name: group.name, ...(await getDroneGroupStats(group.id)) })),
   );
