@@ -5,9 +5,10 @@ import { usePathname } from 'next/navigation';
 import type { SessionUser } from '@/types/next-auth';
 import { getActiveNavHref, getNavItems } from '@/lib/nav-items';
 
-// Desktop-only (>=640px) - MobileTabBar (mobile-tab-bar.tsx) renders the same items below that
-// breakpoint. Both stay mounted in the DOM at all times; Tailwind's hidden/sm: classes decide
-// which one paints, matching this codebase's only responsive convention (no JS media queries).
+// Desktop-only (>=640px) - MobileTabBar (mobile-tab-bar.tsx) has its own fixed 3-tab layout below
+// that breakpoint and does not read getNavItems() at all (see its own file comment). Both stay
+// mounted in the DOM at all times; Tailwind's hidden/sm: classes decide which one paints, matching
+// this codebase's only responsive convention (no JS media queries).
 export function Nav({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const items = getNavItems(user);

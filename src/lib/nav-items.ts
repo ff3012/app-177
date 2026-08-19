@@ -1,32 +1,27 @@
 import type { SessionUser } from '@/types/next-auth';
-import {
-  canAccessHeimatfeuerwehrAdmin,
-  canSendAnyNews,
-  canViewDroneModule,
-  isBezirksAdmin,
-  isDroneGroupAdmin,
-} from '@/lib/auth/permissions';
+import { canAccessHeimatfeuerwehrAdmin, canViewDroneModule, isBezirksAdmin, isDroneGroupAdmin } from '@/lib/auth/permissions';
 
 export interface NavItem {
   href: string;
   label: string;
 }
 
-/** Shared by the desktop <Nav> and the mobile <MobileTabBar> so the permission-filtered item list
- * (up to 5 items now that "Meine Feuerwehr" is unconditional like Kalender) can never drift
- * between the two - MobileTabBar's --tab-count grid is dynamic, not hardcoded to 4. */
+/** Used by the desktop <Nav> (MobileTabBar has its own fixed 3-tab layout since the V3 mobile-nav
+ * rework and no longer reads this list - see its own file comment). "News" is unconditional, not
+ * gated on canSendAnyNews: reading /news is open to every member since the News-Modul rework
+ * (issue #17), the same as "Meine Feuerwehr" - only composing/managing posts stays admin-gated,
+ * inside the News pages themselves. A member reported this exact gap (no way to find the module
+ * from the desktop nav, even though the header bell already worked) after the module already
+ * shipped read-access to everyone; the bell being reachable isn't a substitute for a nav entry. */
 export function getNavItems(user: SessionUser): NavItem[] {
   const items: NavItem[] = [
     { href: '/kalender', label: 'Kalender' },
     { href: '/meine-feuerwehr', label: 'Meine Feuerwehr' },
+    { href: '/news', label: 'News' },
   ];
 
   if (canViewDroneModule(user)) {
     items.push({ href: '/drohnen', label: 'Drohnengruppe' });
-  }
-
-  if (canSendAnyNews(user)) {
-    items.push({ href: '/news', label: 'News' });
   }
 
   const verwaltung = getVerwaltungNavItem(user);
