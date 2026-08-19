@@ -11,16 +11,31 @@ export function getNewsPostStatus(post: { scheduledAt: Date | null; sentAt: Date
  * droneGroupId ist eine reine Skalarspalte auf NewsPost (keine Relation), daher wird der
  * "null ODER meine Gruppe"-OR-Zweig in JS bedingt aufgebaut statt `droneGroupId: x ?? undefined` zu
  * schreiben - Letzteres würde bei x === null das Feld für Prisma komplett aus der Abfrage entfernen und
- * damit JEDE Gruppe matchen, nicht nur "alle Gruppen"-Beiträge. */
-export function buildVisibilityWhere(user: { homeOrganizationId: string; droneGroupId: string | null }): Prisma.NewsPostWhereInput {
+ * damit JEDE Gruppe matchen, nicht nur "alle Gruppen"-Beiträge.
+ *
+ * `canViewDroneModule` gate: exakt wie bei canViewEvent für DROHNENGRUPPE-Termine (siehe
+ * src/lib/auth/permissions.ts) darf ein Nutzer ohne eigene Drohnengruppen-Mitgliedschaft und ohne
+ * Bezirks-Drohnenadmin-Recht KEINE DRONE_GROUP-Beiträge sehen - auch nicht die bezirksweiten
+ * (droneGroupId === null). Ohne dieses Gate würde jeder normale Feuerwehr-Mitglied (bei dem
+ * droneGroupId ebenfalls null ist, weil er/sie schlicht kein Drohnengruppen-Mitglied ist) fälschlich
+ * in den `{droneGroupId: null}`-Zweig fallen und bezirksweite Drohnengruppen-News lesen können. */
+export function buildVisibilityWhere(user: {
+  homeOrganizationId: string;
+  droneGroupId: string | null;
+  canViewDroneModule: boolean;
+}): Prisma.NewsPostWhereInput {
   return {
     sentAt: { not: null },
     OR: [
       { audience: 'FIRE_DEPARTMENT', fireDepartmentId: user.homeOrganizationId },
-      {
-        audience: 'DRONE_GROUP',
-        OR: user.droneGroupId ? [{ droneGroupId: null }, { droneGroupId: user.droneGroupId }] : [{ droneGroupId: null }],
-      },
+      ...(user.canViewDroneModule
+        ? [
+            {
+              audience: 'DRONE_GROUP' as const,
+              OR: user.droneGroupId ? [{ droneGroupId: null }, { droneGroupId: user.droneGroupId }] : [{ droneGroupId: null }],
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -45,9 +60,13 @@ export interface VisibleNewsPost {
 export async function getVisibleNews(userId: string): Promise<VisibleNewsPost[]> {
   const dbUser = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { homeOrganizationId: true, droneMembership: { select: { droneGroupId: true } } },
+    select: { homeOrganizationId: true, isBezirksDrohnenAdmin: true, droneMembership: { select: { droneGroupId: true } } },
   });
-  const user = { homeOrganizationId: dbUser.homeOrganizationId, droneGroupId: dbUser.droneMembership?.droneGroupId ?? null };
+  const user = {
+    homeOrganizationId: dbUser.homeOrganizationId,
+    droneGroupId: dbUser.droneMembership?.droneGroupId ?? null,
+    canViewDroneModule: dbUser.isBezirksDrohnenAdmin || dbUser.droneMembership !== null,
+  };
 
   const posts = await prisma.newsPost.findMany({
     where: buildVisibilityWhere(user),
@@ -78,9 +97,13 @@ export async function getVisibleNews(userId: string): Promise<VisibleNewsPost[]>
 export async function getUnreadNewsCount(userId: string): Promise<number> {
   const dbUser = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { homeOrganizationId: true, droneMembership: { select: { droneGroupId: true } } },
+    select: { homeOrganizationId: true, isBezirksDrohnenAdmin: true, droneMembership: { select: { droneGroupId: true } } },
   });
-  const user = { homeOrganizationId: dbUser.homeOrganizationId, droneGroupId: dbUser.droneMembership?.droneGroupId ?? null };
+  const user = {
+    homeOrganizationId: dbUser.homeOrganizationId,
+    droneGroupId: dbUser.droneMembership?.droneGroupId ?? null,
+    canViewDroneModule: dbUser.isBezirksDrohnenAdmin || dbUser.droneMembership !== null,
+  };
   return prisma.newsPost.count({
     where: { ...buildVisibilityWhere(user), reads: { none: { userId } } },
   });

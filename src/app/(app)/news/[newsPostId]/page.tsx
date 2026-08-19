@@ -16,7 +16,11 @@ export default async function NewsPostDetailPage({ params }: { params: Promise<{
   const post = await prisma.newsPost.findFirst({
     where: {
       id: newsPostId,
-      ...buildVisibilityWhere({ homeOrganizationId: user.homeOrganizationId, droneGroupId: user.droneGroupId }),
+      ...buildVisibilityWhere({
+        homeOrganizationId: user.homeOrganizationId,
+        droneGroupId: user.droneGroupId,
+        canViewDroneModule: user.isDrohnengruppeMember || user.isBezirksDrohnenAdmin,
+      }),
     },
     include: {
       createdBy: { select: { firstName: true, lastName: true } },
