@@ -20,6 +20,7 @@ interface ProfileMenuProps {
    * braucht auf Mobile deshalb eine neue Anlaufstelle. Desktop erreicht News weiterhin unverändert
    * über <Nav>, daher ist der Link hier unten sm:hidden. */
   canManageNews: boolean;
+  unreadNewsCount: number;
   vapidPublicKey: string | null;
   logoutAction: () => Promise<void>;
 }
@@ -32,6 +33,7 @@ export function ProfileMenu({
   adminOrganizationNames,
   isDrohnengruppeMember,
   canManageNews,
+  unreadNewsCount,
   vapidPublicKey,
   logoutAction,
 }: ProfileMenuProps) {
@@ -73,19 +75,29 @@ export function ProfileMenu({
 
   return (
     <div className="relative flex items-center gap-1" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-label={pushEnabled ? 'Push-Benachrichtigungen aktiv' : 'Push-Benachrichtigungen inaktiv'}
+      <Link
+        href="/news"
+        aria-label={
+          unreadNewsCount > 0
+            ? `${unreadNewsCount} ungelesene Nachrichten - Push-Benachrichtigungen ${pushEnabled ? 'aktiv' : 'inaktiv'}`
+            : `Push-Benachrichtigungen ${pushEnabled ? 'aktiv' : 'inaktiv'}`
+        }
         title={pushEnabled ? 'Push-Benachrichtigungen aktiv' : 'Push-Benachrichtigungen inaktiv'}
-        className={`rounded p-1.5 hover:bg-white/10 ${pushEnabled ? 'text-green-400' : 'text-red-400'}`}
+        className={`relative rounded p-1.5 hover:bg-white/10 ${pushEnabled ? 'text-green-400' : 'text-red-400'}`}
       >
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M10 21a2 2 0 0 0 4 0" strokeLinecap="round" />
         </svg>
-      </button>
+        {unreadNewsCount > 0 && (
+          <span
+            aria-hidden
+            className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full border-2 border-[#1c1c1e] bg-brand px-1 text-[10px] font-bold leading-none text-white"
+          >
+            {unreadNewsCount > 99 ? '99+' : unreadNewsCount}
+          </span>
+        )}
+      </Link>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

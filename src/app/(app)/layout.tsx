@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageNews, isBezirksAdmin } from '@/lib/auth/permissions';
+import { canSendAnyNews, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getVerwaltungNavItem } from '@/lib/nav-items';
+import { getUnreadNewsCount } from '@/lib/news/audience';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
@@ -30,7 +31,7 @@ const isDevStage = process.env.APP_STAGE === 'dev';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
-  const [homeOrganization, adminOrganizations] = await Promise.all([
+  const [homeOrganization, adminOrganizations, unreadNewsCount] = await Promise.all([
     // Explizites select statt findUnique ohne select: wappenImageData ist ein potenziell
     // mehrere hundert KB großer Bytes-Blob, der bei jeder Navigation sonst unnötig mitgeladen
     // würde, obwohl hier nur wappenImageMimeType (Präsenz-Check) gebraucht wird.
@@ -41,6 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     user.feuerwehrAdminOrgIds.length > 0
       ? prisma.organization.findMany({ where: { id: { in: user.feuerwehrAdminOrgIds } } })
       : Promise.resolve([]),
+    getUnreadNewsCount(user.id),
   ]);
 
   const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'AFKDO Purkersdorf';
@@ -99,7 +101,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 isSiteAdmin={isBezirksAdmin(user)}
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}
-                canManageNews={canManageNews(user)}
+                canManageNews={canSendAnyNews(user)}
+                unreadNewsCount={unreadNewsCount}
                 vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
                 logoutAction={logoutAction}
               />

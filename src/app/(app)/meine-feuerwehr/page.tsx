@@ -11,6 +11,7 @@ import {
 } from '@/lib/drone/ninety-day-rule';
 import { HomeTodoList, type HomeEventCardData, type StaticTodoItemData } from '@/components/home/home-todo-list';
 import { RecentPhotoUploadsBlock } from '@/components/photo-uploads/recent-photo-uploads-block';
+import { getVisibleNews } from '@/lib/news/audience';
 import { cancelVehicleBooking } from './actions';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
@@ -114,7 +115,7 @@ export default async function MeineFeuerwehrPage() {
   // (Abschnitt-)Feuerwehr innerhalb der eigenen Drohnengruppe gar nicht erst aus der DB geladen.
   const droneMember = canViewDroneModule(user);
 
-  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures, recentPhotoUploads] = await Promise.all([
+  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures, recentPhotoUploads, visibleNews] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: {
@@ -177,7 +178,10 @@ export default async function MeineFeuerwehrPage() {
         _count: { select: { photos: { where: { status: 'READY' } } } },
       },
     }),
+    getVisibleNews(user.id),
   ]);
+
+  const unreadNews = visibleNews.filter((post) => !post.isRead).slice(0, 2);
 
   const candidateEvents = candidateEventsRaw.filter(
     (event) =>
@@ -312,6 +316,29 @@ export default async function MeineFeuerwehrPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      {unreadNews.length > 0 && (
+        <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+          <div className="flex items-center justify-between px-4 pt-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Neue Nachrichten</span>
+            <Link href="/news" className="text-xs font-medium text-brand hover:underline">
+              Alle {visibleNews.filter((post) => !post.isRead).length}
+            </Link>
+          </div>
+          <ul className="flex flex-col">
+            {unreadNews.map((post) => (
+              <li key={post.id} className="flex border-t border-neutral-100 first:border-t-0">
+                <span className={`w-1 flex-none ${post.audience === 'FIRE_DEPARTMENT' ? 'bg-[#1c1c1e]' : 'bg-[#22a06b]'}`} />
+                <Link href={`/news/${post.id}`} className="min-w-0 flex-1 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{post.createdByName}</p>
+                  <p className="truncate font-semibold text-neutral-900">{post.title}</p>
+                  <p className="truncate text-sm text-neutral-500">{post.body}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div>
         <h1 className="text-[27px] font-bold leading-tight text-[#1c1c1e]">Servus, {me.firstName}</h1>
         <p className="mt-1 text-[15px] text-[#6c6c70]">{greetingDate}</p>
