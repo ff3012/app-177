@@ -253,17 +253,33 @@ Startseite). Nicht angemeldete Nutzer: `requireUser()`s bestehender Redirect-zu-
 Mechanismus greift automatisch mit `?next=/news/842` (bereits bestehendes Verhalten dieser
 Funktion im ganzen `(app)`-Bereich, keine News-spezifische Neuimplementierung nötig).
 
-## 4. Startbildschirm „Meine Feuerwehr"
+## 4. Startbildschirm „Meine Feuerwehr" und Header-Glocke
 
-- **Glocke im Header** mit Zähler-Badge (Zahl, nicht nur Punkt), ohne ungelesene Posts keine
-  Badge. Dies ist **nicht** dasselbe wie der bestehende grüne/rote Push-Abo-Punkt in
-  `ProfileMenu` (der bleibt unverändert, reiner Abo-Status) — die neue Glocke zeigt den
-  `getVisibleNews`-Ungelesen-Zähler und verlinkt auf `/news`.
-- **Karte „Neue Nachrichten" ganz oben** auf `/meine-feuerwehr`, vor „Als Nächstes": bis zu zwei
-  ungelesene Beiträge mit Absenderzeile, Titel, einzeiliger Vorschau (Ellipsis), Farbstreifen
-  links (Wehr `#1c1c1e`, Drohnengruppe `#22a06b`), „Alle {n}" oben rechts.
-- Sind alle gelesen, entfällt die Karte vollständig (kein Platzhalter) — Zugang bleibt über die
-  Glocke.
+**Entscheidung (in diesem Chat getroffen): eine kombinierte Glocke, kein zweites Icon.**
+`src/components/layout/profile-menu.tsx` (Zeilen ~76–88) hat bereits eine Glocke, die heute nur
+den Push-Abo-Status zeigt (grün = aktiv, rot = inaktiv/nicht unterstützt) und beim Klick dasselbe
+Dropdown wie der Name-/Avatar-Button öffnet. Diese Glocke wird umgebaut, statt eine zweite
+danebengesetzt:
+
+- **Klickverhalten ändert sich**: die Glocke wird zu einem echten `<Link href="/news">` (nicht
+  mehr `onClick={() => setOpen(...)}`) — sie navigiert jetzt direkt zur Nachrichtenliste. Der
+  Push-Abo-Toggle bleibt unverändert im Dropdown-Menü erreichbar (dort liegt der eigentliche
+  `PushNotificationsToggle` ohnehin schon, Zeile ~143–144) — durch den Klick auf Name/Avatar
+  weiterhin erreichbar, verliert also keine Funktion.
+- **Farbe bleibt der Push-Abo-Indikator**: grün (`text-green-400`) = Push aktiv, rot
+  (`text-red-400`) = inaktiv/nicht unterstützt — exakt wie heute, unverändert übernommen.
+- **Neu: Zähler-Badge** (Zahl, nicht nur Punkt) oben rechts am Glocken-Icon, wenn
+  `getVisibleNews(user.id)` ungelesene Posts liefert — 19px, `bg-brand`, 2px Rand in der
+  Kopfzeilenfarbe (`#1c1c1e`), damit er sich vom dunklen Kopfzeilen-Hintergrund abhebt. Ohne
+  Ungelesene kein Badge (nicht „0" anzeigen, das Element entfällt ganz).
+- `ProfileMenu` braucht dafür den aktuellen Ungelesen-Zähler als Prop von seinem Server-Component-
+  Elternteil (`(app)/layout.tsx`) — ein einziger `getVisibleNews(user.id)`-Aufruf dort, nicht
+  zusätzlich nochmal client-seitig abgefragt.
+
+**Karte „Neue Nachrichten" ganz oben** auf `/meine-feuerwehr`, vor „Als Nächstes": bis zu zwei
+ungelesene Beiträge mit Absenderzeile, Titel, einzeiliger Vorschau (Ellipsis), Farbstreifen links
+(Wehr `#1c1c1e`, Drohnengruppe `#22a06b`), „Alle {n}" oben rechts. Sind alle gelesen, entfällt die
+Karte vollständig (kein Platzhalter) — Zugang bleibt über die Glocke.
 
 ## 5. Nachrichtenliste `/news`
 
