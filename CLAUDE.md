@@ -264,7 +264,7 @@ rule mirrored in `kalender/page.tsx`'s own query, `meine-feuerwehr/page.tsx`'s o
   event), but purely as technical FK/legacy-column values, never read by any visibility check.
   `event.droneGroupId === null` is a **deliberate sentinel**, not an absent/invalid value: it means
   "bezirksweit", visible to members of **all 4** Drohnengruppen (same null-means-"all" pattern already used
-  by `NewsMessage.audienceDroneGroupId`) — the combined per-org token `.ics` feeds are the one exception,
+  by `NewsPost.droneGroupId`) — the combined per-org token `.ics` feeds are the one exception,
   since they're token- rather than session-authenticated and can't check `canViewDroneModule`, so they
   exclude the whole `DROHNENGRUPPE` category outright rather than trying to apply this rule.
 - Create/edit/delete/push authorization for an `Event` goes through the separate `canManageEvent(user,
@@ -351,10 +351,12 @@ does not exist between deploy and someone remembering to run `npm run db:seed` b
   calls at the call site. **Its former `droneFlightNotificationEmail` and `droneQuickRegisterToken` columns
   are gone** — both moved onto `DroneGroup` (`flightNotificationEmail`, `qrToken`), since they are per-group
   now, not app-wide.
-- `PushSubscription` (one row per browser/device, keyed by that browser's own `endpoint`) and `NewsMessage`
-  (`audienceType` ORGANIZATION/DROHNENGRUPPE + optional `audienceOrgId` + optional `audienceDroneGroupId`,
-  `scheduledAt`/`sentAt`) back the News module — see below. For a DROHNENGRUPPE audience, a null
-  `audienceDroneGroupId` deliberately means "all groups"; a set one narrows to that one group.
+- `PushSubscription` (one row per browser/device, keyed by that browser's own `endpoint`) and `NewsPost`
+  (`audience` FIRE_DEPARTMENT/DRONE_GROUP + optional `fireDepartmentId` + optional `droneGroupId`,
+  `scheduledAt`/`sentAt`) back the News module — see below. For a DRONE_GROUP audience, a null
+  `droneGroupId` deliberately means "all groups"; a set one narrows to that one group. `NewsRead`
+  (composite `newsPostId`+`userId` key) tracks per-user read state, driving the reader's own unread badge —
+  there is no admin-visible "X von Y gelesen" readout anywhere in the app, by deliberate design.
 - Migrations are committed SQL under `prisma/migrations/`, applied automatically by
   `docker/entrypoint.sh` via `prisma migrate deploy` on every container start. Generate new ones with
   `npm run db:migrate` after editing `schema.prisma`; don't hand-edit already-committed migration files.
