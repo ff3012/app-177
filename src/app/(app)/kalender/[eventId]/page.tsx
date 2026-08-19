@@ -22,6 +22,14 @@ const STATUS_BADGE_CLASS: Record<RsvpStatusOption, string> = {
 };
 
 function formatRsvpTimestampLabel(zusage: { status: RsvpStatusOption; createdAt: Date; updatedAt: Date }): string {
+  // Exact-millisecond equality, not a tolerance/rounding comparison: TerminZusage.createdAt has a
+  // DB-level DEFAULT CURRENT_TIMESTAMP while updatedAt (@updatedAt) has none, which could in theory
+  // let a real `create` produce two slightly different "now" reads (one from Postgres, one from
+  // Prisma's query engine). Verified empirically against the real setRsvp upsert path (3 separate
+  // real create-path trials against the actual dev DB, 0ms diff every time) that Prisma's query
+  // engine computes a single "now" and reuses it for both @default(now()) and @updatedAt fields
+  // within one create - so this equality check is safe as written. Do not add a display-granularity
+  // or tolerance-based fallback without re-verifying against Prisma's actual behavior first.
   const changed = zusage.createdAt.getTime() !== zusage.updatedAt.getTime();
   return changed
     ? `Zuletzt geändert am ${formatDateTimeDDMMYYYY(zusage.updatedAt)}`
@@ -162,7 +170,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
                     </span>
                     {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}“</span>}
                   </div>
-                  <span className="text-xs text-neutral-400">{formatRsvpTimestampLabel(zusage)}</span>
+                  <span className="text-xs text-neutral-500">{formatRsvpTimestampLabel(zusage)}</span>
                 </li>
               ))}
             </ul>

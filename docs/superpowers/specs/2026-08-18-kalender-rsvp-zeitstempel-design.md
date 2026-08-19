@@ -24,9 +24,11 @@ input widget) is untouched.
   and the "Meine Zusage" section. The compact inline Zusage/Absage buttons elsewhere
   (`event-list-view.tsx`'s `DesktopEventRow`, `home-todo-list.tsx`'s Startbildschirm-Todo) are
   explicitly out of scope — confirmed with the user.
-- No new permission check: the Teilnehmerliste (including the new timestamps) is visible to
-  everyone `canViewEvent` already allows to see the page, unchanged from today — names, statuses,
-  and notes for every participant are already fully visible there.
+- No new permission check: the Teilnehmerliste's audience is unchanged — everyone `canViewEvent`
+  already allows onto the page could already see every participant's name, status, and note.
+  Exactly when someone responded is new information this feature surfaces (it wasn't shown
+  anywhere before), but it's benign event-participation metadata shown to the same existing
+  audience, not a new class of exposure to a new audience — so no new permission check is needed.
 
 ## Label logic (shared by both display spots)
 
@@ -34,8 +36,13 @@ Compare `createdAt.getTime()` and `updatedAt.getTime()` on the `TerminZusage` ro
 
 - **Equal** (never changed since the first response): `"{StatusLabel} am DD-MM-YYYY HH:MM"`,
   e.g. `Zugesagt am 18-08-2026 14:32`, using `createdAt`.
-- **Different** (status was changed at least once since first response): `"Zuletzt geändert am
-  DD-MM-YYYY HH:MM"`, using `updatedAt`.
+- **Different** (the row was saved again since the first response — a real status change, but also
+  a note-only edit or re-submitting the same status, since `updatedAt` is `@updatedAt`-managed and
+  bumps on every write): `"Zuletzt geändert am DD-MM-YYYY HH:MM"`, using `updatedAt`. The label
+  says "geändert" (changed) because the row was touched again, not because the *status* necessarily
+  differs from before - this is a deliberate simplification (tracking a separate "status last
+  changed" timestamp would need a schema change) and matches the common case well enough for this
+  feature's purpose.
 
 This matches the issue's explicit wording ("Zeitstempel bei Zu- bzw. Absagen ... bzw letzte
 Änderung anzeigen wenn von Zugesagt auf Abgesagt Wechsel").
