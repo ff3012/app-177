@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { buildVisibilityWhere } from '@/lib/news/audience';
+import { RefreshAfterMarkRead } from '@/components/news/refresh-after-mark-read';
 
 const AUDIENCE_STRIPE_COLOR: Record<'FIRE_DEPARTMENT' | 'DRONE_GROUP', string> = {
   FIRE_DEPARTMENT: '#1c1c1e',
@@ -33,8 +34,11 @@ export default async function NewsPostDetailPage({ params }: { params: Promise<{
 
   // Beim Rendern setzen, nicht bei einem Client-seitigen Scroll-Event (Design-Spec §6) - derselbe
   // "Mutation direkt aus einer Server-Component-Render-Phase" Ansatz wie decideVehicleBooking im
-  // Fahrzeug-Reservierungs-Modul (siehe dessen Kommentar zu revalidatePath für die eine Ausnahme, die
-  // hier nicht zutrifft - wir rufen hier keine revalidatePath auf).
+  // Fahrzeug-Reservierungs-Modul. revalidatePath() ist hier wie dort während des Renderns verboten
+  // (siehe dessen Kommentar) - anders als bei dessen öffentlichen E-Mail-Link-Seiten wird diese Seite
+  // aber ganz normal per <Link>-Klick aus /news bzw. der Startbildschirm-Karte heraus besucht, wo der
+  // Next.js-Router-Cache die Glocken-Badge im (app)-Layout sonst veraltet stehen lässt (live auf DEV
+  // bestätigt) - deshalb erzwingt <RefreshAfterMarkRead> unten clientseitig einen frischen Reload.
   await prisma.newsRead.upsert({
     where: { newsPostId_userId: { newsPostId: post.id, userId: user.id } },
     create: { newsPostId: post.id, userId: user.id },
@@ -48,6 +52,7 @@ export default async function NewsPostDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-4">
+      <RefreshAfterMarkRead />
       <Link href="/news" className="text-sm text-neutral-600 hover:underline">
         ← Zurück zu Nachrichten
       </Link>
