@@ -328,7 +328,7 @@ export default async function MeineFeuerwehrPage() {
             {unreadNews.map((post) => (
               <li key={post.id} className="flex border-t border-neutral-100 first:border-t-0">
                 <span className={`w-1 flex-none ${post.audience === 'FIRE_DEPARTMENT' ? 'bg-[#1c1c1e]' : 'bg-[#22a06b]'}`} />
-                <Link href={`/news/${post.id}`} className="min-w-0 flex-1 px-4 py-3">
+                <Link href={`/news/${post.id}`} prefetch={false} className="min-w-0 flex-1 px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{post.createdByName}</p>
                   <p className="truncate font-semibold text-neutral-900">{post.title}</p>
                   <p className="truncate text-sm text-neutral-500">{post.body}</p>

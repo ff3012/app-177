@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import type { Prisma } from '@prisma/client';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canSendAnyNews, canSendNewsToFireDepartment, canSendNewsToDroneGroup, canSendBezirksWideDroneNews } from '@/lib/auth/permissions';
@@ -58,12 +59,37 @@ export default async function NeueNewsPage() {
   );
   const bezirksweitStats = canSendBezirksweit ? await getDroneGroupStats(null) : null;
 
-  const upcomingEvents = await prisma.event.findMany({
-    where: { startsAt: { gte: new Date() } },
-    orderBy: { startsAt: 'asc' },
-    take: 50,
-    select: { id: true, title: true, startsAt: true, organizationId: true, droneGroupId: true, category: true },
-  });
+  // Nur Termine der Organisationen/Drohnengruppen laden, an die DIESER Nutzer überhaupt senden darf -
+  // sonst sieht z.B. ein Feuerwehr-Admin Titel/Datum fremder Feuerwehren, für die canViewEvent ihm nie
+  // Zugriff gäbe (Finding 3 der Abschluss-Review), und relevantEvents in news-form.tsx (take: 50, sortiert
+  // nach startsAt) verliert bei Bezirks-Größenordnung leicht den eigenen anstehenden Termin.
+  const eventVisibilityOr: Prisma.EventWhereInput[] = [];
+  if (allowedFireDepartments.length > 0) {
+    eventVisibilityOr.push({
+      category: 'ALLGEMEIN',
+      organizationId: { in: allowedFireDepartments.map((org) => org.id) },
+    });
+  }
+  const droneGroupOr: Prisma.EventWhereInput[] = [];
+  if (allowedDroneGroups.length > 0) {
+    droneGroupOr.push({ droneGroupId: { in: allowedDroneGroups.map((group) => group.id) } });
+  }
+  if (canSendBezirksweit) {
+    droneGroupOr.push({ droneGroupId: null });
+  }
+  if (droneGroupOr.length > 0) {
+    eventVisibilityOr.push({ category: 'DROHNENGRUPPE', OR: droneGroupOr });
+  }
+
+  const upcomingEvents =
+    eventVisibilityOr.length === 0
+      ? []
+      : await prisma.event.findMany({
+          where: { startsAt: { gte: new Date() }, OR: eventVisibilityOr },
+          orderBy: { startsAt: 'asc' },
+          take: 50,
+          select: { id: true, title: true, startsAt: true, organizationId: true, droneGroupId: true, category: true },
+        });
 
   return (
     <div className="flex flex-col gap-4">

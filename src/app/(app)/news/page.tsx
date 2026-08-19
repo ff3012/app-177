@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canSendAnyNews, canManageNewsPost } from '@/lib/auth/permissions';
 import { getVisibleNews, getNewsPostStatus } from '@/lib/news/audience';
+import { markAllNewsRead } from './actions';
 
 const PAGE_SIZE = 30;
 
@@ -44,7 +45,16 @@ export default async function NewsPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-neutral-900">Nachrichten</h1>
-          {unreadCount > 0 && <p className="text-sm text-neutral-500">{unreadCount} ungelesen</p>}
+          {unreadCount > 0 && (
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-neutral-500">{unreadCount} ungelesen</p>
+              <form action={markAllNewsRead}>
+                <button type="submit" className="text-sm font-medium text-brand hover:underline">
+                  Alle gelesen
+                </button>
+              </form>
+            </div>
+          )}
         </div>
         {canCompose && (
           <Link href="/news/neu" className="rounded bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark">
@@ -78,7 +88,7 @@ export default async function NewsPage({
           {pagePosts.map((post) => (
             <li key={post.id} className="flex border-b border-neutral-100 last:border-0">
               <span className={`w-1.5 flex-none ${post.isRead ? 'bg-neutral-200' : AUDIENCE_STRIPE_CLASS[post.audience]}`} />
-              <Link href={`/news/${post.id}`} className="flex flex-1 items-start gap-2 px-4 py-3">
+              <Link href={`/news/${post.id}`} prefetch={false} className="flex flex-1 items-start gap-2 px-4 py-3">
                 {!post.isRead && <span aria-hidden className="mt-1.5 h-2 w-2 flex-none rounded-full bg-brand" />}
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{post.createdByName}</p>

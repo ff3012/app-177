@@ -78,6 +78,7 @@ export function NewsForm({ fireDepartments, droneGroups, bezirksweitStats, event
     handleSubmit,
     watch,
     setValue,
+    setError,
     formState: { errors },
   } = useForm<NewsInput>({
     resolver: zodResolver(newsSchema),
@@ -151,8 +152,13 @@ export function NewsForm({ fireDepartments, droneGroups, bezirksweitStats, event
   }
 
   function onRequestScheduled(values: NewsInput) {
+    // sendMode bleibt bewusst unangetastet, solange kein scheduledAt gesetzt ist: ein vorheriger Bug
+    // setzte hier `sendMode: 'SCHEDULED'` per setValue auch ohne Datum und nie wieder zurück - da das
+    // Zod-refine scheduledAt bei sendMode === 'SCHEDULED' zwingend verlangt, blockierte das dauerhaft
+    // auch "Als Entwurf speichern"/"Jetzt senden" in derselben Formular-Session. Stattdessen nur den
+    // Fehler am scheduledAt-Feld setzen - die anderen beiden Buttons bleiben davon unberührt.
     if (!values.scheduledAt) {
-      setValue('sendMode', 'SCHEDULED', { shouldValidate: true });
+      setError('scheduledAt', { type: 'manual', message: 'Datum/Uhrzeit ist erforderlich.' });
       return;
     }
     setConfirmMode('SCHEDULED');

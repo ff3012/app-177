@@ -55,7 +55,10 @@ self.addEventListener('push', (event) => {
 // Klick auf die Benachrichtigung: öffnet/fokussiert data.url (die konkrete News-Meldung), fällt auf
 // /kalender zurück, falls keine data.url mitgeschickt wurde (z. B. der ältere, News-unabhängige
 // Kalender-Sofortversand). Ein bereits offenes Fenster wird fokussiert UND zur Ziel-URL navigiert -
-// focus() allein würde die zuvor geöffnete Seite unverändert lassen.
+// focus() allein würde die zuvor geöffnete Seite unverändert lassen. navigate() kann ablehnen (z. B. bei
+// einem Fenster, das dieser Service Worker nicht kontrolliert) - in dem Fall auf openWindow() zurückfallen
+// statt den Nutzer stillschweigend auf der alten Seite sitzen zu lassen (genau der Bug, den dieses
+// Feature eigentlich beheben soll).
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification.data?.url || '/kalender';
@@ -63,8 +66,10 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const existing = clientList.find((c) => c.url.includes(self.location.origin));
       if (existing) {
-        existing.focus();
-        return existing.navigate(url);
+        return existing
+          .focus()
+          .then(() => existing.navigate(url))
+          .catch(() => self.clients.openWindow(url));
       }
       return self.clients.openWindow(url);
     })

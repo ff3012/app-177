@@ -12,12 +12,36 @@ import {
   canSendNewsToDroneGroup,
   canSendNewsToFireDepartment,
 } from '@/lib/auth/permissions';
-import { newsSchema, parseNewsFormData } from '@/lib/validation/news.schema';
+import { newsSchema, parseNewsFormData, type NewsInput } from '@/lib/validation/news.schema';
 import { dispatchNewsPost } from '@/lib/news/dispatch-news';
+import { getVisibleNews } from '@/lib/news/audience';
 
 export interface NewsFormState {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;
+}
+
+/** Serverseitige Gegenprobe zum client-seitigen `relevantEvents`-Filter in news-form.tsx (der nur der
+ * Formular-UX dient und keine Sicherheitsgrenze ist) - verhindert, dass ein manipuliertes/veraltetes
+ * `eventId`-Feld einen Termin verlinkt, der gar nicht zum gewählten Empfängerkreis des Beitrags passt.
+ * Für DRONE_GROUP mit droneGroupId === null (bezirksweit) reicht jeder DROHNENGRUPPE-Termin, unabhängig
+ * von dessen eigener droneGroupId - siehe Finding 3 der Abschluss-Review. */
+async function validateNewsEventId(data: NewsInput): Promise<boolean> {
+  if (!data.eventId) return true;
+  const event = await prisma.event.findUnique({
+    where: { id: data.eventId },
+    select: { organizationId: true, droneGroupId: true, category: true },
+  });
+  if (!event) return false;
+
+  if (data.audience === 'FIRE_DEPARTMENT') {
+    return event.category === 'ALLGEMEIN' && event.organizationId === (data.fireDepartmentId || null);
+  }
+
+  if (event.category !== 'DROHNENGRUPPE') return false;
+  const droneGroupId = data.droneGroupId || null;
+  if (droneGroupId === null) return true;
+  return event.droneGroupId === droneGroupId;
 }
 
 export async function createNewsPost(_prevState: NewsFormState, formData: FormData): Promise<NewsFormState> {
@@ -46,6 +70,10 @@ export async function createNewsPost(_prevState: NewsFormState, formData: FormDa
         return { error: 'Kein Senderecht für diese Drohnengruppe.' };
       }
     }
+  }
+
+  if (!(await validateNewsEventId(data))) {
+    return { error: 'Ungültiger Termin für diesen Empfängerkreis.' };
   }
 
   const post = await prisma.newsPost.create({
@@ -103,6 +131,10 @@ export async function updateNewsPost(newsPostId: string, _prevState: NewsFormSta
     }
   }
 
+  if (!(await validateNewsEventId(data))) {
+    return { error: 'Ungültiger Termin für diesen Empfängerkreis.' };
+  }
+
   await prisma.newsPost.update({
     where: { id: newsPostId },
     data: {
@@ -144,4 +176,24 @@ export async function deleteNewsPost(newsPostId: string): Promise<void> {
 
   revalidatePath('/news');
   redirect('/news');
+}
+
+/** "Alle gelesen" (Design-Spec §5, §9.8, §10): markiert jeden für diesen Nutzer sichtbaren, noch
+ * ungelesenen Beitrag als gelesen. `createMany` mit `skipDuplicates` statt einem Upsert pro Beitrag in
+ * einer Schleife - ein Nutzer kann durchaus dutzende ungelesene Beiträge haben und das soll eine einzige
+ * Query bleiben, nicht N sequenzielle Upserts. */
+export async function markAllNewsRead(): Promise<void> {
+  const user = await requireUser();
+  const visible = await getVisibleNews(user.id);
+  const unreadPostIds = visible.filter((post) => !post.isRead).map((post) => post.id);
+
+  if (unreadPostIds.length > 0) {
+    await prisma.newsRead.createMany({
+      data: unreadPostIds.map((newsPostId) => ({ newsPostId, userId: user.id })),
+      skipDuplicates: true,
+    });
+  }
+
+  revalidatePath('/news');
+  revalidatePath('/meine-feuerwehr');
 }
