@@ -160,7 +160,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
                     <span className="text-neutral-800">
                       {zusage.user.firstName} {zusage.user.lastName}
                     </span>
-                    {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}"</span>}
+                    {zusage.note && <span className="text-xs text-neutral-500">„{zusage.note}“</span>}
                   </div>
                   <span className="text-xs text-neutral-400">{formatRsvpTimestampLabel(zusage)}</span>
                 </li>
