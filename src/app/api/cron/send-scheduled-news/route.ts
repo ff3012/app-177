@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { dispatchNewsMessage } from '@/lib/news/send-news';
+import { dispatchNewsPost } from '@/lib/news/dispatch-news';
 import { recordNewsCronRun } from '@/lib/settings';
 
 // Kein Login möglich für einen Cronjob - stattdessen ein geteiltes Secret als Query-Parameter,
@@ -16,12 +16,12 @@ export async function GET(request: Request) {
   // ob der Cronjob überhaupt noch regelmäßig aufgerufen wird.
   await recordNewsCronRun();
 
-  const due = await prisma.newsMessage.findMany({
+  const due = await prisma.newsPost.findMany({
     where: { sentAt: null, scheduledAt: { lte: new Date() } },
     select: { id: true },
   });
 
-  const results = await Promise.allSettled(due.map((news) => dispatchNewsMessage(news.id)));
+  const results = await Promise.allSettled(due.map((news) => dispatchNewsPost(news.id)));
   const sent = results.filter((result) => result.status === 'fulfilled').length;
   const failed = results.length - sent;
 

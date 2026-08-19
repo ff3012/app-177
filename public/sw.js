@@ -30,7 +30,8 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// News-Modul: eingehende Web-Push-Nachricht als Benachrichtigung anzeigen.
+// News-Modul: eingehende Web-Push-Nachricht als Benachrichtigung anzeigen. data.url (falls vorhanden)
+// wird an showNotification durchgereicht, damit notificationclick unten weiß, wohin ein Tap führen soll.
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
@@ -46,19 +47,26 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
+      data: payload.data,
     })
   );
 });
 
-// Klick auf die Benachrichtigung: bereits offenes Fenster fokussieren statt ein neues zu öffnen.
+// Klick auf die Benachrichtigung: öffnet/fokussiert data.url (die konkrete News-Meldung), fällt auf
+// /kalender zurück, falls keine data.url mitgeschickt wurde (z. B. der ältere, News-unabhängige
+// Kalender-Sofortversand). Ein bereits offenes Fenster wird fokussiert UND zur Ziel-URL navigiert -
+// focus() allein würde die zuvor geöffnete Seite unverändert lassen.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const url = event.notification.data?.url || '/kalender';
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ('focus' in client) return client.focus();
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const existing = clientList.find((c) => c.url.includes(self.location.origin));
+      if (existing) {
+        existing.focus();
+        return existing.navigate(url);
       }
-      return self.clients.openWindow('/kalender');
+      return self.clients.openWindow(url);
     })
   );
 });

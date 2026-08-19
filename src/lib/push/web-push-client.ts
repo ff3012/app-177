@@ -19,6 +19,7 @@ function ensureConfigured(): void {
 export interface PushPayload {
   title: string;
   body: string;
+  data?: { url: string };
 }
 
 interface SubscriptionRecord {

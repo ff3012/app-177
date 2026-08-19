@@ -1,45 +1,6 @@
-import { NewsAudienceType, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
-
-export async function resolveAudienceUserIds(
-  audienceType: NewsAudienceType,
-  audienceOrgId: string | null,
-  audienceDroneGroupId: string | null = null,
-): Promise<string[]> {
-  if (audienceType === NewsAudienceType.DROHNENGRUPPE) {
-    // Ein null audienceDroneGroupId bedeutet für NewsMessage bewusst "alle Gruppen" (siehe Kommentar
-    // auf NewsMessage.audienceDroneGroupId im Schema) - das ist die richtige Zielsemantik hier.
-    //
-    // WICHTIG, per Live-Test gegen die echte Dev-DB verifiziert, NICHT nur angenommen - die vom
-    // Task-Brief wörtlich vorgeschlagene Schreibweise `droneMembership: { droneGroupId: ... ?? undefined }`
-    // (ohne `is:`) ist real fehlerhaft und wurde deshalb NICHT übernommen: wenn jedes Feld eines
-    // verschachtelten Relations-Filterobjekts undefined ist, lässt Prisma die Relation dabei komplett
-    // ungeprüft - das Ergebnis matcht dann JEDEN aktiven Nutzer, auch solche ganz OHNE droneMembership,
-    // nicht nur "Mitglieder irgendeiner Gruppe". Live bestätigt: mit einem einzigen aktiven Nutzer ohne
-    // Drohnengruppen-Zugehörigkeit in der DB matchte `droneMembership: { droneGroupId: undefined }`
-    // genau diesen Nutzer trotzdem - identisch zu `droneMembership: {}`. Das explizite `is: {...}`
-    // dagegen verlangt weiterhin, dass die Relation existiert, und filtert nur zusätzlich auf
-    // droneGroupId wenn gesetzt - das ist die Form, die den alten Notbehelf `isNot: null` sauber um
-    // die Gruppen-Eingrenzung erweitert, ohne diesen Bug zu erben.
-    const members = await prisma.user.findMany({
-      where: {
-        droneMembership: { is: { droneGroupId: audienceDroneGroupId ?? undefined } },
-        isActive: true,
-      },
-      select: { id: true },
-    });
-    return members.map((member) => member.id);
-  }
-
-  if (!audienceOrgId) return [];
-
-  const members = await prisma.user.findMany({
-    where: { homeOrganizationId: audienceOrgId, isActive: true },
-    select: { id: true },
-  });
-  return members.map((member) => member.id);
-}
 
 /**
  * Zielgruppe für die "Push-Benachrichtigung jetzt senden"-Option auf der Termin-Detailseite -
