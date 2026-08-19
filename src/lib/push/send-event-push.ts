@@ -15,7 +15,7 @@ export interface EventForPush {
 
 /**
  * Sofort-Versand einer Push-Benachrichtigung mit Termindetails, ausgelöst von der
- * Termin-Detailseite (nicht Teil des News-Moduls - kein NewsMessage-Datensatz, kein
+ * Termin-Detailseite (nicht Teil des News-Moduls - kein NewsPost-Datensatz, kein
  * sentAt-Tracking, kein Zeitplan). Zielgruppe ist dieselbe wie die Sichtbarkeit des Termins
  * selbst, siehe resolveEventAudienceUserIds.
  */

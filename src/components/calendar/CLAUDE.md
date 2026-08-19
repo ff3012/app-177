@@ -269,12 +269,13 @@ Bezirks-Drohnenadmin can push for their own group's/bezirksweit `DROHNENGRUPPE` 
 Abschnittskommando-Admin. Before the multi-Drohnengruppe plan this used the flatter `canManageEventsFor(user,
 event.organizationId)`, which both incorrectly blocked a pure Drohnengruppen-/Bezirksadmin (zero
 `feuerwehrAdminOrgIds`) from pushing their own event and incorrectly let an Abschnittsadmin of a bezirksweit
-event's anchor Abschnitt push to all 4 groups. This is a deliberate departure from `canManageNews` (News
-module, Abschnittskommando-Admin only) — explicitly chosen for this feature despite the parallel. It reuses the News
+event's anchor Abschnitt push to all 4 groups. This is a deliberate departure from the News module's own
+three-tier send-permission model (`canSendNewsToFireDepartment`/`canSendNewsToDroneGroup`/
+`canManageNewsPost`) — explicitly chosen for this feature despite the parallel. It reuses the News
 module's `sendPushToSubscriptions` but resolves its own audience via
-`resolveEventAudienceUserIds`/`sendEventPushNow` (`lib/push/`) rather than `NewsMessage`'s
-ORGANIZATION/DROHNENGRUPPE audience types, since an event can be section-wide without any corresponding
-`NewsMessage` row — it's a one-off send, not persisted, no `sentAt` tracking.
+`resolveEventAudienceUserIds`/`sendEventPushNow` (`lib/push/`) rather than `NewsPost`'s
+FIRE_DEPARTMENT/DRONE_GROUP audience types, since an event can be section-wide without any corresponding
+`NewsPost` row — it's a one-off send, not persisted, no `sentAt` tracking.
 
 `components/calendar/event-form.tsx`: changing Start always carries its date onto Ende; Ende's *time* is only
 auto-suggested (Start + 15 minutes) while Ende has no time of its own yet — once it has one (typed or

@@ -9,8 +9,8 @@ import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
  *   canViewEvent) - Zielgruppe ist ausschließlich über die Drohnengruppen-Mitgliedschaft bestimmt:
  *   die eine Gruppe (droneGroupId gesetzt) oder JEDE Gruppe (droneGroupId null, bezirksweit).
  * - Kategorie ALLGEMEIN bleibt bei der alten organisations-/abschnittsbasierten Regel.
- * Nicht die ORGANIZATION/DROHNENGRUPPE-Unterscheidung von NewsMessage, da ein Termin abschnittsweit
- * sein kann, ohne eine eigene NewsAudienceType-Zeile zu haben.
+ * Nicht die FIRE_DEPARTMENT/DRONE_GROUP-Unterscheidung von NewsPost, da ein Termin abschnittsweit
+ * sein kann, ohne eine eigene NewsPost-Zeile mit passendem NewsAudience-Wert zu haben.
  */
 export async function resolveEventAudienceUserIds(event: {
   organizationId: string;
@@ -20,7 +20,7 @@ export async function resolveEventAudienceUserIds(event: {
 }): Promise<string[]> {
   if (event.category === 'DROHNENGRUPPE') {
     // droneGroupId null bedeutet bezirksweit (alle 4 Gruppen) - genau wie bei canViewEvent und bei
-    // NewsMessage.audienceDroneGroupId (siehe Kommentar dort im Schema), NICHT mehr "niemand". Das
+    // NewsPost.droneGroupId (siehe Kommentar dort im Schema), NICHT mehr "niemand". Das
     // `is: {...}` (statt eines nackten `droneGroupId: ...`) verlangt weiterhin, dass die
     // droneMembership-Relation überhaupt existiert - ein Feld auf undefined setzen würde Prisma bei
     // einem verschachtelten Relations-Filter dazu bringen, dieses Feld GAR NICHT zu filtern (siehe

@@ -68,7 +68,8 @@ export interface EventPushActionState {
  * Löst sofort eine Push-Benachrichtigung mit Termindetails aus. Berechtigung wie beim
  * Bearbeiten/Löschen des Termins selbst (canManageEvent) - jeder Admin der besitzenden
  * Organisation kann also für seine eigenen Termine Push auslösen, nicht nur der
- * Abschnittskommando-Admin (bewusst anders als canManageNews im News-Modul). Für
+ * Abschnittskommando-Admin (bewusst anders als das dreistufige Senderecht-Modell im
+ * News-Modul, siehe canSendNewsToFireDepartment/canSendNewsToDroneGroup/canManageNewsPost). Für
  * DROHNENGRUPPE-Termine verzweigt canManageEvent korrekt nach droneGroupId (eigene Gruppe vs.
  * bezirksweit) statt der alten, rein organizationId-basierten Regel - siehe die identische
  * droneGroup-Ladelogik in kalender/[eventId]/page.tsx.

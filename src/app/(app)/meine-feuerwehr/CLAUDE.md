@@ -456,7 +456,7 @@ way to vary by viewport (see "Login-Redirect" below).
   center button stays visually centered rather than the grid collapsing to 2 columns). News and Verwaltung -
   previously riding along in the same permission-driven list on mobile too - needed new homes since the
   brief's tab bar has no room for them: Verwaltung moved into a new header pill (see below); News moved into
-  `ProfileMenu`'s dropdown as a plain `sm:hidden` link (`canManageNews`-gated, new prop) alongside the
+  `ProfileMenu`'s dropdown as a plain `sm:hidden` link (`canSendAnyNews`-gated, new prop) alongside the
   existing mobile-only Abmelden - desktop keeps reaching both exactly as before, through the unchanged `<Nav>`.
 - **Header restructure** (`(app)/layout.tsx`): the mobile-only small AFKDO crest `<img>` that used to sit at
   the far left is gone entirely (the brief: "Das Wappen ist hier nicht mehr - es sitzt in der Tab-Bar").
