@@ -20,7 +20,7 @@ export default async function LoginPage({
       <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-10 sm:flex-row sm:gap-10">
         <img src="/wappen-bfkdo.png" alt="Wappen BFKDO St. Pölten" className="w-40 shrink-0 sm:w-52" />
         <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow">
-          <h1 className="mb-1 text-xl font-semibold text-neutral-900">Feuerwehr Abschnitt Purkersdorf</h1>
+          <h1 className="mb-1 text-xl font-semibold text-neutral-900">Feuerwehr BFKDO St. Pölten</h1>
           <p className="mb-6 text-sm text-neutral-500">Anmeldung für Mitglieder</p>
           <LoginForm callbackUrl={callbackUrl ?? '/meine-feuerwehr'} />
         </div>

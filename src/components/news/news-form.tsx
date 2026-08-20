@@ -337,7 +337,7 @@ export function NewsForm({ fireDepartments, droneGroups, bezirksweitStats, event
       <div className="flex-1 rounded-lg bg-neutral-50 p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Push-Vorschau</p>
         <div className="rounded-xl bg-white p-3 shadow">
-          <p className="text-xs font-medium text-neutral-500">AFKDO Purkersdorf</p>
+          <p className="text-xs font-medium text-neutral-500">BFKDO St. Pölten</p>
           <p className="text-sm font-semibold text-neutral-900">{title || 'Titel'}</p>
           <p className="text-sm text-neutral-700">
             {previewCut.endsWith('…') ? previewCut.slice(0, -1) : previewCut}

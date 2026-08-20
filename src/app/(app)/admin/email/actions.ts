@@ -33,9 +33,9 @@ export async function sendTestEmail(
       to: parsed.data.recipient,
       subject: 'Test: Mailjet-Integration',
       textPart:
-        'Dies ist eine Testnachricht der Feuerwehr-App Abschnitt Purkersdorf. Die Mailjet-Integration funktioniert.',
+        'Dies ist eine Testnachricht der Feuerwehr-App BFKDO St. Pölten. Die Mailjet-Integration funktioniert.',
       htmlPart:
-        '<p>Dies ist eine Testnachricht der Feuerwehr-App Abschnitt Purkersdorf.</p><p>Die Mailjet-Integration funktioniert.</p>',
+        '<p>Dies ist eine Testnachricht der Feuerwehr-App BFKDO St. Pölten.</p><p>Die Mailjet-Integration funktioniert.</p>',
     });
   } catch (error) {
     console.error('Test-E-Mail fehlgeschlagen:', error);
