@@ -14,7 +14,7 @@ interface BookingForDecision {
     organizationId: string;
     taktischeBezeichnung: string;
     kennzeichen: string;
-    organization: { name: string; shortName: string | null; fahrzeugReservierungEmail: string | null };
+    organization: { name: string; shortName: string | null; fahrzeugReservierungEmails: string[] };
   };
   user: { firstName: string; lastName: string; email: string };
 }
@@ -24,7 +24,7 @@ async function loadBookingForDecision(token: string): Promise<BookingForDecision
     where: { approvalToken: token },
     include: {
       vehicle: {
-        include: { organization: { select: { name: true, shortName: true, fahrzeugReservierungEmail: true } } },
+        include: { organization: { select: { name: true, shortName: true, fahrzeugReservierungEmails: true } } },
       },
       user: { select: { firstName: true, lastName: true, email: true } },
     },
@@ -160,7 +160,7 @@ export async function decideVehicleBooking(
     await sendVehicleBookingDecisionEmail(
       buildEmailContext(booking, token),
       decision,
-      booking.vehicle.organization.fahrzeugReservierungEmail,
+      booking.vehicle.organization.fahrzeugReservierungEmails,
       decision === 'ABGELEHNT' ? rejectionReason : null,
     );
   } catch (error) {

@@ -183,7 +183,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         icsImportLastSyncAt: true,
         icsImportLastSyncError: true,
         wappenImageMimeType: true,
-        fahrzeugReservierungEmail: true,
+        fahrzeugReservierungEmails: true,
         photoUploadNotificationEmails: true,
         googleCalendarServiceAccountJson: true,
         googleCalendarId: true,
@@ -197,11 +197,13 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   }
 
   // Eigene, von der Atemschutz-Query oben unabhängige Abfrage: ALLE (nicht nur Atemschutzgeräteträger-)
-  // Mitglieder dieser einen Feuerwehr, für den Foto-Upload-Benachrichtigungs-Picker. Bewusst auf
-  // homeOrganizationId: selectedOrgId beschränkt - das setzt die Anforderung "ACHTUNG Security, nur
-  // Heimatfeuerwehr Mitglieder" um, da der Picker seine Auswahlmöglichkeiten ausschließlich aus diesem
-  // Array bezieht (siehe photo-upload-notification-emails-form.tsx).
-  const photoUploadPickerMembers = await prisma.user.findMany({
+  // Mitglieder dieser einen Feuerwehr, geteilt von den beiden E-Mail-Chip-Picker-Karten unten
+  // (Fahrzeug-Reservierungen und Foto-Upload-Benachrichtigung - beide brauchen exakt dieselbe Liste).
+  // Bewusst auf homeOrganizationId: selectedOrgId beschränkt - das setzt die Anforderung "nur
+  // Mitglieder aus der Heimatfeuerwehr" um, da jeder Picker seine Auswahlmöglichkeiten ausschließlich
+  // aus diesem Array bezieht (siehe photo-upload-notification-emails-form.tsx /
+  // fahrzeug-reservierung-email-form.tsx).
+  const heimatfeuerwehrPickerMembers = await prisma.user.findMany({
     where: { homeOrganizationId: selectedOrgId, ...NOT_DEACTIVATED_WHERE },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     select: { id: true, firstName: true, lastName: true, email: true },
@@ -413,12 +415,13 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Fahrzeug-Reservierungen</h2>
         <p className="mb-3 text-xs text-ink-faint">
-          Ist eine Freigabe-Adresse hinterlegt, starten neue Reservierungen als "Offen" und erscheinen erst nach
-          Genehmigung im Kalender der Feuerwehr.
+          Ist mindestens eine Freigabe-Adresse hinterlegt, starten neue Reservierungen als "Offen" und erscheinen erst
+          nach Genehmigung im Kalender der Feuerwehr.
         </p>
         <FahrzeugReservierungEmailForm
           organizationId={selectedOrgId}
-          initialEmail={selectedOrgFull.fahrzeugReservierungEmail ?? ''}
+          initialEmails={selectedOrgFull.fahrzeugReservierungEmails}
+          members={heimatfeuerwehrPickerMembers}
         />
         <Table>
           <TableHeader>
@@ -497,7 +500,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         <PhotoUploadNotificationEmailsForm
           organizationId={selectedOrgId}
           initialEmails={selectedOrgFull.photoUploadNotificationEmails}
-          members={photoUploadPickerMembers}
+          members={heimatfeuerwehrPickerMembers}
         />
       </div>
 

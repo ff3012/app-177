@@ -152,19 +152,23 @@ model Organization {
   wappenImageData     Bytes?
   wappenImageMimeType String?
 
-  // Kontaktadresse für die Freigabe-Anfrage-E-Mail neuer Fahrzeug-Reservierungen (siehe
-  // lib/heimatfeuerwehr/notify-vehicle-booking.ts) - analog zu atemschutzSachbearbeiterEmail, pro
-  // Feuerwehr statt global. Leer = Reservierungen werden ohne Freigabe sofort genehmigt.
-  fahrzeugReservierungEmail String?
+  // Kontaktadressen für die Freigabe-Anfrage-E-Mail neuer Fahrzeug-Reservierungen (siehe
+  // lib/heimatfeuerwehr/notify-vehicle-booking.ts), pro Feuerwehr statt global. Leeres Array =
+  // Reservierungen werden ohne Freigabe sofort genehmigt. War ursprünglich ein einzelnes String?-Feld
+  // (fahrzeugReservierungEmail) - auf ausdrücklichen Wunsch auf ein Array umgebaut, exakt nach dem
+  // Vorbild von photoUploadNotificationEmails direkt darunter (People-Picker + Freitext-Chips, nur
+  // Mitglieder der eigenen Heimatfeuerwehr wählbar). Migration
+  // 20260821000000_fahrzeug_reservierung_emails_array backfillt bestehende Einzelwerte als
+  // Ein-Element-Array, bevor die alte Spalte gelöscht wird.
+  fahrzeugReservierungEmails String[] @default([])
 
   // Empfängeradressen für die Benachrichtigung bei neuen Foto-Upload-Ordnern (GitHub Issue #19) - ein
-  // Array statt eines einzelnen String?-Felds (anders als atemschutzSachbearbeiterEmail/
-  // fahrzeugReservierungEmail), da hier ausdrücklich mehrere Adressen gleichzeitig möglich sein
-  // sollen; jeder Eintrag ist eine reine, bereits aufgelöste E-Mail-Adresse (egal ob frei eingetippt
-  // oder über den People-Picker aus den eigenen Mitgliedern gewählt) - keine Live-Referenz auf einen
-  // User, ändert sich also nicht automatisch, falls die Person später ihre E-Mail ändert oder die
-  // Feuerwehr verlässt. Leeres Array = keine Benachrichtigung (siehe
-  // lib/heimatfeuerwehr/notify-photo-upload.ts).
+  // Array statt eines einzelnen String?-Felds (anders als atemschutzSachbearbeiterEmail), da hier
+  // ausdrücklich mehrere Adressen gleichzeitig möglich sein sollen; jeder Eintrag ist eine reine,
+  // bereits aufgelöste E-Mail-Adresse (egal ob frei eingetippt oder über den People-Picker aus den
+  // eigenen Mitgliedern gewählt) - keine Live-Referenz auf einen User, ändert sich also nicht
+  // automatisch, falls die Person später ihre E-Mail ändert oder die Feuerwehr verlässt. Leeres
+  // Array = keine Benachrichtigung (siehe lib/heimatfeuerwehr/notify-photo-upload.ts).
   photoUploadNotificationEmails String[] @default([])
 
   // Funktionsschalter je Heimatfeuerwehr (Funktionsschalter-Brief.md) - Abschalten blendet nur aus,
@@ -643,8 +647,8 @@ model VehicleBooking {
   // die Pflicht wird ausschließlich im Formular/Zod-Schema erzwungen, nicht per DB-Constraint.
   details String?
 
-  // Freigabe-Workflow: neue Reservierungen starten OFFEN, wenn die Feuerwehr eine
-  // fahrzeugReservierungEmail hinterlegt hat (sonst sofort GENEHMIGT, siehe Enum-Kommentar). Der
+  // Freigabe-Workflow: neue Reservierungen starten OFFEN, wenn die Feuerwehr mindestens eine
+  // fahrzeugReservierungEmails-Adresse hinterlegt hat (sonst sofort GENEHMIGT, siehe Enum-Kommentar). Der
   // verknüpfte Kalender-Termin (event) wird erst bei GENEHMIGT angelegt - solange eine Reservierung
   // OFFEN ist, existiert dafür noch kein Event, sie ist also für niemanden außer dem Ausborger
   // selbst sichtbar. approvalToken ist ein roher (nicht gehashter) Capability-Token für die beiden

@@ -123,7 +123,7 @@ const flightNotificationEmailSchema = z.union([z.literal(''), z.string().trim().
  * Ersetzt die frühere singleton-weite `saveDroneFlightEmail` (admin/email) - jede Drohnengruppe hat
  * jetzt ihre eigene Benachrichtigungsadresse (DroneGroup.flightNotificationEmail). Leere Eingabe ist
  * gültig (= keine Benachrichtigung für diese Gruppe), gleiches Muster wie
- * setAtemschutzSachbearbeiter/setFahrzeugReservierungEmail in admin/heimatfeuerwehr/actions.ts.
+ * setAtemschutzSachbearbeiter in admin/heimatfeuerwehr/actions.ts.
  */
 export async function setFlightNotificationEmail(
   droneGroupId: string,

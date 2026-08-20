@@ -17,11 +17,12 @@ export interface VehicleBookingFormState {
 }
 
 /**
- * Legt eine Fahrzeug-Reservierung an. Ist für die Feuerwehr eine `fahrzeugReservierungEmail`
+ * Legt eine Fahrzeug-Reservierung an. Sind für die Feuerwehr `fahrzeugReservierungEmails`
  * hinterlegt, startet die Reservierung als OFFEN und braucht erst eine Freigabe (Genehmigen/
- * Ablehnen-Mail an diese Adresse, siehe notify-vehicle-booking.ts) - der verknüpfte Kalender-Termin
+ * Ablehnen-Mail an diese Adressen, siehe notify-vehicle-booking.ts) - der verknüpfte Kalender-Termin
  * (Event.vehicleBookingId) wird dann erst bei GENEHMIGT angelegt, siehe approveVehicleBooking. Ist
- * keine Adresse hinterlegt, bleibt es beim ursprünglichen Verhalten: sofort GENEHMIGT + Termin.
+ * keine Adresse hinterlegt (leeres Array), bleibt es beim ursprünglichen Verhalten: sofort GENEHMIGT
+ * + Termin.
  */
 export async function createVehicleBooking(
   _prevState: VehicleBookingFormState,
@@ -37,7 +38,7 @@ export async function createVehicleBooking(
 
   const vehicle = await prisma.vehicle.findUnique({
     where: { id: data.vehicleId },
-    include: { organization: { select: { name: true, shortName: true, fahrzeugReservierungEmail: true } } },
+    include: { organization: { select: { name: true, shortName: true, fahrzeugReservierungEmails: true } } },
   });
   if (!vehicle || !vehicle.isActive || vehicle.organizationId !== user.homeOrganizationId) {
     return { fieldErrors: { vehicleId: ['Ausgewähltes Fahrzeug ist nicht verfügbar.'] } };
@@ -53,8 +54,9 @@ export async function createVehicleBooking(
     };
   }
 
-  const approvalEmail = vehicle.organization.fahrzeugReservierungEmail;
-  const approvalToken = approvalEmail ? crypto.randomBytes(24).toString('hex') : null;
+  const approvalEmails = vehicle.organization.fahrzeugReservierungEmails;
+  const needsApproval = approvalEmails.length > 0;
+  const approvalToken = needsApproval ? crypto.randomBytes(24).toString('hex') : null;
 
   const booking = await prisma.vehicleBooking.create({
     data: {
@@ -63,12 +65,12 @@ export async function createVehicleBooking(
       startsAt,
       endsAt,
       details: data.details,
-      status: approvalEmail ? 'OFFEN' : 'GENEHMIGT',
+      status: needsApproval ? 'OFFEN' : 'GENEHMIGT',
       approvalToken,
     },
   });
 
-  if (!approvalEmail) {
+  if (!needsApproval) {
     const bookingEvent = await prisma.event.create({
       data: {
         title: `Fahrzeug: ${vehicle.taktischeBezeichnung} (${user.name})`,
@@ -83,27 +85,25 @@ export async function createVehicleBooking(
     });
     await pushEventToGoogleCalendar(bookingEvent);
   } else {
-    try {
-      await sendVehicleBookingApprovalRequest(
-        {
-          approvalToken: approvalToken!,
-          startsAt,
-          endsAt,
-          details: data.details,
-          vehicleTaktischeBezeichnung: vehicle.taktischeBezeichnung,
-          vehicleKennzeichen: vehicle.kennzeichen,
-          organizationLabel: vehicle.organization.shortName ?? vehicle.organization.name,
-          requesterName: user.name,
-          requesterEmail: user.email,
-        },
-        approvalEmail,
-      );
-    } catch (error) {
-      // Ein Mailjet-Ausfall darf die Reservierung selbst nicht verhindern - dieselbe Abwägung wie
-      // notify-flight-created.ts/notify-atemschutz-warnung.ts. Der Admin sieht die offene
-      // Reservierung trotzdem in der Fahrzeug-Buchungen-Tabelle und kann notfalls direkt Bescheid geben.
-      console.error('Freigabe-Anfrage-E-Mail für Fahrzeug-Reservierung fehlgeschlagen:', error);
-    }
+    // sendVehicleBookingApprovalRequest versendet pro Empfänger einzeln und fängt Mailjet-Fehler
+    // bereits selbst ab (wirft nie) - ein Ausfall darf die Reservierung selbst nicht verhindern,
+    // dieselbe Abwägung wie notify-flight-created.ts/notify-atemschutz-warnung.ts. Der Admin sieht
+    // die offene Reservierung trotzdem in der Fahrzeug-Buchungen-Tabelle und kann notfalls direkt
+    // Bescheid geben.
+    await sendVehicleBookingApprovalRequest(
+      {
+        approvalToken: approvalToken!,
+        startsAt,
+        endsAt,
+        details: data.details,
+        vehicleTaktischeBezeichnung: vehicle.taktischeBezeichnung,
+        vehicleKennzeichen: vehicle.kennzeichen,
+        organizationLabel: vehicle.organization.shortName ?? vehicle.organization.name,
+        requesterName: user.name,
+        requesterEmail: user.email,
+      },
+      approvalEmails,
+    );
   }
 
   revalidatePath('/meine-feuerwehr');

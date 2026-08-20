@@ -250,20 +250,40 @@ report that Feuerwehr-only admins couldn't see the "Verwaltung" nav entry at all
 
 A follow-up request renamed the borrowing flow ("Fahrzeug ausborgen" → "Fahrzeug Reservierungen",
 "Ausborgen" buttons → "Reservieren") and added an optional per-Feuerwehr approval step: if
-`Organization.fahrzeugReservierungEmail` is set, a new reservation no longer creates its calendar
-entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emailed to that address.
+`Organization.fahrzeugReservierungEmails` is non-empty, a new reservation no longer creates its
+calendar entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emailed to those
+addresses.
 
 - **`VehicleBookingStatus` enum** (`OFFEN`/`GENEHMIGT`/`ABGELEHNT`) + `VehicleBooking.status`
   (`@default(GENEHMIGT)` at the DB level, so pre-existing rows stay valid and behaviorally unchanged)
   + `VehicleBooking.approvalToken` (nullable, `@unique`, a **raw** capability token like
   `DashboardToken.token` - not hashed like `PasswordToken`, since this is a low-stakes one-time action
   link, not an auth credential). `createVehicleBooking` (`meine-feuerwehr/actions.ts`) branches on
-  whether the vehicle's organization has `fahrzeugReservierungEmail` set: unset → **unchanged legacy
-  behavior**, immediately `GENEHMIGT` + linked `Event` created, no email; set → the booking is created
-  `OFFEN` with a fresh `approvalToken`, **no `Event` yet**, and an approval-request email goes out
-  instead (see below). This means an `OFFEN` (or `ABGELEHNT`) reservation simply has no `Event` row at
-  all - it's automatically invisible everywhere the Kalender/Dashboard already only ever query `Event`,
-  no extra filtering needed there.
+  whether the vehicle's organization has any `fahrzeugReservierungEmails` set: empty array → **unchanged
+  legacy behavior**, immediately `GENEHMIGT` + linked `Event` created, no email; non-empty → the booking
+  is created `OFFEN` with a fresh `approvalToken`, **no `Event` yet**, and an approval-request email goes
+  out to every configured address instead (see below). This means an `OFFEN` (or `ABGELEHNT`)
+  reservation simply has no `Event` row at all - it's automatically invisible everywhere the
+  Kalender/Dashboard already only ever query `Event`, no extra filtering needed there.
+- **Mehrere Empfänger statt einer einzelnen Adresse (follow-up, "genauso wie Foto Upload
+  Benachrichtigung")**: `fahrzeugReservierungEmails` was originally a single nullable
+  `fahrzeugReservierungEmail String?`, converted to `String[] @default([])` via migration
+  `20260821000000_fahrzeug_reservierung_emails_array` (adds the array column, backfills existing single
+  values as one-element arrays, then drops the old column - same safe non-empty-table sequence as every
+  other migration in this file). `/admin/heimatfeuerwehr`'s "Fahrzeug-Reservierungen" card now uses the
+  exact same chip-list + People-Picker UI as "Foto Upload Benachrichtigung" below
+  (`FahrzeugReservierungEmailForm`/`setFahrzeugReservierungEmails`, sharing the same `emailListSchema`
+  and the same `heimatfeuerwehrPickerMembers` query in `page.tsx` - both cards' pickers only ever offer
+  members of the currently-selected Feuerwehr, enforcing "nur Mitglieder aus der Heimatfeuerwehr"). The
+  approval-request email (`sendVehicleBookingApprovalRequest`) now loops and sends one independent email
+  per recipient (never a combined To/Cc), matching the `notifyPhotoUploadCreated` privacy rule, and
+  swallows per-recipient failures internally instead of throwing - `createVehicleBooking`'s own
+  try/catch around this call was removed as dead code since the function can no longer throw. The
+  **decision** email (`sendVehicleBookingDecisionEmail`, sent to the Ausborger) stays a single send with
+  every configured address passed as `cc` at once (not a loop) - the To recipient is always the one
+  Ausborger, so looping would duplicate that email; and unlike Foto-Upload's arbitrary members, the
+  approval addresses are already the Feuerwehr's own admin circle for each other, so a shared Cc has no
+  privacy downside.
 - **Overlap check still blocks on `OFFEN`, only frees up on `ABGELEHNT`**:
   `findOverlappingBooking` (`lib/heimatfeuerwehr/vehicle-availability.ts`) gained `status: { not:
   'ABGELEHNT' }` - a still-pending reservation must keep blocking the same time slot for other members,
@@ -383,14 +403,16 @@ entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emaile
 
 ### Foto-Upload-Benachrichtigung (GitHub Issue #19)
 
-Mirrors the Atemschutz-/Fahrzeug-Reservierung single-email pattern above, but as multiple recipients
-instead of one, since the issue explicitly asked for several addresses and/or a People Picker over the
-Heimatfeuerwehr's own members.
+Mirrors the Atemschutz single-email pattern above, but as multiple recipients instead of one, since the
+issue explicitly asked for several addresses and/or a People Picker over the Heimatfeuerwehr's own
+members. (Fahrzeug-Reservierungen's own `fahrzeugReservierungEmails` was originally this same single-email
+shape too, but was later converted to the identical array pattern - see the "Mehrere Empfänger" note under
+"Fahrzeug-Reservierungen" above, which this feature predates and was the template for.)
 
 - `Organization.photoUploadNotificationEmails String[] @default([])` (migration
-  `20260820100000_photo_upload_notification_emails`) — an array, unlike `atemschutzSachbearbeiterEmail`/
-  `fahrzeugReservierungEmail`, since multiple simultaneous recipients are a first-class requirement here.
-  Each entry is a plain, already-resolved email string (typed freely or picked from a member), not a live
+  `20260820100000_photo_upload_notification_emails`) — an array, unlike `atemschutzSachbearbeiterEmail`,
+  since multiple simultaneous recipients are a first-class requirement here. Each entry is a plain,
+  already-resolved email string (typed freely or picked from a member), not a live
   reference to a `User` — it does not update if that person later changes their email or leaves the
   Feuerwehr.
 - **`/admin/heimatfeuerwehr`'s new "Foto Upload Benachrichtigung" card** (between Fahrzeug-Reservierungen
