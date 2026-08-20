@@ -90,7 +90,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 </Link>
               )}
               <img
-                src="/wappen-afkdo.png"
+                src="/wappen-bfkdo.png"
                 alt="Wappen BFKDO St. Pölten"
                 className="hidden h-10 w-auto sm:block"
               />
