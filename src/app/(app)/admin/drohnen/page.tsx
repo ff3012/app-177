@@ -71,7 +71,18 @@ export default async function DrohnenVerwaltungPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
+        {/* Nur Browser/Desktop, keine mobile Entsprechung (ausdrücklicher Wunsch) - der Export deckt
+            ohnehin immer den vollen erreichbaren Umfang ab (alle Gruppen für Bezirksadmin/Bezirks-
+            Drohnenadmin, sonst nur die eigene), unabhängig von der hier gerade ausgewählten Gruppe. */}
+        <a
+          href="/admin/drohnen/export"
+          className="hidden rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken md:inline-flex"
+        >
+          Mitglieder exportieren
+        </a>
+      </div>
 
       <div className="md:hidden">
         <GeltungsbereichSelector reachable={reachableScopes} />

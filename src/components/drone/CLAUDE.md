@@ -245,3 +245,31 @@ dokumentierte Hydration-Gap — nie über den Lade-Skeleton hinaus rendert): vor
 Testzeilen mit stark unterschiedlicher Textlänge um über 400px, mit dem Fix liegen alle drei exakt
 an derselben Position.
 
+**Mitgliederexport (`/admin/drohnen/export`, Excel, Browser-only)**: ein "Mitglieder exportieren"-Link
+oben auf `/admin/drohnen`, bewusst `hidden md:inline-flex` (kein mobiles Äquivalent, ausdrücklicher
+Wunsch des App-Betreibers) — verifiziert per `getComputedStyle` (`display: flex` ab `md:`, `none`
+darunter). Die Berechtigung nutzt exakt `getAllowedDroneGroups(user)` (dieselbe bereits geteilte
+Funktion wie `/admin/drohnen` selbst) statt einer eigenen Kopie der Regel: liefert für Bezirksadmin/
+Bezirks-Drohnenadmin alle vier Gruppen, für einen reinen Gruppen-Admin nur die eigene — der Export
+deckt deshalb **immer den vollen erreichbaren Umfang** ab, unabhängig von der auf der Seite gerade
+per `GroupSelect` ausgewählten Gruppe (kein zusätzlicher `?group=`-Parameter). Spaltenreihenfolge/
+-beschriftung wörtlich vom App-Betreiber vorgegeben (`src/lib/drone/member-export-columns.ts`,
+`DRONE_GROUP_MEMBER_EXPORT_COLUMNS`): Drohnengruppe · Heimatfeuerwehr · Stb · Dienstgrad · Vorname ·
+Nachname · email · A1/A3 · A2 · Stützpunktausbildung · BOS1 · BOS2 · Drohnengruppe Rechte · Status
+Zugang · letzter Login. Zwei Formatentscheidungen wurden mit dem App-Betreiber per `AskUserQuestion`
+geklärt statt geraten: "Stb" ist `User.stbNr` (Standesbuchnummer — im Datenmodell gibt es dafür kein
+etabliertes Kürzel), und die fünf Ausbildungsdaten zeigen das tatsächliche Datum (de-AT-Format,
+`toLocaleDateString('de-AT')`) statt nur Ja/Nein — bewusst **nicht** das ISO-Format von
+`USER_EXCEL_COLUMNS` (Benutzerverwaltung), da jener Export zugleich Re-Import-Vorlage ist und dieser
+hier rein lesend bleibt. "Drohnengruppe Rechte" zeigt alle drei echten `DroneRole`-Werte einzeln
+(`MEMBER_EXPORT_ROLE_LABEL`: Pilot/Betrachter/Admin) — anders als `DRONE_ROLE_LABEL` in
+`user-excel-columns.ts`, das VIEWER für die allgemeine Benutzerverwaltung absichtlich mit PILOT zu
+"Mitglied" zusammenfasst; in einem Drohnengruppen-eigenen Export ist gerade diese Unterscheidung
+relevant. "Status Zugang" wiederverwendet `getUserStatus()` (Aktiv/Inaktiv/Deaktiviert, siehe
+`src/lib/auth/user-status.ts`), "letzter Login" den `.title`-Teil von `formatRelativeDate()`
+(absoluter Zeitstempel "DD.MM.YYYY, HH:mm" statt eines relativen Labels, da eine Excel-Zelle anders
+als eine UI-Ansicht nicht "mitaltert"). Verifiziert end-to-end gegen die echte Route (nicht nur
+typgeprüft): ein Gruppen-Admin einer Gruppe sah in einer echten HTTP-Anfrage + geparsten
+`.xlsx`-Antwort ausschließlich die 2 Mitglieder seiner eigenen Gruppe, ein Bezirks-Drohnenadmin alle
+3 Mitglieder über beide Testgruppen hinweg, und ein einfacher Pilot ohne Adminrecht erhielt `403`.
+
