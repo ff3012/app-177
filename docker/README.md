@@ -343,7 +343,7 @@ aws --endpoint-url https://sos-at-vie-1.exo.io s3api put-bucket-cors \
   --cors-configuration '{
     "CORSRules": [
       {
-        "AllowedOrigins": ["https://<produktions-domain>", "https://dev.app-177.ff-wolfsgraben.at"],
+        "AllowedOrigins": ["https://<produktions-domain>", "https://dev.app-17.bfkdo-stpoelten.at"],
         "AllowedMethods": ["PUT", "GET"],
         "AllowedHeaders": ["content-type"],
         "MaxAgeSeconds": 3000
@@ -381,7 +381,17 @@ Die Seite lädt sich selbst alle 5 Minuten neu (`<meta http-equiv="refresh">`) -
 Neustart-Mechanismus nötig. Kein Zoom/Skalierung erforderlich, das Layout passt sich der tatsächlichen
 Displayauflösung automatisch an.
 
-## Zweiter Stack für eine Test-/Dev-Umgebung (dev.app-177.ff-wolfsgraben.at)
+## Zweiter Stack für eine Test-/Dev-Umgebung (dev.app-17.bfkdo-stpoelten.at)
+
+> **Domain-Umzug (2026-08-19):** die Dev-Umgebung lief ursprünglich unter
+> `dev.app-177.ff-wolfsgraben.at`. Ein neuer DNS-Eintrag verankert sie jetzt bei
+> `dev.app-17.bfkdo-stpoelten.at` (Bezirk-17-Branding statt der alten, Purkersdorf-spezifischen
+> Domain) - kompletter Umzug, kein Parallelbetrieb beider Domains. Die Schritte unten spiegeln bereits
+> die neue Domain; wer diesen Umzug auf dem echten Server nachvollzieht, muss zusätzlich: die reale
+> Caddyfile-Zeile für die alte Domain entfernen (nicht nur die neue ergänzen), den alten Origin aus der
+> S3-CORS-`AllowedOrigins`-Liste löschen, und `AUTH_URL`/`SEED_ADMIN_EMAIL` in der echten
+> `/opt/app-177-dev/.env` von Hand aktualisieren (`.env.staging.example` ist nur die Vorlage für einen
+> Neuaufbau, kein automatischer Sync für einen bestehenden Stack).
 
 Nach Release 2.0.0 (echte Nutzer in Produktion) sollte eine neue Änderung nicht mehr direkt gegen Prod
 getestet werden. Dieser Abschnitt richtet einen **zweiten, komplett eigenständigen Stack** auf demselben
@@ -396,7 +406,7 @@ zu vermeiden, auch wenn die Umgebung selbst im Alltag "Dev-Server" genannt wird.
 
 ### 1. Voraussetzungen
 
-- **DNS**: einen A-Record für `dev.app-177.ff-wolfsgraben.at` anlegen, der auf dieselbe Server-IP zeigt
+- **DNS**: einen A-Record für `dev.app-17.bfkdo-stpoelten.at` anlegen, der auf dieselbe Server-IP zeigt
   wie der bestehende Prod-Record. Ohne diesen Eintrag kann Caddy später kein Let's-Encrypt-Zertifikat
   für die neue Subdomain ausstellen.
 - **Serverkapazität** prüfen (`free -h`, `df -h`) - ein zweiter Next.js- + Postgres-Container läuft
@@ -476,7 +486,7 @@ Auf dem Server die **echte** Caddyfile bearbeiten (nicht die Platzhalter-Vorlage
 einen zweiten Site-Block ergänzen:
 
 ```
-dev.app-177.ff-wolfsgraben.at {
+dev.app-17.bfkdo-stpoelten.at {
 	reverse_proxy app177-dev-app:3000
 }
 ```
@@ -487,8 +497,8 @@ vermeiden: Docker Compose vergibt jedem Service auf **jedem** Netzwerk, dem er b
 DNS-Alias gleich dem Service-Namen, auch auf `caddy_net`. Hieße der Dev-Service ebenfalls `app`, gäbe es auf
 `caddy_net` zwei Container mit Alias `app`, und Prod-Caddys eigene `reverse_proxy app:3000`-Zeile (die ja
 den *Prod*-App-Container meint) würde uneindeutig - das ist real passiert: Prod-Aufrufe von
-app-177.ff-wolfsgraben.at landeten zeitweise beim Dev-Container und wurden auf dev.app-177... umgeleitet
-(dessen abweichende `AUTH_URL`), aber nur solange der Dev-Stack lief. Danach Caddy ohne Neustart/Downtime
+app-177.ff-wolfsgraben.at landeten zeitweise beim Dev-Container und wurden auf die Dev-Domain umgeleitet
+(deren abweichende `AUTH_URL`), aber nur solange der Dev-Stack lief. Danach Caddy ohne Neustart/Downtime
 neu laden:
 
 ```bash
@@ -496,7 +506,7 @@ cd /opt/app-177
 docker compose -f docker/docker-compose.yml --env-file .env exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-`https://dev.app-177.ff-wolfsgraben.at` sollte jetzt erreichbar sein (Caddy stellt beim ersten Aufruf
+`https://dev.app-17.bfkdo-stpoelten.at` sollte jetzt erreichbar sein (Caddy stellt beim ersten Aufruf
 automatisch ein eigenes Let's-Encrypt-Zertifikat für die neue Subdomain aus - vorausgesetzt der
 DNS-Eintrag aus Schritt 1 ist bereits gesetzt). Login mit `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` aus
 der Dev-`.env` testen.
