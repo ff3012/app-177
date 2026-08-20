@@ -108,7 +108,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
         style={{ height: 'clamp(84px, 9vh, 132px)', borderBottom: '4px solid #e4322b' }}
       >
         <div className="flex items-center gap-[22px]">
-          <img src="/wappen-afkdo.png" alt={`Wappen ${organizationDisplayName}`} className="h-[62px] w-[62px] object-contain" />
+          <img src="/wappen-bfkdo.png" alt={`Wappen ${organizationDisplayName}`} className="h-[62px] w-[62px] object-contain" />
           <div className="flex flex-col gap-[5px]">
             <span className="text-[30px] font-bold leading-none tracking-[-0.01em]">{organizationDisplayName}</span>
             <span className="dash-section-label font-semibold uppercase leading-none tracking-[0.06em] text-[#6c6c70]">

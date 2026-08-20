@@ -446,9 +446,10 @@ way to vary by viewport (see "Login-Redirect" below).
   into every single page navigation just to read `wappenImageMimeType`'s presence. No wappen set → the
   mobile tab bar's center button shows a neutral hand-rolled fallback shield icon
   (`components/layout/wappen-fallback-icon.tsx`) - never another Feuerwehr's crest, never the blanket
-  district-wide wappen file (login page and desktop header now use `/wappen-bfkdo.png` as of the 2026-08-20
-  rebrand; the dashboard kiosk and drohnen-schnell public pages still use the older `/wappen-afkdo.png`,
-  untouched by that rebrand) - this per-org crest is additive, not a replacement of either district mark.
+  district-wide wappen file. As of 2026-08-20, login page, desktop header, dashboard kiosk, and
+  drohnen-schnell all use the new `/wappen-bfkdo.png` (the old `/wappen-afkdo.png` is no longer referenced
+  anywhere in `src/`, but stays on disk since nothing requires deleting it) - this per-org crest is
+  additive, not a replacement of the district mark.
 - **Mobile tab bar rebuilt from scratch** (`components/layout/mobile-tab-bar.tsx`): no longer built from the
   shared, permission-driven `getNavItems()`/`nav-items.ts` list that desktop `<Nav>` still uses unchanged -
   a hardcoded, fixed 3-column grid (`grid-cols-3`, `h-[86px]`) instead: Kalender (left) · Wappen-Home (center,

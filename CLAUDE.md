@@ -24,12 +24,14 @@ below). Installable as a PWA (manifest + minimal service worker) so it can be ad
 screen without an app-store build. All UI copy and commit-adjacent docs are German; code identifiers are a
 German/English mix (keep matching the existing convention in a given file).
 
-Branding is still Purkersdorf-specific in several places (PWA manifest, login page, the public kiosk
-dashboard) — a known, deliberately deferred follow-up, not a sign that the app is still single-Abschnitt.
-The desktop/mobile header wordmark, footer, and all transactional email templates were moved to
-"BFKDO St. Pölten"/"Bezirksfeuerwehrkommando St. Pölten" on 2026-08-20 as part of the wider Bezirk-17
-rebrand (same effort as that day's prod/dev domain migrations) — the remaining spots above weren't part
-of that specific request and are still pending.
+Branding is still Purkersdorf-specific in a few places (the PWA manifest's `name`/`short_name`/`description`
+text, and the login page's own `<h1>` heading) — a known, deliberately deferred follow-up, not a sign that
+the app is still single-Abschnitt. As of the 2026-08-20 Bezirk-17 rebrand (same effort as that day's
+prod/dev domain migrations): the desktop/mobile header wordmark, footer, and all transactional email
+templates now say "BFKDO St. Pölten"/"Bezirksfeuerwehrkommando St. Pölten"; the Wappen image itself
+(login page, header, dashboard kiosk, drohnen-schnell, and the PWA icon set) was swapped from
+`wappen-afkdo.png` to a new `wappen-bfkdo.png` everywhere it appeared. The two remaining spots above are
+text-only leftovers, not something the Wappen/email/domain work touched.
 
 ## Commands
 
@@ -366,8 +368,10 @@ does not exist between deploy and someone remembering to run `npm run db:seed` b
 
 ### PWA
 
-`src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (cropped from `public/wappen-afkdo.png`
-via a one-off PowerShell/System.Drawing script, not checked in) + `public/sw.js` (hand-written, no
+`src/app/manifest.ts` (Next.js manifest convention) + `public/icons/*` (generated from `public/wappen-bfkdo.png`
+via a one-off PowerShell/System.Drawing script, not checked in — regenerated 2026-08-20 for the Bezirk-17
+rebrand; same sizes as before, composited onto a white background matching `manifest.ts`'s own
+`background_color`) + `public/sw.js` (hand-written, no
 `next-pwa`/similar dependency — deliberately minimal: caches only the app shell/offline fallback, does
 network-first with an offline-page fallback for GET navigations, and explicitly leaves all POSTs/Server
 Actions/API calls untouched so nothing dynamic ever gets stale-cached) + `components/pwa-register.tsx`
