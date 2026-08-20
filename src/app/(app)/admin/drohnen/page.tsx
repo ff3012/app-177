@@ -71,18 +71,7 @@ export default async function DrohnenVerwaltungPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
-        {/* Nur Browser/Desktop, keine mobile Entsprechung (ausdrücklicher Wunsch) - der Export deckt
-            ohnehin immer den vollen erreichbaren Umfang ab (alle Gruppen für Bezirksadmin/Bezirks-
-            Drohnenadmin, sonst nur die eigene), unabhängig von der hier gerade ausgewählten Gruppe. */}
-        <a
-          href="/admin/drohnen/export"
-          className="hidden rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken md:inline-flex"
-        >
-          Mitglieder exportieren
-        </a>
-      </div>
+      <h1 className="text-[28px] font-bold text-ink">Drohnengruppe</h1>
 
       <div className="md:hidden">
         <GeltungsbereichSelector reachable={reachableScopes} />
@@ -97,12 +86,23 @@ export default async function DrohnenVerwaltungPage({
         <p className="mb-3 text-sm text-ink-muted">
           Ampel-Übersicht der BOS1-Piloten dieser Gruppe (90-Tage-Regel) sowie Mitgliederzahl und A2-Zertifikate.
         </p>
-        <Link
-          href={`/admin/drohnen/einsatzbereitschaft?group=${selectedGroup.id}`}
-          className="inline-block rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          Einsatzbereitschaft ansehen
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/admin/drohnen/einsatzbereitschaft?group=${selectedGroup.id}`}
+            className="inline-block rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Einsatzbereitschaft ansehen
+          </Link>
+          {/* Nur Browser/Desktop, keine mobile Entsprechung (ausdrücklicher Wunsch) - der Export deckt
+              ohnehin immer den vollen erreichbaren Umfang ab (alle Gruppen für Bezirksadmin/Bezirks-
+              Drohnenadmin, sonst nur die eigene), unabhängig von der hier gerade ausgewählten Gruppe. */}
+          <a
+            href="/admin/drohnen/export"
+            className="hidden rounded-md bg-neutral-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-600 md:inline-block"
+          >
+            Mitglieder exportieren
+          </a>
+        </div>
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
