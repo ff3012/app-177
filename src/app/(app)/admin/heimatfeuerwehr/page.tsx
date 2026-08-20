@@ -252,7 +252,11 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           Wird im mittleren Tab der mobilen Navigation gezeigt. Ohne Bild erscheint dort ein neutrales
           Ersatzsymbol statt eines fremden Wappens.
         </p>
+        {/* key erzwingt einen Remount bei Feuerwehr-Wechsel - siehe die ausführliche Begründung bei
+            FahrzeugReservierungEmailForm weiter unten (derselbe latente Bug betrifft jedes
+            useState/defaultValue-basierte Formular auf dieser Seite ohne eigenen key). */}
         <WappenUploadForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           hasWappen={Boolean(selectedOrgFull.wappenImageMimeType)}
           wappenSrc={`/api/organization/${selectedOrgId}/wappen`}
@@ -350,6 +354,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           "Läuft bald ab" bedeutet: Untersuchung oder Finnentest laufen innerhalb der nächsten 30 Tage ab.
         </p>
         <AtemschutzSachbearbeiterForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           initialEmail={selectedOrgFull.atemschutzSachbearbeiterEmail ?? ''}
         />
@@ -418,7 +423,12 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           Ist mindestens eine Freigabe-Adresse hinterlegt, starten neue Reservierungen als "Offen" und erscheinen erst
           nach Genehmigung im Kalender der Feuerwehr.
         </p>
+        {/* key erzwingt einen Remount bei Feuerwehr-Wechsel (OrgSelect navigiert per router.push
+            client-seitig) - sonst behält der Formular-eigene useState<string[]>(initialEmails) den
+            Chip-Zustand der VORHERIGEN Feuerwehr bei, da useState-Initializer nur beim allerersten
+            Mount gelesen werden (derselbe Bug wie bei DroneGroupEmailForm, siehe admin/drohnen/page.tsx). */}
         <FahrzeugReservierungEmailForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           initialEmails={selectedOrgFull.fahrzeugReservierungEmails}
           members={heimatfeuerwehrPickerMembers}
@@ -497,7 +507,10 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         <p className="mb-3 text-xs text-ink-faint">
           Diese Adressen werden benachrichtigt, sobald ein neuer Foto-Upload-Ordner für diese Feuerwehr angelegt wird.
         </p>
+        {/* key erzwingt einen Remount bei Feuerwehr-Wechsel - derselbe Grund wie bei
+            FahrzeugReservierungEmailForm oben. */}
         <PhotoUploadNotificationEmailsForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           initialEmails={selectedOrgFull.photoUploadNotificationEmails}
           members={heimatfeuerwehrPickerMembers}
@@ -507,6 +520,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-3 text-[15px] font-semibold text-ink">Kalender-Import (ICS)</h2>
         <IcsImportForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           initialUrl={selectedOrgFull.icsImportUrl ?? ''}
           initialLastSyncAt={selectedOrgFull.icsImportLastSyncAt?.toISOString() ?? null}
@@ -522,6 +536,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           übertragen - kein Cron-Job nötig.
         </p>
         <GoogleCalendarConfigForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           initialCalendarId={selectedOrgFull.googleCalendarId ?? ''}
           hasCredentials={Boolean(selectedOrgFull.googleCalendarServiceAccountJson)}
@@ -541,6 +556,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         </p>
 
         <DashboardFacebookConfigForm
+          key={selectedOrgId}
           organizationId={selectedOrgId}
           initialPageId={selectedOrgFull.facebookPageId ?? ''}
           hasAccessToken={Boolean(selectedOrgFull.facebookPageAccessToken)}

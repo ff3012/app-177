@@ -196,7 +196,13 @@ export default async function DrohnenVerwaltungPage({
         <p className="mb-3 text-sm text-ink-muted">
           Empfängeradressen für die Benachrichtigung bei jedem neu registrierten Flug dieser Gruppe.
         </p>
+        {/* key erzwingt einen Remount bei Gruppenwechsel (GroupSelect navigiert per router.push
+            client-seitig, ohne diese Komponente sonst neu zu mounten) - sonst behält ihr
+            useState<string[]>(initialEmails) den zuletzt bearbeiteten Chip-Zustand der VORHERIGEN
+            Gruppe bei, da useState-Initializer nur beim allerersten Mount gelesen werden (echter Bug,
+            gemeldet: ein zu Gruppe A hinzugefügtes Mitglied blieb beim Wechsel zu Gruppe B sichtbar). */}
         <DroneGroupEmailForm
+          key={selectedGroup.id}
           droneGroupId={selectedGroup.id}
           initialEmails={selectedGroup.flightNotificationEmails}
           members={flightNotificationPickerMembers}
