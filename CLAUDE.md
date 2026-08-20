@@ -24,14 +24,15 @@ below). Installable as a PWA (manifest + minimal service worker) so it can be ad
 screen without an app-store build. All UI copy and commit-adjacent docs are German; code identifiers are a
 German/English mix (keep matching the existing convention in a given file).
 
-Branding is still Purkersdorf-specific in a few places (the PWA manifest's `name`/`short_name`/`description`
-text, and the login page's own `<h1>` heading) — a known, deliberately deferred follow-up, not a sign that
-the app is still single-Abschnitt. As of the 2026-08-20 Bezirk-17 rebrand (same effort as that day's
-prod/dev domain migrations): the desktop/mobile header wordmark, footer, and all transactional email
-templates now say "BFKDO St. Pölten"/"Bezirksfeuerwehrkommando St. Pölten"; the Wappen image itself
-(login page, header, dashboard kiosk, drohnen-schnell, and the PWA icon set) was swapped from
-`wappen-afkdo.png` to a new `wappen-bfkdo.png` everywhere it appeared. The two remaining spots above are
-text-only leftovers, not something the Wappen/email/domain work touched.
+Branding is still Purkersdorf-specific in one remaining place: the login page's own `<h1>` heading
+(`src/app/(auth)/login/page.tsx`) — a known, deliberately deferred follow-up, not a sign that the app is
+still single-Abschnitt. As of the 2026-08-20 Bezirk-17 rebrand (same effort as that day's prod/dev domain
+migrations): the desktop/mobile header wordmark, footer, all transactional email templates, and the PWA
+manifest's `name`/`short_name`/`description`/`appleWebApp.title` (`src/app/layout.tsx`, `src/app/manifest.ts`)
+now say "BFKDO St. Pölten"/"Bezirksfeuerwehrkommando St. Pölten"; the Wappen image itself (login page,
+header, dashboard kiosk, drohnen-schnell, and the PWA icon set) was swapped from `wappen-afkdo.png` to a
+new `wappen-bfkdo.png` everywhere it appeared. The login `<h1>` is the one spot the Wappen/email/domain/PWA
+work never touched.
 
 ## Commands
 

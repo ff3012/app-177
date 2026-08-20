@@ -24,8 +24,8 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: 'Feuerwehr Abschnitt Purkersdorf',
-  description: 'Terminplanung und Drohnengruppe für den Abschnitt Purkersdorf',
+  title: 'Feuerwehr BFKDO St. Pölten',
+  description: 'Terminplanung und Drohnengruppe für den Bezirk 17 St. Pölten',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Abschnitt Purkersdorf',
+    title: 'BFKDO St. Pölten',
   },
 };
 
