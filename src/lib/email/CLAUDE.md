@@ -23,24 +23,33 @@ monitored address, so password reset and login token each end
 with a short "bitte nicht antworten, bei Fragen wende dich an florian.krebs@feuerwehr.gv.at" line — the same
 contact address already hardcoded (by design, see below) for in-app feedback. Admin-facing operational mails
 (drone-flight notification, system-check result) don't need this line; the admin who receives them already
-knows who to contact. Password reset and login token's sign-off reads "Abschnittsfeuerwehrkommando
-Purkersdorf" — the `Organization` row's actual name for the AFKDO org (`prisma/seed.ts`) — not the informal
-"Feuerwehr Abschnitt Purkersdorf" phrase a couple of templates used until this was flagged as inconsistent.
+knows who to contact. Password reset and login token's sign-off reads "Bezirksfeuerwehrkommando St. Pölten"
+(as of the 2026-08-20 Bezirk-17 rebrand, see below — was "Abschnittsfeuerwehrkommando Purkersdorf" before
+that, the `Organization` row's actual name for the AFKDO org in `prisma/seed.ts`, not a DB-driven value).
+
+**Bezirk-17-Rebrand (2026-08-20): all three templates now uniformly say "BFKDO St. Pölten"/
+"Bezirksfeuerwehrkommando St. Pölten", superseding an earlier, narrower decision.** During the initial
+Bezirk expansion, the Willkommens-Mail's subject/body were renamed from "AFKDO Purkersdorf" to
+"BFKDO St. Pölten" ("Kalender für alle Termine im Bezirk, Abschnitt und Feuerwehr" instead of "im
+Abschnitt Purkersdorf"), but its sign-off was explicitly reverted back to plain "AFKDO Purkersdorf" in
+a follow-up round on the app operator's specific request at the time (verbatim text, not drafted by
+Claude) — worth knowing this history existed, since it means a *previous* explicit instruction was later
+superseded by a *newer* one, not silently overwritten. The 2026-08-20 request explicitly asked for every
+email template's Purkersdorf branding to move to the Bezirk-17 name, with no carve-out for the sign-off
+this time — `MAILJET_FROM_NAME`'s fallback (`mailjet.ts`, `.env.example`, `.env.staging.example`, both
+`docker-compose*.yml` defaults) moved to "BFKDO St. Pölten" too, for the same reason. `MAILJET_FROM_EMAIL`
+itself (`noreply@ff-wolfsgraben.at`) was explicitly excluded from this rebrand and stays as-is "bis auf
+weiteres" (until further notice) — don't change it without being asked again.
 
 **Willkommens-Mail (`sendActivationEmail`) — Sonderfall, nicht mehr `wrapHtmlPart`-Standard**: nach
 mehreren Feinschliff-Runden auf ausdrücklichen Wunsch des App-Betreibers weicht dieses eine Template
-inzwischen bewusst vom obigen Muster ab. Betreff und Fließtext wurden im Rahmen der Bezirk-Erweiterung
-von "AFKDO Purkersdorf" auf "BFKDO St. Pölten" umbenannt ("Kalender für alle Termine im Bezirk,
-Abschnitt und Feuerwehr" statt "im Abschnitt Purkersdorf"), die Grußzeile aber in einer Folgerunde
-wieder auf schlicht **"AFKDO Purkersdorf"** zurückgesetzt (ohne "Dein", explizit vom App-Betreiber so
-gewünscht — Text von ihm wörtlich vorgegeben, nicht selbst formuliert). Die alte "bitte nicht
-antworten..."-Zeile ist in dieser einen Mail **ersatzlos entfernt**, ersetzt durch eine eigene
-Fußzeile: "Diese App wird vom Abschnittsfeuerwehrkommando Purkersdorf zur Verfügung gestellt. Fragen
-an Florian Krebs florian.krebs@feuerwehr.gv.at" — auf explizite Nachfrage bestätigt, dass das so
-gewollt ist, trotz `noreply@ff-wolfsgraben.at` als technischem Absender. Password Reset und Login
-Token behalten die alte "bitte nicht antworten"-Zeile unverändert; nur die Willkommens-Mail ist
-davon abgewichen. Beide Mails (Willkommen + Passwort-Reset) verlinken zusätzlich `/how-to.html` (die
-öffentliche FAQ-Seite, siehe unten) über einen neuen `faqLink = ${baseUrl()}/how-to.html`.
+weiterhin bewusst vom obigen Muster ab. Die alte "bitte nicht antworten..."-Zeile ist in dieser einen Mail
+**ersatzlos entfernt**, ersetzt durch eine eigene Fußzeile: "Diese App wird vom Bezirksfeuerwehrkommando
+St. Pölten zur Verfügung gestellt. Fragen an Florian Krebs florian.krebs@feuerwehr.gv.at" — auf explizite
+Nachfrage bestätigt, dass das so gewollt ist, trotz `noreply@ff-wolfsgraben.at` als technischem Absender.
+Password Reset und Login Token behalten die alte "bitte nicht antworten"-Zeile unverändert; nur die
+Willkommens-Mail ist davon abgewichen. Beide Mails (Willkommen + Passwort-Reset) verlinken zusätzlich
+`/how-to.html` (die öffentliche FAQ-Seite, siehe unten) über einen neuen `faqLink = ${baseUrl()}/how-to.html`.
 
 **FAQ-Seite (`public/how-to.html`, GitHub-Repo-URL für Vorab-Fassung s. `gh-pages`-Branch)**: eine
 statische, selbstständige HTML-Seite (kein Build-Schritt, keine App-Abhängigkeiten) unter

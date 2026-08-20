@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     getUnreadNewsCount(user.id),
   ]);
 
-  const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'AFKDO Purkersdorf';
+  const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'BFKDO St. Pölten';
   const wappenSrc = homeOrganization?.wappenImageMimeType ? `/api/organization/${homeOrganization.id}/wappen` : null;
   // Dieselbe Quelle wie der Desktop-Nav-Eintrag (lib/nav-items.ts) statt einer zweiten, hier inline
   // gepflegten Kopie derselben Bedingung/Ziel-Auflösung - sonst fehlt der mobilen Pille jeder künftig
@@ -70,7 +70,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   nicht mehr zusätzlich links in der Kopfzeile - das Mobile-Wappen-<img> von V2/V3
                   entfällt deshalb hier ersatzlos. */}
               <MobileHeaderTitleSlot fallback={mobileHeaderLabel} />
-              <span className="hidden text-sm font-semibold text-white sm:inline">AFKDO Purkersdorf</span>
+              <span className="hidden text-sm font-semibold text-white sm:inline">BFKDO St. Pölten</span>
               {isDevStage && (
                 <span className="shrink-0 rounded-full bg-black/25 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                   <span className="sm:hidden">DEV</span>
@@ -91,7 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               )}
               <img
                 src="/wappen-afkdo.png"
-                alt="Wappen AFKDO Purkersdorf"
+                alt="Wappen BFKDO St. Pölten"
                 className="hidden h-10 w-auto sm:block"
               />
               <ProfileMenu

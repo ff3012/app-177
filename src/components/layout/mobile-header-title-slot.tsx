@@ -3,7 +3,7 @@
 import { useMobileHeader } from './mobile-header-context';
 
 /**
- * Crossfades the "AFKDO Purkersdorf" wordmark with the current page's collapsing large title
+ * Crossfades the "BFKDO St. Pölten" wordmark with the current page's collapsing large title
  * (CollapsingPageTitle) as titleProgress goes 0 -> 1. Both spans are absolutely stacked in the
  * same box rather than side by side, so only one text occupies the limited mobile header width at
  * a time - matches how iOS itself swaps the nav bar's title area instead of adding a second label.

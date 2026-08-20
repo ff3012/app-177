@@ -24,9 +24,12 @@ below). Installable as a PWA (manifest + minimal service worker) so it can be ad
 screen without an app-store build. All UI copy and commit-adjacent docs are German; code identifiers are a
 German/English mix (keep matching the existing convention in a given file).
 
-Branding is still Purkersdorf-specific in several places (header wordmark, PWA manifest, login page, email
-templates, the public kiosk dashboard) — a known, deliberately deferred follow-up, not a sign that the app
-is still single-Abschnitt.
+Branding is still Purkersdorf-specific in several places (PWA manifest, login page, the public kiosk
+dashboard) — a known, deliberately deferred follow-up, not a sign that the app is still single-Abschnitt.
+The desktop/mobile header wordmark, footer, and all transactional email templates were moved to
+"BFKDO St. Pölten"/"Bezirksfeuerwehrkommando St. Pölten" on 2026-08-20 as part of the wider Bezirk-17
+rebrand (same effort as that day's prod/dev domain migrations) — the remaining spots above weren't part
+of that specific request and are still pending.
 
 ## Commands
 

@@ -33,9 +33,9 @@ export async function sendActivationEmail(user: { email: string; firstName: stri
       'Feedback kannst du gerne direkt in der App mit uns teilen.',
       '',
       'Mit kameradschaftlichen Grüßen',
-      'AFKDO Purkersdorf',
+      'BFKDO St. Pölten',
       '',
-      'Diese App wird vom Abschnittsfeuerwehrkommando Purkersdorf zur Verfügung gestellt. Fragen an Florian Krebs florian.krebs@feuerwehr.gv.at',
+      'Diese App wird vom Bezirksfeuerwehrkommando St. Pölten zur Verfügung gestellt. Fragen an Florian Krebs florian.krebs@feuerwehr.gv.at',
     ].join('\n'),
     htmlPart: [
       `<p>Hallo ${user.firstName},</p>`,
@@ -46,8 +46,8 @@ export async function sendActivationEmail(user: { email: string; firstName: stri
       '<p>Es freut uns dich in der neuen App bald zu sehen.</p>',
       `<p>Häufige Fragen (z. B. wie du die App aufs Handy installierst oder ein neues Passwort setzt) findest du hier:<br><a href="${faqLink}">${faqLink}</a></p>`,
       '<p>Feedback kannst du gerne direkt in der App mit uns teilen.</p>',
-      '<p>Mit kameradschaftlichen Grüßen<br>AFKDO Purkersdorf</p>',
-      '<p>Diese App wird vom Abschnittsfeuerwehrkommando Purkersdorf zur Verfügung gestellt. Fragen an Florian Krebs ' +
+      '<p>Mit kameradschaftlichen Grüßen<br>BFKDO St. Pölten</p>',
+      '<p>Diese App wird vom Bezirksfeuerwehrkommando St. Pölten zur Verfügung gestellt. Fragen an Florian Krebs ' +
         '<a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a></p>',
     ].join(''),
   });
@@ -60,8 +60,8 @@ export async function sendPasswordResetEmail(user: { email: string; firstName: s
     to: user.email,
     toName: `${user.firstName} ${user.lastName}`,
     subject: 'Passwort zurücksetzen',
-    textPart: `Hallo ${user.firstName},\n\ndu hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:\n\n${link}\n\nDer Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.\n\nHäufige Fragen zur App findest du hier:\n${faqLink}\n\nDiese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.\n\nAbschnittsfeuerwehrkommando Purkersdorf`,
-    htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p>Häufige Fragen zur App findest du hier:<br><a href="${faqLink}">${faqLink}</a></p><p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p><p>Abschnittsfeuerwehrkommando Purkersdorf</p>`,
+    textPart: `Hallo ${user.firstName},\n\ndu hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:\n\n${link}\n\nDer Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.\n\nHäufige Fragen zur App findest du hier:\n${faqLink}\n\nDiese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.\n\nBezirksfeuerwehrkommando St. Pölten`,
+    htmlPart: `<p>Hallo ${user.firstName},</p><p>du hast ein neues Passwort angefordert. Über folgenden Link kannst du ein neues Passwort setzen:</p><p><a href="${link}">${link}</a></p><p>Der Link ist 1 Stunde gültig. Falls du das nicht warst, kannst du diese E-Mail ignorieren.</p><p>Häufige Fragen zur App findest du hier:<br><a href="${faqLink}">${faqLink}</a></p><p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p><p>Bezirksfeuerwehrkommando St. Pölten</p>`,
   });
 }
 
@@ -96,7 +96,7 @@ export async function sendLoginTokenEmail(
       'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an',
       'florian.krebs@feuerwehr.gv.at.',
       '',
-      'Abschnittsfeuerwehrkommando Purkersdorf',
+      'Bezirksfeuerwehrkommando St. Pölten',
     ].join('\n'),
     htmlPart: [
       `<p>Hallo ${user.firstName},</p>`,
@@ -112,7 +112,7 @@ export async function sendLoginTokenEmail(
         'E-Mail ignorieren.</p>',
       '<p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an ' +
         '<a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
-      '<p>Abschnittsfeuerwehrkommando Purkersdorf</p>',
+      '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
     ].join(''),
   });
 }

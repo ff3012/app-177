@@ -25,7 +25,7 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
   const apiKey = process.env.MAILJET_API_KEY;
   const apiSecret = process.env.MAILJET_API_SECRET;
   const fromEmail = process.env.MAILJET_FROM_EMAIL;
-  const fromName = process.env.MAILJET_FROM_NAME ?? 'AFKDO Purkersdorf';
+  const fromName = process.env.MAILJET_FROM_NAME ?? 'BFKDO St. Pölten';
 
   if (!apiKey || !apiSecret || !fromEmail) {
     throw new Error(
