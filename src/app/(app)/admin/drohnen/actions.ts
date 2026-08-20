@@ -117,29 +117,35 @@ export interface DroneGroupEmailState {
   error?: string;
 }
 
-const flightNotificationEmailSchema = z.union([z.literal(''), z.string().trim().email('Ungültige E-Mail-Adresse.')]);
+/** Chip-Listen-JSON-Feld, gleiches Muster wie emailListSchema in admin/heimatfeuerwehr/actions.ts. */
+const flightNotificationEmailsSchema = z
+  .string()
+  .transform((raw) => (raw ? (JSON.parse(raw) as unknown) : []))
+  .pipe(z.array(z.string().trim().email('Ungültige E-Mail-Adresse.')).max(20, 'Höchstens 20 Adressen.'));
 
 /**
  * Ersetzt die frühere singleton-weite `saveDroneFlightEmail` (admin/email) - jede Drohnengruppe hat
- * jetzt ihre eigene Benachrichtigungsadresse (DroneGroup.flightNotificationEmail). Leere Eingabe ist
- * gültig (= keine Benachrichtigung für diese Gruppe), gleiches Muster wie
- * setAtemschutzSachbearbeiter in admin/heimatfeuerwehr/actions.ts.
+ * jetzt ihre eigenen Benachrichtigungsadressen (DroneGroup.flightNotificationEmails). War
+ * ursprünglich ein einzelnes E-Mail-Feld; auf ausdrücklichen Wunsch auf eine Chip-Liste + People-
+ * Picker umgebaut, exakt nach dem Vorbild von setPhotoUploadNotificationEmails/
+ * setFahrzeugReservierungEmails (admin/heimatfeuerwehr/actions.ts) - hier nur Mitglieder DIESER
+ * Drohnengruppe wählbar (siehe drone-group-email-form.tsx). Leeres Array = keine Benachrichtigung.
  */
-export async function setFlightNotificationEmail(
+export async function setFlightNotificationEmails(
   droneGroupId: string,
   _prevState: DroneGroupEmailState,
   formData: FormData,
 ): Promise<DroneGroupEmailState> {
   await requireDroneGroupAccess(droneGroupId);
 
-  const parsed = flightNotificationEmailSchema.safeParse(formData.get('email'));
+  const parsed = flightNotificationEmailsSchema.safeParse(formData.get('emails'));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Ungültige E-Mail-Adresse.' };
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige Eingabe.' };
   }
 
   await prisma.droneGroup.update({
     where: { id: droneGroupId },
-    data: { flightNotificationEmail: parsed.data || null },
+    data: { flightNotificationEmails: [...new Set(parsed.data)] },
   });
 
   revalidatePath('/admin/drohnen');

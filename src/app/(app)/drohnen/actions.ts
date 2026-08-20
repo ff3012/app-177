@@ -52,7 +52,7 @@ export async function createFlight(
     include: { drone: true, pilotUser: true, registeredBy: true },
   });
 
-  await notifyDroneFlightCreated(flight, droneGroup.flightNotificationEmail);
+  await notifyDroneFlightCreated(flight, droneGroup.flightNotificationEmails);
 
   revalidatePath('/drohnen');
   redirect('/drohnen');

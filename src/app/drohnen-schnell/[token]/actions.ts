@@ -58,7 +58,7 @@ export async function registerFlightViaQuickLink(
     include: { drone: true, pilotUser: true, registeredBy: true },
   });
 
-  await notifyDroneFlightCreated(flight, droneGroup.flightNotificationEmail);
+  await notifyDroneFlightCreated(flight, droneGroup.flightNotificationEmails);
 
   return { success: true };
 }

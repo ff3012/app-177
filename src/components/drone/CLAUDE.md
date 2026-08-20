@@ -273,3 +273,39 @@ typgeprüft): ein Gruppen-Admin einer Gruppe sah in einer echten HTTP-Anfrage + 
 `.xlsx`-Antwort ausschließlich die 2 Mitglieder seiner eigenen Gruppe, ein Bezirks-Drohnenadmin alle
 3 Mitglieder über beide Testgruppen hinweg, und ein einfacher Pilot ohne Adminrecht erhielt `403`.
 
+**Drohnenflug E-Mail: mehrere Empfänger + Mitglieder-Picker (follow-up, "genauso wie Foto Upload
+Benachrichtigung/Fahrzeug-Reservierungen")** — `DroneGroup.flightNotificationEmail` war ursprünglich
+ein einzelnes optionales `String?`-Feld; auf ausdrücklichen Wunsch auf `flightNotificationEmails
+String[] @default([])` umgebaut (Migration
+`20260822000000_drone_group_flight_notification_emails_array` — Spalte hinzufügen, bestehende
+Einzelwerte als Ein-Element-Array zurückschreiben, alte Spalte löschen, dieselbe sichere Reihenfolge
+wie bei den beiden Heimatfeuerwehr-Feldern zuvor).
+
+- **`/admin/drohnen`'s "Benachrichtigung"-Karte** nutzt jetzt dieselbe Chip-Liste + People-Picker-UI
+  wie `PhotoUploadNotificationEmailsForm`/`FahrzeugReservierungEmailForm`
+  (`admin/heimatfeuerwehr/*`) — `DroneGroupEmailForm`/`setFlightNotificationEmails`
+  (`admin/drohnen/actions.ts`), mit derselben Chip-Listen-als-JSON-in-einem-Hidden-Feld-Schema wie
+  dort (hier lokal als `flightNotificationEmailsSchema` definiert, keine geteilte Utility zwischen den
+  beiden Verwaltungsmodulen — Duplikation statt verfrühter Abstraktion, dem sonstigen Stil dieser
+  Codebase entsprechend).
+- **Der Picker ist an genau EINE Drohnengruppe gebunden**, nicht an eine Heimatfeuerwehr: eine neue,
+  dedizierte Query in `admin/drohnen/page.tsx`
+  (`flightNotificationPickerMembers`, `where: { droneMembership: { droneGroupId: selectedGroup.id },
+  ...NOT_DEACTIVATED_WHERE }`) — bewusst **nicht** über das bereits geteilte
+  `listDrohnengruppeMembers()` (`lib/drone/members.ts`) gelöst, das absichtlich schlank bleibt (siehe
+  die "Qualifikations-Filter"-Notiz oben: ein Aufrufer mit Sonderbedarf — hier `email`, dort die
+  Ausbildungsdaten — schreibt sich seine eigene Query statt die geteilte um zusätzliche Felder zu
+  erweitern, die die übrigen Aufrufer nicht brauchen). Das setzt "NUR Mitglieder der jeweiligen
+  Drohnengruppe" wörtlich um — wechselt man auf der Seite per `GroupSelect` die Gruppe, lädt diese
+  Query serverseitig neu und der Picker zeigt ausschließlich die neue Gruppe.
+- `notifyDroneFlightCreated()` (`lib/drone/notify-flight-created.ts`) sendet jetzt eine E-Mail PRO
+  Empfänger statt einer einzelnen Adresse (dieselbe Privacy-Regel wie `notifyPhotoUploadCreated`),
+  einzeln try/catch-abgesichert; die Funktion wirft weiterhin nie. Beide Aufrufer
+  (`drohnen/actions.ts`'s `createFlight`, `drohnen-schnell/[token]/actions.ts`'s
+  Schnellerfassung) übergeben unverändert die volle, bereits geladene `DroneGroup`-Zeile, jetzt mit
+  `flightNotificationEmails` statt `flightNotificationEmail`.
+- Verifiziert direkt gegen die lokale Dev-Datenbank (nicht nur typgeprüft): Persistenz mehrerer
+  Adressen, korrekte Auflösung auf zwei Empfänger, leeres Array als No-op-Pfad, und die
+  Picker-Query liefert für Gruppe A ausschließlich deren eigenes Mitglied, nie ein Mitglied einer
+  anderen Gruppe (zwei separat angelegte Testgruppen-Mitgliedschaften gegenübergestellt).
+

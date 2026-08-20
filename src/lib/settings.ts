@@ -4,7 +4,7 @@ const SETTINGS_ID = 'singleton';
 
 // getDroneFlightNotificationEmail/setDroneFlightNotificationEmail/getDroneQuickRegisterToken/
 // generateDroneQuickRegisterToken wurden entfernt (Task 9, Bezirk/Abschnitt/Drohnengruppen-Plan) -
-// beide Werte sind jetzt pro DroneGroup gespeichert (DroneGroup.flightNotificationEmail/qrToken)
+// beide Werte sind jetzt pro DroneGroup gespeichert (DroneGroup.flightNotificationEmails/qrToken)
 // statt als AppSettings-Singleton-Felder app-weit. Ersetzt durch direkte Prisma-Lese-/Schreibzugriffe
 // an den jeweiligen Aufrufstellen (admin/drohnen/actions.ts, drohnen-schnell/[token]/*), die die
 // DroneGroup-Zeile ohnehin schon für andere Zwecke laden - siehe CLAUDE.md.

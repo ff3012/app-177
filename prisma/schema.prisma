@@ -396,10 +396,18 @@ model DroneGroup {
   // Bezirksverwaltung - dieselbe Semantik wie Organization.isActive oben.
   isActive       Boolean      @default(true)
 
-  // Ersetzen die bisherigen AppSettings.droneFlightNotificationEmail/droneQuickRegisterToken
-  // (Singleton-Felder) - jetzt pro Gruppe statt app-weit.
-  flightNotificationEmail String?
-  qrToken                 String? @unique
+  // Ersetzt das bisherige AppSettings.droneQuickRegisterToken (Singleton-Feld) - jetzt pro Gruppe
+  // statt app-weit.
+  qrToken String? @unique
+
+  // Ersetzte ursprünglich AppSettings.droneFlightNotificationEmail (Singleton) als einzelnes
+  // String?-Feld pro Gruppe; auf ausdrücklichen Wunsch auf ein Array umgebaut, exakt nach dem Vorbild
+  // von Organization.photoUploadNotificationEmails/fahrzeugReservierungEmails (People-Picker +
+  // Freitext-Chips, hier nur Mitglieder DIESER Drohnengruppe statt einer Heimatfeuerwehr wählbar).
+  // Migration 20260822000000_drone_group_flight_notification_emails_array backfillt bestehende
+  // Einzelwerte als Ein-Element-Array, bevor die alte Spalte gelöscht wird. Leeres Array = keine
+  // Benachrichtigung bei neuen Drohnenflügen dieser Gruppe.
+  flightNotificationEmails String[] @default([])
 
   memberships  DrohnengruppeMembership[]
   documents    DroneDocument[]

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -48,7 +49,7 @@ export default async function DrohnenVerwaltungPage({
 
   const selectedGroup = (group && allowedGroups.find((g) => g.id === group)) || allowedGroups[0];
 
-  const [drones, documents] = await Promise.all([
+  const [drones, documents, flightNotificationPickerMembers] = await Promise.all([
     prisma.drone.findMany({ where: { droneGroupId: selectedGroup.id }, orderBy: { sortOrder: 'asc' } }),
     prisma.droneDocument.findMany({
       where: { droneGroupId: selectedGroup.id },
@@ -61,6 +62,16 @@ export default async function DrohnenVerwaltungPage({
         uploadedBy: { select: { firstName: true, lastName: true } },
       },
       orderBy: { createdAt: 'desc' },
+    }),
+    // Eigene, dedizierte Abfrage statt listDrohnengruppeMembers() (das dort etablierte Muster - siehe
+    // components/drone/CLAUDE.md - ist "gemeinsam genutzte Query bleibt schlank, ein Aufrufer mit
+    // Sonderbedarf (hier: email) schreibt sich seine eigene"): Mitglieder NUR dieser Drohnengruppe für
+    // den Benachrichtigungs-E-Mail-Picker (DroneGroupEmailForm) - setzt "NUR Mitglieder der
+    // jeweiligen Drohnengruppe" um.
+    prisma.user.findMany({
+      where: { droneMembership: { droneGroupId: selectedGroup.id }, ...NOT_DEACTIVATED_WHERE },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true, email: true },
     }),
   ]);
   const quickRegisterLink = selectedGroup.qrToken ? `${baseUrl()}/drohnen-schnell/${selectedGroup.qrToken}` : null;
@@ -183,9 +194,13 @@ export default async function DrohnenVerwaltungPage({
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Benachrichtigung</h2>
         <p className="mb-3 text-sm text-ink-muted">
-          Empfängeradresse für die Benachrichtigung bei jedem neu registrierten Flug dieser Gruppe.
+          Empfängeradressen für die Benachrichtigung bei jedem neu registrierten Flug dieser Gruppe.
         </p>
-        <DroneGroupEmailForm droneGroupId={selectedGroup.id} initialEmail={selectedGroup.flightNotificationEmail ?? ''} />
+        <DroneGroupEmailForm
+          droneGroupId={selectedGroup.id}
+          initialEmails={selectedGroup.flightNotificationEmails}
+          members={flightNotificationPickerMembers}
+        />
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
