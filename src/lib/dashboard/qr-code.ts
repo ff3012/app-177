@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
  * buildDashboardLink() in admin/heimatfeuerwehr/page.tsx - eine einzige Quelle für die öffentliche
  * App-URL statt separat hardcodierter Kopien. Fällt nur auf den Literal-Wert zurück, falls AUTH_URL
  * nicht gesetzt ist. */
-export const APP_URL = process.env.AUTH_URL?.replace(/\/$/, '') || 'https://app-177.ff-wolfsgraben.at/';
+export const APP_URL = process.env.AUTH_URL?.replace(/\/$/, '') || 'https://app-17.bfkdo-stpoelten.at/';
 
 /** Erzeugt den QR-Code für eine beliebige URL als SVG-Data-URI, serverseitig - Design-Spec §7:
  * Fehlerkorrektur M, Ruhezone 4 Module. */

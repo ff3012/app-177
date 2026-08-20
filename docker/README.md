@@ -1,5 +1,20 @@
 # Deployment (Hetzner Ubuntu Server)
 
+> **Domain-Umzug Produktion (2026-08-20):** die kanonische Produktions-Domain ist jetzt
+> `app-17.bfkdo-stpoelten.at` (Bezirk-17-Branding), nicht mehr `app-177.ff-wolfsgraben.at` -
+> `AUTH_URL` in der echten `/opt/app-177/.env` wurde entsprechend aktualisiert. Anders als beim
+> Dev-Umzug einen Tag zuvor **kein kompletter Cutover**: die alte Domain bleibt bewusst "parallel
+> für die Migrationszeit" erreichbar, aber nur noch als permanenter (301) Redirect auf die neue
+> Domain in der echten Caddyfile (`app-177.ff-wolfsgraben.at { redir https://app-17.bfkdo-stpoelten.at{uri} permanent }`),
+> nicht mehr als eigener `reverse_proxy`-Block. Wer noch eine aktive Session auf der alten Domain
+> hatte, landet nach dem Redirect ausgeloggt auf der neuen Domain - `__Host-`-Cookies sind strikt an
+> die exakte Origin gebunden, die sie gesetzt hat, das ist bei jedem Domain-Wechsel unvermeidbar,
+> kein Bug. S3-Bucket-CORS (`app-177-pictures`) und der `qr-code.ts`-Fallback wurden ebenfalls auf
+> die neue Domain aktualisiert; die alte Domain bleibt zusätzlich in `AllowedOrigins`, solange der
+> Redirect noch aktiv ist. Denselben Docker-Bind-Mount-Stolperstein wie beim Dev-Umzug beachten: eine
+> Caddyfile-Änderung wirkt erst nach `docker compose ... up -d --force-recreate caddy`, ein reines
+> `caddy reload` reicht nicht (siehe die zugehörige Projekt-Memory-Notiz zu diesem genauen Bug).
+
 ## Voraussetzungen auf dem Server
 
 - Docker Engine + Docker Compose Plugin installiert (`curl -fsSL https://get.docker.com | sh`)
@@ -343,7 +358,7 @@ aws --endpoint-url https://sos-at-vie-1.exo.io s3api put-bucket-cors \
   --cors-configuration '{
     "CORSRules": [
       {
-        "AllowedOrigins": ["https://<produktions-domain>", "https://dev.app-17.bfkdo-stpoelten.at"],
+        "AllowedOrigins": ["https://app-17.bfkdo-stpoelten.at", "https://app-177.ff-wolfsgraben.at", "https://dev.app-17.bfkdo-stpoelten.at"],
         "AllowedMethods": ["PUT", "GET"],
         "AllowedHeaders": ["content-type"],
         "MaxAgeSeconds": 3000
