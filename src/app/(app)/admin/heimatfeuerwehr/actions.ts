@@ -299,6 +299,45 @@ export async function setFahrzeugReservierungEmail(
   return { success: true };
 }
 
+export interface PhotoUploadNotificationEmailsState {
+  success?: boolean;
+  error?: string;
+}
+
+const emailListSchema = z
+  .string()
+  .transform((raw) => (raw ? (JSON.parse(raw) as unknown) : []))
+  .pipe(z.array(z.string().trim().email('Ungültige E-Mail-Adresse.')).max(20, 'Höchstens 20 Adressen.'));
+
+/** GitHub Issue #19: Benachrichtigung bei neuen Foto-Upload-Ordnern - anders als
+ * atemschutzSachbearbeiterEmail/fahrzeugReservierungEmail ein Array, da hier ausdrücklich mehrere
+ * Adressen möglich sein sollen (siehe Kommentar auf Organization.photoUploadNotificationEmails).
+ * Das Formular sendet die aktuelle Chip-Liste als JSON-String in einem einzigen Hidden-Feld statt
+ * mehrerer gleichnamiger Felder - einfacher zu parsen als FormData.getAll() und funktioniert
+ * identisch mit/ohne JavaScript (Server Actions unterstützen ohnehin kein natives Multi-Input für
+ * eine dynamische Chip-Liste). */
+export async function setPhotoUploadNotificationEmails(
+  organizationId: string,
+  _prevState: PhotoUploadNotificationEmailsState,
+  formData: FormData,
+): Promise<PhotoUploadNotificationEmailsState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const parsed = emailListSchema.safeParse(formData.get('emails'));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige Eingabe.' };
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { photoUploadNotificationEmails: [...new Set(parsed.data)] },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  return { success: true };
+}
+
 export interface IcsImportUrlState {
   success?: boolean;
   error?: string;

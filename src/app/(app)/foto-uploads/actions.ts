@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db/prisma';
 import { canManagePhotoUploadsFor, canDeletePhoto } from '@/lib/auth/permissions';
 import { photoUploadSchema, parsePhotoUploadFormData } from '@/lib/validation/photo-upload.schema';
 import { deletePhotoObjects } from '@/lib/storage/photo-uploads-s3';
+import { notifyPhotoUploadCreated } from '@/lib/heimatfeuerwehr/notify-photo-upload';
 
 export interface PhotoUploadFormState {
   error?: string;
@@ -31,7 +32,19 @@ export async function createPhotoUpload(
       occurredOn: new Date(parsed.data.occurredOn),
       createdById: user.id,
     },
+    include: { fireDepartment: { select: { name: true, photoUploadNotificationEmails: true } } },
   });
+
+  await notifyPhotoUploadCreated(
+    {
+      kind: photoUpload.kind,
+      description: photoUpload.description,
+      occurredOn: photoUpload.occurredOn,
+      createdByName: user.name,
+      fireDepartment: { name: photoUpload.fireDepartment.name },
+    },
+    photoUpload.fireDepartment.photoUploadNotificationEmails,
+  );
 
   revalidatePath('/meine-feuerwehr');
   revalidatePath('/foto-uploads');

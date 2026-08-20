@@ -369,6 +369,22 @@ does not exist between deploy and someone remembering to run `npm run db:seed` b
 - Migrations are committed SQL under `prisma/migrations/`, applied automatically by
   `docker/entrypoint.sh` via `prisma migrate deploy` on every container start. Generate new ones with
   `npm run db:migrate` after editing `schema.prisma`; don't hand-edit already-committed migration files.
+  **Known pre-existing ordering bug (found 2026-08-20, not yet fixed)**: `20260819100617_news_modul/
+  migration.sql` contains `ALTER TABLE "NewsMessage" DROP CONSTRAINT "NewsMessage_audienceDroneGroupId_fkey"`,
+  but that constraint is only *created* by the later-timestamped `20260820090000_news_audience_drone_group`
+  — so a full from-scratch replay (e.g. `prisma migrate dev`'s shadow database, or a fresh
+  `prisma migrate deploy` against an empty database) fails with P3006 ("constraint does not exist") on the
+  DROP, since it runs before the CREATE in filename order. This does **not** affect the already-migrated
+  dev/prod databases (both already have both changes applied, whatever order they actually ran in
+  historically) — `prisma migrate deploy` only applies migrations not yet marked as applied, so it's a real
+  risk only for a genuine disaster-recovery rebuild from an empty database. Not yet fixed (would need
+  reordering/merging two already-deployed migration files, which conflicts with "never hand-edit an
+  already-committed migration" — needs a deliberate decision, not a reflexive edit). Worked around once so
+  far (`20260820100000_photo_upload_notification_emails`, GitHub issue #19) via
+  `prisma migrate diff --from-url <DATABASE_URL> --to-schema-datamodel prisma/schema.prisma --script`
+  (diffs the live DB directly, bypassing history replay) + a hand-written migration folder +
+  `prisma migrate resolve --applied` — the same workaround applies to any future migration attempted while
+  this bug remains unfixed.
 
 ### PWA
 

@@ -381,6 +381,42 @@ entry immediately - it waits for an explicit Genehmigen/Ablehnen decision emaile
   request - scoped to just these two templates, not the app-wide email sign-off convention described
   under "Email" below (those templates are untouched).
 
+### Foto-Upload-Benachrichtigung (GitHub Issue #19)
+
+Mirrors the Atemschutz-/Fahrzeug-Reservierung single-email pattern above, but as multiple recipients
+instead of one, since the issue explicitly asked for several addresses and/or a People Picker over the
+Heimatfeuerwehr's own members.
+
+- `Organization.photoUploadNotificationEmails String[] @default([])` (migration
+  `20260820100000_photo_upload_notification_emails`) — an array, unlike `atemschutzSachbearbeiterEmail`/
+  `fahrzeugReservierungEmail`, since multiple simultaneous recipients are a first-class requirement here.
+  Each entry is a plain, already-resolved email string (typed freely or picked from a member), not a live
+  reference to a `User` — it does not update if that person later changes their email or leaves the
+  Feuerwehr.
+- **`/admin/heimatfeuerwehr`'s new "Foto Upload Benachrichtigung" card** (between Fahrzeug-Reservierungen
+  and Kalender-Import): `PhotoUploadNotificationEmailsForm` (chip list + a free-text `<input type="email">`
+  "Hinzufügen" control + a `<select>` "Aus Mitgliedern wählen") rather than the shadcn `AdminOrgMultiSelect`
+  combobox used elsewhere in Verwaltung — that component only supports picking from a fixed org-ID list, not
+  freely-typed addresses, and this app's default outside the shadcn-based Verwaltung redesign is simple
+  hand-rolled controls anyway. `setPhotoUploadNotificationEmails` (`admin/heimatfeuerwehr/actions.ts`)
+  receives the whole chip list as one JSON-stringified array in a single hidden field (simpler than
+  `FormData.getAll()` for a dynamic list, and works identically with/without JS since Server Actions don't
+  support a native multi-input for this anyway), Zod-validates each entry as an email, and de-dupes via
+  `[...new Set(...)]` before writing.
+- **Security**: the People Picker's `<select>` is fed by a *separate* Prisma query in `page.tsx`
+  (`photoUploadPickerMembers`, `homeOrganizationId: selectedOrgId` + `NOT_DEACTIVATED_WHERE`) — distinct from
+  the pre-existing `members` query on that page, which is Atemschutzgeräteträger-only and would have silently
+  excluded most of the roster. This is what actually enforces the issue's "ACHTUNG Security, nur
+  Heimatfeuerwehr Mitglieder": the picker can only ever offer emails already scoped to the selected Feuerwehr,
+  never a district-wide search.
+- `src/lib/heimatfeuerwehr/notify-photo-upload.ts`'s `notifyPhotoUploadCreated()` mirrors
+  `notifyDroneFlightCreated()`'s resilience shape (no-op on an empty array, try/catch per send, never
+  throws) but loops and sends **one separate `sendEmail()` call per recipient** rather than combining them
+  into one To list or Cc — established this session as the standing rule for multi-recipient notifications,
+  so no recipient ever sees another's address. Wired into `createPhotoUpload`
+  (`foto-uploads/actions.ts`) right after the `prisma.photoUpload.create` call, which now `include`s
+  `fireDepartment: { name, photoUploadNotificationEmails }` to resolve the recipients without a second query.
+
 ### Startbildschirm & mobile Navigation (Startbildschirm-Brief.md)
 
 A follow-up mobile-only rework (imported via the same Claude Design `DesignSync`-MCP flow as the earlier

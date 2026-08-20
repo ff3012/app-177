@@ -157,6 +157,16 @@ model Organization {
   // Feuerwehr statt global. Leer = Reservierungen werden ohne Freigabe sofort genehmigt.
   fahrzeugReservierungEmail String?
 
+  // Empfängeradressen für die Benachrichtigung bei neuen Foto-Upload-Ordnern (GitHub Issue #19) - ein
+  // Array statt eines einzelnen String?-Felds (anders als atemschutzSachbearbeiterEmail/
+  // fahrzeugReservierungEmail), da hier ausdrücklich mehrere Adressen gleichzeitig möglich sein
+  // sollen; jeder Eintrag ist eine reine, bereits aufgelöste E-Mail-Adresse (egal ob frei eingetippt
+  // oder über den People-Picker aus den eigenen Mitgliedern gewählt) - keine Live-Referenz auf einen
+  // User, ändert sich also nicht automatisch, falls die Person später ihre E-Mail ändert oder die
+  // Feuerwehr verlässt. Leeres Array = keine Benachrichtigung (siehe
+  // lib/heimatfeuerwehr/notify-photo-upload.ts).
+  photoUploadNotificationEmails String[] @default([])
+
   // Funktionsschalter je Heimatfeuerwehr (Funktionsschalter-Brief.md) - Abschalten blendet nur aus,
   // löscht nichts; Reaktivierung zeigt alle Daten unverändert wieder. featureAtemschutz defaultet auf
   // true (Bestandswehren verlieren nichts durch die Migration), featureFacebook auf false - ohne Token

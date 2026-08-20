@@ -26,6 +26,7 @@ import { GoogleCalendarConfigForm } from './google-calendar-config-form';
 import { WappenUploadForm } from './wappen-upload-form';
 import { FunktionenCard } from './funktionen-card';
 import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
+import { PhotoUploadNotificationEmailsForm } from './photo-upload-notification-emails-form';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
@@ -183,6 +184,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         icsImportLastSyncError: true,
         wappenImageMimeType: true,
         fahrzeugReservierungEmail: true,
+        photoUploadNotificationEmails: true,
         googleCalendarServiceAccountJson: true,
         googleCalendarId: true,
         googleCalendarLastSyncAt: true,
@@ -193,6 +195,17 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   if (!selectedOrgFull) {
     notFound();
   }
+
+  // Eigene, von der Atemschutz-Query oben unabhängige Abfrage: ALLE (nicht nur Atemschutzgeräteträger-)
+  // Mitglieder dieser einen Feuerwehr, für den Foto-Upload-Benachrichtigungs-Picker. Bewusst auf
+  // homeOrganizationId: selectedOrgId beschränkt - das setzt die Anforderung "ACHTUNG Security, nur
+  // Heimatfeuerwehr Mitglieder" um, da der Picker seine Auswahlmöglichkeiten ausschließlich aus diesem
+  // Array bezieht (siehe photo-upload-notification-emails-form.tsx).
+  const photoUploadPickerMembers = await prisma.user.findMany({
+    where: { homeOrganizationId: selectedOrgId, ...NOT_DEACTIVATED_WHERE },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    select: { id: true, firstName: true, lastName: true, email: true },
+  });
 
   const tokenQrCodeDataUris = await Promise.all(
     dashboardTokens.map((token) => generateQrCodeDataUri(buildDashboardLink(token.token))),
@@ -474,6 +487,18 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Foto Upload Benachrichtigung</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Diese Adressen werden benachrichtigt, sobald ein neuer Foto-Upload-Ordner für diese Feuerwehr angelegt wird.
+        </p>
+        <PhotoUploadNotificationEmailsForm
+          organizationId={selectedOrgId}
+          initialEmails={selectedOrgFull.photoUploadNotificationEmails}
+          members={photoUploadPickerMembers}
+        />
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
