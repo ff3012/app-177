@@ -14,6 +14,7 @@ import { MobileHeaderProvider } from '@/components/layout/mobile-header-context'
 import { MobileHeaderTitleSlot } from '@/components/layout/mobile-header-title-slot';
 import { MobileHeaderActionSlot } from '@/components/layout/mobile-header-action-slot';
 import { MainContainer } from '@/components/layout/main-container';
+import { AndroidBackButton } from '@/components/capacitor/android-back-button';
 import { logoutAction } from './logout-action';
 
 /** Startbildschirm-Brief.md §2: "Feuerwehr {Heimatfeuerwehr}", ohne "Freiwillige" - für
@@ -58,6 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <TooltipProvider>
     <MobileHeaderProvider>
       <div className="flex min-h-screen flex-col bg-[#f6f6f7]">
+        <AndroidBackButton />
         {/* V2-Mobile: eine Zeile auf allen Breiten statt vormals flex-col (=> zwei gestapelte
             Zeilen unter sm:). Mobile-only Elemente (Wappen links, Crossfade-Titel, Filter-Slot,
             Initialen-Avatar) sind über sm:hidden ausgeblendet; Desktop-Elemente (Nav, Wortmarke,
