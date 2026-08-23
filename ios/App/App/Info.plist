@@ -64,6 +64,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Wird benötigt, um Fotos direkt beim Fotoupload aufzunehmen.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Wird benötigt, um vorhandene Fotos für den Fotoupload auszuwählen.</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>
