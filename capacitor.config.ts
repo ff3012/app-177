@@ -16,9 +16,13 @@ const config: CapacitorConfig = {
   appName: 'APP-17',
   // Kein lokal gebündeltes web-dir - die WebView lädt die live gehostete Origin direkt (siehe
   // docs/superpowers/specs/2026-08-23-capacitor-store-rollout-design.md: kein Rewrite der
-  // Server-Actions-/Session-Architektur). webDir bleibt trotzdem gesetzt, weil Capacitors CLI
-  // einen Wert erwartet, auch wenn dessen Inhalt hier nie tatsächlich ausgeliefert wird.
-  webDir: 'public',
+  // Server-Actions-/Session-Architektur). webDir zeigt trotzdem auf den schlanken Ordner
+  // native-fallback/ (enthält nur offline.html), damit `cap sync`s Copy-from-webDir-Schritt genau
+  // die richtige, versionierte offline.html ausliefert (als errorPath-Ziel unten, siehe Fix 1 im
+  // finalen Whole-Branch-Review) statt versehentlich etwas aus dem Next.js public/-Ordner
+  // aufzugreifen - der ist viel größer und enthält unzusammenhängende PWA-Assets, die nicht für
+  // das native Bundle gedacht sind.
+  webDir: 'native-fallback',
   server: {
     url: ORIGINS[TARGET],
     cleartext: false,
