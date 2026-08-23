@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { Capacitor } from '@capacitor/core';
 import { ChangePasswordForm } from './change-password-form';
 import { FeedbackForm } from './feedback-form';
 import { PushNotificationsToggle } from './push-notifications-toggle';
@@ -58,6 +59,16 @@ export function ProfileMenu({
   // den richtigen Status (an/aus) zeigt, nicht erst nach dem ersten Öffnen.
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return;
+    }
+    // Weder iOS WKWebView noch Androids WebView unterstützen die Web-Push-API, und Task 5 (dieser
+    // Branch) überspringt die Custom-Service-Worker-Registrierung bewusst innerhalb der
+    // Capacitor-Shell (Capacitor.isNativePlatform()). Androids WebView kann trotzdem sowohl
+    // `serviceWorker` als auch `PushManager` als Objekte exponieren, obwohl echte Push-Zustellung
+    // dort nie funktioniert - das reine Feature-Detection oben reicht innerhalb der nativen Shell
+    // also nicht aus. Ohne dieses Gate würde `navigator.serviceWorker.ready` weiter unten ewig
+    // hängen, da nie ein Service Worker registriert wird.
+    if (Capacitor.isNativePlatform()) {
       return;
     }
     setPushSupported(true);

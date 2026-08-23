@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { savePushSubscription, deletePushSubscription } from '@/app/(app)/profile/push-actions';
 
@@ -79,6 +80,17 @@ export function PushNotificationsToggle({
   }
 
   if (!supported) {
+    // Native-App-Nutzer (App/Play Store) können sich nicht per "Zum Home-Bildschirm hinzufügen"
+    // in Web-Push-Unterstützung hineinbringen - dieser Rat wäre hier schlicht falsch. Weder iOS
+    // WKWebView noch Androids WebView unterstützen die Web-Push-API; ProfileMenu setzt `supported`
+    // deshalb innerhalb der Capacitor-Shell nie auf true (siehe dortiger Kommentar).
+    if (Capacitor.isNativePlatform()) {
+      return (
+        <p className="text-xs text-neutral-500">
+          Push-Benachrichtigungen sind in dieser App-Version nicht verfügbar.
+        </p>
+      );
+    }
     const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
     if (isIOS) {
       return (
