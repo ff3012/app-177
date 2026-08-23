@@ -62,6 +62,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.5.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.0",

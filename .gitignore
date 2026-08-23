@@ -26,3 +26,7 @@ next-env.d.ts
 
 # backups
 /docker/backups/
+
+# capacitor-assets source images (regenerated on demand from public/wappen-bfkdo.png,
+# not committed - same convention as the PWA icon set's own one-off generation script)
+/assets/
