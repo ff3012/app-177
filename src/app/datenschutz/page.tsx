@@ -16,8 +16,20 @@ export default function DatenschutzPage() {
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Verantwortlicher</h2>
         <p className="mb-4">
-          Bezirksfeuerwehrkommando St. Pölten. Kontakt für Datenschutzanfragen:{' '}
-          florian.krebs@feuerwehr.gv.at.
+          Bezirksfeuerwehrkommando St. Pölten.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Datenschutzbeauftragter</h2>
+        <p className="mb-4">
+          Florian Krebs ABI
+          <br />
+          Freiwillige Feuerwehr Wolfsgraben
+          <br />
+          Wehrerstrasse 1
+          <br />
+          3012 Wolfsgraben
+          <br />
+          florian.krebs@feuerwehr.gv.at
         </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Welche Daten werden verarbeitet</h2>
@@ -25,6 +37,13 @@ export default function DatenschutzPage() {
           <li>Konto- und Profildaten: Name, E-Mail-Adresse, Telefonnummer, Dienstgrad, Standesbuchnummer, Heimatfeuerwehr.</li>
           <li>Nutzungsdaten der Feuerwehr-Module: Kalendereinträge, Drohnenflug-Protokolle, Fahrzeug-Reservierungen, hochgeladene Einsatz-/Übungsfotos.</li>
           <li>Technische Daten: Push-Benachrichtigungs-Endpunkte (nur bei aktivierter Benachrichtigungsfunktion), Zeitpunkt der letzten Anmeldung.</li>
+        </ul>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Auftragsverarbeiter</h2>
+        <ul className="mb-4 list-disc pl-5">
+          <li>Hetzner Online GmbH — Server-Hosting.</li>
+          <li>Mailjet — E-Mail-Versand.</li>
+          <li>Exoscale — S3 Storage.</li>
         </ul>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Zweck der Verarbeitung</h2>
@@ -44,6 +63,12 @@ export default function DatenschutzPage() {
         <p className="mb-4">
           Jedes Mitglied hat das Recht auf Auskunft, Berichtigung und Löschung der eigenen Daten. Anfragen bitte
           an obige Kontaktadresse.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Beschwerderecht</h2>
+        <p className="mb-4">
+          Jedes Mitglied hat das Recht, sich bei der österreichischen Datenschutzbehörde
+          (www.dsb.gv.at) über die Verarbeitung seiner personenbezogenen Daten zu beschweren.
         </p>
       </div>
       <Footer />
