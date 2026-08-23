@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">APP-17</string>
+    <string name="title_activity_main">APP-17</string>
+    <string name="package_name">at.bfkdostpoelten.app</string>
+    <string name="custom_url_scheme">at.bfkdostpoelten.app</string>
+</resources>
