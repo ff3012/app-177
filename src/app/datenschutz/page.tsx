@@ -4,7 +4,7 @@ export const metadata = { title: 'Datenschutzerklärung — APP-17' };
 
 export default function DatenschutzPage() {
   return (
-    <div className="pt-safe flex min-h-screen flex-col bg-[#f6f6f7]">
+    <div className="pt-safe pb-safe-tabbar flex min-h-screen flex-col bg-[#f6f6f7]">
       <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 text-sm leading-relaxed text-neutral-800">
         <h1 className="mb-6 text-2xl font-semibold text-neutral-900">Datenschutzerklärung</h1>
 
