@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { PwaRegister } from '@/components/pwa-register';
+import { NativeShellInit } from '@/components/capacitor/native-shell-init';
 
 // "Signalrot" design pass: Barlow (body) + IBM Plex Mono (tokens/codes/timestamps) replace the
 // previous Noto Sans / default monospace, matching the new color palette below.
@@ -68,6 +69,7 @@ export default function RootLayout({
         className={`${barlow.variable} ${ibmPlexMono.variable} ${barlowCondensed.variable} min-h-screen font-sans antialiased`}
       >
         <PwaRegister />
+        <NativeShellInit />
         {children}
       </body>
     </html>
