@@ -9,6 +9,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/aktivieren',
   '/passwort-vergessen',
   '/passwort-zuruecksetzen',
+  '/datenschutz',
   '/drohnen-schnell',
   '/api/cron',
   '/dashboard',
