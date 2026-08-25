@@ -199,6 +199,7 @@ model Organization {
   featuresUpdatedByName String?
 
   members      User[]        @relation("HomeOrganization")
+  secondaryHomeMembers User[] @relation("SecondaryHomeOrganization")
   memberships  Membership[]
   events       Event[]
   newsPosts    NewsPost[]
@@ -272,6 +273,17 @@ model User {
   dienstgradId String?
   dienstgrad   Dienstgrad? @relation(fields: [dienstgradId], references: [id])
 
+  // Zweite Heimatfeuerwehr (GitHub Issue #21, siehe
+  // docs/superpowers/specs/2026-08-25-zweite-heimatfeuerwehr-design.md) - optional, eine FF + eine
+  // BTF (nie zwei vom selben Typ, app-seitig geprüft in admin/benutzer/actions.ts, kein
+  // DB-Constraint). Das Mitglied kann im Profil-Dropdown zwischen homeOrganizationId/dienstgradId und
+  // diesem Paar wechseln (switchHomeOrganization) - ein atomarer Tausch beider Paare, kein
+  // gleichzeitiges "beides sichtbar".
+  secondaryOrganizationId String?
+  secondaryOrganization   Organization? @relation("SecondaryHomeOrganization", fields: [secondaryOrganizationId], references: [id])
+  secondaryDienstgradId   String?
+  secondaryDienstgrad     Dienstgrad?   @relation("SecondaryDienstgrad", fields: [secondaryDienstgradId], references: [id])
+
   createdPhotoUploads PhotoUpload[]
   uploadedPhotos      Photo[]
 
@@ -318,6 +330,7 @@ model Dienstgrad {
   sortOrder   Int                 @unique
 
   users User[]
+  secondaryDienstgradUsers User[] @relation("SecondaryDienstgrad")
 
   @@index([kategorie])
 }
