@@ -337,6 +337,26 @@ CRON_TZ=Europe/Vienna
 0 4 * * * /opt/app-177/docker/photo-cleanup.sh >> /var/log/ffapp-photo-cleanup.log 2>&1
 ```
 
+## Docker-Aufräumung (alte Images/Build-Cache)
+
+Jeder `docker compose ... up -d --build`-Deploy hinterlässt nicht mehr referenzierte Image-Layer
+und Build-Cache auf der Festplatte - bei den vielen Deploys auf DEV und PROD summiert sich das
+merklich. Wöchentlich per Cron aufräumen (DEV und PROD laufen auf demselben Host, siehe
+"Zweiten Checkout anlegen" oben - **ein** Cron-Eintrag deckt beide Stacks ab, keine zweite
+Einrichtung nötig):
+
+```bash
+crontab -e
+CRON_TZ=Europe/Vienna
+# Weekly, Sunday 04:30 (nach dem nächtlichen Backup um 03:00 und photo-cleanup um 04:00)
+30 4 * * 0 docker system prune -a -f >> /var/log/ffapp-docker-prune.log 2>&1
+```
+
+**Bewusst ohne `--volumes`**: `docker system prune -a` fasst benannte Volumes grundsätzlich nicht an
+(nur Container, Netzwerke, Images, Build-Cache) - die Postgres-Datenbank läuft in einem benannten
+Volume und bleibt davon unberührt. `--volumes` niemals ergänzen, sonst könnte bei ungünstigem Timing
+(z. B. während eines Container-Recreate) das Datenbank-Volume gelöscht werden.
+
 ## Einsatzfotos: CORS-Konfiguration des `app-177-pictures`-Buckets (einmalige manuelle Einrichtung)
 
 Der Foto-Upload lädt Originale per Browser-`XMLHttpRequest PUT` **direkt** gegen
