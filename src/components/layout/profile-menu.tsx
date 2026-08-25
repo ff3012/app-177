@@ -206,10 +206,10 @@ export function ProfileMenu({
             </div>
           )}
 
-          {/* Mobile-only, wie der News-Link oben: die app-weite <Footer/> (mit ihrem eigenen
-              Datenschutz-Link) wird in (app)/layout.tsx nur ab sm: gerendert - ohne diesen Link
-              hätte ein eingeloggter Mobile-Nutzer sonst keinen Weg zur Datenschutzerklärung. */}
-          <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
+          {/* Mobile-only, wie der News-Link oben: die app-weite <Footer/> (mit ihren eigenen
+              Datenschutz-/Impressum-Links) wird in (app)/layout.tsx nur ab sm: gerendert - ohne
+              diese Links hätte ein eingeloggter Mobile-Nutzer sonst keinen Weg dorthin. */}
+          <div className="mt-4 flex gap-3 border-t border-neutral-200 pt-3 sm:hidden">
             <Link
               href="/datenschutz"
               onClick={() => setOpen(false)}
@@ -217,6 +217,14 @@ export function ProfileMenu({
             >
               Datenschutz
             </Link>
+            <a
+              href="https://bfkdo-stpoelten.at/impressum/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Impressum
+            </a>
           </div>
 
           {/* Nur Mobile: Desktop hat "Abmelden" bereits als eigenen Button in der Kopfleiste

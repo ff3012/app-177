@@ -13,6 +13,15 @@ export function Footer() {
       ·{' '}
       <a href="/datenschutz" className="text-neutral-200 hover:text-white hover:underline">
         Datenschutz
+      </a>{' '}
+      ·{' '}
+      <a
+        href="https://bfkdo-stpoelten.at/impressum/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-neutral-200 hover:text-white hover:underline"
+      >
+        Impressum
       </a>
     </footer>
   );

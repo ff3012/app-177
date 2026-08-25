@@ -21,7 +21,15 @@ export default function DatenschutzPage() {
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Verantwortlicher</h2>
         <p className="mb-4">
-          Bezirksfeuerwehrkommando St. Pölten
+          NÖ Landesfeuerwehrverband – Bezirksfeuerwehrkommando St. Pölten
+          <br />
+          Goldegger Straße 10, 3100 St. Pölten
+          <br />
+          Tel.: +43 (2742) 366511-218
+          <br />
+          Fax: +43 (2742) 366518
+          <br />
+          bfk.st.poelten@feuerwehr.gv.at
         </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Datenschutzbeauftragter</h2>
@@ -102,6 +110,26 @@ export default function DatenschutzPage() {
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Keine automatisierte Entscheidungsfindung</h2>
         <p className="mb-4">
           Es findet keine automatisierte Entscheidungsfindung einschließlich Profiling statt.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Minderjährige</h2>
+        <p className="mb-4">
+          Die App wird ausschließlich von aktiven Feuerwehrmitgliedern genutzt. Mitglieder der
+          Feuerwehrjugend nutzen die App nicht.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Impressum</h2>
+        <p className="mb-4">
+          Das Impressum des Bezirksfeuerwehrkommandos St. Pölten findest du unter{' '}
+          <a
+            href="https://bfkdo-stpoelten.at/impressum/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand hover:underline"
+          >
+            bfkdo-stpoelten.at/impressum
+          </a>
+          .
         </p>
       </div>
       <Footer />
