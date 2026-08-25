@@ -83,7 +83,10 @@ groups" — the same null-sentinel pattern used elsewhere for Drohnengruppen dat
   admin-visible warning for a missing cron job today.
 - `public/sw.js` handles `push` (shows the notification, passing through `payload.data` so `.url` survives
   onto the notification object) and `notificationclick` (reads `event.notification.data?.url`, falling back
-  to `/kalender` for the older, News-independent Kalender-Sofortversand which carries no `data.url`). For an
+  to `/kalender` only if that's ever missing). GitHub Issue #20: the News-independent Kalender-Sofortversand
+  (`sendEventPushNow`, above) now also carries `data: { url: '/kalender/${event.id}' }`, so a click deep-links
+  straight to that event instead of the general list — the `/kalender` fallback is now just defensive, not
+  the expected path for this feature. For an
   already-open matching window: `existing.focus().then(() => existing.navigate(url)).catch(() =>
   self.clients.openWindow(url))` — `focus()` alone leaves the previously-open page unchanged, and
   `navigate()` can reject for a window not controlled by this service worker (e.g. a tab loaded before the
