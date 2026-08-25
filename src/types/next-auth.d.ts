@@ -6,6 +6,9 @@ export interface SessionUser {
   name: string;
   homeOrganizationId: string;
   homeOrganizationType: 'FEUERWEHR' | 'ABSCHNITTSKOMMANDO';
+  // Zweite Heimatfeuerwehr (siehe docs/superpowers/specs/2026-08-25-zweite-heimatfeuerwehr-design.md) -
+  // null, wenn keine zugewiesen ist.
+  secondaryOrganizationId: string | null;
   // Der Abschnitt (Organization.id vom Typ ABSCHNITTSKOMMANDO), dem homeOrganization angehört - bei
   // homeOrganizationType === ABSCHNITTSKOMMANDO ist das homeOrganizationId selbst, sonst deren parentId.
   homeAbschnittOrganizationId: string;

@@ -31,7 +31,7 @@ const isDevStage = process.env.APP_STAGE === 'dev';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
-  const [homeOrganization, adminOrganizations, unreadNewsCount] = await Promise.all([
+  const [homeOrganization, secondaryOrganization, adminOrganizations, unreadNewsCount] = await Promise.all([
     // Explizites select statt findUnique ohne select: wappenImageData ist ein potenziell
     // mehrere hundert KB großer Bytes-Blob, der bei jeder Navigation sonst unnötig mitgeladen
     // würde, obwohl hier nur wappenImageMimeType (Präsenz-Check) gebraucht wird.
@@ -39,6 +39,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       where: { id: user.homeOrganizationId },
       select: { id: true, name: true, shortName: true, type: true, wappenImageMimeType: true },
     }),
+    user.secondaryOrganizationId
+      ? prisma.organization.findUnique({
+          where: { id: user.secondaryOrganizationId },
+          select: { name: true, shortName: true },
+        })
+      : Promise.resolve(null),
     user.feuerwehrAdminOrgIds.length > 0
       ? prisma.organization.findMany({ where: { id: { in: user.feuerwehrAdminOrgIds } } })
       : Promise.resolve([]),
@@ -98,6 +104,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 name={user.name}
                 email={user.email}
                 homeOrganizationName={homeOrganization?.shortName ?? homeOrganization?.name ?? '–'}
+                secondaryOrganizationName={secondaryOrganization ? secondaryOrganization.shortName ?? secondaryOrganization.name : null}
                 isSiteAdmin={isBezirksAdmin(user)}
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}

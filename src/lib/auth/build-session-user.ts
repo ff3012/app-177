@@ -60,6 +60,7 @@ export async function buildSessionUser(user: UserWithRelations): Promise<Session
     name: `${user.firstName} ${user.lastName}`,
     homeOrganizationId: user.homeOrganizationId,
     homeOrganizationType: user.homeOrganization.type,
+    secondaryOrganizationId: user.secondaryOrganizationId,
     homeAbschnittOrganizationId,
     feuerwehrAdminOrgIds,
     abschnittAdminOrgIds,

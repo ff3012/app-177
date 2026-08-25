@@ -3,16 +3,18 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Capacitor } from '@capacitor/core';
+import { switchHomeOrganization } from '@/app/(app)/switch-organization-action';
 import { ChangePasswordForm } from './change-password-form';
 import { FeedbackForm } from './feedback-form';
 import { PushNotificationsToggle } from './push-notifications-toggle';
 
-type ProfilePanel = 'password' | 'feedback' | null;
+type ProfilePanel = 'password' | 'feedback' | 'switch-org' | null;
 
 interface ProfileMenuProps {
   name: string;
   email: string;
   homeOrganizationName: string;
+  secondaryOrganizationName: string | null;
   isSiteAdmin: boolean;
   adminOrganizationNames: string[];
   isDrohnengruppeMember: boolean;
@@ -30,6 +32,7 @@ export function ProfileMenu({
   name,
   email,
   homeOrganizationName,
+  secondaryOrganizationName,
   isSiteAdmin,
   adminOrganizationNames,
   isDrohnengruppeMember,
@@ -148,7 +151,18 @@ export function ProfileMenu({
           <dl className="mt-3 flex flex-col gap-3">
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-neutral-400">Organisation</dt>
-              <dd className="text-neutral-800">{homeOrganizationName}</dd>
+              <dd className="flex flex-wrap items-center gap-2 text-neutral-800">
+                {homeOrganizationName}
+                {secondaryOrganizationName && (
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel('switch-org')}
+                    className="text-xs font-medium text-brand hover:underline"
+                  >
+                    Wechseln zu {secondaryOrganizationName}
+                  </button>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-neutral-400">Admin-Rechte</dt>
@@ -174,6 +188,33 @@ export function ProfileMenu({
               <ChangePasswordForm />
             ) : activePanel === 'feedback' ? (
               <FeedbackForm />
+            ) : activePanel === 'switch-org' ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-neutral-700">
+                  Wirklich zu {secondaryOrganizationName} wechseln? Kalender, Foto-Uploads und Fahrzeug-Reservierung
+                  zeigen danach {secondaryOrganizationName}.
+                </p>
+                <form
+                  action={async () => {
+                    await switchHomeOrganization();
+                  }}
+                  className="flex items-center gap-3"
+                >
+                  <button
+                    type="submit"
+                    className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+                  >
+                    Bestätigen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel(null)}
+                    className="text-sm font-medium text-neutral-600 hover:text-neutral-900"
+                  >
+                    Abbrechen
+                  </button>
+                </form>
+              </div>
             ) : (
               <div className="flex flex-col items-start gap-2">
                 <button
