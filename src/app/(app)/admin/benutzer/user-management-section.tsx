@@ -197,6 +197,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 export function UserManagementSection({
   users,
   organizations,
+  secondaryOrganizationOptions,
   dienstgrade,
   droneGroups,
   initialQuery,
@@ -224,6 +225,13 @@ export function UserManagementSection({
 }: {
   users: UserRow[];
   organizations: Organization[];
+  /** Finding 1 (final-review, issue #21): erweiterte Organisationsliste nur für die
+   * Zweite-Feuerwehr-Auswahl im UserFormSheet - enthält zusätzlich zu `organizations` jede
+   * Organisation, die für einen scoped Admin außerhalb seines eigenen Verwaltungsbereichs liegt,
+   * aber die zweite Feuerwehr eines Benutzers in seinem Bereich ist (siehe page.tsx). Bewusst NICHT
+   * dieselbe Liste wie `organizations`, die auch "Admin für" und die Heimat-Feuerwehr-Auswahl speist
+   * - dort darf ein scoped Admin weiterhin nur seinen eigenen Bereich sehen. */
+  secondaryOrganizationOptions: Organization[];
   dienstgrade: DienstgradOption[];
   droneGroups: { id: string; name: string; isActive: boolean }[];
   initialQuery: string;
@@ -971,6 +979,7 @@ export function UserManagementSection({
         }}
         mode={sheetState?.mode ?? 'create'}
         organizations={organizations}
+        secondaryOrganizationOptions={secondaryOrganizationOptions}
         dienstgrade={dienstgrade}
         droneGroups={droneGroups}
         viewerIsBezirksAdmin={viewerIsBezirksAdmin}

@@ -76,6 +76,10 @@ interface UserFormSheetProps {
   onOpenChange: (open: boolean) => void;
   mode: 'create' | 'edit';
   organizations: OrganizationOption[];
+  /** Finding 1 (final-review, issue #21): erweiterte Liste nur für "Zweite Feuerwehr" - siehe
+   * Kommentar an der gleichnamigen Prop in user-management-section.tsx. "Admin für"/Heimat-Feuerwehr
+   * verwenden weiterhin unverändert `organizations`. */
+  secondaryOrganizationOptions: OrganizationOption[];
   dienstgrade: DienstgradOption[];
   droneGroups: { id: string; name: string; isActive: boolean }[];
   viewerIsBezirksAdmin: boolean;
@@ -153,6 +157,7 @@ export function UserFormSheet({
   onOpenChange,
   mode,
   organizations,
+  secondaryOrganizationOptions,
   dienstgrade,
   droneGroups,
   target,
@@ -580,7 +585,7 @@ export function UserFormSheet({
                         render={({ field }) => (
                           <OrgSearchSelect
                             id="secondaryOrganizationId"
-                            options={organizations}
+                            options={secondaryOrganizationOptions}
                             value={field.value ?? ''}
                             onChange={field.onChange}
                             placeholder="Keine"

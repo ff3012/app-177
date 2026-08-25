@@ -216,11 +216,34 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     q,
   });
 
-  const [organizations, dienstgrade, allDroneGroups, totalUsersCount, homeOrgGroups, filteredCount] =
+  const [organizations, secondaryOrgExtras, dienstgrade, allDroneGroups, totalUsersCount, homeOrgGroups, filteredCount] =
     await Promise.all([
       prisma.organization.findMany({
         where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
         orderBy: { name: 'asc' },
+        include: { parent: { select: { id: true, shortName: true, name: true } } },
+      }),
+      // Finding 1 (final-review, issue #21): für einen scoped (nicht-Bezirks-)Admin zusätzlich jede
+      // Organisation laden, die aktuell die ZWEITE Feuerwehr irgendeines Benutzers in seinem
+      // Verwaltungsbereich ist (secondaryHomeMembers - Gegenstück zu User.secondaryOrganizationId),
+      // auch wenn diese Organisation außerhalb seines eigenen Bereichs liegt (typisch: eine BTF, die
+      // ein Bezirksadmin zugewiesen hat). Bewusst NICHT in die obige `organizations`-Liste gemischt -
+      // die speist auch "Admin für" (AdminOrgMultiSelect) und die Heimat-Feuerwehr-Auswahl, für die
+      // ein scoped Admin nach wie vor NUR seinen eigenen Bereich angeboten bekommen darf; eine
+      // fremde Organisation dort auswählbar zu machen hätte serverseitig ohnehin nur einen erneut
+      // uncaught-ForbiddenError produziert (dieselbe Klasse Bug wie Finding 1 selbst). Stattdessen
+      // unten zu einer separaten `secondaryOrganizationOptions`-Liste zusammengeführt, die nur das
+      // Zweite-Feuerwehr-Feld speist - siehe UserFormSheet.
+      prisma.organization.findMany({
+        // Für einen Bezirksadmin liefert dies absichtlich nichts (die Haupt-Query oben deckt bereits
+        // jede Organisation ab) - eine leere `in: []`-Bedingung statt eines zweiten, andersartig
+        // typisierten Query-Zweigs, damit beide Zweige exakt denselben Rückgabetyp haben.
+        where: fullAdmin
+          ? { id: { in: [] } }
+          : {
+              id: { notIn: currentUser.feuerwehrAdminOrgIds },
+              secondaryHomeMembers: { some: { homeOrganizationId: { in: currentUser.feuerwehrAdminOrgIds } } },
+            },
         include: { parent: { select: { id: true, shortName: true, name: true } } },
       }),
       prisma.dienstgrad.findMany({ orderBy: { sortOrder: 'asc' } }),
@@ -301,16 +324,23 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     };
   });
 
+  const toOrgOption = (org: (typeof organizations)[number]) => ({
+    id: org.id,
+    name: org.shortName ?? org.name,
+    abschnittName: org.parent?.shortName ?? org.parent?.name,
+    abschnittId: org.parent?.id,
+    isActive: org.isActive,
+  });
+  // Finding 1: nur für die Zweite-Feuerwehr-Auswahl im UserFormSheet - siehe Kommentar an
+  // secondaryOrgExtras' Query oben. Für einen Bezirksadmin identisch zu `organizations` (secondaryOrgExtras
+  // ist dann immer leer), daher kein eigener Prop-Wert nötig.
+  const secondaryOrganizationOptions = [...organizations, ...secondaryOrgExtras].map(toOrgOption);
+
   return (
     <UserManagementSection
       users={rows}
-      organizations={organizations.map((org) => ({
-        id: org.id,
-        name: org.shortName ?? org.name,
-        abschnittName: org.parent?.shortName ?? org.parent?.name,
-        abschnittId: org.parent?.id,
-        isActive: org.isActive,
-      }))}
+      organizations={organizations.map(toOrgOption)}
+      secondaryOrganizationOptions={secondaryOrganizationOptions}
       dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
       droneGroups={droneGroups}
       initialQuery={q}

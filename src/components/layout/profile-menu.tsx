@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Capacitor } from '@capacitor/core';
 import { switchHomeOrganization } from '@/app/(app)/switch-organization-action';
@@ -46,6 +46,27 @@ export function ProfileMenu({
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Finding 3 (final-review, issue #21): switchHomeOrganization's { error? } war bisher komplett
+  // ignoriert (form action={async () => { await switchHomeOrganization(); }}) - eine deaktivierte
+  // Ziel-Organisation (Race mit einem Admin, der sie gerade deaktiviert) produzierte keinerlei
+  // sichtbare Rückmeldung. pending sichert zusätzlich gegen einen Doppel-Klick ab (Button unten
+  // disabled={pending}), switchError wird bei jedem neuen Versuch zurückgesetzt.
+  const [switchPending, startSwitchTransition] = useTransition();
+  const [switchError, setSwitchError] = useState<string | undefined>();
+
+  function handleConfirmSwitch() {
+    setSwitchError(undefined);
+    startSwitchTransition(async () => {
+      const result = await switchHomeOrganization();
+      if (result.error) {
+        setSwitchError(result.error);
+        return;
+      }
+      // Erfolg: Panel schließen, statt die jetzt gespiegelte ("Wirklich zu {alte Organisation}
+      // wechseln?") Bestätigung weiter anzuzeigen.
+      setActivePanel(null);
+    });
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -156,7 +177,10 @@ export function ProfileMenu({
                 {secondaryOrganizationName && (
                   <button
                     type="button"
-                    onClick={() => setActivePanel('switch-org')}
+                    onClick={() => {
+                      setSwitchError(undefined);
+                      setActivePanel('switch-org');
+                    }}
                     className="text-xs font-medium text-brand hover:underline"
                   >
                     Wechseln zu {secondaryOrganizationName}
@@ -194,26 +218,28 @@ export function ProfileMenu({
                   Wirklich zu {secondaryOrganizationName} wechseln? Kalender, Foto-Uploads und Fahrzeug-Reservierung
                   zeigen danach {secondaryOrganizationName}.
                 </p>
-                <form
-                  action={async () => {
-                    await switchHomeOrganization();
-                  }}
-                  className="flex items-center gap-3"
-                >
+                {switchError && <p className="text-sm text-red-700">{switchError}</p>}
+                <div className="flex items-center gap-3">
                   <button
-                    type="submit"
-                    className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+                    type="button"
+                    onClick={handleConfirmSwitch}
+                    disabled={switchPending}
+                    className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60"
                   >
-                    Bestätigen
+                    {switchPending ? 'Wird gewechselt…' : 'Bestätigen'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActivePanel(null)}
-                    className="text-sm font-medium text-neutral-600 hover:text-neutral-900"
+                    onClick={() => {
+                      setSwitchError(undefined);
+                      setActivePanel(null);
+                    }}
+                    disabled={switchPending}
+                    className="text-sm font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-60"
                   >
                     Abbrechen
                   </button>
-                </form>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-start gap-2">

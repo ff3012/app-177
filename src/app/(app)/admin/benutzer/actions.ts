@@ -318,8 +318,24 @@ export async function updateUser(
 
   assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
   assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
+  // Nur geprüft, wenn sich die zweite Feuerwehr tatsächlich ändert - sonst würde JEDE Bearbeitung
+  // eines Benutzers mit einer zweiten Feuerwehr außerhalb des eigenen Verwaltungsbereichs
+  // fehlschlagen (typischer Fall: ein Feuerwehr-Admin bearbeitet ein unverändertes Feld bei einem
+  // Benutzer, dessen zweite Feuerwehr - eine BTF - vorher von einem Bezirksadmin zugewiesen wurde),
+  // exakt dasselbe Änderungs-gescopte Muster wie bei isBezirksAdmin/isBezirksDrohnenAdmin unten.
+  // Ändert sich der Wert (Zuweisung, Wechsel ODER Entfernen), braucht der Aufrufer Rechte über BEIDE
+  // betroffenen Organisationen - die bisherige (falls gesetzt) und die neue (falls gesetzt) - sonst
+  // könnte er über einen geleerten Wert eine fremde Zuweisung entfernen, ohne selbst Rechte über die
+  // bisherige Organisation zu haben, oder eine neue fremde Organisation zuweisen.
+  if (data.secondaryOrganizationId !== (targetUser.secondaryOrganizationId ?? '')) {
+    if (targetUser.secondaryOrganizationId) {
+      assertPermission(canManageUsersFor(currentUser, targetUser.secondaryOrganizationId));
+    }
+    if (data.secondaryOrganizationId) {
+      assertPermission(canManageUsersFor(currentUser, data.secondaryOrganizationId));
+    }
+  }
   if (data.secondaryOrganizationId) {
-    assertPermission(canManageUsersFor(currentUser, data.secondaryOrganizationId));
     const categoryError = await validateSecondaryOrganizationCategory(data.homeOrganizationId, data.secondaryOrganizationId);
     if (categoryError) {
       return { fieldErrors: categoryError };
@@ -505,6 +521,18 @@ export async function bulkSetHomeOrganization(userIds: string[], organizationId:
   assertPermission(targetUsers.every((u) => canManageUserRecord(currentUser, u)));
 
   await prisma.user.updateMany({ where: { id: { in: userIds } }, data: { homeOrganizationId: organizationId } });
+  // Zweite Feuerwehr/Dienstgrad räumen, falls sie zufällig genau die neue Heimat-Feuerwehr war -
+  // sonst bliebe ein Benutzer mit homeOrganizationId === secondaryOrganizationId zurück (ein Zustand,
+  // den die normale Bearbeitung/switchHomeOrganization nie erzeugen kann, siehe
+  // validateSecondaryOrganizationCategory/updateUser oben). In diesem kaputten Zustand böte das
+  // Profil-Dropdown "Wechseln zu X" für die bereits aktive Organisation an, und ein Bestätigen würde
+  // nur unsichtbar den Dienstgrad tauschen, ohne dass sich die Organisation sichtbar ändert - dieser
+  // zweite updateMany verhindert das, indem er die zweite Feuerwehr für genau die betroffenen
+  // Benutzer leert.
+  await prisma.user.updateMany({
+    where: { id: { in: userIds }, secondaryOrganizationId: organizationId },
+    data: { secondaryOrganizationId: null, secondaryDienstgradId: null },
+  });
   revalidatePath('/admin/benutzer');
   return { success: true, affectedCount: userIds.length };
 }
