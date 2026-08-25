@@ -17,7 +17,10 @@ export interface EventForPush {
  * Sofort-Versand einer Push-Benachrichtigung mit Termindetails, ausgelöst von der
  * Termin-Detailseite (nicht Teil des News-Moduls - kein NewsPost-Datensatz, kein
  * sentAt-Tracking, kein Zeitplan). Zielgruppe ist dieselbe wie die Sichtbarkeit des Termins
- * selbst, siehe resolveEventAudienceUserIds.
+ * selbst, siehe resolveEventAudienceUserIds. GitHub Issue #20: die Benachrichtigung trägt jetzt
+ * data.url auf den konkreten Termin (statt vorher gar kein data.url, siehe public/sw.js's
+ * notificationclick-Fallback auf /kalender) - bewusst weiterhin ohne NewsPost/News-Sichtbarkeit,
+ * das bleibt laut Rückmeldung des App-Betreibers ein getrenntes Feature.
  */
 export async function sendEventPushNow(event: EventForPush): Promise<{ sent: number; recipients: number }> {
   const userIds = await resolveEventAudienceUserIds(event);
@@ -27,7 +30,11 @@ export async function sendEventPushNow(event: EventForPush): Promise<{ sent: num
   const dateLabel = event.startsAt.toLocaleString('de-AT', { dateStyle: 'medium', timeStyle: 'short' });
   const body = event.location ? `${dateLabel} · ${event.location}` : dateLabel;
 
-  const { sent, staleIds } = await sendPushToSubscriptions(subscriptions, { title: event.title, body });
+  const { sent, staleIds } = await sendPushToSubscriptions(subscriptions, {
+    title: event.title,
+    body,
+    data: { url: `/kalender/${event.id}` },
+  });
 
   if (staleIds.length > 0) {
     await prisma.pushSubscription.deleteMany({ where: { id: { in: staleIds } } });
