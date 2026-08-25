@@ -9,6 +9,10 @@ export function Footer() {
         className="text-neutral-200 hover:text-white hover:underline"
       >
         bfkdo-stpoelten.at
+      </a>{' '}
+      ·{' '}
+      <a href="/datenschutz" className="text-neutral-200 hover:text-white hover:underline">
+        Datenschutz
       </a>
     </footer>
   );

@@ -14,6 +14,11 @@ export default function DatenschutzPage() {
           personenbezogenen Daten verarbeitet werden und zu welchem Zweck.
         </p>
 
+        <p className="mb-4">
+          Die App enthält keine Werbung, kein Tracking zu Werbezwecken und keine Analyse-Dienste von
+          Drittanbietern. Es werden keine Daten zu Werbezwecken verkauft oder weitergegeben.
+        </p>
+
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Verantwortlicher</h2>
         <p className="mb-4">
           Bezirksfeuerwehrkommando St. Pölten
@@ -41,10 +46,20 @@ export default function DatenschutzPage() {
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Auftragsverarbeiter</h2>
         <ul className="mb-4 list-disc pl-5">
-          <li>Hetzner Online GmbH — Server-Hosting.</li>
-          <li>Mailjet — E-Mail-Versand.</li>
-          <li>Exoscale — S3 Storage.</li>
+          <li>Hetzner Online GmbH — Server-Hosting (Deutschland/EU).</li>
+          <li>Mailjet — E-Mail-Versand (Frankreich/EU).</li>
+          <li>Exoscale — S3 Storage (Österreich/EU).</li>
         </ul>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Übermittlung in Drittländer</h2>
+        <p className="mb-4">
+          Wenn Push-Benachrichtigungen aktiviert werden, erfolgt die technische Zustellung über den
+          jeweiligen Push-Dienst des verwendeten Browsers bzw. Betriebssystems (z. B. Google Firebase Cloud
+          Messaging oder Apple Push Notification Service). Dabei werden das Push-Kennzeichen des Geräts und
+          der Inhalt der Benachrichtigung übermittelt; dies kann eine Übermittlung in die USA einschließen.
+          Alle übrigen in dieser Erklärung genannten Auftragsverarbeiter verarbeiten Daten ausschließlich
+          innerhalb der EU.
+        </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Zweck der Verarbeitung</h2>
         <p className="mb-4">
@@ -70,6 +85,23 @@ export default function DatenschutzPage() {
         <p className="mb-4">
           Jedes Mitglied hat das Recht, sich bei der österreichischen Datenschutzbehörde
           (www.dsb.gv.at) über die Verarbeitung seiner personenbezogenen Daten zu beschweren.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Datensicherheit</h2>
+        <p className="mb-4">
+          Die Übertragung erfolgt ausschließlich verschlüsselt über TLS. Passwörter werden nur als
+          kryptografischer Hash gespeichert, niemals im Klartext.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Cookies und lokale Speicherung</h2>
+        <p className="mb-4">
+          Die Weboberfläche verwendet ausschließlich ein technisch notwendiges Sitzungs-Cookie, das für die
+          Anmeldung erforderlich ist. Es werden keine Cookies zu Analyse- oder Werbezwecken gesetzt.
+        </p>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Keine automatisierte Entscheidungsfindung</h2>
+        <p className="mb-4">
+          Es findet keine automatisierte Entscheidungsfindung einschließlich Profiling statt.
         </p>
       </div>
       <Footer />

@@ -206,6 +206,19 @@ export function ProfileMenu({
             </div>
           )}
 
+          {/* Mobile-only, wie der News-Link oben: die app-weite <Footer/> (mit ihrem eigenen
+              Datenschutz-Link) wird in (app)/layout.tsx nur ab sm: gerendert - ohne diesen Link
+              hätte ein eingeloggter Mobile-Nutzer sonst keinen Weg zur Datenschutzerklärung. */}
+          <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
+            <Link
+              href="/datenschutz"
+              onClick={() => setOpen(false)}
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Datenschutz
+            </Link>
+          </div>
+
           {/* Nur Mobile: Desktop hat "Abmelden" bereits als eigenen Button in der Kopfleiste
               (siehe (app)/layout.tsx) - hier zusätzlich anzeigen würde es doppeln. */}
           <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
