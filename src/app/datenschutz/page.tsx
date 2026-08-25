@@ -42,6 +42,8 @@ export default function DatenschutzPage() {
           <br />
           3012 Wolfsgraben
           <br />
+          Tel.: +43 664 5315009
+          <br />
           florian.krebs@feuerwehr.gv.at
         </p>
 
@@ -86,7 +88,16 @@ export default function DatenschutzPage() {
         <ul className="mb-4 list-disc pl-5">
           <li>Hochgeladene Einsatz-/Übungsfotos: werden automatisch 96 Stunden nach dem Hochladen gelöscht.</li>
           <li>Drohnenflug-Protokolle: 5 Jahre.</li>
+          <li>Kalendereinträge und Fahrzeug-Reservierungen: 12 Monate.</li>
         </ul>
+
+        <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Konto löschen</h2>
+        <p className="mb-4">
+          Du kannst die Löschung deines Kontos jederzeit beim Datenschutzbeauftragten (siehe oben) per
+          E-Mail oder Telefon beantragen. Mit der Löschung werden dein Profil und deine Zugangsdaten
+          entfernt. Daten, die einer gesetzlichen oder dienstlichen Aufbewahrungspflicht unterliegen (z. B.
+          Drohnenflug-Protokolle), bleiben für die oben genannten Fristen bestehen.
+        </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Rechte der Nutzer</h2>
         <p className="mb-4">
