@@ -16,13 +16,7 @@ export default function DatenschutzPage() {
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Verantwortlicher</h2>
         <p className="mb-4">
-          Freiwillige Feuerwehr Wolfsgraben
-          <br />
-          Florian Krebs
-          <br />
-          Wehrerstrasse 1
-          <br />
-          3012 Wolfsgraben
+          Bezirksfeuerwehrkommando St. Pölten
         </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Datenschutzbeauftragter</h2>
