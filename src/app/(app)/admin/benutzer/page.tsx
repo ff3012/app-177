@@ -294,6 +294,8 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       passwordChangedAt: u.passwordChangedAt ? u.passwordChangedAt.toISOString() : null,
       dienstgradId: u.dienstgradId ?? '',
       dienstgrad: u.dienstgrad?.kurzform ?? '',
+      secondaryOrganizationId: u.secondaryOrganizationId ?? '',
+      secondaryDienstgradId: u.secondaryDienstgradId ?? '',
       isBezirksAdmin: u.isBezirksAdmin,
       isBezirksDrohnenAdmin: u.isBezirksDrohnenAdmin,
     };

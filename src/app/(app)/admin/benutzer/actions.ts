@@ -15,6 +15,7 @@ import {
   canManageUsersFor,
   filterRemovableAdminOrgIds,
 } from '@/lib/auth/permissions';
+import { FEUERWEHR_KATEGORIE_LABEL } from '@/lib/organizations/feuerwehr-kategorie';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
@@ -166,6 +167,41 @@ async function syncDroneMembership(
   });
 }
 
+/**
+ * Prüft die Design-Regel aus docs/superpowers/specs/2026-08-25-zweite-heimatfeuerwehr-design.md:
+ * secondaryOrganizationId muss auf eine andere feuerwehrKategorie zeigen als homeOrganizationId
+ * (eine FF + eine BTF, nie zwei vom selben Typ). Nur app-seitig geprüft (kein DB-Constraint), da
+ * beide Kategorien serverseitig geladen werden müssen - kann nicht als synchrones Zod-.refine()
+ * ausgedrückt werden. Gibt bei Verletzung ein fieldErrors-Objekt zurück (gleiche Form wie
+ * userSchema.safeParse's eigene Fehler), sonst null.
+ */
+async function validateSecondaryOrganizationCategory(
+  homeOrganizationId: string,
+  secondaryOrganizationId: string,
+): Promise<UserFormState['fieldErrors'] | null> {
+  if (!secondaryOrganizationId) return null;
+  const [home, secondary] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: homeOrganizationId }, select: { feuerwehrKategorie: true } }),
+    prisma.organization.findUnique({ where: { id: secondaryOrganizationId }, select: { feuerwehrKategorie: true } }),
+  ]);
+  if (!home || !secondary) {
+    return { secondaryOrganizationId: ['Feuerwehr wurde nicht gefunden.'] };
+  }
+  if (home.feuerwehrKategorie === secondary.feuerwehrKategorie) {
+    const label = FEUERWEHR_KATEGORIE_LABEL[home.feuerwehrKategorie];
+    const otherLabel =
+      home.feuerwehrKategorie === 'FREIWILLIGE_FEUERWEHR'
+        ? FEUERWEHR_KATEGORIE_LABEL.BETRIEBSFEUERWEHR
+        : FEUERWEHR_KATEGORIE_LABEL.FREIWILLIGE_FEUERWEHR;
+    return {
+      secondaryOrganizationId: [
+        `Diese Feuerwehr hat dieselbe Kategorie (${label}) wie die Heimat-Feuerwehr — bitte eine ${otherLabel} wählen.`,
+      ],
+    };
+  }
+  return null;
+}
+
 export async function createUser(_prevState: UserFormState, formData: FormData): Promise<UserFormState> {
   const currentUser = await requireUser();
 
@@ -181,6 +217,13 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   // die er selbst verwaltet.
   assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
   assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
+  if (data.secondaryOrganizationId) {
+    assertPermission(canManageUsersFor(currentUser, data.secondaryOrganizationId));
+    const categoryError = await validateSecondaryOrganizationCategory(data.homeOrganizationId, data.secondaryOrganizationId);
+    if (categoryError) {
+      return { fieldErrors: categoryError };
+    }
+  }
   if (data.isBezirksAdmin) {
     assertPermission(canGrantBezirksAdmin(currentUser));
   }
@@ -206,6 +249,8 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
+      secondaryOrganizationId: data.secondaryOrganizationId || null,
+      secondaryDienstgradId: data.secondaryDienstgradId || null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
       passwordHash,
@@ -271,6 +316,13 @@ export async function updateUser(
 
   assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
   assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
+  if (data.secondaryOrganizationId) {
+    assertPermission(canManageUsersFor(currentUser, data.secondaryOrganizationId));
+    const categoryError = await validateSecondaryOrganizationCategory(data.homeOrganizationId, data.secondaryOrganizationId);
+    if (categoryError) {
+      return { fieldErrors: categoryError };
+    }
+  }
   if (data.isBezirksAdmin !== targetUser.isBezirksAdmin) {
     assertPermission(canGrantBezirksAdmin(currentUser));
   }
@@ -298,6 +350,8 @@ export async function updateUser(
       istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
       dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
+      secondaryOrganizationId: data.secondaryOrganizationId || null,
+      secondaryDienstgradId: data.secondaryDienstgradId || null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
     },

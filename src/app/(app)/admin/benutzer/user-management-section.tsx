@@ -67,6 +67,8 @@ export interface UserRow {
   passwordChangedAt: string | null;
   dienstgradId: string;
   dienstgrad: string;
+  secondaryOrganizationId: string;
+  secondaryDienstgradId: string;
   isBezirksAdmin: boolean;
   isBezirksDrohnenAdmin: boolean;
 }
@@ -632,6 +634,8 @@ export function UserManagementSection({
         lastLoginAt: sheetTargetRow.lastLoginAt,
         passwordChangedAt: sheetTargetRow.passwordChangedAt,
         dienstgradId: sheetTargetRow.dienstgradId,
+        secondaryOrganizationId: sheetTargetRow.secondaryOrganizationId,
+        secondaryDienstgradId: sheetTargetRow.secondaryDienstgradId,
         isBezirksAdmin: sheetTargetRow.isBezirksAdmin,
         isBezirksDrohnenAdmin: sheetTargetRow.isBezirksDrohnenAdmin,
       }

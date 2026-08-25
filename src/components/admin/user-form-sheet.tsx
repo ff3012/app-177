@@ -55,6 +55,8 @@ export interface UserSheetTarget {
   dienstgradId: string;
   homeOrganizationId: string;
   homeOrgName: string;
+  secondaryOrganizationId: string;
+  secondaryDienstgradId: string;
   adminOrgIds: string[];
   droneRole: DroneRoleOption;
   droneGroupId: string | null;
@@ -120,6 +122,8 @@ function buildDefaultValues(
     istAtemschutzgeraeteTraeger: target?.istAtemschutzgeraeteTraeger ?? false,
     dienstgradId: target?.dienstgradId ?? '',
     homeOrganizationId: target?.homeOrganizationId ?? organizations[0]?.id ?? '',
+    secondaryOrganizationId: target?.secondaryOrganizationId ?? '',
+    secondaryDienstgradId: target?.secondaryDienstgradId ?? '',
     adminOrgIds: target?.adminOrgIds ?? [],
     droneRole: target?.droneRole ?? 'NONE',
     droneGroupId: target?.droneGroupId ?? null,
@@ -207,6 +211,7 @@ export function UserFormSheet({
   const email = watch('email');
   const droneRole = watch('droneRole');
   const isBezirksDrohnenAdmin = watch('isBezirksDrohnenAdmin');
+  const secondaryOrganizationId = watch('secondaryOrganizationId');
   const a1a3LizenzAm = watch('a1a3LizenzAm');
   const a2LizenzAm = watch('a2LizenzAm');
   const stuetzpunktausbildungAm = watch('stuetzpunktausbildungAm');
@@ -243,6 +248,8 @@ export function UserFormSheet({
     if (values.istAtemschutzgeraeteTraeger) formData.set('istAtemschutzgeraeteTraeger', 'on');
     formData.set('dienstgradId', values.dienstgradId ?? '');
     formData.set('homeOrganizationId', values.homeOrganizationId);
+    formData.set('secondaryOrganizationId', values.secondaryOrganizationId ?? '');
+    formData.set('secondaryDienstgradId', values.secondaryDienstgradId ?? '');
     for (const orgId of values.adminOrgIds) formData.append('adminOrgIds', orgId);
     formData.set('droneRole', values.droneRole);
     if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
@@ -537,6 +544,57 @@ export function UserFormSheet({
                       />
                       <p className="mt-1 text-xs text-ink-faint">Leer lassen, wenn keine Adminrechte bestehen.</p>
                     </div>
+                    <div>
+                      <FieldLabel htmlFor="secondaryOrganizationId">Zweite Feuerwehr (optional)</FieldLabel>
+                      <Controller
+                        control={control}
+                        name="secondaryOrganizationId"
+                        render={({ field }) => (
+                          <OrgSearchSelect
+                            id="secondaryOrganizationId"
+                            options={organizations}
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                            placeholder="Keine"
+                            allLabel="Keine"
+                            allValue=""
+                            triggerClassName="w-full"
+                          />
+                        )}
+                      />
+                      <p className="mt-1 text-xs text-ink-faint">
+                        Muss eine andere Kategorie (Freiwillige Feuerwehr/Betriebsfeuerwehr) als die
+                        Heimat-Feuerwehr haben - wird beim Speichern geprüft.
+                      </p>
+                      <FieldError message={errors.secondaryOrganizationId?.message} />
+                    </div>
+                    {secondaryOrganizationId && (
+                      <div>
+                        <FieldLabel htmlFor="secondaryDienstgradId">Dienstgrad (zweite Feuerwehr)</FieldLabel>
+                        <Controller
+                          control={control}
+                          name="secondaryDienstgradId"
+                          render={({ field }) => (
+                            <Select
+                              value={field.value || 'NONE'}
+                              onValueChange={(value) => field.onChange(value === 'NONE' ? '' : value)}
+                            >
+                              <SelectTrigger id="secondaryDienstgradId" className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE">–</SelectItem>
+                                {dienstgrade.map((d) => (
+                                  <SelectItem key={d.id} value={d.id}>
+                                    {d.kurzform}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    )}
                   </div>
                 </section>
 

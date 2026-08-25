@@ -33,6 +33,8 @@ export const userSchema = z
     istAtemschutzgeraeteTraeger: z.boolean(),
     dienstgradId: z.string().optional().or(z.literal('')),
     homeOrganizationId: z.string().min(1, 'Feuerwehr/Organisation ist erforderlich.'),
+    secondaryOrganizationId: z.string().optional().or(z.literal('')),
+    secondaryDienstgradId: z.string().optional().or(z.literal('')),
     adminOrgIds: z.array(z.string()),
     droneRole: z.enum(DRONE_ROLE_OPTIONS),
     droneGroupId: z.string().nullable(),
@@ -83,6 +85,8 @@ export function parseUserFormData(formData: FormData) {
     istAtemschutzgeraeteTraeger: formData.get('istAtemschutzgeraeteTraeger') === 'on',
     dienstgradId: String(formData.get('dienstgradId') ?? ''),
     homeOrganizationId: String(formData.get('homeOrganizationId') ?? ''),
+    secondaryOrganizationId: String(formData.get('secondaryOrganizationId') ?? ''),
+    secondaryDienstgradId: String(formData.get('secondaryDienstgradId') ?? ''),
     adminOrgIds: formData.getAll('adminOrgIds').map(String),
     droneRole: (DRONE_ROLE_OPTIONS as readonly string[]).includes(rawDroneRole)
       ? (rawDroneRole as DroneRoleOption)
