@@ -34,7 +34,7 @@ export default async function BezirksverwaltungPage() {
     showFeuerwehren
       ? prisma.organization.findMany({
           where: { type: 'FEUERWEHR' },
-          select: { id: true, name: true, shortName: true, nummer: true, parentId: true, isActive: true },
+          select: { id: true, name: true, shortName: true, nummer: true, parentId: true, isActive: true, feuerwehrKategorie: true },
           orderBy: { name: 'asc' },
         })
       : Promise.resolve([]),
@@ -60,6 +60,7 @@ export default async function BezirksverwaltungPage() {
     nummer: f.nummer,
     abschnittName: abschnittNameById.get(f.parentId ?? '') ?? '–',
     isActive: f.isActive,
+    feuerwehrKategorie: f.feuerwehrKategorie,
   }));
 
   return (

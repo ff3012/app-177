@@ -114,6 +114,21 @@ export async function toggleFeuerwehrActive(organizationId: string): Promise<voi
   revalidate();
 }
 
+/** Freiwillige Feuerwehr <-> Betriebsfeuerwehr - nur die beiden Werte, daher ein einfacher
+ * Toggle-Button statt eines Auswahlfelds, gleiches Muster wie toggleFeuerwehrActive oben. */
+export async function toggleFeuerwehrKategorie(organizationId: string): Promise<void> {
+  const user = await requireUser();
+  assertPermission(canManageFeuerwehrenBezirksweit(user));
+
+  const existing = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  if (existing.type !== 'FEUERWEHR') {
+    throw new Error('Ungültige Organisation.');
+  }
+  const next = existing.feuerwehrKategorie === 'FREIWILLIGE_FEUERWEHR' ? 'BETRIEBSFEUERWEHR' : 'FREIWILLIGE_FEUERWEHR';
+  await prisma.organization.update({ where: { id: organizationId }, data: { feuerwehrKategorie: next } });
+  revalidate();
+}
+
 export async function createDroneGroup(
   _prevState: BezirksverwaltungFormState,
   formData: FormData,

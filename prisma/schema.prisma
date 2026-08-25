@@ -14,6 +14,16 @@ enum OrganizationType {
   ABSCHNITTSKOMMANDO
 }
 
+// Nur für type == FEUERWEHR relevant (bei ABSCHNITTSKOMMANDO-Zeilen ungenutzt, aber die Spalte
+// bleibt trotzdem NOT NULL mit Default statt nullable - siehe Kommentar auf
+// Organization.feuerwehrKategorie). Vorstufe zu einem künftigen Feature, bei dem eine Person
+// Mitglied sowohl einer Freiwilligen Feuerwehr als auch einer Betriebsfeuerwehr sein kann - noch
+// nicht Teil dieser Änderung.
+enum FeuerwehrKategorie {
+  FREIWILLIGE_FEUERWEHR
+  BETRIEBSFEUERWEHR
+}
+
 enum MembershipRole {
   ADMIN
   MEMBER
@@ -95,19 +105,26 @@ enum DienstgradKategorie {
 // ---------- Core org & users ----------
 
 model Organization {
-  id        String           @id @default(cuid())
-  name      String           @unique
-  shortName String?
-  nummer    String           @unique
-  type      OrganizationType
-  icsToken  String           @unique @default(cuid())
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id                 String             @id @default(cuid())
+  name               String             @unique
+  shortName          String?
+  nummer             String             @unique
+  type               OrganizationType
+  // Freiwillige Feuerwehr vs. Betriebsfeuerwehr - nur für type == FEUERWEHR bedeutungsvoll, bleibt
+  // bei ABSCHNITTSKOMMANDO-Zeilen einfach auf dem Default stehen und wird dort nirgends gelesen.
+  // NOT NULL mit Default statt nullable, weil "jede Feuerwehr muss eine von beiden Kategorien haben"
+  // eine feste Anforderung ist, nicht optional wie z. B. stbNr. Migration
+  // 20260826000000_feuerwehr_kategorie setzt den Default direkt beim ADD COLUMN, sodass jede
+  // bestehende Zeile ohne separaten Backfill-Schritt auf FREIWILLIGE_FEUERWEHR landet.
+  feuerwehrKategorie FeuerwehrKategorie @default(FREIWILLIGE_FEUERWEHR)
+  icsToken           String             @unique @default(cuid())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
   // Bezirksverwaltung: deaktivierte Feuerwehren/Abschnitte bleiben vollständig erhalten (Termine,
   // Mitgliedschaften, Historie) - isActive=false blendet sie nur aus NEUEN Zuordnungs-Auswahllisten
   // aus (siehe OrgSearchSelect/event-form.tsx), nie aus bestehenden Verwaltungsansichten. Additiv,
   // default(true) ist für jede bestehende Zeile korrekt - kein Backfill nötig.
-  isActive  Boolean          @default(true)
+  isActive           Boolean            @default(true)
 
   // Kontaktadresse für die tägliche Atemschutz-Fristen-Warnung (nur FEUERWEHR-Orgs relevant) -
   // bewusst ein eigenes Feld hier statt eines globalen AppSettings-Eintrags, da jede Heimatfeuerwehr
@@ -409,11 +426,11 @@ model DroneGroup {
   // Benachrichtigung bei neuen Drohnenflügen dieser Gruppe.
   flightNotificationEmails String[] @default([])
 
-  memberships  DrohnengruppeMembership[]
-  documents    DroneDocument[]
-  drones       Drone[]
-  events       Event[]
-  newsPosts    NewsPost[]
+  memberships DrohnengruppeMembership[]
+  documents   DroneDocument[]
+  drones      Drone[]
+  events      Event[]
+  newsPosts   NewsPost[]
 
   @@index([organizationId])
 }

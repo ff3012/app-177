@@ -1,11 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { FeuerwehrKategorie } from '@prisma/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { FEUERWEHR_KATEGORIE_LABEL } from '@/lib/organizations/feuerwehr-kategorie';
 import { RenameFeuerwehrForm } from './rename-feuerwehr-form';
 import { AddFeuerwehrForm } from './add-feuerwehr-form';
-import { toggleFeuerwehrActive } from './actions';
+import { toggleFeuerwehrActive, toggleFeuerwehrKategorie } from './actions';
 
 export interface FeuerwehrRow {
   id: string;
@@ -14,6 +16,7 @@ export interface FeuerwehrRow {
   nummer: string;
   abschnittName: string;
   isActive: boolean;
+  feuerwehrKategorie: FeuerwehrKategorie;
 }
 
 /** Freitext-Suchfeld analog zur Benutzertabelle (bei 124 Feuerwehren rechtfertigt sich das) - rein
@@ -45,6 +48,7 @@ export function FeuerwehrenTable({ feuerwehren, abschnitte }: { feuerwehren: Feu
             <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name / Kurzname</TableHead>
             <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Nummer</TableHead>
             <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Abschnitt</TableHead>
+            <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Kategorie</TableHead>
             <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
             <TableHead />
           </TableRow>
@@ -52,6 +56,7 @@ export function FeuerwehrenTable({ feuerwehren, abschnitte }: { feuerwehren: Feu
         <TableBody>
           {filtered.map((f) => {
             const boundToggle = toggleFeuerwehrActive.bind(null, f.id);
+            const boundToggleKategorie = toggleFeuerwehrKategorie.bind(null, f.id);
             return (
               <TableRow key={f.id} className="border-line">
                 <TableCell>
@@ -59,6 +64,18 @@ export function FeuerwehrenTable({ feuerwehren, abschnitte }: { feuerwehren: Feu
                 </TableCell>
                 <TableCell className="font-mono text-ink-muted">{f.nummer}</TableCell>
                 <TableCell className="text-ink-muted">{f.abschnittName}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="border-transparent bg-brand-subtle text-ink">
+                      {FEUERWEHR_KATEGORIE_LABEL[f.feuerwehrKategorie]}
+                    </Badge>
+                    <form action={boundToggleKategorie}>
+                      <button type="submit" className="text-xs text-brand hover:underline">
+                        {f.feuerwehrKategorie === 'FREIWILLIGE_FEUERWEHR' ? 'Auf Betriebsfeuerwehr setzen' : 'Auf Freiwillige Feuerwehr setzen'}
+                      </button>
+                    </form>
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Badge
                     variant="outline"
@@ -79,7 +96,7 @@ export function FeuerwehrenTable({ feuerwehren, abschnitte }: { feuerwehren: Feu
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-ink-muted">
+              <TableCell colSpan={6} className="text-center text-ink-muted">
                 Keine Feuerwehr entspricht der Suche.
               </TableCell>
             </TableRow>
