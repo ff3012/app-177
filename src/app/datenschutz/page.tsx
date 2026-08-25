@@ -79,9 +79,14 @@ export default function DatenschutzPage() {
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Speicherdauer</h2>
         <p className="mb-4">
-          Daten werden für die Dauer der Mitgliedschaft bzw. bis zur Deaktivierung des Zugangs gespeichert und
-          können auf Anfrage gelöscht werden, soweit keine gesetzliche Aufbewahrungspflicht entgegensteht.
+          Konto- und Profildaten werden für die Dauer der Mitgliedschaft bzw. bis zur Deaktivierung des
+          Zugangs gespeichert und können auf Anfrage gelöscht werden, soweit keine gesetzliche
+          Aufbewahrungspflicht entgegensteht.
         </p>
+        <ul className="mb-4 list-disc pl-5">
+          <li>Hochgeladene Einsatz-/Übungsfotos: werden automatisch 96 Stunden nach dem Hochladen gelöscht.</li>
+          <li>Drohnenflug-Protokolle: 5 Jahre.</li>
+        </ul>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Rechte der Nutzer</h2>
         <p className="mb-4">
