@@ -16,7 +16,13 @@ export default function DatenschutzPage() {
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Verantwortlicher</h2>
         <p className="mb-4">
-          Bezirksfeuerwehrkommando St. Pölten.
+          Freiwillige Feuerwehr Wolfsgraben
+          <br />
+          Florian Krebs
+          <br />
+          Wehrerstrasse 1
+          <br />
+          3012 Wolfsgraben
         </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Datenschutzbeauftragter</h2>
@@ -50,7 +56,8 @@ export default function DatenschutzPage() {
         <p className="mb-4">
           Die Daten dienen ausschließlich der internen Organisation der Feuerwehren im Bezirk 17 (Terminplanung,
           Drohnengruppen-Verwaltung, Fahrzeug-Reservierung, Atemschutz-Nachweis, Fotodokumentation). Es findet
-          keine Weitergabe an Dritte zu Werbezwecken statt.
+          keine Weitergabe an Dritte zu Werbezwecken statt. Die Nutzung obliegt den einzelnen Drohnengruppen sowie
+          Heimatfeuerwehren.
         </p>
 
         <h2 className="mb-2 mt-6 text-lg font-semibold text-neutral-900">Speicherdauer</h2>
