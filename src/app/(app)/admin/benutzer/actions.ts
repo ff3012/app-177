@@ -250,7 +250,9 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
       dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
       secondaryOrganizationId: data.secondaryOrganizationId || null,
-      secondaryDienstgradId: data.secondaryDienstgradId || null,
+      // Ohne zweite Feuerwehr darf kein Dienstgrad dafür bestehen bleiben - siehe Kommentar bei
+      // updateUser unten, dieselbe Regel gilt hier fürs Anlegen.
+      secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
       passwordHash,
@@ -351,7 +353,11 @@ export async function updateUser(
       dienstgradId: data.dienstgradId || null,
       homeOrganizationId: data.homeOrganizationId,
       secondaryOrganizationId: data.secondaryOrganizationId || null,
-      secondaryDienstgradId: data.secondaryDienstgradId || null,
+      // Server ist die Autorität, nicht nur das Client-UI (gleiches Muster wie syncDroneMembership's
+      // droneRole==='NONE'-Zweig): wird die zweite Feuerwehr geleert, ohne dass das UI den zugehörigen
+      // Dienstgrad zurücksetzt (oder bei einem direkten Server-Action-Aufruf), darf trotzdem kein
+      // Dienstgrad einer nicht mehr vorhandenen zweiten Feuerwehr in der DB überleben.
+      secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
     },

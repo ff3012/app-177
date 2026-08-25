@@ -178,6 +178,7 @@ export function UserFormSheet({
     watch,
     reset,
     setValue,
+    setError,
     formState: { errors, isDirty },
   } = useForm<UserInput>({
     resolver: zodResolver(userSchema),
@@ -229,6 +230,19 @@ export function UserFormSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBezirksDrohnenAdmin]);
 
+  // Wird "Zweite Feuerwehr" auf "Keine" zurückgesetzt, bleibt der zugehörige Dienstgrad clientseitig
+  // sonst als verwaister Wert stehen (das bedingt gerenderte <Select> für secondaryDienstgradId wird
+  // nur unsichtbar, react-hook-form löscht seinen Wert dabei nicht automatisch) - beim erneuten
+  // Hinzufügen einer zweiten Feuerwehr stünde sonst überraschend noch der alte Dienstgrad vorausgewählt.
+  // Die eigentliche Absicherung ist serverseitig in actions.ts (secondaryOrganizationId leer ⇒
+  // secondaryDienstgradId wird beim Speichern ignoriert), dies ist nur die UX-Ergänzung dazu.
+  useEffect(() => {
+    if (!secondaryOrganizationId) {
+      setValue('secondaryDienstgradId', '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondaryOrganizationId]);
+
   function requestClose(next: boolean) {
     if (!next && isDirty && !activationLink) {
       setConfirmDiscard(true);
@@ -268,6 +282,20 @@ export function UserFormSheet({
       if (result?.error) {
         setServerError(result.error);
         toast.error(result.error);
+        return;
+      }
+      if (result?.fieldErrors) {
+        // Serverseitige Validierung (z. B. validateSecondaryOrganizationCategory) hat abgelehnt -
+        // OHNE diesen Zweig fiel das Ergebnis vorher in den Erfolgsfall darunter durch, obwohl kein
+        // Schreibvorgang stattfand ("false success"). Auf dieselben `errors`-Felder abbilden, die
+        // <FieldError> bereits liest (formState.errors, sonst nur clientseitig über zodResolver
+        // befüllt), und ohne Erfolgstoast/onSaved() abbrechen.
+        for (const [field, messages] of Object.entries(result.fieldErrors)) {
+          const message = messages?.[0];
+          if (message) {
+            setError(field as keyof UserInput, { type: 'server', message });
+          }
+        }
         return;
       }
       if (result?.success && result?.activationLink) {
