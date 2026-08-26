@@ -71,7 +71,7 @@ export async function checkAndNotifyAtemschutzWarnungen(): Promise<void> {
             return `- ${w.name}: ${parts.join(', ')}`;
           }),
           '',
-          'Abschnittsfeuerwehrkommando Purkersdorf',
+          'Bezirksfeuerwehrkommando St. Pölten',
         ].join('\n'),
         htmlPart: [
           `<p>Bei folgenden Mitgliedern von ${escapeHtml(orgLabel)} läuft demnächst eine Atemschutz-Frist ab:</p>`,
@@ -87,7 +87,7 @@ export async function checkAndNotifyAtemschutzWarnungen(): Promise<void> {
             return `<li>${escapeHtml(w.name)}: ${parts.join(', ')}</li>`;
           }),
           '</ul>',
-          '<p>Abschnittsfeuerwehrkommando Purkersdorf</p>',
+          '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
         ].join(''),
       });
     } catch (error) {

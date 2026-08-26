@@ -34,16 +34,16 @@ export async function notifySystemCheckResult(result: SystemCheckResult): Promis
   try {
     await sendEmail({
       to: recipient,
-      subject: `Systemcheck App-177: ${allOk ? 'Alles OK' : 'Fehler erkannt'} (${checkedAtFormatted})`,
+      subject: `Systemcheck APP-17: ${allOk ? 'Alles OK' : 'Fehler erkannt'} (${checkedAtFormatted})`,
       textPart: [
-        `Täglicher Systemcheck App-177 - ${checkedAtFormatted}`,
+        `Täglicher Systemcheck APP-17 - ${checkedAtFormatted}`,
         '',
         ...rows.map((row) => `${row.ok ? 'OK    ' : 'FEHLER'} - ${row.label}: ${row.detail}`),
         '',
-        'Abschnittsfeuerwehrkommando Purkersdorf',
+        'Bezirksfeuerwehrkommando St. Pölten',
       ].join('\n'),
       htmlPart: [
-        `<p>Täglicher Systemcheck App-177 - ${escapeHtml(checkedAtFormatted)}</p>`,
+        `<p>Täglicher Systemcheck APP-17 - ${escapeHtml(checkedAtFormatted)}</p>`,
         '<table style="border-collapse:collapse;">',
         '<tr>',
         '<th style="padding:6px 12px;border:1px solid #ddd;text-align:left;">Check</th>',
@@ -52,7 +52,7 @@ export async function notifySystemCheckResult(result: SystemCheckResult): Promis
         '</tr>',
         htmlRows,
         '</table>',
-        '<p>Abschnittsfeuerwehrkommando Purkersdorf</p>',
+        '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
       ].join(''),
     });
   } catch (error) {

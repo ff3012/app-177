@@ -112,7 +112,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
           <div className="flex flex-col gap-[5px]">
             <span className="text-[30px] font-bold leading-none tracking-[-0.01em]">{organizationDisplayName}</span>
             <span className="dash-section-label font-semibold uppercase leading-none tracking-[0.06em] text-[#6c6c70]">
-              Abschnittsfeuerwehrkommando Purkersdorf
+              Bezirksfeuerwehrkommando St. Pölten
             </span>
           </div>
         </div>
@@ -379,7 +379,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
       >
         <span className="dash-secondary text-[#6c6c70]">Dashboard Feuerwehrhaus · Anzeige aktualisiert sich automatisch</span>
         <span className="dash-secondary text-[#6c6c70]">
-          Zuletzt aktualisiert {now.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} · Quellen: App-177, WASTL
+          Zuletzt aktualisiert {now.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} · Quellen: APP-17, WASTL
           Niederösterreich{facebookActive ? ', Facebook' : ''}
         </span>
       </div>

@@ -35,7 +35,7 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let payload = { title: 'AFKDO Purkersdorf', body: '' };
+  let payload = { title: 'BFKDO St. Pölten', body: '' };
   try {
     payload = event.data.json();
   } catch {

@@ -83,7 +83,7 @@ export async function sendLoginTokenEmail(
       'Am Computer oder im normalen Browser: Über folgenden Link kannst du dich anmelden:',
       link,
       '',
-      'Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben NICHT - er würde',
+      'Nutzt du die APP-17 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben NICHT - er würde',
       'nur in Safari anmelden, nicht in der bereits installierten App. Gib stattdessen diesen Code',
       'direkt in der App im Feld "Code aus E-Mail einfügen" ein:',
       '',
@@ -103,7 +103,7 @@ export async function sendLoginTokenEmail(
       '<p>du hast eine Anmeldung per E-Mail angefordert.</p>',
       '<p>Am Computer oder im normalen Browser: Über folgenden Link kannst du dich anmelden:</p>',
       `<p><a href="${link}">${link}</a></p>`,
-      '<p>Nutzt du die App-177 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben <strong>nicht</strong> - ' +
+      '<p>Nutzt du die APP-17 vom Homescreen aus (iPhone/iPad)? Dann öffne den Link oben <strong>nicht</strong> - ' +
         'er würde nur in Safari anmelden, nicht in der bereits installierten App. Gib stattdessen diesen Code ' +
         'direkt in der App im Feld „Code aus E-Mail einfügen" ein:</p>',
       `<p style="font-family: monospace; font-size: 24px; letter-spacing: 4px; background: #f4f4f4; padding: 12px 16px; border-radius: 4px; text-align: center;">${shortCode}</p>`,
