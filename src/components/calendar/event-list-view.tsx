@@ -124,14 +124,25 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
       </td>
       <td className="whitespace-nowrap px-3 py-1 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="inline-flex items-center gap-1.5">
-          <a
-            href={`/kalender/${event.id}`}
-            className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-neutral-600 hover:bg-neutral-100"
-            title="Zusage & Teilnehmerliste"
-          >
-            Zusage
-          </a>
-          <AddToCalendarLink eventId={event.id} variant="icon" />
+          {event.isVehicleBooking ? (
+            <a
+              href={`/kalender/${event.id}`}
+              className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-neutral-600 hover:bg-neutral-100"
+            >
+              Buchung öffnen
+            </a>
+          ) : (
+            <>
+              <a
+                href={`/kalender/${event.id}`}
+                className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-neutral-600 hover:bg-neutral-100"
+                title="Zusage & Teilnehmerliste"
+              >
+                Zusage
+              </a>
+              <AddToCalendarLink eventId={event.id} variant="icon" />
+            </>
+          )}
         </div>
       </td>
     </tr>
@@ -180,10 +191,18 @@ function EventCard({ event }: { event: CalendarEventInput }) {
           <LocationMeta event={event} />
         </div>
         <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-          <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
-            Zusage & Details
-          </a>
-          <AddToCalendarLink eventId={event.id} variant="icon" />
+          {event.isVehicleBooking ? (
+            <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
+              Buchung öffnen
+            </a>
+          ) : (
+            <>
+              <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
+                Zusage & Details
+              </a>
+              <AddToCalendarLink eventId={event.id} variant="icon" />
+            </>
+          )}
         </div>
       </div>
     </div>
