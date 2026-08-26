@@ -30,3 +30,14 @@ next-env.d.ts
 # capacitor-assets source images (regenerated on demand from public/wappen-bfkdo.png,
 # not committed - same convention as the PWA icon set's own one-off generation script)
 /assets/
+
+# store signing credentials - must live outside this repo (see
+# docs/superpowers/specs/2026-08-23-capacitor-store-rollout-design.md Part B); losing the Android
+# keystore blocks all future updates to the Play Store listing, and either file leaking is a real
+# credential exposure, not just an inconvenience
+*.keystore
+*.jks
+google-services.json
+*.p12
+*.mobileprovision
+*.cer
