@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { savePushSubscription, deletePushSubscription, saveFcmToken, deleteFcmToken } from '@/app/(app)/profile/push-actions';
@@ -35,12 +35,45 @@ export function PushNotificationsToggle({
 }: PushNotificationsToggleProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  // Token gecacht vom letzten "aktivieren", damit "deaktivieren" (im selben Component-Lifetime)
+  // exakt den Token löscht, der tatsächlich serverseitig gespeichert wurde, statt per erneutem
+  // PushNotifications.register() einen (im seltenen Rotationsfall abweichenden) neuen zu erhalten.
+  // Kein useState, da eine Änderung keinen Re-Render auslösen muss.
+  const fcmTokenRef = useRef<string | null>(null);
+
+  async function registerForFcmToken(pushNotifications: typeof import('@capacitor/push-notifications').PushNotifications) {
+    return new Promise<string>((resolve, reject) => {
+      let registrationHandle: { remove: () => void } | undefined;
+      let errorHandle: { remove: () => void } | undefined;
+      const cleanup = () => {
+        registrationHandle?.remove();
+        errorHandle?.remove();
+      };
+      pushNotifications
+        .addListener('registration', (t) => {
+          cleanup();
+          resolve(t.value);
+        })
+        .then((handle) => {
+          registrationHandle = handle;
+        });
+      pushNotifications
+        .addListener('registrationError', (err) => {
+          cleanup();
+          reject(err);
+        })
+        .then((handle) => {
+          errorHandle = handle;
+        });
+      pushNotifications.register();
+    });
+  }
 
   async function handleToggle(next: boolean) {
     setError(undefined);
     setPending(true);
 
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
       try {
         const { PushNotifications } = await import('@capacitor/push-notifications');
         if (next) {
@@ -49,16 +82,13 @@ export function PushNotificationsToggle({
             setError('Berechtigung für Benachrichtigungen wurde nicht erteilt.');
             return;
           }
-        }
-        const token = await new Promise<string>((resolve, reject) => {
-          PushNotifications.addListener('registration', (t) => resolve(t.value));
-          PushNotifications.addListener('registrationError', (err) => reject(err));
-          PushNotifications.register();
-        });
-        if (next) {
+          const token = await registerForFcmToken(PushNotifications);
+          fcmTokenRef.current = token;
           await saveFcmToken(token);
         } else {
+          const token = fcmTokenRef.current ?? (await registerForFcmToken(PushNotifications));
           await deleteFcmToken(token);
+          fcmTokenRef.current = null;
         }
         onEnabledChange(next);
       } catch (err) {
