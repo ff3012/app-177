@@ -15,9 +15,9 @@ export interface DispatchResult {
 // truncate-for-push.ts importieren, siehe Kommentar dort.
 export { truncateForPush };
 
-/** Löst die Zielgruppe auf, versendet per Web-Push an alle registrierten Geräte (mit data.url für das
- * Sprungziel des Push-Klicks) und markiert den Beitrag als gesendet. Idempotent: bereits gesendete
- * Beiträge werden übersprungen. */
+/** Löst die Zielgruppe auf, versendet per Web-Push (VAPID) und nativem Android/FCM-Push an alle
+ * registrierten Geräte (mit data.url für das Sprungziel des Push-Klicks) und markiert den Beitrag als
+ * gesendet. Idempotent: bereits gesendete Beiträge werden übersprungen. */
 export async function dispatchNewsPost(newsPostId: string): Promise<DispatchResult> {
   const post = await prisma.newsPost.findUnique({ where: { id: newsPostId } });
   if (!post) {
@@ -42,10 +42,18 @@ export async function dispatchNewsPost(newsPostId: string): Promise<DispatchResu
     data: { url: `/news/${post.id}` },
   };
 
-  const [webResult, fcmResult] = await Promise.all([
+  const [webSettled, fcmSettled] = await Promise.allSettled([
     sendPushToSubscriptions(subscriptions, pushPayload),
     sendPushToFcmTokens(fcmTokens, pushPayload),
   ]);
+  if (webSettled.status === 'rejected') {
+    console.error('Web-Push-Versand fehlgeschlagen:', webSettled.reason);
+  }
+  if (fcmSettled.status === 'rejected') {
+    console.error('FCM-Push-Versand fehlgeschlagen:', fcmSettled.reason);
+  }
+  const webResult = webSettled.status === 'fulfilled' ? webSettled.value : { sent: 0, staleIds: [] };
+  const fcmResult = fcmSettled.status === 'fulfilled' ? fcmSettled.value : { sent: 0, staleIds: [] };
 
   if (webResult.staleIds.length > 0) {
     await prisma.pushSubscription.deleteMany({ where: { id: { in: webResult.staleIds } } });

@@ -37,10 +37,18 @@ export async function sendEventPushNow(event: EventForPush): Promise<{ sent: num
   const body = event.location ? `${dateLabel} · ${event.location}` : dateLabel;
   const pushPayload = { title: event.title, body, data: { url: `/kalender/${event.id}` } };
 
-  const [webResult, fcmResult] = await Promise.all([
+  const [webSettled, fcmSettled] = await Promise.allSettled([
     sendPushToSubscriptions(subscriptions, pushPayload),
     sendPushToFcmTokens(fcmTokens, pushPayload),
   ]);
+  if (webSettled.status === 'rejected') {
+    console.error('Web-Push-Versand fehlgeschlagen:', webSettled.reason);
+  }
+  if (fcmSettled.status === 'rejected') {
+    console.error('FCM-Push-Versand fehlgeschlagen:', fcmSettled.reason);
+  }
+  const webResult = webSettled.status === 'fulfilled' ? webSettled.value : { sent: 0, staleIds: [] };
+  const fcmResult = fcmSettled.status === 'fulfilled' ? fcmSettled.value : { sent: 0, staleIds: [] };
 
   if (webResult.staleIds.length > 0) {
     await prisma.pushSubscription.deleteMany({ where: { id: { in: webResult.staleIds } } });
