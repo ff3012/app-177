@@ -48,7 +48,18 @@
    docker compose -f docker/docker-compose.yml --env-file .env exec app node -e "console.log(require('web-push').generateVAPIDKeys())"
    docker compose -f docker/docker-compose.yml --env-file .env up -d app
    ```
-7. Bootstrap-Login mit `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` aus der `.env` testen, danach Passwort in der Benutzerverwaltung ändern.
+7. Firebase Cloud Messaging (natives Android-Push) einrichten: Firebase-Konsole → das Projekt, das auch
+   `android/app/google-services.json` gehört → Projekteinstellungen → Dienstkonten → "Neuen privaten
+   Schlüssel generieren". Der Download ist eine JSON-Datei; ihren **kompletten** Inhalt als einzeiligen
+   String (keine eingebetteten Zeilenumbrüche) in `FIREBASE_SERVICE_ACCOUNT_JSON` in `.env` eintragen, dann
+   den Stack neu starten:
+   ```bash
+   docker compose -f docker/docker-compose.yml --env-file .env up -d app
+   ```
+   Ohne diese Variable meldet der Server-Start beim ersten Versuch, eine native Push-Nachricht zu senden,
+   einen Fehler (siehe `src/lib/push/fcm-client.ts`) — Web Push (VAPID, oben) ist davon unabhängig und
+   funktioniert weiterhin.
+8. Bootstrap-Login mit `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` aus der `.env` testen, danach Passwort in der Benutzerverwaltung ändern.
 
 ## Migrationen bei späteren Deploys
 
@@ -115,8 +126,11 @@ unverändert nur das lokale DB-Backup wie bisher. Beide Dateien existieren nur a
 Server (`.env` ist `.gitignore`t, die echte Domain in `Caddyfile` wurde nie committet) und sind für
 einen Restore auf einem neuen Server genauso wichtig wie die Datenbank selbst — ohne sie insbesondere
 kein Zugriff auf `VAPID_PRIVATE_KEY`, ohne den alle bestehenden Push-Abos aus dem DB-Restore
-permanent nutzlos wären (jedes der ~200 Mitglieder müsste Push-Benachrichtigungen neu aktivieren).
-In `.env` ergänzen:
+permanent nutzlos wären (jedes der ~200 Mitglieder müsste Push-Benachrichtigungen neu aktivieren). Dasselbe
+gilt seit dem nativen Android-Push-Feature für `FIREBASE_SERVICE_ACCOUNT_JSON`: ohne diesen Wert wären
+ebenso alle bereits gespeicherten `FcmToken`-Zeilen aus dem DB-Restore dauerhaft nutzlos (jedes Android-App-
+Gerät müsste Push erneut über den Profil-Toggle aktivieren) — der Verlust wäre also genauso permanent wie
+beim VAPID-Key, nur für den nativen statt den Web-Push-Kanal. In `.env` ergänzen:
 
 ```
 S3_BACKUP_BUCKET=app-177-backup

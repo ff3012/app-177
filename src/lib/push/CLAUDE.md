@@ -6,8 +6,14 @@ This file loads automatically (in addition to the root CLAUDE.md) when Claude Co
 
 `/news` (list + unread state), `/news/neu` (compose), `/news/[newsPostId]` (detail, the push
 notification-click deep-link target) and `/news/[newsPostId]/bearbeiten` (edit, only while unsent) persist a
-`NewsPost` and send push notifications to installed devices. This is Web Push (VAPID), not a native push
-service (no APNs/FCM integration) — it rides entirely on the PWA infrastructure already in place.
+`NewsPost` and send push notifications to installed devices. This module is Web Push (VAPID) — it rides
+entirely on the PWA infrastructure already in place. Since the 2026-08-27 native-Android-push feature, a
+second, parallel delivery path exists for members using the Play Store Android app: native push via
+Firebase Cloud Messaging (FCM), not Web Push, since Android's WebView doesn't support the Web Push API from
+inside a Capacitor native shell. See `src/lib/push/fcm-client.ts` for the FCM Admin SDK send path and
+`docs/superpowers/specs/2026-08-27-android-native-push-fcm-design.md` for the full design (device-token
+storage, the client-side enable/disable toggle, token rotation handling). iOS native push (APNs) remains
+explicitly out of scope. The rest of this file documents the Web Push mechanics only.
 
 **Reading is open to every member, on both mobile and desktop — this is not an admin-only module.**
 Only composing/managing posts is gated by the three-tier permission model below. This tripped up two

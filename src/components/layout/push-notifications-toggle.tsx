@@ -26,6 +26,20 @@ interface PushNotificationsToggleProps {
   onEnabledChange: (enabled: boolean) => void;
 }
 
+// Finding A/B (final-review, native Android push): einzige Quelle der Wahrheit für den
+// localStorage-Key, der "hat der Nutzer Push über diesen Toggle tatsächlich erfolgreich
+// aktiviert" festhält - siehe ausführlicher Kommentar in ProfileMenu, warum
+// PushNotifications.checkPermissions() dafür nicht taugt (gibt auf Android < 13 immer 'granted'
+// zurück, unabhängig vom tatsächlichen Registrierungsstatus). ProfileMenu importiert exakt diese
+// Konstante, statt den String ein zweites Mal zu tippen.
+export const NATIVE_PUSH_ENABLED_KEY = 'app177-native-push-enabled';
+
+// Finding C (final-review): wie lange registerForFcmToken auf die register()-Listener wartet,
+// bevor es mit einem klaren Fehler abbricht - ein hängender nativer Bridge-Call (z. B. weil
+// google-services.json im Build fehlt und Firebase nie initialisiert) darf den Toggle nicht für
+// immer in "Wird aktualisiert…" stecken lassen.
+const FCM_REGISTRATION_TIMEOUT_MS = 30_000;
+
 /** Kontrolliert von ProfileMenu (das den Status auch für das Glocken-Icon in der Kopfzeile braucht). */
 export function PushNotificationsToggle({
   vapidPublicKey,
@@ -45,27 +59,49 @@ export function PushNotificationsToggle({
     return new Promise<string>((resolve, reject) => {
       let registrationHandle: { remove: () => void } | undefined;
       let errorHandle: { remove: () => void } | undefined;
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
       const cleanup = () => {
         registrationHandle?.remove();
         errorHandle?.remove();
+        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      };
+      const settleResolve = (value: string) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const settleReject = (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
       };
       pushNotifications
         .addListener('registration', (t) => {
-          cleanup();
-          resolve(t.value);
+          settleResolve(t.value);
         })
         .then((handle) => {
           registrationHandle = handle;
         });
       pushNotifications
         .addListener('registrationError', (err) => {
-          cleanup();
-          reject(err);
+          settleReject(err);
         })
         .then((handle) => {
           errorHandle = handle;
         });
-      pushNotifications.register();
+      // Finding C (final-review): register() selbst kann ablehnen (z. B. fehlende
+      // google-services.json -> Firebase initialisiert nie), ohne dass je einer der beiden
+      // Listener oben feuert - ohne dieses .catch() bliebe das Promise für immer offen.
+      pushNotifications.register().catch(settleReject);
+      // Zusätzliches Sicherheitsnetz: falls weder ein Listener noch register()'s eigenes Promise
+      // je settlen (z. B. die native Bridge selbst hängt), nach FCM_REGISTRATION_TIMEOUT_MS mit
+      // einem klaren Fehler abbrechen statt den Toggle für immer in "Wird aktualisiert…" zu lassen.
+      timeoutHandle = setTimeout(() => {
+        settleReject(new Error('Zeitüberschreitung bei der Push-Registrierung.'));
+      }, FCM_REGISTRATION_TIMEOUT_MS);
     });
   }
 
@@ -85,10 +121,23 @@ export function PushNotificationsToggle({
           const token = await registerForFcmToken(PushNotifications);
           fcmTokenRef.current = token;
           await saveFcmToken(token);
+          // Finding A/B: einziges Signal, das ProfileMenu beim nächsten Laden liest, um den
+          // Glocken-Status zu bestimmen - ein Storage-Fehler (z. B. privater Modus) darf den
+          // eigentlichen Enable-Vorgang nicht scheitern lassen, daher nur best-effort.
+          try {
+            localStorage.setItem(NATIVE_PUSH_ENABLED_KEY, 'true');
+          } catch (storageErr) {
+            console.error('Konnte Push-Status nicht in localStorage speichern:', storageErr);
+          }
         } else {
           const token = fcmTokenRef.current ?? (await registerForFcmToken(PushNotifications));
           await deleteFcmToken(token);
           fcmTokenRef.current = null;
+          try {
+            localStorage.removeItem(NATIVE_PUSH_ENABLED_KEY);
+          } catch (storageErr) {
+            console.error('Konnte Push-Status nicht aus localStorage entfernen:', storageErr);
+          }
         }
         onEnabledChange(next);
       } catch (err) {

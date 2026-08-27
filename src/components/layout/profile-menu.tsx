@@ -6,7 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { switchHomeOrganization } from '@/app/(app)/switch-organization-action';
 import { ChangePasswordForm } from './change-password-form';
 import { FeedbackForm } from './feedback-form';
-import { PushNotificationsToggle } from './push-notifications-toggle';
+import { PushNotificationsToggle, NATIVE_PUSH_ENABLED_KEY } from './push-notifications-toggle';
 
 type ProfilePanel = 'password' | 'feedback' | 'switch-org' | null;
 
@@ -87,11 +87,21 @@ export function ProfileMenu({
       // real FCM flow, iOS keeps showing PushNotificationsToggle's existing "nicht verfügbar" text.
       if (Capacitor.getPlatform() !== 'android') return;
       setPushSupported(true);
-      import('@capacitor/push-notifications').then(({ PushNotifications }) => {
-        PushNotifications.checkPermissions()
-          .then((status) => setPushEnabled(status.receive === 'granted'))
-          .catch(() => {});
-      });
+      // Finding A (final-review): NICHT von PushNotifications.checkPermissions() ableiten - laut
+      // dem installierten Plugin (node_modules/@capacitor/push-notifications/android/.../
+      // PushNotificationsPlugin.java) liefert checkPermissions() auf jedem Android-Gerät unterhalb
+      // API 33 (Android 12 und älter) unbedingt 'granted' zurück, unabhängig davon, ob je eine
+      // FCM-Registrierung stattgefunden hat. Da minSdkVersion 24 ist (android/variables.gradle),
+      // hätte die Glocke auf jedem unterstützten Android-7-12-Gerät ab dem ersten App-Start "an"
+      // gezeigt, obwohl nie ein FcmToken gespeichert wurde. Stattdessen lesen wir das Flag, das
+      // PushNotificationsToggle selbst nach einem tatsächlich erfolgreichen Enable/Disable setzt
+      // (siehe NATIVE_PUSH_ENABLED_KEY dort) - Storage-Zugriff defensiv wrappen, da er in manchen
+      // Kontexten (privater Modus o. ä.) werfen kann.
+      try {
+        setPushEnabled(localStorage.getItem(NATIVE_PUSH_ENABLED_KEY) === 'true');
+      } catch {
+        setPushEnabled(false);
+      }
       return;
     }
 

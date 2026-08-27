@@ -98,8 +98,12 @@ remove or "simplify" the `TZ` env var or the `tzdata` install.
 **Stack**: Next.js App Router (TypeScript) · PostgreSQL via Prisma · Auth.js v5 (beta) with the Credentials
 provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms · `exceljs` for XLSX export ·
 `ical-generator` for .ics · Mailjet REST API directly via `fetch` (no SDK) for transactional email ·
-`@aws-sdk/client-s3` for the System Check's live S3/Exoscale connectivity probe (the one SDK dependency in
-the codebase, see "System Check" below for why) · `qrcode` for server-side dashboard/token QR generation ·
+`@aws-sdk/client-s3` for the System Check's live S3/Exoscale connectivity probe (one of two SDK dependencies
+in the codebase, see "System Check" below for why) · `firebase-admin` (the other one — the FCM Admin SDK,
+used specifically for native Android push, see `src/lib/push/fcm-client.ts` and
+`docs/superpowers/specs/2026-08-27-android-native-push-fcm-design.md`; it's there because it was the
+explicit, approved choice for that feature per the design spec, not because this codebase generally prefers
+full SDKs over a thin `fetch` call) · `qrcode` for server-side dashboard/token QR generation ·
 `sharp` for compositing the WASTL district-status overlay GIFs onto the basemap (see "WASTL proxy" under
 Dashboard Feuerwehrhaus below) · `cmdk` (via shadcn's `command` component) for the "Admin für"
 searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md under Verwaltung below) ·
