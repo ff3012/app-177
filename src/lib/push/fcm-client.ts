@@ -66,8 +66,8 @@ export async function sendPushToFcmTokens(
       sent += 1;
       return;
     }
-    const error = result.reason as { errorInfo?: { code?: string } };
-    if (error?.errorInfo?.code === 'messaging/registration-token-not-registered') {
+    const error = result.reason as { code?: string };
+    if (error?.code === 'messaging/registration-token-not-registered') {
       staleIds.push(tokens[index].id);
     } else {
       console.error('FCM-Push-Versand an ein Token fehlgeschlagen:', error);
