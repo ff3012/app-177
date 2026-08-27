@@ -7,6 +7,7 @@ import { switchHomeOrganization } from '@/app/(app)/switch-organization-action';
 import { ChangePasswordForm } from './change-password-form';
 import { FeedbackForm } from './feedback-form';
 import { PushNotificationsToggle, NATIVE_PUSH_ENABLED_KEY } from './push-notifications-toggle';
+import { LogoutButton } from './logout-button';
 
 type ProfilePanel = 'password' | 'feedback' | 'switch-org' | null;
 
@@ -310,14 +311,9 @@ export function ProfileMenu({
           {/* Nur Mobile: Desktop hat "Abmelden" bereits als eigenen Button in der Kopfleiste
               (siehe (app)/layout.tsx) - hier zusätzlich anzeigen würde es doppeln. */}
           <div className="mt-4 border-t border-neutral-200 pt-3 sm:hidden">
-            <form action={logoutAction}>
-              <button
-                type="submit"
-                className="text-sm font-medium text-neutral-600 hover:text-neutral-900"
-              >
-                Abmelden
-              </button>
-            </form>
+            <LogoutButton logoutAction={logoutAction} className="text-sm font-medium text-neutral-600 hover:text-neutral-900">
+              Abmelden
+            </LogoutButton>
           </div>
         </div>
       )}

@@ -40,6 +40,62 @@ export const NATIVE_PUSH_ENABLED_KEY = 'app177-native-push-enabled';
 // immer in "Wird aktualisiert…" stecken lassen.
 const FCM_REGISTRATION_TIMEOUT_MS = 30_000;
 
+// Gehoben auf Modul-Ebene (statt in PushNotificationsToggle verschachtelt): schließt über keinen
+// Component-State/Props, also verhält sich das Verschieben unverändert - und LogoutButton braucht
+// exakt dieselbe Registrierungs-/Timeout-/Cleanup-Logik, um beim Abmelden den aktuellen Token
+// erneut abzuleiten (falls kein gecachter Wert mehr vorliegt), statt sie zu duplizieren.
+export async function registerForFcmToken(
+  pushNotifications: typeof import('@capacitor/push-notifications').PushNotifications,
+) {
+  return new Promise<string>((resolve, reject) => {
+    let registrationHandle: { remove: () => void } | undefined;
+    let errorHandle: { remove: () => void } | undefined;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+    const cleanup = () => {
+      registrationHandle?.remove();
+      errorHandle?.remove();
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+    };
+    const settleResolve = (value: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+    const settleReject = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+    pushNotifications
+      .addListener('registration', (t) => {
+        settleResolve(t.value);
+      })
+      .then((handle) => {
+        registrationHandle = handle;
+      });
+    pushNotifications
+      .addListener('registrationError', (err) => {
+        settleReject(err);
+      })
+      .then((handle) => {
+        errorHandle = handle;
+      });
+    // Finding C (final-review): register() selbst kann ablehnen (z. B. fehlende
+    // google-services.json -> Firebase initialisiert nie), ohne dass je einer der beiden
+    // Listener oben feuert - ohne dieses .catch() bliebe das Promise für immer offen.
+    pushNotifications.register().catch(settleReject);
+    // Zusätzliches Sicherheitsnetz: falls weder ein Listener noch register()'s eigenes Promise
+    // je settlen (z. B. die native Bridge selbst hängt), nach FCM_REGISTRATION_TIMEOUT_MS mit
+    // einem klaren Fehler abbrechen statt den Toggle für immer in "Wird aktualisiert…" zu lassen.
+    timeoutHandle = setTimeout(() => {
+      settleReject(new Error('Zeitüberschreitung bei der Push-Registrierung.'));
+    }, FCM_REGISTRATION_TIMEOUT_MS);
+  });
+}
+
 /** Kontrolliert von ProfileMenu (das den Status auch für das Glocken-Icon in der Kopfzeile braucht). */
 export function PushNotificationsToggle({
   vapidPublicKey,
@@ -54,56 +110,6 @@ export function PushNotificationsToggle({
   // PushNotifications.register() einen (im seltenen Rotationsfall abweichenden) neuen zu erhalten.
   // Kein useState, da eine Änderung keinen Re-Render auslösen muss.
   const fcmTokenRef = useRef<string | null>(null);
-
-  async function registerForFcmToken(pushNotifications: typeof import('@capacitor/push-notifications').PushNotifications) {
-    return new Promise<string>((resolve, reject) => {
-      let registrationHandle: { remove: () => void } | undefined;
-      let errorHandle: { remove: () => void } | undefined;
-      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-      let settled = false;
-      const cleanup = () => {
-        registrationHandle?.remove();
-        errorHandle?.remove();
-        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
-      };
-      const settleResolve = (value: string) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(value);
-      };
-      const settleReject = (err: unknown) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(err);
-      };
-      pushNotifications
-        .addListener('registration', (t) => {
-          settleResolve(t.value);
-        })
-        .then((handle) => {
-          registrationHandle = handle;
-        });
-      pushNotifications
-        .addListener('registrationError', (err) => {
-          settleReject(err);
-        })
-        .then((handle) => {
-          errorHandle = handle;
-        });
-      // Finding C (final-review): register() selbst kann ablehnen (z. B. fehlende
-      // google-services.json -> Firebase initialisiert nie), ohne dass je einer der beiden
-      // Listener oben feuert - ohne dieses .catch() bliebe das Promise für immer offen.
-      pushNotifications.register().catch(settleReject);
-      // Zusätzliches Sicherheitsnetz: falls weder ein Listener noch register()'s eigenes Promise
-      // je settlen (z. B. die native Bridge selbst hängt), nach FCM_REGISTRATION_TIMEOUT_MS mit
-      // einem klaren Fehler abbrechen statt den Toggle für immer in "Wird aktualisiert…" zu lassen.
-      timeoutHandle = setTimeout(() => {
-        settleReject(new Error('Zeitüberschreitung bei der Push-Registrierung.'));
-      }, FCM_REGISTRATION_TIMEOUT_MS);
-    });
-  }
 
   async function handleToggle(next: boolean) {
     setError(undefined);

@@ -9,6 +9,7 @@ import { getUnreadNewsCount } from '@/lib/news/audience';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
+import { LogoutButton } from '@/components/layout/logout-button';
 import { Footer } from '@/components/layout/footer';
 import { MobileHeaderProvider } from '@/components/layout/mobile-header-context';
 import { MobileHeaderTitleSlot } from '@/components/layout/mobile-header-title-slot';
@@ -113,11 +114,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
                 logoutAction={logoutAction}
               />
-              <form action={logoutAction} className="hidden sm:block">
-                <button type="submit" className="rounded px-2 py-1 text-neutral-200 hover:bg-white/10">
-                  Abmelden
-                </button>
-              </form>
+              <LogoutButton
+                logoutAction={logoutAction}
+                className="hidden rounded px-2 py-1 text-neutral-200 hover:bg-white/10 sm:block"
+              >
+                Abmelden
+              </LogoutButton>
             </div>
           </div>
         </header>
