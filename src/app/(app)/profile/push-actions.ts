@@ -36,3 +36,21 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
   const user = await requireUser();
   await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: user.id } });
 }
+
+export async function saveFcmToken(token: string): Promise<void> {
+  const user = await requireUser();
+  const existing = await prisma.fcmToken.findUnique({ where: { token } });
+  if (existing && existing.userId !== user.id) {
+    throw new Error('Dieses FCM-Token gehört bereits einem anderen Benutzer.');
+  }
+  await prisma.fcmToken.upsert({
+    where: { token },
+    create: { userId: user.id, token },
+    update: {},
+  });
+}
+
+export async function deleteFcmToken(token: string): Promise<void> {
+  const user = await requireUser();
+  await prisma.fcmToken.deleteMany({ where: { token, userId: user.id } });
+}

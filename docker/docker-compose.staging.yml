@@ -44,6 +44,7 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
       CRON_SECRET: ${CRON_SECRET}
       # Bewusst keine S3_*-Variablen - eine Test-/Dev-Umgebung braucht kein Off-Box-Backup ihrer
       # eigenen Wegwerfdaten. backup.sh wird auf diesem Stack ohnehin nicht per Cron eingerichtet.
