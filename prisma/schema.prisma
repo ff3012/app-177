@@ -305,6 +305,7 @@ model User {
   pilotedFlights         DroneFlight[]            @relation("FlightPilot")
   passwordTokens         PasswordToken[]
   pushSubscriptions      PushSubscription[]
+  fcmTokens              FcmToken[]
   newsPostsCreated       NewsPost[]               @relation("NewsPostCreatedBy")
   newsReads              NewsRead[]
   terminZusagen          TerminZusage[]
@@ -604,6 +605,22 @@ model PushSubscription {
   endpoint  String   @unique
   p256dh    String
   auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Ein registriertes Android-Gerät für natives Push über Firebase Cloud Messaging (FCM) - siehe
+// docs/superpowers/specs/2026-08-27-android-native-push-fcm-design.md. Bewusst eine eigene Tabelle,
+// keine Erweiterung von PushSubscription: ein FCM-Token ist ein einzelner String, keine
+// endpoint/p256dh/auth-Kombination wie bei Web Push, und beide Mechanismen laufen dauerhaft parallel
+// (ein User kann beides gleichzeitig haben - Browser-Session + Android-App).
+model FcmToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
