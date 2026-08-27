@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
-import { savePushSubscription, deletePushSubscription } from '@/app/(app)/profile/push-actions';
+import { savePushSubscription, deletePushSubscription, saveFcmToken, deleteFcmToken } from '@/app/(app)/profile/push-actions';
 
 // Uint8Array.from(...) infers a Uint8Array<ArrayBufferLike>, which the DOM types no longer accept
 // for PushManager.subscribe's applicationServerKey. Build via `new Uint8Array(length)` instead so
@@ -38,12 +38,44 @@ export function PushNotificationsToggle({
 
   async function handleToggle(next: boolean) {
     setError(undefined);
-    if (!vapidPublicKey) {
-      setError('Push-Benachrichtigungen sind serverseitig noch nicht konfiguriert.');
+    setPending(true);
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        if (next) {
+          const permission = await PushNotifications.requestPermissions();
+          if (permission.receive !== 'granted') {
+            setError('Berechtigung für Benachrichtigungen wurde nicht erteilt.');
+            return;
+          }
+        }
+        const token = await new Promise<string>((resolve, reject) => {
+          PushNotifications.addListener('registration', (t) => resolve(t.value));
+          PushNotifications.addListener('registrationError', (err) => reject(err));
+          PushNotifications.register();
+        });
+        if (next) {
+          await saveFcmToken(token);
+        } else {
+          await deleteFcmToken(token);
+        }
+        onEnabledChange(next);
+      } catch (err) {
+        console.error('Native Push-Registrierung fehlgeschlagen:', err);
+        setError('Push-Benachrichtigungen konnten nicht geändert werden.');
+      } finally {
+        setPending(false);
+      }
       return;
     }
 
-    setPending(true);
+    if (!vapidPublicKey) {
+      setError('Push-Benachrichtigungen sind serverseitig noch nicht konfiguriert.');
+      setPending(false);
+      return;
+    }
+
     try {
       const registration = await navigator.serviceWorker.ready;
 

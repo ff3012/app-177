@@ -4,6 +4,7 @@ import './globals.css';
 import { PwaRegister } from '@/components/pwa-register';
 import { NativeShellInit } from '@/components/capacitor/native-shell-init';
 import { AndroidBackButton } from '@/components/capacitor/android-back-button';
+import { NativePushListener } from '@/components/capacitor/native-push-listener';
 
 // "Signalrot" design pass: Barlow (body) + IBM Plex Mono (tokens/codes/timestamps) replace the
 // previous Noto Sans / default monospace, matching the new color palette below.
@@ -72,6 +73,7 @@ export default function RootLayout({
         <PwaRegister />
         <NativeShellInit />
         <AndroidBackButton />
+        <NativePushListener />
         {children}
       </body>
     </html>

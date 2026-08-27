@@ -82,17 +82,20 @@ export function ProfileMenu({
   // Läuft unabhängig davon, ob das Dropdown offen ist, damit die Glocke in der Kopfzeile immer
   // den richtigen Status (an/aus) zeigt, nicht erst nach dem ersten Öffnen.
   useEffect(() => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (Capacitor.isNativePlatform()) {
+      // iOS native push is explicitly out of scope (see the design spec) - only Android gets the
+      // real FCM flow, iOS keeps showing PushNotificationsToggle's existing "nicht verfügbar" text.
+      if (Capacitor.getPlatform() !== 'android') return;
+      setPushSupported(true);
+      import('@capacitor/push-notifications').then(({ PushNotifications }) => {
+        PushNotifications.checkPermissions()
+          .then((status) => setPushEnabled(status.receive === 'granted'))
+          .catch(() => {});
+      });
       return;
     }
-    // Weder iOS WKWebView noch Androids WebView unterstützen die Web-Push-API, und Task 5 (dieser
-    // Branch) überspringt die Custom-Service-Worker-Registrierung bewusst innerhalb der
-    // Capacitor-Shell (Capacitor.isNativePlatform()). Androids WebView kann trotzdem sowohl
-    // `serviceWorker` als auch `PushManager` als Objekte exponieren, obwohl echte Push-Zustellung
-    // dort nie funktioniert - das reine Feature-Detection oben reicht innerhalb der nativen Shell
-    // also nicht aus. Ohne dieses Gate würde `navigator.serviceWorker.ready` weiter unten ewig
-    // hängen, da nie ein Service Worker registriert wird.
-    if (Capacitor.isNativePlatform()) {
+
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
       return;
     }
     setPushSupported(true);
