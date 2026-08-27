@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { resolveNewsAudienceUserIds } from '@/lib/news/audience';
 import { sendPushToSubscriptions } from '@/lib/push/web-push-client';
+import { sendPushToFcmTokens } from '@/lib/push/fcm-client';
 import { truncateForPush } from '@/lib/news/truncate-for-push';
 
 export interface DispatchResult {
@@ -27,19 +28,33 @@ export async function dispatchNewsPost(newsPostId: string): Promise<DispatchResu
   }
 
   const userIds = await resolveNewsAudienceUserIds(post);
-  const subscriptions = userIds.length > 0 ? await prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } }) : [];
+  const [subscriptions, fcmTokens] =
+    userIds.length > 0
+      ? await Promise.all([
+          prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } }),
+          prisma.fcmToken.findMany({ where: { userId: { in: userIds } } }),
+        ])
+      : [[], []];
 
-  const { sent, staleIds } = await sendPushToSubscriptions(subscriptions, {
+  const pushPayload = {
     title: post.title,
     body: truncateForPush(post.body),
     data: { url: `/news/${post.id}` },
-  });
+  };
 
-  if (staleIds.length > 0) {
-    await prisma.pushSubscription.deleteMany({ where: { id: { in: staleIds } } });
+  const [webResult, fcmResult] = await Promise.all([
+    sendPushToSubscriptions(subscriptions, pushPayload),
+    sendPushToFcmTokens(fcmTokens, pushPayload),
+  ]);
+
+  if (webResult.staleIds.length > 0) {
+    await prisma.pushSubscription.deleteMany({ where: { id: { in: webResult.staleIds } } });
+  }
+  if (fcmResult.staleIds.length > 0) {
+    await prisma.fcmToken.deleteMany({ where: { id: { in: fcmResult.staleIds } } });
   }
 
   await prisma.newsPost.update({ where: { id: post.id }, data: { sentAt: new Date() } });
 
-  return { sent, recipients: subscriptions.length };
+  return { sent: webResult.sent + fcmResult.sent, recipients: subscriptions.length + fcmTokens.length };
 }
