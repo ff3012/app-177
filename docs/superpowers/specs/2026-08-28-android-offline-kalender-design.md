@@ -32,30 +32,86 @@ ansteht bzw. kürzlich stattgefunden hat.
 
 ## Architektur-Überblick
 
-Drei neue Bausteine, eingebettet in die bestehende Struktur:
+> **Revision (2026-08-28, nach finalem Whole-Branch-Review):** Der ursprünglich hier beschriebene
+> Ansatz — ein separates Vite-Bundle, ausgeliefert über Capacitors `server.errorPath` — wurde
+> **verworfen**, bevor er gemerged wurde. Der finale Review (Lesen von Capacitors eigenem
+> Android-Java-Quellcode, nicht Vermutung) fand zwei Blocker: (1) `errorPath` lädt zwar die
+> Fehlerseite selbst lokal, aber jede weitere Ressource dieser Seite (JS/CSS) fällt auf einen
+> echten Netzwerk-Request zurück, der offline fehlschlägt — nur bei der alten, reinen
+> HTML/CSS-ohne-JS-`offline.html` war das nie ein Problem. (2) Die `errorPath`-Seite läuft auf einer
+> **anderen Origin** (`localhost` statt der echten App-Origin) — Capacitors natives Bridge-Skript
+> wird aber nur für die echte App-Origin injiziert, weshalb `@capacitor/filesystem` dort in seine
+> Web-Fallback-Implementierung fällt und den nativ geschriebenen Cache nie lesen könnte. Ergebnis
+> wäre eine Offline-Ansicht gewesen, die dauerhaft "kein Cache" gezeigt hätte, selbst direkt nach
+> einer erfolgreichen Online-Synchronisierung. Der Abschnitt unten beschreibt den **korrigierten**
+> Ansatz; die ursprüngliche Architektur ist nur noch als Warnung interessant, falls sie je wieder
+> in Erwägung gezogen wird.
 
-1. **Ein neues, eigenständiges Vite-React-Bundle** (`native-offline/`), das die *bestehenden*
-   Kalender-Anzeige-Komponenten aus `src/components/calendar/` direkt importiert und offline (ohne
-   Next.js-Server, ohne Server Actions) rendert. Kein Komponenten-Duplikat.
-2. **Ein Android-only Cache-Schreiber**, der beim normalen Online-Besuch der Kalender-Seite die
-   bereits geladenen Daten (kein zusätzlicher Request) auf das gewählte Zeitfenster zuschneidet und
-   lokal auf dem Gerät speichert (`@capacitor/filesystem`).
-3. **Eine Änderung an `capacitor.config.ts`**, die bei fehlgeschlagenem Laden der Live-Seite
-   (`server.errorPath`) auf das neue Offline-Bundle statt auf die bisherige leere `offline.html`
-   verweist.
+Vier Bausteine, eingebettet in die bestehende Struktur:
+
+1. **Eine neue, statische Next.js-Seite** (reine Client Component, keine Server-Datenabfrage) unter
+   `src/app/offline-kalender/`, die die *bestehenden* Kalender-Anzeige-Komponenten aus
+   `src/components/calendar/` direkt importiert und rein clientseitig rendert. Kein separates
+   Build-Tool, kein Komponenten-Duplikat — Teil des normalen `npm run build`, läuft also durch
+   Next.js' eigenen Bundler, der `'use server'`-Dateien bereits korrekt behandelt (anders als der
+   verworfene Vite-Ansatz, der dafür einen Alias-Stub brauchte).
+2. **Derselbe Android-only Cache-Schreiber wie zuvor** (unverändert, siehe "Daten-Fluss: Cache
+   schreiben" unten) — läuft weiterhin auf der Live-Seite, schreibt weiterhin über
+   `@capacitor/filesystem`.
+3. **Eine Erweiterung von `public/sw.js`**: cached beim Precache-Schritt zusätzlich die Assets
+   dieser neuen Offline-Seite und liefert sie bei einem fehlgeschlagenen Navigations-Fetch aus,
+   statt wie bisher nur die bare `offline.html`. Entscheidend: der Service Worker läuft auf
+   **derselben Origin** wie die Live-App — Capacitors Bridge-Injection ist origin-basiert (nicht
+   inhaltsbasiert), eine über den Service-Worker-Cache ausgelieferte Seite bekommt sie also
+   trotzdem, im Gegensatz zur alten `errorPath`-Seite auf `localhost`.
+4. **Eine Änderung an `components/pwa-register.tsx`**: die bisherige
+   `if (Capacitor.isNativePlatform()) return;`-Sperre vor der Service-Worker-Registrierung entfällt
+   für diesen einen, eng gefassten Zweck (siehe "Service-Worker-Registrierung auf Android" unten).
+   `capacitor.config.ts`s `server.errorPath` bleibt bei der ursprünglichen `offline.html` — sie ist
+   weiterhin der allerletzte Rückfallpunkt für den Fall, dass der Service Worker selbst noch nie
+   erfolgreich installiert werden konnte (z. B. allererster App-Start ganz ohne Verbindung).
 
 ```
 Online:  WebView --live--> app-17.bfkdo-stpoelten.at/kalender (unverändert)
                               |
                               +--> [Android-only Effect] events/layers Prop
-                                     --> Zeitfenster-Filter (client-seitig)
-                                     --> @capacitor/filesystem: offline-cache/kalender.json
+                              |      --> Zeitfenster-Filter (client-seitig)
+                              |      --> @capacitor/filesystem: offline-cache/kalender.json
+                              |
+                              +--> Service Worker (public/sw.js) precacht bei install/activate
+                                     die Assets von /offline-kalender
 
-Offline: WebView --Ladefehler--> capacitor.config.ts server.errorPath
-                                     --> native-fallback/offline-app/index.html (neues Vite-Bundle)
-                                     --> liest offline-cache/kalender.json
+Offline: WebView --Navigation--> fetch schlägt fehl (network error)
+                                     --> Service Worker liefert gecachte /offline-kalender-Seite
+                                         aus (SELBE Origin wie die Live-App)
+                                     --> Next.js-Client-Component liest offline-cache/kalender.json
+                                         über @capacitor/filesystem (Bridge vorhanden, da
+                                         gleiche Origin)
                                      --> rendert KalenderWithLayers(readOnly)
+
+Letzter Rückfallpunkt (Service Worker selbst nie installiert):
+         WebView --Ladefehler--> capacitor.config.ts server.errorPath --> offline.html (unverändert)
 ```
+
+### Service-Worker-Registrierung auf Android
+
+Die bisherige Sperre (`pwa-register.tsx`) war eine bewusste Vereinfachung — die Begründung
+("zwei konkurrierende Installationsmechanismen ohne klare Update-Präzedenz") bezog sich auf
+allgemeine PWA-Install-Prompts/Update-Flows, **nicht** auf einen rein passiven
+Offline-Fallback-Cache. Es gibt keinen dokumentierten Fund, dass Service Worker in einer
+Capacitor-Android-WebView grundsätzlich nicht funktionieren — im Gegenteil, Capacitors eigener
+Java-Quellcode (`Bridge.java`, `WebViewLocalServer.java`) zeigt, dass die App-eigene
+Request-Interception für die entfernte `server.url`-Origin ohnehin `null` zurückgibt (nichts tut)
+und damit einem Service Worker auf dieser Origin nicht im Weg steht. Die einzige verbleibende,
+nur auf einem echten Gerät zu klärende Unsicherheit ist eine reine WebView-Plattformfrage (nicht
+Capacitor-spezifisch): funktioniert Registrierung/Persistenz/Fetch-Interception zuverlässig unter
+Android WebView (API 24, was `minSdkVersion` bereits erfüllt, Capacitor selbst verlangt WebView
+≥55 und lädt sonst ohnehin `errorPath`).
+
+Um die ursprüngliche Sorge (konkurrierende Mechanismen) nicht wieder einzuführen, bleibt die Rolle
+des Service Workers bewusst eng: weiterhin nur GET-Navigationsanfragen abgefangen (unverändert aus
+`sw.js`), keine Änderung an Push/Notification-Handling (ohnehin schon durch die native FCM-Lösung
+ersetzt, Web-Push-APIs funktionieren in einer Android-WebView laut Recherche ohnehin nicht).
 
 ## Komponenten-Wiederverwendungsplan
 
@@ -104,44 +160,55 @@ Capacitor-Speicher-Plugin.
 
 ## Daten-Fluss: Offline anzeigen
 
-Das neue Vite-Bundle (`native-offline/`, Build-Output landet direkt in
-`native-fallback/offline-app/`) hat einen einzigen Einstiegspunkt (`main.tsx`), der:
+`src/app/offline-kalender/page.tsx` (neu, `'use client'`, keine Server-Komponente, keine
+`async`-Datenabfrage — das macht Next.js sie als statische Route vorrenderbar, sodass der Service
+Worker eine feste, gecachte HTML/JS/CSS-Antwort für diese URL ausliefern kann) rendert einen
+einzigen Einstiegspunkt, der:
 
-1. Per `@capacitor/filesystem` `offline-cache/kalender.json` liest.
+**Wichtig: eine dritte, öffentliche Top-Level-Route, nicht unter `(app)/`.** Wie
+`drohnen-schnell/[token]` (siehe root CLAUDE.md) liegt diese Seite außerhalb der `(app)`-Gruppe und
+wird zu `middleware.ts`s `PUBLIC_PATH_PREFIXES` hinzugefügt. Grund: der Service Worker cached diese
+Seite beim `install`-Schritt per eigenem `fetch()`-Aufruf — läge die Seite unter `(app)/` (mit
+`requireUser()`-Gate), würde ein Precache-Versuch ohne (oder mit gerade abgelaufener) Session
+stattdessen die Login-Seite cachen. Da die Seite ohnehin ausschließlich lokal zwischengespeicherte
+Gerätedaten anzeigt (nichts vom Server abruft), hat "öffentlich erreichbar" keine
+Sicherheitsauswirkung — die tatsächlichen Kalenderdaten kommen nie über das Netz für diese URL.
+
+1. Per `@capacitor/filesystem` `offline-cache/kalender.json` liest — funktioniert hier, weil diese
+   Seite (anders als der verworfene `errorPath`-Ansatz) auf derselben Origin wie die Live-App läuft
+   und damit die native Bridge injiziert bekommt.
 2. Drei Zustände unterscheidet:
    - **Kein Cache vorhanden** (Datei existiert nicht — z. B. Erstinstallation ohne je online gewesen
      zu sein): Meldung "Noch keine Daten zwischengespeichert — bitte einmal mit
      Internetverbindung öffnen."
    - **Cache vorhanden**: rendert `KalenderWithLayers` mit `readOnly={true}`, plus einen Kopfbereich
      "Offline-Ansicht — Stand: {syncedAt, formatiert}" und einen "Erneut verbinden"-Button
-     (navigiert zurück zur Live-Origin, funktioniert automatisch sobald wieder Netz da ist).
+     (lädt dieselbe URL neu, funktioniert automatisch sobald wieder Netz da ist — der Service
+     Worker liefert dann wieder die echte Live-Seite statt der gecachten Fallback-Antwort).
    - **Fehler beim Lesen** (korrupte Datei o. ä.): dieselbe "kein Cache"-Meldung als Fallback.
 3. Erhalten bleibt aus der bestehenden Interaktivität: Gitter-/Listenansicht umschalten,
    Layer-/Status-Filter — beides bereits client-seitiger State ohne Serverzugriff.
 
-Das Bundle ist bewusst als **eigenständige "Offline-Hülle"** angelegt (eigener Kopfbereich, eigene
-Meldung), nicht nur als nackte Kalender-Seite — das macht es erweiterbar, sobald Drohnen/Atemschutz
-in späteren Specs dazukommen, ohne den Mechanismus (errorPath, Vite-Build, Filesystem-Cache) erneut
-umbauen zu müssen. Für diesen Piloten enthält die Hülle nur den Kalender-Abschnitt.
+Die Seite ist bewusst als **eigenständige "Offline-Hülle"** angelegt (eigener Kopfbereich, eigene
+Meldung), nicht nur als nackte Kalender-Seite — das macht sie erweiterbar, sobald Drohnen/Atemschutz
+in späteren Specs dazukommen, ohne den Mechanismus (Service-Worker-Precache, Filesystem-Cache)
+erneut umbauen zu müssen. Für diesen Piloten enthält die Hülle nur den Kalender-Abschnitt.
 
 ## Build & Einbindung
 
-- Neues npm-Skript `build:offline` (Vite-Build, `vite.config.ts` im Repo-Root mit eigenem `root`/
-  `build.outDir: 'native-fallback/offline-app'`), nutzt dieselbe `tailwind.config.ts`/`globals.css`
-  wie die Hauptapp (identisches Erscheinungsbild) — Vite unterstützt Tailwind v3 direkt.
-- `npx cap sync android` kopiert `native-fallback/` (inkl. `offline-app/`) unverändert wie bisher in
-  das Android-Projekt — kein zusätzlicher Kopierschritt nötig, `build:offline` muss nur vorher
-  gelaufen sein. Neues kombiniertes Skript `cap:sync:android` (`npm run build:offline && npx cap
-  sync android`) verhindert, dass dieser Schritt bei einem künftigen Release vergessen wird.
-- **Schriftart-Vereinfachung**: die Offline-Ansicht nutzt eine System-Schriftart statt Barlow/IBM
-  Plex Mono (Google Fonts sind offline nicht ladbar; lokal eingebettete Font-Dateien wären möglich,
-  werden für diesen Piloten aber bewusst nicht umgesetzt — kleiner optischer Unterschied, kein
-  funktionales Problem). FullCalendar selbst braucht keine externen Ressourcen (CSS ist im
-  npm-Paket enthalten).
-- `capacitor.config.ts`: `server.errorPath` von `'offline.html'` auf
-  `'offline-app/index.html'` ändern. Die bisherige `offline.html` bleibt als Asset erhalten (falls
-  das neue Bundle selbst nicht ladbar wäre, z. B. bei einem Build-Fehler) oder wird entfernt — wird
-  beim Implementieren anhand von Capacitors tatsächlichem `errorPath`-Verhalten entschieden.
+- **Kein separates Build-Tool.** `src/app/offline-kalender/page.tsx` wird Teil des ganz normalen
+  `npm run build` (Next.js) — dieselbe `tailwind.config.ts`/`globals.css`, dieselben Fonts
+  (`next/font`, Barlow/IBM Plex Mono laden hier wie überall sonst in der App, kein
+  Font-Fallback-Sonderfall wie beim verworfenen Vite-Ansatz).
+- **`public/sw.js` Erweiterung**: die bestehende `STATIC_ASSETS`-Precache-Liste bekommt die
+  gebauten Assets von `/offline-kalender` dazu (Next.js' Build-Manifest liefert die exakten,
+  gehashten Pfade); der bestehende `fetch`-Handler (weiterhin nur GET-Navigationsanfragen, siehe
+  "Service-Worker-Registrierung auf Android" oben) liefert bei einem fehlgeschlagenen Fetch diese
+  gecachte Antwort statt wie bisher nur `offline.html`.
+- **`components/pwa-register.tsx`**: die `if (Capacitor.isNativePlatform()) return;`-Sperre entfällt
+  — Registrierung läuft jetzt auch nativ, mit der oben beschriebenen eng gefassten Rolle.
+- `capacitor.config.ts`s `server.errorPath` bleibt unverändert bei `'offline.html'` — sie deckt nur
+  noch den seltenen Fall ab, dass der Service Worker selbst nie erfolgreich installiert wurde.
 
 ## Fehlerbehandlung & Edge Cases
 
@@ -150,17 +217,23 @@ umbauen zu müssen. Für diesen Piloten enthält die Hülle nur den Kalender-Abs
 - Lesen des Caches schlägt fehl/Datei fehlt → "kein Cache"-Meldung statt Absturz.
 - Cache ist veraltet (z. B. Nutzer war wochenlang offline) → wird nicht aktiv erkannt/gewarnt über
   den reinen Zeitstempel "Stand: ..." hinaus — das reicht für diesen Piloten aus.
-- Nutzer landet offline auf einer *anderen* Seite als Kalender (z. B. Drohnen) → sieht dieselbe
-  Offline-Hülle mit dem Kalender-Inhalt (da `errorPath` global für jede fehlgeschlagene
-  WebView-Navigation gilt) — kein individuelles Routing zur ursprünglich versuchten Seite in diesem
+- Nutzer landet offline auf einer *anderen* Seite als Kalender (z. B. Drohnen) → der Service Worker
+  liefert für jede fehlgeschlagene Navigation dieselbe gecachte Offline-Hülle mit dem
+  Kalender-Inhalt aus — kein individuelles Routing zur ursprünglich versuchten Seite in diesem
   Piloten.
+- Service Worker selbst wurde nie erfolgreich installiert (z. B. allererster App-Start ganz ohne
+  Verbindung, bevor je ein Online-Besuch die Registrierung/den Precache abschließen konnte) → fällt
+  auf Capacitors `errorPath` (`offline.html`, unverändert) zurück, keine Kalenderdaten, aber auch
+  kein Absturz.
 
 ## Testing / Verifikation
 
 Kein automatisierter Test-Suite im Projekt (projektweite Konvention). Verifikation manuell:
 1. Kalender-Seite online öffnen, prüfen, dass `offline-cache/kalender.json` auf dem Gerät entsteht
    (z. B. via `adb shell run-as at.bfkdostpoelten.app cat files/offline-cache/kalender.json` oder
-   Logcat-Ausgabe eines Debug-Logs beim Schreiben).
+   Logcat-Ausgabe eines Debug-Logs beim Schreiben). Über `chrome://inspect` (siehe diese Session
+   bereits etabliertes Debug-Vorgehen für native Push) zusätzlich im Application-Tab prüfen, dass
+   der Service Worker registriert ist und `/offline-kalender` im Cache Storage liegt.
 2. Gerät in Flugmodus versetzen, App neu starten/zu einer beliebigen Seite navigieren → Offline-
    Kalender-Ansicht muss erscheinen, mit den zuvor gecachten Terminen, korrektem Zeitstempel.
 3. Gitter-/Listenansicht umschalten, Layer-Filter umschalten → muss offline funktionieren.
