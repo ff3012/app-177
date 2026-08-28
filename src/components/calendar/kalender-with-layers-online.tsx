@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { KalenderWithLayers, type CalendarLayer } from './kalender-with-layers';
+import { OfflineCacheSync } from './offline-cache-sync';
 import type { CalendarEventInput } from './calendar-view';
 
 interface KalenderWithLayersOnlineProps {
@@ -17,5 +18,10 @@ interface KalenderWithLayersOnlineProps {
  */
 export function KalenderWithLayersOnline({ events, layers }: KalenderWithLayersOnlineProps) {
   const router = useRouter();
-  return <KalenderWithLayers events={events} layers={layers} onNavigate={(path) => router.push(path)} />;
+  return (
+    <>
+      <OfflineCacheSync events={events} layers={layers} />
+      <KalenderWithLayers events={events} layers={layers} onNavigate={(path) => router.push(path)} />
+    </>
+  );
 }
