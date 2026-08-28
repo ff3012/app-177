@@ -3,34 +3,49 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Kalender view readable offline in the native Android app by reusing the existing
-calendar display components in a new, separate Vite bundle that reads a locally-cached JSON
-snapshot, replacing the current bare "no connection" fallback.
+calendar display components on a dedicated offline page, served from the app's own live origin via
+an extended service worker, reading a locally-cached JSON snapshot.
 
 **Architecture:** `CalendarView`/`EventListView`/`KalenderWithLayers` become router-agnostic and gain
-a `readOnly` mode (fully additive — existing online behavior is unchanged when omitted). A new
-Android-only effect writes a time-bounded JSON snapshot of the already-loaded calendar data to disk
-via `@capacitor/filesystem` on every normal online visit. A new, separate Vite-built bundle
-(`native-offline/`) imports these same components and renders them from that snapshot when
-`capacitor.config.ts`'s `server.errorPath` kicks in (WebView failed to reach the live server).
+a `readOnly` mode (fully additive — existing online behavior is unchanged when omitted) — **Tasks 1
+and 2 below are already implemented and merged onto this branch, unchanged by this revision.**
+A new Android-only effect writes a time-bounded JSON snapshot of the already-loaded calendar data to
+disk via `@capacitor/filesystem` on every normal online visit (Task 2). **Revision (see
+`docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md` for the full rationale): the
+original Tasks 3-4 (a separate Vite bundle served via `capacitor.config.ts`'s `server.errorPath`)
+were discarded before merge — the final whole-branch review found, by reading Capacitor's own
+Android Java source, that the `errorPath` page's subresources fall through to the network (fails
+offline) and its origin never receives Capacitor's bridge injection (so `@capacitor/filesystem`
+could never read the cache).** The replacement Tasks 3-4 below instead add a genuine Next.js static
+page (`/offline-kalender`, public, outside the `(app)` route group) that imports the same display
+components, and extend the existing hand-written service worker (`public/sw.js`) to precache that
+page's assets and serve it — from the same live origin, so the bridge and local storage are both
+present — when a navigation fetch fails.
 
-**Tech Stack:** Next.js App Router (existing), React 19, `@capacitor/filesystem` (new dependency),
-Vite + `@vitejs/plugin-react` (new devDependencies), Tailwind v3 (reused config), existing
-`CalendarEventInput` type.
+**Tech Stack:** Next.js App Router (existing, no new build tool), React 19, `@capacitor/filesystem`
+(added in Task 2), the existing hand-written service worker (`public/sw.js`, extended — no Workbox/
+`next-pwa` introduced), Tailwind v3 (reused config), existing `CalendarEventInput` type.
 
 ## Global Constraints
 
 - Read-only only: no offline RSVP, event create/edit, or `.ics` download — those require the server
   and stay online-only.
-- Android-native only: no changes to iOS or the PWA/service-worker path.
+- Native-Android-focused: no new iOS-specific work and no iOS-specific testing. Tasks 3-4 (revised)
+  do touch the shared `public/sw.js`/`components/pwa-register.tsx` service-worker path — narrowly,
+  and only to add passive offline-fallback caching — since serving the offline page from the live
+  origin (rather than a separate local bundle) is what avoids the Capacitor bridge/origin problem
+  that sank the original approach. This is a deliberate, reasoned exception to the earlier
+  Android-only framing, not scope creep — see the design spec's "Service-Worker-Registrierung auf
+  Android" section for the full reasoning.
 - Every change to `CalendarView`/`EventListView`/`KalenderWithLayers` must be additive — when
   `readOnly` is omitted/`false` and `onNavigate` behaves like today's `router.push`, the rendered
-  online output must be unchanged.
+  online output must be unchanged. (Already satisfied by Task 1, unaffected by this revision.)
 - Cache filter uses the event's `end` field, not `start` (`end >= heute - 30 Tage`), so a multi-day
-  event that started before the window but ends within/after it is not dropped.
+  event that started before the window but ends within/after it is not dropped. (Task 2, unaffected.)
 - No new automated tests — this repo has none; verification is `npx tsc --noEmit`, `npm run build`,
-  `npm run build:offline` (new), and manual on-device testing (flight mode) per Task 4.
+  and manual on-device testing (flight mode) per Task 4.
 - Reuse the existing `CalendarEventInput` type and existing Tailwind tokens/`globals.css` — no new
-  color or type definitions.
+  color or type definitions, no new build tooling/devDependencies.
 
 ---
 
@@ -688,164 +703,234 @@ git commit -m "feat: write offline calendar cache on native Android"
 
 ---
 
-### Task 3: Scaffold the standalone Vite offline bundle
+### Task 3: Extend the service worker to precache and serve the offline Kalender page
 
 **Files:**
-- Create: `vite.config.ts`
-- Create: `native-offline/main.tsx`
-- Create: `native-offline/index.html`
-- Modify: `package.json` (scripts, devDependencies)
-- Modify: `.gitignore`
+- Modify: `public/sw.js`
+- Modify: `src/components/pwa-register.tsx`
 
 **Interfaces:**
-- Consumes: `KalenderWithLayers` (`src/components/calendar/kalender-with-layers.tsx`, unchanged from
-  Task 1), `globals.css`/`tailwind.config.ts` (unchanged, reused as-is).
-- Produces: `native-fallback/offline-app/index.html` + hashed JS/CSS assets (the Vite build output;
-  git-ignored, built fresh before every `cap sync`) — Task 4 finishes this entry point's actual logic
-  (currently a hardcoded sample render, so this task's own build/render can be verified in isolation
-  before Task 4 wires up the real cache read).
+- Consumes: nothing from Task 1/2 directly — this task only touches the service worker and its
+  registration. It depends on Task 4's `/offline-kalender` route existing at that exact URL, but
+  Task 3 can be implemented and committed first since `fetch('/offline-kalender')` failing during
+  `install` is handled gracefully (best-effort, matching the rest of this feature's error handling)
+  — the precache step simply does nothing useful until Task 4 lands, without breaking the service
+  worker itself.
+- Produces: an updated `public/sw.js` that precaches `/offline-kalender` and its referenced
+  `/_next/` assets, and serves them for any failed navigation. `src/components/pwa-register.tsx`
+  registers the service worker on Android (previously skipped there).
 
-- [ ] **Step 1: Add Vite devDependencies**
+- [ ] **Step 1: Rewrite `public/sw.js`**
 
-```bash
-npm install -D vite@^6 @vitejs/plugin-react@^4
-```
+Replace the entire file with:
 
-- [ ] **Step 2: Create `vite.config.ts` at the repo root**
+```js
+const CACHE_NAME = 'ff-purkersdorf-shell-v3';
+const OFFLINE_URL = '/offline.html';
+const OFFLINE_KALENDER_URL = '/offline-kalender';
+const STATIC_PRECACHE_URLS = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png'];
 
-```ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'node:path';
+// Next.js baut /offline-kalender mit inhaltsgehashten JS/CSS-Dateien (_next/static/...) - die
+// exakten Dateinamen sind erst zur Build-Zeit bekannt, nicht vorher fest eintragbar. Statt eines
+// zusätzlichen Build-Schritts (Workbox o.ä., bewusst nicht eingeführt - siehe root CLAUDE.md,
+// "hand-written, no next-pwa/similar dependency") liest dieser Schritt die tatsächlich
+// ausgelieferte HTML-Antwort und cached jede darin referenzierte /_next/-Datei mit. Fragil
+// gegenüber Änderungen an Next.js' HTML-Struktur, aber für diesen Piloten bewusst akzeptiert -
+// siehe docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md.
+async function precacheOfflineKalender(cache) {
+  try {
+    const response = await fetch(OFFLINE_KALENDER_URL);
+    if (!response.ok) return;
+    const html = await response.clone().text();
+    await cache.put(OFFLINE_KALENDER_URL, response);
+    const assetUrls = [...html.matchAll(/(?:src|href)="(\/_next\/[^"]+)"/g)].map((m) => m[1]);
+    await Promise.all(
+      assetUrls.map((url) =>
+        fetch(url)
+          .then((res) => res.ok && cache.put(url, res))
+          .catch(() => {})
+      )
+    );
+  } catch {
+    // best-effort - siehe Kommentar oben. Ohne vollständigen Precache zeigt der Offline-Fallback
+    // ggf. eine unvollständig gestylte Seite, aber keinen Absturz.
+  }
+}
 
-// Eigenständiges Build für die Offline-Kalender-Ansicht (native Android, siehe
-// docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md). Läuft neben dem
-// bestehenden Next.js-Build, nicht als Ersatz - `npm run build` (Next.js) bleibt unverändert.
-export default defineConfig({
-  root: 'native-offline',
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-    },
-  },
-  build: {
-    outDir: path.resolve(__dirname, 'native-fallback/offline-app'),
-    emptyOutDir: true,
-  },
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_PRECACHE_URLS).then(() => precacheOfflineKalender(cache)))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+// Navigationen: network-first mit Offline-Fallback (bevorzugt /offline-kalender, sonst die alte
+// bare offline.html). /_next/-Assets: ebenfalls network-first, aber bei Fehlschlag aus dem Cache
+// bedient, falls sie beim Precache-Schritt oben mitgesichert wurden - das deckt genau die JS/CSS-
+// Dateien ab, die /offline-kalender zum Rendern braucht. Alles andere (API-Calls, Server Actions,
+// POST, Bilder, sonstige Assets) bleibt unangetastet, damit keine veralteten Daten/Formulare
+// zwischengespeichert werden.
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
+  const isNavigation = event.request.mode === 'navigate';
+  const isNextStaticAsset = new URL(event.request.url).pathname.startsWith('/_next/');
+  if (!isNavigation && !isNextStaticAsset) return;
+
+  event.respondWith(
+    fetch(event.request).catch(async () => {
+      if (isNavigation) {
+        const kalender = await caches.match(OFFLINE_KALENDER_URL);
+        return kalender || (await caches.match(OFFLINE_URL));
+      }
+      return caches.match(event.request);
+    })
+  );
+});
+
+// News-Modul: eingehende Web-Push-Nachricht als Benachrichtigung anzeigen. data.url (falls vorhanden)
+// wird an showNotification durchgereicht, damit notificationclick unten weiß, wohin ein Tap führen soll.
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload = { title: 'BFKDO St. Pölten', body: '' };
+  try {
+    payload = event.data.json();
+  } catch {
+    payload.body = event.data.text();
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: payload.data,
+    })
+  );
+});
+
+// Klick auf die Benachrichtigung: öffnet/fokussiert data.url (die konkrete News-Meldung), fällt auf
+// /kalender zurück, falls keine data.url mitgeschickt wurde (z. B. der ältere, News-unabhängige
+// Kalender-Sofortversand). Ein bereits offenes Fenster wird fokussiert UND zur Ziel-URL navigiert -
+// focus() allein würde die zuvor geöffnete Seite unverändert lassen. navigate() kann ablehnen (z. B. bei
+// einem Fenster, das dieser Service Worker nicht kontrolliert) - in dem Fall auf openWindow() zurückfallen
+// statt den Nutzer stillschweigend auf der alten Seite sitzen zu lassen (genau der Bug, den dieses
+// Feature eigentlich beheben soll).
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/kalender';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const existing = clientList.find((c) => c.url.includes(self.location.origin));
+      if (existing) {
+        return existing
+          .focus()
+          .then(() => existing.navigate(url))
+          .catch(() => self.clients.openWindow(url));
+      }
+      return self.clients.openWindow(url);
+    })
+  );
 });
 ```
 
-- [ ] **Step 3: Create `native-offline/index.html`**
+The only functional changes from the current file: `CACHE_NAME` bumped `v2` → `v3` (forces old
+caches to be purged on next activate, since `STATIC_PRECACHE_URLS` content changed), the new
+`OFFLINE_KALENDER_URL`/`precacheOfflineKalender` precache step, and the `fetch` handler now also
+matches `/_next/` GET requests (network-first, cache-fallback) in addition to navigations. The
+`push`/`notificationclick` handlers are untouched — copy them verbatim.
 
-Note: no `<link>` to `globals.css` here — with `root: 'native-offline'` (Step 2), an absolute
-`href="/src/app/globals.css"` would resolve against `native-offline/` itself, not the repo root, and
-silently fail to find the real file at build time. The CSS is imported from `main.tsx` instead
-(Step 4), which Vite resolves correctly through the JS module graph regardless of `root`.
+- [ ] **Step 2: Register the service worker on Android in `pwa-register.tsx`**
 
-```html
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Offline – Kalender</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/main.tsx"></script>
-  </body>
-</html>
-```
-
-- [ ] **Step 4: Create `native-offline/main.tsx` (placeholder render, finished in Task 4)**
+Replace the whole file:
 
 ```tsx
-import '../src/app/globals.css';
-import { createRoot } from 'react-dom/client';
-import { KalenderWithLayers } from '@/components/calendar/kalender-with-layers';
+'use client';
 
-// Platzhalter für diesen Task: rendert KalenderWithLayers mit leeren Daten, um Build + Styling zu
-// verifizieren. Task 4 ersetzt dies durch das echte Lesen von offline-cache/kalender.json plus die
-// drei Zustände (kein Cache / Cache vorhanden / Lesefehler).
-const root = createRoot(document.getElementById('root')!);
-root.render(<KalenderWithLayers events={[]} layers={[]} readOnly />);
+import { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+
+export function PwaRegister() {
+  useEffect(() => {
+    // Android registriert den Service Worker jetzt ebenfalls (siehe
+    // docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md, "Service-Worker-
+    // Registrierung auf Android") - eng gefasst auf einen reinen Offline-Fallback-Cache (siehe
+    // sw.js), um die ursprüngliche Sorge (zwei konkurrierende Installationsmechanismen) nicht
+    // wieder einzuführen. iOS bleibt ausgenommen: dort übernimmt weiterhin ausschließlich die
+    // native Capacitor-Hülle die "installierte App"-Rolle - kein Offline-Kalender-Pilot für iOS.
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') return;
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // Registrierung ist best-effort; ohne SW funktioniert die App normal weiter.
+      });
+    }
+  }, []);
+
+  return null;
+}
 ```
 
-- [ ] **Step 5: Add the `build:offline` script and fold it into the existing sync scripts**
+The only change from the current file: the early-return condition narrows from "any native
+platform" to "native AND iOS" — web and Android both now proceed to registration (web already did;
+Android is the new case).
 
-```diff
-    "scripts": {
-      "dev": "next dev",
-      "build": "next build",
-+     "build:offline": "vite build",
-      "start": "next start",
-      "lint": "next lint",
-      "db:migrate": "prisma migrate dev",
-      "db:deploy": "prisma migrate deploy",
-      "db:seed": "node node_modules/tsx/dist/cli.mjs prisma/seed.ts",
-      "db:studio": "prisma studio",
-      "postinstall": "prisma generate",
--     "cap:sync:prod": "cross-env CAPACITOR_TARGET=prod npx cap sync",
--     "cap:sync:dev": "cross-env CAPACITOR_TARGET=dev npx cap sync",
-+     "cap:sync:prod": "npm run build:offline && cross-env CAPACITOR_TARGET=prod npx cap sync",
-+     "cap:sync:dev": "npm run build:offline && cross-env CAPACITOR_TARGET=dev npx cap sync",
-      "cap:open:ios": "npx cap open ios",
-      "cap:open:android": "npx cap open android"
-    },
-```
-
-This matches the existing target-based naming convention instead of inventing a platform-specific
-script name — both existing sync scripts now always rebuild the offline bundle first, so it can
-never be forgotten before a native build (the same class of mistake this repo has already hit twice
-with docker-compose env vars, per the root CLAUDE.md).
-
-- [ ] **Step 6: Ignore the build output**
-
-```diff
-  # (append to .gitignore, near the other build-output entries)
-+ /native-fallback/offline-app/
-```
-
-- [ ] **Step 7: Verify the build**
+- [ ] **Step 3: Verify**
 
 ```bash
-npm run build:offline
+npx tsc --noEmit
+npm run build
 ```
-Expected: succeeds, produces `native-fallback/offline-app/index.html` plus a `assets/` directory
-with hashed `.js`/`.css` files. Open that `index.html` directly in a desktop browser (e.g.
-`start native-fallback/offline-app/index.html` on Windows, or drag it into a browser tab): the page
-should render an empty calendar (`KalenderWithLayers` with `events: []` shows its "Keine Termine
-vorhanden." list state and an empty grid), styled with the same Tailwind colors/fonts as the main
-app (falling back to `system-ui` for the font, per the design spec — Barlow itself won't load since
-`next/font` doesn't run here). No console errors about `next/navigation`, `next/link`, or a missing
-router.
 
-- [ ] **Step 8: Commit**
+Expected: both succeed. This task's real effect (precache behavior, offline serving) cannot be
+verified until Task 4's `/offline-kalender` route exists — `npm run build` succeeding and the
+service worker file being valid JS is the only automated check available at this point. Also
+confirm by reading the diff that no other behavior in `sw.js` changed (push/notificationclick
+handlers byte-identical to before).
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add vite.config.ts native-offline package.json package-lock.json .gitignore
-git commit -m "feat: scaffold standalone Vite bundle for offline calendar view"
+git add public/sw.js src/components/pwa-register.tsx
+git commit -m "feat: extend service worker to precache and serve offline Kalender page"
 ```
 
 ---
 
-### Task 4: Offline entry point, cache read, and `capacitor.config.ts` wiring
+### Task 4: Build the `/offline-kalender` page and wire it into the public routes
 
 **Files:**
-- Modify: `native-offline/main.tsx`
-- Create: `native-offline/OfflineKalenderApp.tsx`
-- Modify: `capacitor.config.ts`
+- Create: `src/app/offline-kalender/page.tsx`
+- Modify: `src/middleware.ts`
 
 **Interfaces:**
 - Consumes: `OfflineKalenderCache` type and the `offline-cache/kalender.json` path (Task 2's
   `offline-cache-sync.tsx`), `KalenderWithLayers` (Task 1), `MobileHeaderProvider`/`useMobileHeader`
-  (`src/components/layout/mobile-header-context.tsx`, unchanged, already portable).
-- Produces: the finished offline entry point rendered at `native-fallback/offline-app/index.html`.
+  (`src/components/layout/mobile-header-context.tsx`, unchanged, already portable — confirmed by the
+  original Task 4's since-discarded work, same reasoning still applies), Task 3's
+  `precacheOfflineKalender` (which fetches this exact route by URL — the route must live at
+  `/offline-kalender`, matching `OFFLINE_KALENDER_URL` in `public/sw.js`).
+- Produces: the finished offline entry point at `/offline-kalender`, publicly reachable (no
+  `requireUser()` gate) so the service worker's `install`-time precache fetch always succeeds
+  regardless of session state.
 
-- [ ] **Step 1: Create `native-offline/OfflineKalenderApp.tsx`**
+- [ ] **Step 1: Create `src/app/offline-kalender/page.tsx`**
 
 ```tsx
+'use client';
+
 import { useEffect, useState } from 'react';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { KalenderWithLayers } from '@/components/calendar/kalender-with-layers';
@@ -873,11 +958,19 @@ function useOfflineCache(): LoadState {
           encoding: Encoding.UTF8,
         });
         const cache = JSON.parse(result.data as string) as OfflineKalenderCache;
-        if (!cancelled) setState({ status: 'ready', cache });
-      } catch {
-        // Datei fehlt (nie online synchronisiert) oder ist beschädigt - in beiden Fällen dieselbe
-        // "kein Cache"-Meldung statt eines Absturzes, siehe Design-Spec, Abschnitt "Daten-Fluss:
-        // Offline anzeigen".
+        if (cancelled) return;
+        if (Array.isArray(cache.events) && Array.isArray(cache.layers)) {
+          setState({ status: 'ready', cache });
+        } else {
+          setState({ status: 'empty' });
+        }
+      } catch (err) {
+        // Datei fehlt (nie online synchronisiert), ist beschädigt, oder JSON.parse schlägt fehl -
+        // in allen Fällen dieselbe "kein Cache"-Meldung statt eines Absturzes. console.error bleibt
+        // für Logcat-Sichtbarkeit beim Debuggen auf einem echten Gerät erhalten (Finding aus dem
+        // vorherigen Task-4-Review: ein leerer catch{} macht "nie synchronisiert" von "Cache
+        // beschädigt" nicht mehr unterscheidbar).
+        console.error('Offline-Kalender-Cache konnte nicht gelesen werden:', err);
         if (!cancelled) setState({ status: 'empty' });
       }
     }
@@ -895,14 +988,16 @@ function formatSyncedAt(iso: string): string {
   return new Date(iso).toLocaleString('de-AT', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function goOnline() {
-  window.location.href = '/';
+function reload() {
+  // Lädt dieselbe URL neu - kommt der Request diesmal durch (Netz wieder da), liefert der
+  // Service Worker die echte, live gerenderte Seite statt der gecachten Offline-Antwort.
+  window.location.reload();
 }
 
 function OfflineHeader({ syncedAt }: { syncedAt: string | null }) {
   const { actionSlot } = useMobileHeader();
   return (
-    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-neutral-200 bg-[#1c1c1e] px-4 py-3 text-white">
+    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-neutral-200 bg-[#1c1c1e] px-4 py-3 pt-safe text-white">
       <div className="flex flex-col">
         <span className="text-sm font-semibold">Offline-Ansicht</span>
         {syncedAt && <span className="text-xs text-neutral-300">Stand: {formatSyncedAt(syncedAt)}</span>}
@@ -911,7 +1006,7 @@ function OfflineHeader({ syncedAt }: { syncedAt: string | null }) {
         {actionSlot}
         <button
           type="button"
-          onClick={goOnline}
+          onClick={reload}
           className="rounded bg-white/10 px-3 py-1.5 text-sm font-medium hover:bg-white/20"
         >
           Erneut verbinden
@@ -956,7 +1051,7 @@ function OfflineKalenderContent() {
   );
 }
 
-export function OfflineKalenderApp() {
+export default function OfflineKalenderPage() {
   return (
     <MobileHeaderProvider>
       <div className="min-h-screen bg-[#f6f6f7]">
@@ -967,68 +1062,90 @@ export function OfflineKalenderApp() {
 }
 ```
 
-- [ ] **Step 2: Wire the real entry point in `native-offline/main.tsx`**
+This route is a top-level segment (`src/app/offline-kalender/`, a sibling of `(app)`/`(auth)`/
+`drohnen-schnell`), so it automatically inherits only the root `src/app/layout.tsx` (fonts, global
+styles, `<PwaRegister/>`, `<AndroidBackButton/>`, etc.) and NOT `(app)/layout.tsx`'s header/nav/
+`requireUser()` gate — same mechanism already used by `drohnen-schnell/[token]`, no new layout file
+needed.
 
-```tsx
-import '../src/app/globals.css';
-import { createRoot } from 'react-dom/client';
-import { OfflineKalenderApp } from './OfflineKalenderApp';
-
-const root = createRoot(document.getElementById('root')!);
-root.render(<OfflineKalenderApp />);
-```
-
-- [ ] **Step 3: Point `capacitor.config.ts`'s `errorPath` at the new bundle**
+- [ ] **Step 2: Add `/offline-kalender` to `middleware.ts`'s public paths**
 
 ```diff
-    server: {
-      url: ORIGINS[TARGET],
-      cleartext: false,
--     errorPath: 'offline.html',
-+     errorPath: 'offline-app/index.html',
-    },
+  const PUBLIC_PATH_PREFIXES = [
+    '/login',
+    '/api/auth',
+    '/api/health',
+    '/kalender/ics',
+    '/aktivieren',
+    '/passwort-vergessen',
+    '/passwort-zuruecksetzen',
+    '/datenschutz',
+    '/drohnen-schnell',
+    '/api/cron',
+    '/dashboard',
+    '/api/wastl',
+    '/api/facebook/image',
+    '/fahrzeug-reservierung',
+    '/how-to.html',
++   '/offline-kalender',
 ```
 
-Leave `native-fallback/offline.html` itself in place (unused by `errorPath` after this change, but
-kept as a safety fallback asset — no reason to delete a working file for a hypothetical future need).
+This is required, not just convenient: the service worker's `install`-time `fetch('/offline-kalender')`
+(Task 3) must succeed regardless of whether that request carries a valid session cookie — if this
+route stayed behind the default auth gate, a precache attempt before login (or after a session
+expired) would silently cache the login-redirect page instead of the real offline content. The page
+itself displays only locally-cached device data and calls no server API, so making it publicly
+reachable has no confidentiality implication.
 
-- [ ] **Step 4: Rebuild and verify the bundle in isolation**
+- [ ] **Step 3: Verify**
 
 ```bash
-npm run build:offline
+npx tsc --noEmit
+npm run build
 ```
-Expected: succeeds. Manually place a valid `OfflineKalenderCache` JSON string as this device's
-`offline-cache/kalender.json` (either by first completing Task 2's on-device verification so the
-real app writes one, or by pushing a hand-written test file via `adb push`), then load
-`native-fallback/offline-app/index.html` on a physical device or emulator through the Capacitor
-build (not a desktop browser this time, since `@capacitor/filesystem` needs the native bridge) —
-confirm the header shows "Offline-Ansicht — Stand: ..." with the correct formatted timestamp, the
-calendar (grid + list) renders the cached events, and the layer/status filters and view toggle work.
 
-- [ ] **Step 5: End-to-end on-device verification (per the design spec's test plan)**
+Expected: both succeed, and the build's route table includes a new static/prerendered entry for
+`/offline-kalender` (look for a `○` or similar static marker in the build output, not `ƒ`/dynamic —
+confirms Next.js recognized this as a page with no server data dependency, which is what makes it
+cacheable as a fixed response).
 
-Using a physical Android device with this build installed (matching this session's established
-device-testing flow — `CAPACITOR_TARGET=dev npx cap sync android` or `prod`, then run from Android
-Studio or a signed build):
+Then start the dev server (`npm run dev`) and open `http://localhost:3000/offline-kalender`
+directly in a browser: it should render without requiring login, showing the "Noch keine Daten
+zwischengespeichert…" empty state (no `@capacitor/filesystem` bridge in a plain browser, so the
+read always lands in `catch`) with no console errors — this confirms the page itself is
+structurally sound before testing the full service-worker/native flow.
 
-1. Open the Kalender page online, confirm (via Task 2's `adb shell run-as` check) the cache file
-   exists.
-2. Enable flight mode, then either restart the app or navigate to any page that requires a live
-   request — the WebView's load failure should trigger `errorPath`, showing the offline Kalender
-   view with the previously cached events and the correct "Stand: ..." timestamp.
-3. Toggle grid/list view and the layer/status filters — confirm they still work with no console
+- [ ] **Step 4: On-device end-to-end verification**
+
+Using a physical Android device with this build installed (`CAPACITOR_TARGET=dev npx cap sync
+android` or `prod`, then run from Android Studio or a signed build — matching this session's
+established device-testing flow):
+
+1. Open the app online at least once (any page) so the service worker registers and its `install`
+   step runs — confirm via `chrome://inspect` → Application tab → Service Workers (should show
+   `sw.js` activated) and Cache Storage (should show `/offline-kalender` plus its `/_next/` assets
+   under `ff-purkersdorf-shell-v3`).
+2. Open the Kalender page online, confirm (via `adb shell run-as at.bfkdostpoelten.app cat
+   files/offline-cache/kalender.json`, per Task 2) the cache file exists.
+3. Enable flight mode, navigate to any page (or restart the app) — the failed navigation should be
+   served the cached `/offline-kalender` page, showing the previously cached events and the correct
+   "Stand: ..." timestamp.
+4. Toggle grid/list view and the layer/status filters — confirm they still work with no console
    errors.
-4. Confirm a previously-RSVP'd event shows its `RsvpBadge`/status pill (read-only), with no
-   Zusage/Absage buttons, no "Neuer Termin", no `.ics` icon anywhere in the offline view.
-5. On a device/profile that has never opened the app online (no cache file), confirm flight mode +
-   any failed navigation shows the "Noch keine Daten zwischengespeichert…" message, not a blank or
-   broken page.
-6. Disable flight mode, tap "Erneut verbinden" — confirm the app returns to the live, fully
-   interactive Kalender page.
+5. Confirm a previously-RSVP'd event shows its `RsvpBadge`/status pill (read-only), with no
+   Zusage/Absage buttons, no "Neuer Termin", no `.ics` icon anywhere.
+6. On a device/profile that has never opened the app online (no cache file, but the service worker
+   has still precached the shell on its first install), confirm flight mode + a failed navigation
+   shows the "Noch keine Daten zwischengespeichert…" message, not a blank or broken page.
+7. Disable flight mode, tap "Erneut verbinden" — confirm the app returns to the live, fully
+   interactive page it originally tried to reach.
+8. As a final sanity check specifically for the bug the previous approach had: confirm step 3 above
+   actually shows real calendar data (not a permanent empty state) — this is the exact failure mode
+   the original `errorPath`-based design would have hit silently.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add native-offline capacitor.config.ts
-git commit -m "feat: finish offline calendar entry point and wire errorPath"
+git add src/app/offline-kalender/page.tsx src/middleware.ts
+git commit -m "feat: add public offline-kalender page served via service worker"
 ```
