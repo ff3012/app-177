@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useActionState } from 'react';
+import { getRememberedValues, rememberValue } from '@/lib/remembered-values';
 import {
   loginAction,
   requestLoginToken,
@@ -15,14 +16,31 @@ const initialLoginState: LoginState = {};
 const initialTokenState: LoginTokenState = {};
 const initialConfirmState: LoginTokenState = {};
 
+// Merkt genau die zuletzt verwendete Login-E-Mail (nicht das Passwort - das bleibt Androids
+// eigenem Passwort-Manager überlassen, siehe docs/superpowers/specs/2026-08-28-
+// formular-vorschlaege-design.md). Ein gemeinsamer Key für alle drei E-Mail-Felder unten, da sie
+// dieselbe Identität repräsentieren.
+const LOGIN_EMAIL_KEY = 'app177-last-login-email';
+
 type Mode = 'password' | 'email-token';
 
 export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const [mode, setMode] = useState<Mode>('password');
-  const [tokenEmail, setTokenEmail] = useState('');
+  // Treibt alle drei E-Mail-Felder unten (Passwort-Modus + beide E-Mail-Token-Modi) - vormals nur
+  // "tokenEmail" für die letzten beiden, jetzt umbenannt, da der Name sonst irreführend wäre.
+  const [email, setEmail] = useState('');
   const [loginState, loginFormAction, loginPending] = useActionState(loginAction, initialLoginState);
   const [tokenState, tokenFormAction, tokenPending] = useActionState(requestLoginToken, initialTokenState);
   const [confirmState, confirmFormAction, confirmPending] = useActionState(confirmLoginWithToken, initialConfirmState);
+
+  useEffect(() => {
+    const [remembered] = getRememberedValues(LOGIN_EMAIL_KEY);
+    if (remembered) setEmail(remembered);
+  }, []);
+
+  function rememberEmail() {
+    rememberValue(LOGIN_EMAIL_KEY, email, 1);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +66,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       </div>
 
       {mode === 'password' ? (
-        <form action={loginFormAction} className="flex flex-col gap-4">
+        <form action={loginFormAction} onSubmit={rememberEmail} className="flex flex-col gap-4">
           <input type="hidden" name="callbackUrl" value={callbackUrl} />
 
           <div className="flex flex-col gap-1">
@@ -61,6 +79,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
               type="email"
               required
               autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
             />
           </div>
@@ -102,7 +122,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
               Code gesendet. Bitte E-Mails prüfen (auch Spam-Ordner). Gültig 5 Minuten.
             </p>
           ) : (
-            <form action={tokenFormAction} className="flex flex-col gap-4">
+            <form action={tokenFormAction} onSubmit={rememberEmail} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <label htmlFor="token-email" className="text-sm font-medium text-neutral-700">
                   E-Mail
@@ -113,8 +133,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
                   type="email"
                   required
                   autoComplete="email"
-                  value={tokenEmail}
-                  onChange={(event) => setTokenEmail(event.target.value)}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
                 />
                 <p className="text-xs text-neutral-500">Du erhältst einen Anmeldelink und einen 6-stelligen Code per E-Mail, gültig 5 Minuten.</p>
@@ -138,7 +158,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
             <div className="h-px flex-1 bg-neutral-200" />
           </div>
 
-          <form action={confirmFormAction} className="flex flex-col gap-3">
+          <form action={confirmFormAction} onSubmit={rememberEmail} className="flex flex-col gap-3">
             <p className="text-xs text-neutral-500">
               Nutzt du die App vom Homescreen aus? Öffne den Link in der E-Mail nicht (er würde nur in Safari
               anmelden), sondern gib E-Mail und den 6-stelligen Code hier direkt ein.
@@ -153,8 +173,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
                 name="email"
                 type="email"
                 autoComplete="email"
-                value={tokenEmail}
-                onChange={(event) => setTokenEmail(event.target.value)}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 className="rounded border border-neutral-300 px-3 py-2 focus:border-brand focus:outline-none"
               />
             </div>

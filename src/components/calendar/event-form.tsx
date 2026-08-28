@@ -6,7 +6,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { EVENT_CATEGORIES, eventSchema, type EventInput } from '@/lib/validation/event.schema';
 import { DateTime15MinInput } from '@/components/ui/datetime-15min-input';
+import { getRememberedValues, rememberValue } from '@/lib/remembered-values';
 import type { EventFormState } from '@/app/(app)/kalender/actions';
+
+// Merkt bis zu 8 zuletzt verwendete, unterschiedliche Termin-Orte - eigener, vom Drohnenflug-
+// Formular getrennter Verlauf (siehe docs/superpowers/specs/2026-08-28-
+// formular-vorschlaege-design.md).
+const KALENDER_EVENT_LOCATION_KEY = 'app177-kalender-event-locations';
 
 interface OrganizationOption {
   id: string;
@@ -39,6 +45,11 @@ export function EventForm({
 }: EventFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
+  const [locations, setLocations] = useState<string[]>([]);
+
+  useEffect(() => {
+    setLocations(getRememberedValues(KALENDER_EVENT_LOCATION_KEY));
+  }, []);
 
   const {
     register,
@@ -140,6 +151,7 @@ export function EventForm({
     startTransition(async () => {
       const result = await action({}, formData);
       setServerError(result?.error);
+      if (!result?.error && values.location) rememberValue(KALENDER_EVENT_LOCATION_KEY, values.location, 8);
     });
   }
 
@@ -158,7 +170,16 @@ export function EventForm({
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Ort</label>
-        <input {...register('location')} className="rounded border border-neutral-300 px-3 py-2" />
+        <input
+          {...register('location')}
+          list="kalender-event-location-suggestions"
+          className="rounded border border-neutral-300 px-3 py-2"
+        />
+        <datalist id="kalender-event-location-suggestions">
+          {locations.map((location) => (
+            <option key={location} value={location} />
+          ))}
+        </datalist>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
