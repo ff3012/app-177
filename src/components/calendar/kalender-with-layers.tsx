@@ -18,6 +18,8 @@ export type StatusFilter = 'ALLE' | 'OFFEN' | 'ZUGESAGT';
 interface KalenderWithLayersProps {
   events: CalendarEventInput[];
   layers: CalendarLayer[];
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
 }
 
 type ViewMode = 'calendar' | 'list';
@@ -58,7 +60,7 @@ function FilterIcon({ hasHiddenLayers }: { hasHiddenLayers: boolean }) {
 // Komponente (KalenderDesktopSidebar) statt KalenderFiltersContent - die Legende entfällt dort
 // zugunsten einer Fußzeile, eine neue "Nur anzeigen"-Statusfilter-Karte kommt dazu. Unterhalb lg:
 // bleibt KalenderFiltersContent (BottomSheet) unverändert und bekommt nie einen statusFilter.
-export function KalenderWithLayers({ events, layers }: KalenderWithLayersProps) {
+export function KalenderWithLayers({ events, layers, readOnly = false, onNavigate }: KalenderWithLayersProps) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(layers.map((layer) => [layer.key, true])),
   );
@@ -169,9 +171,14 @@ export function KalenderWithLayers({ events, layers }: KalenderWithLayersProps) 
           </div>
         </div>
         {viewMode === 'calendar' ? (
-          <CalendarView events={filteredEvents} />
+          <CalendarView events={filteredEvents} readOnly={readOnly} onNavigate={onNavigate} />
         ) : (
-          <EventListView events={sortedEvents} desktopEvents={visibleListEvents} />
+          <EventListView
+            events={sortedEvents}
+            desktopEvents={visibleListEvents}
+            readOnly={readOnly}
+            onNavigate={onNavigate}
+          />
         )}
       </div>
     </div>

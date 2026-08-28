@@ -1,8 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import type { CalendarEventInput } from './calendar-view';
 import { AddToCalendarLink } from './add-to-calendar-link';
@@ -70,15 +68,15 @@ function LocationMeta({ event }: { event: CalendarEventInput }) {
  * sonst würde die Navigation aus dem ersten Klick bereits laufen, bevor der Doppelklick erkannt wird.
  * Geteilt zwischen der Tabellenzeile, der mobilen Karte und der neuen Desktop-Monatsgruppen-Zeile.
  */
-function useRowClick(eventId: string, editable: boolean) {
-  const router = useRouter();
+function useRowClick(eventId: string, editable: boolean, onNavigate?: (path: string) => void) {
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleClick() {
+    if (!onNavigate) return;
     if (clickTimer.current) return;
     clickTimer.current = setTimeout(() => {
       clickTimer.current = null;
-      router.push(`/kalender/${eventId}`);
+      onNavigate(`/kalender/${eventId}`);
     }, DOUBLE_CLICK_WINDOW_MS);
   }
 
@@ -87,14 +85,22 @@ function useRowClick(eventId: string, editable: boolean) {
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
     }
-    if (editable) router.push(`/kalender/${eventId}/bearbeiten`);
+    if (editable && onNavigate) onNavigate(`/kalender/${eventId}/bearbeiten`);
   }
 
   return { handleClick, handleDoubleClick };
 }
 
-function EventListRow({ event }: { event: CalendarEventInput }) {
-  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable);
+function EventListRow({
+  event,
+  readOnly,
+  onNavigate,
+}: {
+  event: CalendarEventInput;
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
+}) {
+  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable, onNavigate);
   const start = new Date(event.start);
 
   return (
@@ -123,27 +129,29 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
         <RsvpBadge counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
       </td>
       <td className="whitespace-nowrap px-3 py-1 text-right" onClick={(e) => e.stopPropagation()}>
-        <div className="inline-flex items-center gap-1.5">
-          {event.isVehicleBooking ? (
-            <a
-              href={`/kalender/${event.id}`}
-              className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-neutral-600 hover:bg-neutral-100"
-            >
-              Buchung öffnen
-            </a>
-          ) : (
-            <>
+        {!readOnly && (
+          <div className="inline-flex items-center gap-1.5">
+            {event.isVehicleBooking ? (
               <a
                 href={`/kalender/${event.id}`}
                 className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-neutral-600 hover:bg-neutral-100"
-                title="Zusage & Teilnehmerliste"
               >
-                Zusage
+                Buchung öffnen
               </a>
-              <AddToCalendarLink eventId={event.id} variant="icon" />
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <a
+                  href={`/kalender/${event.id}`}
+                  className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-neutral-600 hover:bg-neutral-100"
+                  title="Zusage & Teilnehmerliste"
+                >
+                  Zusage
+                </a>
+                <AddToCalendarLink eventId={event.id} variant="icon" />
+              </>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );
@@ -153,8 +161,16 @@ function EventListRow({ event }: { event: CalendarEventInput }) {
  * hin. Die Datums-Badge-Spalte + farbige Akzentleiste (Farbe aus layer-colors.ts, dieselbe Quelle
  * wie die Termin-Chips im Kalendergitter und die Legende) übernimmt die visuelle Zuordnung, die im
  * Gitter über die Chip-Farbe passiert - hier gibt es keine Chips, nur die Karte selbst. */
-function EventCard({ event }: { event: CalendarEventInput }) {
-  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable);
+function EventCard({
+  event,
+  readOnly,
+  onNavigate,
+}: {
+  event: CalendarEventInput;
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
+}) {
+  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable, onNavigate);
   const start = new Date(event.start);
   const accentColor = LAYER_COLORS[event.layer ?? ''] ?? '#8e8e93';
 
@@ -190,20 +206,22 @@ function EventCard({ event }: { event: CalendarEventInput }) {
         <div className="truncate text-sm text-neutral-500" title={locationMetaText(event)}>
           <LocationMeta event={event} />
         </div>
-        <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-          {event.isVehicleBooking ? (
-            <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
-              Buchung öffnen
-            </a>
-          ) : (
-            <>
+        {!readOnly && (
+          <div className="mt-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            {event.isVehicleBooking ? (
               <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
-                Zusage & Details
+                Buchung öffnen
               </a>
-              <AddToCalendarLink eventId={event.id} variant="icon" />
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <a href={`/kalender/${event.id}`} className="text-sm font-medium text-brand hover:underline">
+                  Zusage & Details
+                </a>
+                <AddToCalendarLink eventId={event.id} variant="icon" />
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -285,6 +303,8 @@ interface DesktopEventRowProps {
   expanded: boolean;
   onRespond: (eventId: string, status: 'ZUGESAGT' | 'ABGESAGT') => void;
   onToggleExpand: (eventId: string) => void;
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
 }
 
 /** Zeile der neuen Desktop-Monatsgruppen-Ansicht (Kalender Browser.dc.html, nur ab lg:) - eigene
@@ -292,8 +312,17 @@ interface DesktopEventRowProps {
  * Inline-Zusage/Absage, Aufklapp-Panel) grundlegend anders ist als die Tabellenzeile. Bei
  * Fahrzeug-Reservierungen (kein Zusage-Konzept, siehe rsvp-actions.ts's eigene Sperre dafür) gibt
  * es weder RSVP-Chips noch Aufklapp-Chevron, nur einen "Buchung öffnen"-Button. */
-function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, onToggleExpand }: DesktopEventRowProps) {
-  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable);
+function DesktopEventRow({
+  event,
+  overrideStatus,
+  pending,
+  expanded,
+  onRespond,
+  onToggleExpand,
+  readOnly,
+  onNavigate,
+}: DesktopEventRowProps) {
+  const { handleClick, handleDoubleClick } = useRowClick(event.id, event.editable, onNavigate);
   const start = new Date(event.start);
   const accentColor = LAYER_COLORS[event.layer ?? ''] ?? '#8e8e93';
   const status = overrideStatus ?? event.myRsvpStatus ?? null;
@@ -327,9 +356,7 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
                 Bezirksweit
               </span>
             )}
-            <Link href={`/kalender/${event.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
-              {event.title}
-            </Link>
+            <span className="hover:underline">{event.title}</span>
           </div>
           <div
             className="truncate text-sm text-neutral-500"
@@ -353,18 +380,20 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
         </div>
 
         {event.isVehicleBooking ? (
-          <div
-            className="flex shrink-0 justify-end"
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-          >
-            <a
-              href={`/kalender/${event.id}`}
-              className="rounded border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
+          !readOnly && (
+            <div
+              className="flex shrink-0 justify-end"
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
             >
-              Buchung öffnen
-            </a>
-          </div>
+              <a
+                href={`/kalender/${event.id}`}
+                className="rounded border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
+              >
+                Buchung öffnen
+              </a>
+            </div>
+          )
         ) : (
           <>
             <RsvpCountChips counts={event.rsvpCounts ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 }} />
@@ -377,7 +406,7 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
                 <span className={`rounded px-3 py-2 text-sm font-semibold ${RSVP_STATUS_CLASS[status]}`}>
                   {RSVP_STATUS_LABEL[status]}
                 </span>
-              ) : (
+              ) : !readOnly ? (
                 <>
                   <button
                     type="button"
@@ -396,8 +425,8 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
                     Absage
                   </button>
                 </>
-              )}
-              <AddToCalendarLink eventId={event.id} variant="icon" />
+              ) : null}
+              {!readOnly && <AddToCalendarLink eventId={event.id} variant="icon" />}
               <button
                 type="button"
                 onClick={() => onToggleExpand(event.id)}
@@ -427,7 +456,15 @@ function DesktopEventRow({ event, overrideStatus, pending, expanded, onRespond, 
 /** Hält den optimistischen Zusage/Absage-Zustand und das Aufklapp-Panel pro Zeile - exakt dasselbe
  * Muster wie HomeTodoList's responded/pending (siehe home-todo-list.tsx): sofortiges UI-Update,
  * Rollback + Toast bei einem Serverfehler, kein Seitenwechsel. */
-function DesktopMonthList({ events }: { events: CalendarEventInput[] }) {
+function DesktopMonthList({
+  events,
+  readOnly,
+  onNavigate,
+}: {
+  events: CalendarEventInput[];
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
+}) {
   const [overrideStatus, setOverrideStatus] = useState<Record<string, 'ZUGESAGT' | 'ABGESAGT'>>({});
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -470,6 +507,8 @@ function DesktopMonthList({ events }: { events: CalendarEventInput[] }) {
                 expanded={Boolean(expanded[event.id])}
                 onRespond={handleRespond}
                 onToggleExpand={handleToggleExpand}
+                readOnly={readOnly}
+                onNavigate={onNavigate}
               />
             ))}
           </div>
@@ -482,9 +521,13 @@ function DesktopMonthList({ events }: { events: CalendarEventInput[] }) {
 export function EventListView({
   events,
   desktopEvents,
+  readOnly,
+  onNavigate,
 }: {
   events: CalendarEventInput[];
   desktopEvents?: CalendarEventInput[];
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
 }) {
   const eventsForDesktop = desktopEvents ?? events;
 
@@ -501,7 +544,7 @@ export function EventListView({
       {/* Kartenansicht: unter sm (< 640px), z. B. Smartphones im Hochformat */}
       <div className="flex flex-col rounded-xl bg-white shadow-sm sm:hidden">
         {events.map((event) => (
-          <EventCard key={event.id} event={event} />
+          <EventCard key={event.id} event={event} readOnly={readOnly} onNavigate={onNavigate} />
         ))}
       </div>
 
@@ -521,7 +564,7 @@ export function EventListView({
           </thead>
           <tbody>
             {events.map((event) => (
-              <EventListRow key={event.id} event={event} />
+              <EventListRow key={event.id} event={event} readOnly={readOnly} onNavigate={onNavigate} />
             ))}
           </tbody>
         </table>
@@ -537,7 +580,7 @@ export function EventListView({
             Keine Termine für diese Auswahl.
           </div>
         ) : (
-          <DesktopMonthList events={eventsForDesktop} />
+          <DesktopMonthList events={eventsForDesktop} readOnly={readOnly} onNavigate={onNavigate} />
         )}
       </div>
     </>

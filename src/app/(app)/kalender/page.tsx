@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { canManageEvent, canViewDroneModule, isBezirksAdmin, isDroneGroupAdmin } from '@/lib/auth/permissions';
-import { KalenderWithLayers, type CalendarLayer } from '@/components/calendar/kalender-with-layers';
+import { KalenderWithLayersOnline } from '@/components/calendar/kalender-with-layers-online';
+import type { CalendarLayer } from '@/components/calendar/kalender-with-layers';
 import type { CalendarEventInput } from '@/components/calendar/calendar-view';
 import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
 import { CollapsingPageTitle } from '@/components/layout/collapsing-page-title';
@@ -123,7 +124,7 @@ export default async function KalenderPage() {
           </Link>
         )}
       </div>
-      <KalenderWithLayers events={calendarEvents} layers={layers} />
+      <KalenderWithLayersOnline events={calendarEvents} layers={layers} />
     </div>
   );
 }

@@ -7,7 +7,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import deLocale from '@fullcalendar/core/locales/de';
-import { useRouter } from 'next/navigation';
 import { AddToCalendarLink } from './add-to-calendar-link';
 import { RsvpBadge } from './rsvp-badge';
 import { VehicleBookingIcon } from './vehicle-booking-icon';
@@ -57,13 +56,20 @@ function renderEventContent(arg: EventContentArg) {
   );
 }
 
-export function CalendarView({ events }: { events: CalendarEventInput[] }) {
-  const router = useRouter();
+export function CalendarView({
+  events,
+  readOnly = false,
+  onNavigate,
+}: {
+  events: CalendarEventInput[];
+  readOnly?: boolean;
+  onNavigate?: (path: string) => void;
+}) {
   const [viewEvent, setViewEvent] = useState<CalendarEventInput | null>(null);
 
   function handleEventClick(info: EventClickArg) {
-    if (info.event.extendedProps.editable) {
-      router.push(`/kalender/${info.event.id}/bearbeiten`);
+    if (!readOnly && info.event.extendedProps.editable && onNavigate) {
+      onNavigate(`/kalender/${info.event.id}/bearbeiten`);
       return;
     }
     const event = events.find((e) => e.id === info.event.id);
@@ -140,12 +146,14 @@ export function CalendarView({ events }: { events: CalendarEventInput[] }) {
                 </div>
               )}
             </dl>
-            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-3">
-              <AddToCalendarLink eventId={viewEvent.id} />
-              <a href={`/kalender/${viewEvent.id}`} className="text-sm font-medium text-brand hover:underline">
-                Zusage & Teilnehmerliste
-              </a>
-            </div>
+            {!readOnly && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-3">
+                <AddToCalendarLink eventId={viewEvent.id} />
+                <a href={`/kalender/${viewEvent.id}`} className="text-sm font-medium text-brand hover:underline">
+                  Zusage & Teilnehmerliste
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}
