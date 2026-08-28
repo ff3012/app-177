@@ -17,6 +17,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/facebook/image',
   '/fahrzeug-reservierung',
   '/how-to.html',
+  '/offline-kalender',
 ];
 
 export default auth((req) => {
