@@ -46,6 +46,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FlightInput>({
     resolver: zodResolver(flightSchema),
@@ -112,6 +113,24 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
             <option key={location} value={location} />
           ))}
         </datalist>
+        {/* Eigene Chip-Liste zusätzlich zum <datalist> oben: Android-WebView zeigt native
+            <datalist>-Vorschläge oft gar nicht an (bestätigte Einschränkung, siehe
+            docs/superpowers/specs/2026-08-28-formular-vorschlaege-design.md) - diese Buttons
+            funktionieren unabhängig davon, da sie reines React sind. */}
+        {locations.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {locations.map((location) => (
+              <button
+                key={location}
+                type="button"
+                onClick={() => setValue('location', location, { shouldValidate: true })}
+                className="rounded-full border border-neutral-300 bg-neutral-50 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
+              >
+                {location}
+              </button>
+            ))}
+          </div>
+        )}
         {errors.location && <p className="text-sm text-red-700">{errors.location.message}</p>}
       </div>
 
