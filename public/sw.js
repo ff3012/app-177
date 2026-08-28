@@ -1,3 +1,9 @@
+// WICHTIG - CACHE_NAME bei JEDER Änderung an /offline-kalender oder einer seiner Komponenten
+// (KalenderWithLayers und alles darunter) hochzählen! Der activate-Handler unten räumt nur Caches
+// auf, deren Schlüssel vom AKTUELLEN CACHE_NAME abweicht - ein bereits installiertes Gerät führt
+// install nie erneut aus, nur weil sich der Inhalt von /offline-kalender in einem späteren Deploy
+// geändert hat. Ohne diesen Versionsbump bleibt ein bereits installiertes Gerät auf unbestimmte
+// Zeit beim alten, gecachten Stand - siehe auch "Build & Einbindung" im Design-Spec.
 const CACHE_NAME = 'ff-purkersdorf-shell-v3';
 const OFFLINE_URL = '/offline.html';
 const OFFLINE_KALENDER_URL = '/offline-kalender';
@@ -20,7 +26,28 @@ async function precacheOfflineKalender(cache) {
     await Promise.all(
       assetUrls.map((url) =>
         fetch(url)
-          .then((res) => res.ok && cache.put(url, res))
+          .then(async (res) => {
+            if (!res.ok) return;
+            // next/font lädt die Barlow/IBM Plex Mono .woff2-Dateien nicht direkt aus dem HTML,
+            // sondern über @font-face { src: url(...) } INNERHALB der gecachten CSS-Datei - ein
+            // reiner HTML-Scrape (oben) findet sie deshalb nie. Für jede .css-Datei den Text
+            // zusätzlich nach url(/_next/...)-Referenzen durchsuchen und diese Fonts mitcachen,
+            // gleiches best-effort-Prinzip wie der Rest dieser Funktion.
+            const cssClone = url.endsWith('.css') ? res.clone() : null;
+            await cache.put(url, res);
+            if (!cssClone) return;
+            const css = await cssClone.text();
+            const fontUrls = [...css.matchAll(/url\((\/_next\/[^)]+)\)/g)].map((m) =>
+              m[1].replace(/^['"]|['"]$/g, '')
+            );
+            await Promise.all(
+              fontUrls.map((fontUrl) =>
+                fetch(fontUrl)
+                  .then((fontRes) => fontRes.ok && cache.put(fontUrl, fontRes))
+                  .catch(() => {})
+              )
+            );
+          })
           .catch(() => {})
       )
     );
@@ -65,9 +92,12 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request).catch(async () => {
       if (isNavigation) {
         const kalender = await caches.match(OFFLINE_KALENDER_URL);
-        return kalender || (await caches.match(OFFLINE_URL));
+        if (kalender) return kalender;
+        const fallback = await caches.match(OFFLINE_URL);
+        return fallback || Response.error();
       }
-      return caches.match(event.request);
+      const cached = await caches.match(event.request);
+      return cached || Response.error();
     })
   );
 });

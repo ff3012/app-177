@@ -1142,6 +1142,18 @@ established device-testing flow):
 8. As a final sanity check specifically for the bug the previous approach had: confirm step 3 above
    actually shows real calendar data (not a permanent empty state) — this is the exact failure mode
    the original `errorPath`-based design would have hit silently.
+9. Confirm that when the service worker serves the cached `/offline-kalender` HTML in response to a
+   *different* failed URL (e.g. the user was trying to reach `/kalender`, not `/offline-kalender`
+   directly), the page still renders correctly (Next.js hydrates from its own inlined flight-data
+   payload, not from `window.location`, so this is expected to work, but should be confirmed live) —
+   and that tapping "Erneut verbinden" (which reloads the CURRENT url) then correctly returns to that
+   originally-intended page once network is back, not just to `/offline-kalender` itself.
+10. Confirm that tapping an in-app `<Link>` while offline (e.g. navigating between app sections)
+    doesn't dead-end — Next.js's client-side route-prefetch/RSC fetches aren't intercepted by the
+    service worker the same way a full navigation is, so there may be a brief delay/flash before it
+    falls back to the offline page; confirm it doesn't hang indefinitely.
+11. Confirm the native Android back button (long-press/back gesture) behaves sensibly while on the
+    offline page rather than appearing frozen.
 
 - [ ] **Step 5: Commit**
 

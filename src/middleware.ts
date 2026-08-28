@@ -18,6 +18,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/fahrzeug-reservierung',
   '/how-to.html',
   '/offline-kalender',
+  '/sw.js',
 ];
 
 export default auth((req) => {

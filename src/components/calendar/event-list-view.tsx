@@ -107,8 +107,12 @@ function EventListRow({
     <tr
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      className="cursor-pointer border-b border-neutral-100 hover:bg-neutral-50"
-      title={event.editable ? 'Klick für Details, Doppelklick zum Bearbeiten' : 'Klick für Details'}
+      className={
+        readOnly
+          ? 'border-b border-neutral-100'
+          : 'cursor-pointer border-b border-neutral-100 hover:bg-neutral-50'
+      }
+      title={readOnly ? undefined : event.editable ? 'Klick für Details, Doppelklick zum Bearbeiten' : 'Klick für Details'}
     >
       <td className="whitespace-nowrap px-3 py-1">{start.toLocaleDateString('de-AT')}</td>
       <td className="whitespace-nowrap px-3 py-1">{formatStartTime(event)}</td>
@@ -178,7 +182,11 @@ function EventCard({
     <div
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      className="flex cursor-pointer gap-3 border-b border-neutral-100 py-3 pl-0 pr-4 active:bg-neutral-50"
+      className={
+        readOnly
+          ? 'flex gap-3 border-b border-neutral-100 py-3 pl-0 pr-4'
+          : 'flex cursor-pointer gap-3 border-b border-neutral-100 py-3 pl-0 pr-4 active:bg-neutral-50'
+      }
     >
       <div className="flex shrink-0 items-stretch gap-2 pl-4">
         <span className="w-1 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
@@ -332,8 +340,12 @@ function DesktopEventRow({
       <div
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
-        className="flex cursor-pointer items-center gap-4 py-3 pl-4 pr-4 hover:bg-neutral-50"
-        title={event.editable ? 'Klick für Details, Doppelklick zum Bearbeiten' : 'Klick für Details'}
+        className={
+          readOnly
+            ? 'flex items-center gap-4 py-3 pl-4 pr-4'
+            : 'flex cursor-pointer items-center gap-4 py-3 pl-4 pr-4 hover:bg-neutral-50'
+        }
+        title={readOnly ? undefined : event.editable ? 'Klick für Details, Doppelklick zum Bearbeiten' : 'Klick für Details'}
       >
         <div className="w-14 shrink-0 text-center">
           <div className="text-2xl font-bold leading-none text-neutral-900">
@@ -356,15 +368,21 @@ function DesktopEventRow({
                 Bezirksweit
               </span>
             )}
-            <span
-              className="hover:underline"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate?.(`/kalender/${event.id}`);
-              }}
-            >
-              {event.title}
-            </span>
+            {onNavigate ? (
+              <a
+                href={`/kalender/${event.id}`}
+                className="hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onNavigate(`/kalender/${event.id}`);
+                }}
+              >
+                {event.title}
+              </a>
+            ) : (
+              <span>{event.title}</span>
+            )}
           </div>
           <div
             className="truncate text-sm text-neutral-500"

@@ -25,7 +25,8 @@ interface OfflineCacheSyncProps {
  * Android-only, best-effort: schreibt bei jedem normalen Online-Besuch der Kalender-Seite einen
  * lokalen JSON-Snapshot (letzte 30 Tage + alle zukünftigen Termine, gefiltert nach `end`, nicht
  * `start` - ein mehrtägiger Termin, der vor 40 Tagen begann und erst morgen endet, bleibt so im
- * Cache), den die Offline-Ansicht (native-offline/) später liest. Ein Fehler hier darf die normale
+ * Cache), den die Offline-Ansicht (`/offline-kalender`, eine ganz normale Next.js-Route, ausgeliefert
+ * über den erweiterten Service Worker in public/sw.js) später liest. Ein Fehler hier darf die normale
  * Online-Anzeige nie beeinträchtigen - siehe
  * docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md.
  */

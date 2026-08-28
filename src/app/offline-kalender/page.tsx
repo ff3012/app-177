@@ -92,7 +92,7 @@ function OfflineKalenderContent() {
     return (
       <>
         <OfflineHeader syncedAt={null} />
-        <div className="p-4 text-sm text-neutral-500">Lädt…</div>
+        <div className="p-4 pb-content-safe text-sm text-neutral-500">Lädt…</div>
       </>
     );
   }
@@ -101,7 +101,7 @@ function OfflineKalenderContent() {
     return (
       <>
         <OfflineHeader syncedAt={null} />
-        <div className="p-4">
+        <div className="p-4 pb-content-safe">
           <div className="rounded-lg bg-white p-6 text-center text-sm text-neutral-500 shadow-sm">
             Noch keine Daten zwischengespeichert — bitte einmal mit Internetverbindung öffnen.
           </div>
@@ -113,7 +113,7 @@ function OfflineKalenderContent() {
   return (
     <>
       <OfflineHeader syncedAt={state.cache.syncedAt} />
-      <div className="p-4">
+      <div className="p-4 pb-content-safe">
         <KalenderWithLayers events={state.cache.events} layers={state.cache.layers} readOnly />
       </div>
     </>

@@ -101,12 +101,25 @@ allgemeine PWA-Install-Prompts/Update-Flows, **nicht** auf einen rein passiven
 Offline-Fallback-Cache. Es gibt keinen dokumentierten Fund, dass Service Worker in einer
 Capacitor-Android-WebView grundsätzlich nicht funktionieren — im Gegenteil, Capacitors eigener
 Java-Quellcode (`Bridge.java`, `WebViewLocalServer.java`) zeigt, dass die App-eigene
-Request-Interception für die entfernte `server.url`-Origin ohnehin `null` zurückgibt (nichts tut)
-und damit einem Service Worker auf dieser Origin nicht im Weg steht. Die einzige verbleibende,
-nur auf einem echten Gerät zu klärende Unsicherheit ist eine reine WebView-Plattformfrage (nicht
-Capacitor-spezifisch): funktioniert Registrierung/Persistenz/Fetch-Interception zuverlässig unter
-Android WebView (API 24, was `minSdkVersion` bereits erfüllt, Capacitor selbst verlangt WebView
-≥55 und lädt sonst ohnehin `errorPath`).
+Request-Interception der entfernten `server.url`-Origin nicht im Weg steht, allerdings aus einem
+anderen Grund als ursprünglich angenommen: `Bridge.java`s `authorities.add(appUrlObject.
+getAuthority())` trägt die `server.url`-Origin sehr wohl in `authorities` ein, sodass
+`WebViewLocalServer`s `uriMatcher.match()` dafür durchaus einen Handler findet — die
+Request-Interception läuft also nicht deshalb ins Leere. Der eigentliche Grund liegt in
+`WebViewLocalServer.handleProxyRequest()`: dessen allererste Prüfung ist `if (jsInjector != null)`,
+und `Bridge.java` setzt genau diese Variable auf `null`, sobald die WebView
+`WebViewFeature.DOCUMENT_START_SCRIPT` unterstützt (den moderneren Injection-Mechanismus, der
+anstelle des älteren Stream-Injection-Pfads verwendet wird) — auf jeder WebView mit dieser
+Feature-Unterstützung bricht `handleProxyRequest` also sofort ab und tut nichts, unabhängig vom
+Inhalt von `authorities`. Restrisiko, bewusst für diesen Piloten akzeptiert: Auf einer WebView
+*ohne* `DOCUMENT_START_SCRIPT`-Unterstützung (ältere Chromium-Versionen) wäre `jsInjector` nicht
+`null`, und `handleProxyRequest` würde Requests aktiv proxyen statt No-op zu sein — das könnte sich
+anders verhalten; `capacitor.config.ts` setzt kein explizites `minWebViewVersion`, verlässt sich
+also auf Capacitors eigenen Default (WebView ≥60), was hier nicht weiter abgesichert wird. Die
+einzige verbleibende, nur auf einem echten Gerät zu klärende Unsicherheit ist eine reine
+WebView-Plattformfrage (nicht Capacitor-spezifisch): funktioniert Registrierung/Persistenz/
+Fetch-Interception zuverlässig unter Android WebView (API 24, was `minSdkVersion` bereits erfüllt,
+Capacitor selbst verlangt WebView ≥55 und lädt sonst ohnehin `errorPath`).
 
 Um die ursprüngliche Sorge (konkurrierende Mechanismen) nicht wieder einzuführen, bleibt die Rolle
 des Service Workers bewusst eng: weiterhin nur GET-Navigationsanfragen abgefangen (unverändert aus
@@ -209,6 +222,12 @@ erneut umbauen zu müssen. Für diesen Piloten enthält die Hülle nur den Kalen
   — Registrierung läuft jetzt auch nativ, mit der oben beschriebenen eng gefassten Rolle.
 - `capacitor.config.ts`s `server.errorPath` bleibt unverändert bei `'offline.html'` — sie deckt nur
   noch den seltenen Fall ab, dass der Service Worker selbst nie erfolgreich installiert wurde.
+- **`CACHE_NAME`-Versionierung ist Pflicht bei jeder Änderung**: `public/sw.js`s `activate`-Handler
+  räumt nur Caches auf, deren Schlüssel vom aktuellen `CACHE_NAME` abweicht — ein bereits
+  installiertes Gerät führt `install` nie erneut aus, nur weil sich `/offline-kalender` oder eine
+  seiner Komponenten (`KalenderWithLayers` und alles darunter) in einem späteren Deploy geändert
+  hat. `CACHE_NAME` muss deshalb bei jeder solchen Änderung von Hand hochgezählt werden, sonst
+  bleibt ein bereits installiertes Gerät auf unbestimmte Zeit beim alten, gecachten Stand.
 
 ## Fehlerbehandlung & Edge Cases
 

@@ -12,8 +12,9 @@ interface KalenderWithLayersOnlineProps {
 
 /**
  * Next.js-spezifischer Adapter für KalenderWithLayers: liefert die echte router.push-Navigation.
- * KalenderWithLayers selbst bleibt dadurch frei von next/navigation und ist so auch im
- * eigenständigen Offline-Bundle (native-offline/) wiederverwendbar - siehe
+ * KalenderWithLayers selbst bleibt dadurch frei von next/navigation und ist so auch von der
+ * `/offline-kalender`-Route (über den erweiterten Service Worker, public/sw.js, ausgeliefert)
+ * ohne Navigation (readOnly) wiederverwendbar - siehe
  * docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md.
  */
 export function KalenderWithLayersOnline({ events, layers }: KalenderWithLayersOnlineProps) {
