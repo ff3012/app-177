@@ -356,7 +356,15 @@ function DesktopEventRow({
                 Bezirksweit
               </span>
             )}
-            <span className="hover:underline">{event.title}</span>
+            <span
+              className="hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate?.(`/kalender/${event.id}`);
+              }}
+            >
+              {event.title}
+            </span>
           </div>
           <div
             className="truncate text-sm text-neutral-500"
