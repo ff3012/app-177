@@ -1,10 +1,41 @@
-const CACHE_NAME = 'ff-purkersdorf-shell-v2';
+const CACHE_NAME = 'ff-purkersdorf-shell-v3';
 const OFFLINE_URL = '/offline.html';
-const PRECACHE_URLS = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png'];
+const OFFLINE_KALENDER_URL = '/offline-kalender';
+const STATIC_PRECACHE_URLS = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png'];
+
+// Next.js baut /offline-kalender mit inhaltsgehashten JS/CSS-Dateien (_next/static/...) - die
+// exakten Dateinamen sind erst zur Build-Zeit bekannt, nicht vorher fest eintragbar. Statt eines
+// zusätzlichen Build-Schritts (Workbox o.ä., bewusst nicht eingeführt - siehe root CLAUDE.md,
+// "hand-written, no next-pwa/similar dependency") liest dieser Schritt die tatsächlich
+// ausgelieferte HTML-Antwort und cached jede darin referenzierte /_next/-Datei mit. Fragil
+// gegenüber Änderungen an Next.js' HTML-Struktur, aber für diesen Piloten bewusst akzeptiert -
+// siehe docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md.
+async function precacheOfflineKalender(cache) {
+  try {
+    const response = await fetch(OFFLINE_KALENDER_URL);
+    if (!response.ok) return;
+    const html = await response.clone().text();
+    await cache.put(OFFLINE_KALENDER_URL, response);
+    const assetUrls = [...html.matchAll(/(?:src|href)="(\/_next\/[^"]+)"/g)].map((m) => m[1]);
+    await Promise.all(
+      assetUrls.map((url) =>
+        fetch(url)
+          .then((res) => res.ok && cache.put(url, res))
+          .catch(() => {})
+      )
+    );
+  } catch {
+    // best-effort - siehe Kommentar oben. Ohne vollständigen Precache zeigt der Offline-Fallback
+    // ggf. eine unvollständig gestylte Seite, aber keinen Absturz.
+  }
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_PRECACHE_URLS).then(() => precacheOfflineKalender(cache)))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -17,16 +48,27 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Nur GET-Navigationen abfangen: Network-first mit Offline-Fallback. Alles andere (API-Calls,
-// Server Actions, POST) unangetastet durchreichen, damit keine veralteten Daten/Formulare
+// Navigationen: network-first mit Offline-Fallback (bevorzugt /offline-kalender, sonst die alte
+// bare offline.html). /_next/-Assets: ebenfalls network-first, aber bei Fehlschlag aus dem Cache
+// bedient, falls sie beim Precache-Schritt oben mitgesichert wurden - das deckt genau die JS/CSS-
+// Dateien ab, die /offline-kalender zum Rendern braucht. Alles andere (API-Calls, Server Actions,
+// POST, Bilder, sonstige Assets) bleibt unangetastet, damit keine veralteten Daten/Formulare
 // zwischengespeichert werden.
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode !== 'navigate' || event.request.method !== 'GET') {
-    return;
-  }
+  if (event.request.method !== 'GET') return;
+
+  const isNavigation = event.request.mode === 'navigate';
+  const isNextStaticAsset = new URL(event.request.url).pathname.startsWith('/_next/');
+  if (!isNavigation && !isNextStaticAsset) return;
 
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(OFFLINE_URL))
+    fetch(event.request).catch(async () => {
+      if (isNavigation) {
+        const kalender = await caches.match(OFFLINE_KALENDER_URL);
+        return kalender || (await caches.match(OFFLINE_URL));
+      }
+      return caches.match(event.request);
+    })
   );
 });
 

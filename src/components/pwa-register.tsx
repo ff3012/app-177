@@ -5,12 +5,13 @@ import { Capacitor } from '@capacitor/core';
 
 export function PwaRegister() {
   useEffect(() => {
-    // Die native Capacitor-Hülle übernimmt bereits die "installierte App"-Rolle (eigener
-    // Prozess, eigenes Icon, eigener Splash-Screen) - ein zusätzlich registrierter Service Worker
-    // in derselben WebView würde nur riskieren, gegen zwei konkurrierende Install-Mechanismen
-    // ohne klare Update-Präzedenz zu cachen. Einfachste sichere Wahl: pro Installationsweg nur
-    // einer der beiden.
-    if (Capacitor.isNativePlatform()) return;
+    // Android registriert den Service Worker jetzt ebenfalls (siehe
+    // docs/superpowers/specs/2026-08-28-android-offline-kalender-design.md, "Service-Worker-
+    // Registrierung auf Android") - eng gefasst auf einen reinen Offline-Fallback-Cache (siehe
+    // sw.js), um die ursprüngliche Sorge (zwei konkurrierende Installationsmechanismen) nicht
+    // wieder einzuführen. iOS bleibt ausgenommen: dort übernimmt weiterhin ausschließlich die
+    // native Capacitor-Hülle die "installierte App"-Rolle - kein Offline-Kalender-Pilot für iOS.
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') return;
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {
