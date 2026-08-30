@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import { toast } from 'sonner';
 import {
   Table,
   TableBody,
@@ -28,13 +29,21 @@ export function PendingRegistrationsSection({ registrations }: { registrations: 
 
   function handleApprove(id: string) {
     startTransition(async () => {
-      await approveRegistration(id);
+      const result = await approveRegistration(id);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success('Registrierung genehmigt.');
+      }
     });
   }
 
   function handleReject(id: string) {
     startTransition(async () => {
-      await rejectRegistration(id);
+      const result = await rejectRegistration(id);
+      if (result.error) {
+        toast.error(result.error);
+      }
     });
   }
 

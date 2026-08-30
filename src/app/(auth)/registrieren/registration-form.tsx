@@ -57,6 +57,14 @@ export function RegistrationForm({ organizations, dienstgrade }: RegistrationFor
     });
   }
 
+  // Server-seitige fieldErrors kommen nur zustande, wenn die client-seitige Zod-Prüfung etwas
+  // durchlässt, das der Server trotzdem ablehnt (z. B. eine zwischenzeitlich deaktivierte Feuerwehr)
+  // - ohne diese Zeile blieb ein solcher Fehlschlag zuvor komplett unsichtbar: der Spinner stoppte,
+  // aber nichts erklärte warum.
+  const serverFieldError = state.fieldErrors
+    ? Object.values(state.fieldErrors).flat().filter(Boolean)[0]
+    : undefined;
+
   if (state.submitted) {
     return (
       <p className="text-sm text-neutral-700">
@@ -132,7 +140,9 @@ export function RegistrationForm({ organizations, dienstgrade }: RegistrationFor
       </div>
       {errors.confirmed && <p className="text-sm text-red-700">{errors.confirmed.message}</p>}
 
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {(state.error || serverFieldError) && (
+        <p className="text-sm text-red-700">{state.error || serverFieldError}</p>
+      )}
 
       <button
         type="submit"

@@ -63,7 +63,12 @@ export async function submitRegistration(
       firstName: data.firstName,
       lastName: data.lastName,
       stbNr: data.stbNr,
-      dienstgradId: data.dienstgradId || null,
+      // Nur eine ID schreiben, die tatsächlich existiert (Ergebnis der Abfrage oben) - ein
+      // manipuliertes/veraltetes dienstgradId sonst direkt ungeprüft zu schreiben würde die
+      // PendingRegistration_dienstgradId_fkey-Constraint verletzen und diesen öffentlichen Endpunkt
+      // mit einem unbehandelten 500er abstürzen lassen, statt die Registrierung einfach ohne
+      // Dienstgrad anzulegen.
+      dienstgradId: dienstgrad ? data.dienstgradId! : null,
       email,
     },
   });

@@ -5,7 +5,7 @@ export const registrationSchema = z.object({
   firstName: z.string().trim().min(1, 'Vorname ist erforderlich.').max(100),
   lastName: z.string().trim().min(1, 'Nachname ist erforderlich.').max(100),
   stbNr: z.string().trim().min(1, 'Standesbuchnummer ist erforderlich.').max(50),
-  dienstgradId: z.string().optional().or(z.literal('')),
+  dienstgradId: z.string().optional(),
   email: z.string().trim().email('Ungültige E-Mail-Adresse.'),
   confirmed: z.boolean().refine((v) => v === true, {
     message: 'Bitte bestätige, dass die Angaben korrekt sind.',
