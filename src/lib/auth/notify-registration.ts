@@ -68,6 +68,10 @@ export async function notifyOrganizationAdminsOfRegistration(ctx: RegistrationEm
     `E-Mail: ${ctx.email}`,
     '',
     `Zur Prüfung: ${link}`,
+    '',
+    'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.',
+    '',
+    'Bezirksfeuerwehrkommando St. Pölten',
   ]
     .filter((line) => line !== null)
     .join('\n');
@@ -79,6 +83,8 @@ export async function notifyOrganizationAdminsOfRegistration(ctx: RegistrationEm
     `<li>E-Mail: ${escapeHtml(ctx.email)}</li>`,
     '</ul>',
     `<p><a href="${link}">Zur Prüfung in der Benutzerverwaltung</a></p>`,
+    '<p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
+    '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
   ].join('');
 
   for (const to of recipients) {
