@@ -46,7 +46,11 @@ export function MobileTabBar({ user, wappenSrc }: { user: SessionUser; wappenSrc
 
   return (
     <nav
-      className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 grid h-[86px] grid-cols-3 items-start border-t border-neutral-200 bg-white pt-2.5 sm:hidden"
+      // h-[98px] (was 86px): +12px matches .pb-safe-tabbar's new guaranteed max(0.75rem, ...) floor
+      // in globals.css, so the icon/label row keeps the same rendered height it always had - the
+      // extra space is added purely below the labels, as breathing room above Android's system nav
+      // bar, on devices where env(safe-area-inset-bottom) resolves to 0px (see that file's comment).
+      className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 grid h-[98px] grid-cols-3 items-start border-t border-neutral-200 bg-white pt-2.5 sm:hidden"
       aria-label="Hauptnavigation"
     >
       <Link

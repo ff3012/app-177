@@ -57,15 +57,23 @@ body {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+/* max(0.75rem, env(...)) guarantees at least 12px of breathing room below the tab bar's labels even
+   when env(safe-area-inset-bottom) resolves to 0px - confirmed to happen on at least one real
+   Android device (Samsung One UI, 3-button nav bar) in the installed Capacitor app, since this app
+   does no native edge-to-edge/inset handling (no WindowCompat.setDecorFitsSystemWindows, default
+   BridgeActivity) - the WebView's own safe-area value can't be trusted to reflect the real system
+   nav bar height there. On iOS, where the real inset is already comfortably above 0.75rem, this
+   max() is a no-op and changes nothing. */
 .pb-safe-tabbar {
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(0.5rem + max(0.75rem, env(safe-area-inset-bottom, 0px)));
 }
 
 /* Bottom padding for authenticated page content so the fixed mobile tab bar never covers the end
    of a page. 1.5rem matches the desktop py-6 this replaces below sm:; 56px is the tab bar's own
-   rendered height budget (icon + label + vertical padding). */
+   rendered height budget (icon + label + vertical padding). Uses the same max(0.75rem, ...) floor
+   as .pb-safe-tabbar above so the two can never drift out of sync with each other. */
 .pb-content-safe {
-  padding-bottom: calc(1.5rem + 56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(1.5rem + 56px + max(0.75rem, env(safe-area-inset-bottom, 0px)));
 }
 
 /* FullCalendar: on narrow screens the default toolbar (prev/next/today, title,

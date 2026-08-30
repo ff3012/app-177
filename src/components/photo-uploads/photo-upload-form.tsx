@@ -93,7 +93,9 @@ export function PhotoUploadForm({ fireDepartmentName, defaultValues, action, sub
 
       {serverError && <p className="text-sm text-red-700">{serverError}</p>}
 
-      <div className="fixed inset-x-0 bottom-[86px] z-40 flex justify-center border-t border-neutral-200 bg-white p-4 pb-safe-tabbar sm:static sm:bottom-0 sm:z-auto sm:border-0 sm:bg-transparent sm:p-0">
+      {/* bottom-[98px] docks this bar directly above MobileTabBar - keep in sync with that
+          component's own h-[98px]. */}
+      <div className="fixed inset-x-0 bottom-[98px] z-40 flex justify-center border-t border-neutral-200 bg-white p-4 pb-safe-tabbar sm:static sm:bottom-0 sm:z-auto sm:border-0 sm:bg-transparent sm:p-0">
         <div className="flex w-full max-w-lg items-center gap-3">
           <button
             type="submit"
