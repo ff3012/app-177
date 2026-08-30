@@ -1,0 +1,1 @@
+﻿-- Empty migration - schema already synced via db push
