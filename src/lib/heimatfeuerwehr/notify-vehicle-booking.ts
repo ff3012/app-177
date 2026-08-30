@@ -184,7 +184,9 @@ export async function sendVehicleBookingAdminInfoEmail(ctx: AdminBookingEmailCon
 /**
  * Benachrichtigt das Mitglied, für das ein Admin stellvertretend gebucht hat - verhindert, dass
  * jemand erst im Kalender entdeckt, dass für ihn ein Fahrzeug reserviert wurde. Best-effort wie
- * jeder andere E-Mail-Versand in diesem Modul, wirft nie.
+ * jeder andere E-Mail-Versand in diesem Modul, wirft nie. Enthält bewusst KEIN `details` - dieses
+ * Feld ist laut der bestehenden Konvention (siehe VehicleBooking.details in
+ * meine-feuerwehr/CLAUDE.md) admin-only, der Fahrer sieht es an keiner anderen Stelle der App.
  */
 export async function sendVehicleBookingDriverNotificationEmail(ctx: AdminBookingEmailContext): Promise<void> {
   const range = formatRange(ctx.startsAt, ctx.endsAt);
@@ -199,18 +201,14 @@ export async function sendVehicleBookingDriverNotificationEmail(ctx: AdminBookin
         '',
         `Fahrzeug: ${ctx.vehicleTaktischeBezeichnung} (${ctx.vehicleKennzeichen})`,
         `Zeitraum: ${range}`,
-        ctx.details ? `Details: ${ctx.details}` : null,
         '',
         'Die Reservierung ist bereits genehmigt und im Kalender deiner Feuerwehr sichtbar.',
-      ]
-        .filter((line) => line !== null)
-        .join('\n'),
+      ].join('\n'),
       htmlPart: [
         `<p>${escapeHtml(ctx.adminName)} hat für dich eine Fahrzeug-Reservierung angelegt.</p>`,
         '<ul>',
         `<li>Fahrzeug: ${escapeHtml(ctx.vehicleTaktischeBezeichnung)} (${escapeHtml(ctx.vehicleKennzeichen)})</li>`,
         `<li>Zeitraum: ${escapeHtml(range)}</li>`,
-        ctx.details ? `<li>Details: ${escapeHtml(ctx.details)}</li>` : '',
         '</ul>',
         '<p>Die Reservierung ist bereits genehmigt und im Kalender deiner Feuerwehr sichtbar.</p>',
       ].join(''),

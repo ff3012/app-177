@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageHeimatfeuerwehrFor, canManageVehicleBooking } from '@/lib/auth/permissions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { vehicleBookingSchema, parseVehicleBookingFormData } from '@/lib/validation/vehicle-booking.schema';
 import { findOverlappingBooking } from '@/lib/heimatfeuerwehr/vehicle-availability';
 import {
@@ -72,8 +73,8 @@ export async function createVehicleBooking(
       return { error: 'Keine Berechtigung, für ein anderes Mitglied zu reservieren.' };
     }
 
-    const driver = await prisma.user.findUnique({
-      where: { id: bookingForUserId! },
+    const driver = await prisma.user.findFirst({
+      where: { id: bookingForUserId!, ...NOT_DEACTIVATED_WHERE },
       select: { id: true, firstName: true, lastName: true, email: true, homeOrganizationId: true },
     });
     if (!driver || driver.homeOrganizationId !== vehicle.organizationId) {
