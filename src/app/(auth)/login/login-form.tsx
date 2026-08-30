@@ -208,6 +208,13 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           </form>
         </div>
       )}
+
+      <p className="text-center text-sm text-neutral-600">
+        Neu hier?{' '}
+        <Link href="/registrieren" className="text-brand hover:underline">
+          Jetzt registrieren
+        </Link>
+      </p>
     </div>
   );
 }
