@@ -310,7 +310,8 @@ model User {
   newsReads              NewsRead[]
   terminZusagen          TerminZusage[]
   droneDocumentsUploaded DroneDocument[]          @relation("DroneDocumentUploadedBy")
-  vehicleBookings        VehicleBooking[]
+  vehicleBookings        VehicleBooking[]         @relation("VehicleBookingDriver")
+  vehicleBookingsAsAdmin VehicleBooking[]         @relation("VehicleBookingBookedByAdmin")
   dashboardTokensCreated DashboardToken[]
 
   @@index([homeOrganizationId])
@@ -721,8 +722,15 @@ model VehicleBooking {
   // gesetzt; bei GENEHMIGT immer null.
   rejectionReason String?
 
+  // Gesetzt, wenn ein Feuerwehr-Admin diese Reservierung stellvertretend für ein anderes
+  // Mitglied angelegt hat (userId ist dann der Fahrer, nicht der Admin) - null bei einer
+  // normalen Selbst-Buchung. Analog zu DroneFlight.registeredBy/pilotUser. onDelete: SetNull,
+  // damit ein späteres Löschen des Admin-Kontos die Buchung selbst nicht mitreißt.
+  bookedByAdmin   User?   @relation("VehicleBookingBookedByAdmin", fields: [bookedByAdminId], references: [id], onDelete: SetNull)
+  bookedByAdminId String?
+
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User    @relation("VehicleBookingDriver", fields: [userId], references: [id], onDelete: Cascade)
   event   Event?
 
   @@index([vehicleId, startsAt])
