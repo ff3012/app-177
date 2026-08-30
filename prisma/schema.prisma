@@ -205,6 +205,7 @@ model Organization {
   newsPosts    NewsPost[]
   vehicles     Vehicle[]
   photoUploads PhotoUpload[]
+  pendingRegistrations PendingRegistration[]
 
   dashboardTokens   DashboardToken[]
   facebookPostCache FacebookPostCache?
@@ -333,6 +334,7 @@ model Dienstgrad {
 
   users User[]
   secondaryDienstgradUsers User[] @relation("SecondaryDienstgrad")
+  pendingRegistrations PendingRegistration[]
 
   @@index([kategorie])
 }
@@ -357,6 +359,30 @@ model LoginTokenRequestAttempt {
   email          String    @unique
   requestCount   Int       @default(0)
   firstRequestAt DateTime  @default(now())
+  lockedUntil    DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
+model PendingRegistration {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  firstName      String
+  lastName       String
+  stbNr          String
+  dienstgradId   String?
+  dienstgrad     Dienstgrad?  @relation(fields: [dienstgradId], references: [id], onDelete: SetNull)
+  email          String
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model RegistrationAttempt {
+  id             String    @id @default(cuid())
+  ipAddress      String    @unique
+  attemptCount   Int       @default(1)
+  firstAttemptAt DateTime  @default(now())
   lockedUntil    DateTime?
   updatedAt      DateTime  @updatedAt
 }

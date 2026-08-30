@@ -575,3 +575,90 @@ export async function deleteUser(
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');
 }
+
+export async function approveRegistration(registrationId: string): Promise<{ error?: string }> {
+  const currentUser = await requireUser();
+
+  const pending = await prisma.pendingRegistration.findUnique({ where: { id: registrationId } });
+  if (!pending) {
+    return { error: 'Diese Anfrage wurde bereits bearbeitet.' };
+  }
+  assertPermission(canManageUsersFor(currentUser, pending.organizationId));
+
+  const existing = await prisma.user.findUnique({ where: { email: pending.email } });
+  if (existing) {
+    return { error: 'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.' };
+  }
+
+  // Dieselbe Kernlogik wie createUser() (Zufalls-Passwort, isActive: false), aber ohne createUser()
+  // direkt aufzurufen: das ist an FormData, eine Berechtigungsprüfung gegen den AUFRUFENDEN Admin und
+  // einen eigenen abschließenden redirect() gekoppelt, was hier nicht passt - eine Registrierung hat
+  // keine adminOrgIds/Drohnengruppen-Auswahl zu übernehmen, nur die Kernfelder. Anlegen + Löschen der
+  // PendingRegistration-Zeile laufen in EINER Transaktion, damit zwei (fast) gleichzeitige
+  // Genehmigungsversuche derselben Anfrage (Doppelklick, zwei offene Tabs) nie einen verwaisten
+  // User ohne gelöschte Anfrage oder umgekehrt hinterlassen - der zweite Versuch schlägt komplett
+  // fehl (P2025 auf dem delete, da die Zeile schon weg ist) statt einen zweiten User anzulegen.
+  const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+  let user: { id: string; email: string; firstName: string; lastName: string };
+  try {
+    [user] = await prisma.$transaction([
+      prisma.user.create({
+        data: {
+          firstName: pending.firstName,
+          lastName: pending.lastName,
+          email: pending.email,
+          stbNr: pending.stbNr,
+          dienstgradId: pending.dienstgradId,
+          homeOrganizationId: pending.organizationId,
+          isActive: false,
+          passwordHash,
+        },
+      }),
+      prisma.pendingRegistration.delete({ where: { id: registrationId } }),
+    ]);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        return { error: 'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.' };
+      }
+      if (error.code === 'P2025') {
+        return { error: 'Diese Anfrage wurde bereits bearbeitet.' };
+      }
+    }
+    throw error;
+  }
+
+  const token = await createToken(user.id, TokenPurpose.ACTIVATION);
+
+  try {
+    await sendActivationEmail(user, token);
+  } catch (error) {
+    console.error('Fehler beim Senden der Aktivierungs-E-Mail (Registrierung genehmigt):', error);
+  }
+
+  revalidatePath('/admin/benutzer');
+  return {};
+}
+
+export async function rejectRegistration(registrationId: string): Promise<{ error?: string }> {
+  const currentUser = await requireUser();
+
+  const pending = await prisma.pendingRegistration.findUnique({ where: { id: registrationId } });
+  if (!pending) {
+    return {};
+  }
+  assertPermission(canManageUsersFor(currentUser, pending.organizationId));
+
+  try {
+    await prisma.pendingRegistration.delete({ where: { id: registrationId } });
+  } catch (error) {
+    // Zwischen der obigen Prüfung und diesem delete wurde dieselbe Anfrage bereits von woanders
+    // bearbeitet (Doppelklick, zwei offene Tabs) - kein echter Fehler, einfach nichts mehr zu tun.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return {};
+    }
+    throw error;
+  }
+  revalidatePath('/admin/benutzer');
+  return {};
+}
