@@ -6,6 +6,7 @@ import { canAccessUserManagementAdmin, canManageDroneGroupFor, isBezirksAdmin } 
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { getReachableScopes, resolveAdminScope } from '@/lib/admin/scope';
 import { UserManagementSection, type UserRow } from './user-management-section';
+import { PendingRegistrationsSection, type PendingRegistrationRow } from './pending-registrations-section';
 
 const PAGE_SIZE = 50;
 
@@ -216,8 +217,16 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
     q,
   });
 
-  const [organizations, secondaryOrgExtras, dienstgrade, allDroneGroups, totalUsersCount, homeOrgGroups, filteredCount] =
-    await Promise.all([
+  const [
+    organizations,
+    secondaryOrgExtras,
+    dienstgrade,
+    allDroneGroups,
+    totalUsersCount,
+    homeOrgGroups,
+    filteredCount,
+    pendingRegistrations,
+  ] = await Promise.all([
       prisma.organization.findMany({
         where: fullAdmin ? undefined : { id: { in: currentUser.feuerwehrAdminOrgIds } },
         orderBy: { name: 'asc' },
@@ -254,6 +263,14 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       prisma.user.count({ where: scopeWhere }),
       prisma.user.groupBy({ by: ['homeOrganizationId'], where: scopeWhere }),
       prisma.user.count({ where: usersWhere }),
+      prisma.pendingRegistration.findMany({
+        where: fullAdmin ? undefined : { organizationId: { in: currentUser.feuerwehrAdminOrgIds } },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          organization: { select: { name: true, shortName: true } },
+          dienstgrad: { select: { kurzform: true } },
+        },
+      }),
     ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
@@ -336,35 +353,48 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   // ist dann immer leer), daher kein eigener Prop-Wert nötig.
   const secondaryOrganizationOptions = [...organizations, ...secondaryOrgExtras].map(toOrgOption);
 
+  const pendingRegistrationRows: PendingRegistrationRow[] = pendingRegistrations.map((r) => ({
+    id: r.id,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    stbNr: r.stbNr,
+    dienstgradLabel: r.dienstgrad?.kurzform ?? '',
+    email: r.email,
+    organizationLabel: r.organization.shortName ?? r.organization.name,
+  }));
+
   return (
-    <UserManagementSection
-      users={rows}
-      organizations={organizations.map(toOrgOption)}
-      secondaryOrganizationOptions={secondaryOrganizationOptions}
-      dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
-      droneGroups={droneGroups}
-      initialQuery={q}
-      initialFeuerwehr={feuerwehr}
-      initialDrohnengruppe={drohnengruppe}
-      initialRolle={rolle}
-      initialStatus={status}
-      initialSort={sort}
-      initialDir={dir}
-      currentUserId={currentUser.id}
-      initialEditUserId={params.edit}
-      initialCreateOpen={params.new === '1'}
-      adminNavItems={getAdminNavItems(currentUser)}
-      reachableScopes={reachableScopes}
-      initialAbschnitt={initialAbschnitt}
-      abschnitte={abschnitte}
-      isFullAdmin={fullAdmin}
-      viewerIsBezirksAdmin={fullAdmin}
-      viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
-      totalUsersCount={totalUsersCount}
-      totalOrgsCount={homeOrgGroups.length}
-      filteredCount={filteredCount}
-      page={page}
-      pageSize={PAGE_SIZE}
-    />
+    <div className="flex flex-col gap-6">
+      <PendingRegistrationsSection registrations={pendingRegistrationRows} />
+      <UserManagementSection
+        users={rows}
+        organizations={organizations.map(toOrgOption)}
+        secondaryOrganizationOptions={secondaryOrganizationOptions}
+        dienstgrade={dienstgrade.map((d) => ({ id: d.id, kurzform: d.kurzform, bezeichnung: d.bezeichnung }))}
+        droneGroups={droneGroups}
+        initialQuery={q}
+        initialFeuerwehr={feuerwehr}
+        initialDrohnengruppe={drohnengruppe}
+        initialRolle={rolle}
+        initialStatus={status}
+        initialSort={sort}
+        initialDir={dir}
+        currentUserId={currentUser.id}
+        initialEditUserId={params.edit}
+        initialCreateOpen={params.new === '1'}
+        adminNavItems={getAdminNavItems(currentUser)}
+        reachableScopes={reachableScopes}
+        initialAbschnitt={initialAbschnitt}
+        abschnitte={abschnitte}
+        isFullAdmin={fullAdmin}
+        viewerIsBezirksAdmin={fullAdmin}
+        viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
+        totalUsersCount={totalUsersCount}
+        totalOrgsCount={homeOrgGroups.length}
+        filteredCount={filteredCount}
+        page={page}
+        pageSize={PAGE_SIZE}
+      />
+    </div>
   );
 }

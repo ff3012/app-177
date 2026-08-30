@@ -575,3 +575,76 @@ export async function deleteUser(
   revalidatePath('/admin/benutzer');
   redirect('/admin/benutzer');
 }
+
+/**
+ * Legt den Benutzer für eine genehmigte Registrierung an - dieselbe Kernlogik wie createUser()
+ * (Zufalls-Passwort, isActive: false, ACTIVATION-Token), aber als eigene, kleine Funktion statt eines
+ * direkten Aufrufs von createUser(): createUser() ist an FormData, eine Berechtigungsprüfung gegen den
+ * AUFRUFENDEN Admin und einen eigenen abschließenden redirect() gekoppelt, was hier nicht passt - eine
+ * Registrierung hat keine adminOrgIds/Drohnengruppen-Auswahl zu übernehmen, nur die Kernfelder.
+ */
+async function createActivatedPendingUser(pending: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  stbNr: string;
+  dienstgradId: string | null;
+  organizationId: string;
+}): Promise<{ user: { id: string; email: string; firstName: string; lastName: string }; token: string }> {
+  const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+  const user = await prisma.user.create({
+    data: {
+      firstName: pending.firstName,
+      lastName: pending.lastName,
+      email: pending.email,
+      stbNr: pending.stbNr,
+      dienstgradId: pending.dienstgradId,
+      homeOrganizationId: pending.organizationId,
+      isActive: false,
+      passwordHash,
+    },
+  });
+  const token = await createToken(user.id, TokenPurpose.ACTIVATION);
+  return { user, token };
+}
+
+export async function approveRegistration(registrationId: string): Promise<{ error?: string }> {
+  const currentUser = await requireUser();
+
+  const pending = await prisma.pendingRegistration.findUnique({ where: { id: registrationId } });
+  if (!pending) {
+    return { error: 'Diese Anfrage wurde bereits bearbeitet.' };
+  }
+  assertPermission(canManageUsersFor(currentUser, pending.organizationId));
+
+  const existing = await prisma.user.findUnique({ where: { email: pending.email } });
+  if (existing) {
+    return { error: 'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.' };
+  }
+
+  const { user, token } = await createActivatedPendingUser(pending);
+  await prisma.pendingRegistration.delete({ where: { id: registrationId } });
+
+  try {
+    await sendActivationEmail(user, token);
+  } catch (error) {
+    console.error('Fehler beim Senden der Aktivierungs-E-Mail (Registrierung genehmigt):', error);
+  }
+
+  revalidatePath('/admin/benutzer');
+  return {};
+}
+
+export async function rejectRegistration(registrationId: string): Promise<{ error?: string }> {
+  const currentUser = await requireUser();
+
+  const pending = await prisma.pendingRegistration.findUnique({ where: { id: registrationId } });
+  if (!pending) {
+    return {};
+  }
+  assertPermission(canManageUsersFor(currentUser, pending.organizationId));
+
+  await prisma.pendingRegistration.delete({ where: { id: registrationId } });
+  revalidatePath('/admin/benutzer');
+  return {};
+}
