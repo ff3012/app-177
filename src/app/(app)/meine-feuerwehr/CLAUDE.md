@@ -401,6 +401,68 @@ addresses.
   request - scoped to just these two templates, not the app-wide email sign-off convention described
   under "Email" below (those templates are untouched).
 
+### Fahrzeugreservierung: Admin bucht stellvertretend
+
+A follow-up on top of the Freigabe-Workflow above: any Feuerwehr-Admin (or Abschnittsadmin/
+Bezirksadmin, via `canManageHeimatfeuerwehrFor`) can now create a vehicle reservation **on behalf of
+any other member of their own Heimatfeuerwehr**, bypassing the approval workflow entirely - the
+admin already vouches for the booking, so there is nothing left to approve. Full design rationale in
+`docs/superpowers/specs/2026-08-28-fahrzeugreservierung-admin-stellvertretend-design.md`.
+
+- **`VehicleBooking.userId` now means "Fahrer", not necessarily "wer hat gebucht"**: a new nullable
+  `bookedByAdminId` (`User? @relation("VehicleBookingBookedByAdmin", ...)`, `onDelete: SetNull`)
+  records which admin created the booking when it differs from `userId` - exactly the same
+  driver/registrant split `DroneFlight.registeredBy`/`pilotUser` already established. `null` (the
+  overwhelming majority of rows) means an ordinary self-booking, unchanged from before this feature.
+  Both `User` relations to `VehicleBooking` needed explicit `@relation(...)` names once a second FK to
+  `User` existed (`VehicleBookingDriver` for the pre-existing `user`/`vehicleBookings` pair,
+  `VehicleBookingBookedByAdmin` for the new one) - Prisma requires this only for disambiguation, the
+  field names themselves (`user`, `vehicleBookings`) are unchanged, so no other call site needed
+  touching.
+- **`createVehicleBooking` (`meine-feuerwehr/actions.ts`) branches on an optional `bookingForUserId`
+  FormData field**, inserted *before* the existing approval-vs-immediate logic and ending in its own
+  `redirect()`: absent, or equal to the acting user's own id, falls through to the pre-existing
+  self-booking code path completely unchanged (this is the load-bearing regression-safety guarantee -
+  the vast majority of bookings are still self-service and must behave byte-for-byte as before). A
+  different id re-validates `canManageHeimatfeuerwehrFor(user, vehicle.organizationId)` **and** that
+  the target member's `homeOrganizationId` matches the vehicle's organization, both server-side - a
+  client-forged `bookingForUserId` is rejected with an error, never silently falls back to
+  self-booking. The target-member lookup also applies `NOT_DEACTIVATED_WHERE` (`lib/auth/user-status.ts`)
+  - a deactivated member can't be selected even via a crafted request, matching this codebase's
+  "recheck at write time" convention used elsewhere (`isEligiblePilot`, `findOverlappingBooking`'s own
+  overlap recheck).
+- **On this path the booking is created directly `GENEHMIGT`** (no `approvalToken`, no `OFFEN`
+  intermediate state) **regardless of whether `fahrzeugReservierungEmails` is configured** for that
+  Feuerwehr - the admin-on-behalf-of path and the approval-workflow path are mutually exclusive
+  branches of the same function, not composed. The linked `Event`'s title uses the **target member's**
+  name (`${driver.firstName} ${driver.lastName}`), not the acting admin's `user.name` - this was a
+  late correction during planning: the pre-existing self-booking code literally builds the title from
+  `user.name` (the session user), not from any DB relation, so simply "reusing" that path would have
+  shown the admin's name in the calendar, not the driver's, without this explicit branch.
+- **Two new best-effort emails** (`lib/heimatfeuerwehr/notify-vehicle-booking.ts`,
+  `sendVehicleBookingAdminInfoEmail`/`sendVehicleBookingDriverNotificationEmail`), both try/catch-wrapped
+  per send and never throwing, matching every other notification in this module:
+  `sendVehicleBookingAdminInfoEmail` reuses the same `fahrzeugReservierungEmails` array as the
+  Freigabe-Workflow (one email per recipient, no shared To/Cc, no-op if empty) but is purely
+  informational, no Genehmigen/Ablehnen links, since the booking is already final. `sendVehicleBookingDriverNotificationEmail` always sends to the target member (independent of whether
+  `fahrzeugReservierungEmails` is configured) so they learn about a reservation someone else made for
+  them before stumbling onto it in the Kalender - **deliberately omits `VehicleBooking.details`**,
+  unlike the admin-facing email, to stay consistent with the existing "`details` is admin-only, the
+  person the booking is about never sees it" rule documented above under "`VehicleBooking.details`".
+- **Form UI** (`buchen/page.tsx`/`booking-form.tsx`): a new "Fahrzeugreservierung für" `<select>`,
+  rendered only when `canManageHeimatfeuerwehrFor(user, user.homeOrganizationId)` is true for the
+  viewer - a plain member never sees this field at all (the prop is simply not passed, so
+  `bookingForUserId` never appears in the submitted FormData for them, matching the server action's
+  "field absent" branch exactly). First option is always "Ich selbst" carrying the admin's own real
+  user id (no empty-string sentinel), followed by every other active member of the org, reusing the
+  same `NOT_DEACTIVATED_WHERE`-filtered member-picker query shape already established by
+  `heimatfeuerwehrPickerMembers` elsewhere in this file.
+- **`bookedByAdminId` is a pure audit-trail column today** - by deliberate design scope, nothing in the
+  UI (the admin table, the per-vehicle Reservierungshistorie) currently surfaces "wer hat diese
+  Buchung stellvertretend angelegt"; only the driver is shown under "Reserviert von" on both admin
+  surfaces, same as any other booking. Surfacing it there would be a small, low-risk follow-up if ever
+  requested, but wasn't part of what was asked for here.
+
 ### Foto-Upload-Benachrichtigung (GitHub Issue #19)
 
 Mirrors the Atemschutz single-email pattern above, but as multiple recipients instead of one, since the

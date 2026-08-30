@@ -5,10 +5,15 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageVehicleBooking } from '@/lib/auth/permissions';
+import { assertPermission, canManageHeimatfeuerwehrFor, canManageVehicleBooking } from '@/lib/auth/permissions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { vehicleBookingSchema, parseVehicleBookingFormData } from '@/lib/validation/vehicle-booking.schema';
 import { findOverlappingBooking } from '@/lib/heimatfeuerwehr/vehicle-availability';
-import { sendVehicleBookingApprovalRequest } from '@/lib/heimatfeuerwehr/notify-vehicle-booking';
+import {
+  sendVehicleBookingApprovalRequest,
+  sendVehicleBookingAdminInfoEmail,
+  sendVehicleBookingDriverNotificationEmail,
+} from '@/lib/heimatfeuerwehr/notify-vehicle-booking';
 import { deleteEventFromGoogleCalendar, pushEventToGoogleCalendar } from '@/lib/calendar/google-calendar-push';
 
 export interface VehicleBookingFormState {
@@ -52,6 +57,76 @@ export async function createVehicleBooking(
     return {
       error: `Das Fahrzeug ist in diesem Zeitraum bereits von ${overlap.user.firstName} ${overlap.user.lastName} reserviert.`,
     };
+  }
+
+  // Stellvertretende Buchung: nur wenn ein anderer Wert als die eigene ID übermittelt wurde UND
+  // der handelnde Nutzer tatsächlich Admin dieser Feuerwehr ist - serverseitig erneut geprüft,
+  // nie nur der Formular-UI vertraut. Siehe docs/superpowers/specs/2026-08-28-
+  // fahrzeugreservierung-admin-stellvertretend-design.md.
+  const bookingForUserIdRaw = formData.get('bookingForUserId');
+  const bookingForUserId =
+    typeof bookingForUserIdRaw === 'string' && bookingForUserIdRaw.length > 0 ? bookingForUserIdRaw : null;
+  const isOnBehalfOf = bookingForUserId !== null && bookingForUserId !== user.id;
+
+  if (isOnBehalfOf) {
+    if (!canManageHeimatfeuerwehrFor(user, vehicle.organizationId)) {
+      return { error: 'Keine Berechtigung, für ein anderes Mitglied zu reservieren.' };
+    }
+
+    const driver = await prisma.user.findFirst({
+      where: { id: bookingForUserId!, ...NOT_DEACTIVATED_WHERE },
+      select: { id: true, firstName: true, lastName: true, email: true, homeOrganizationId: true },
+    });
+    if (!driver || driver.homeOrganizationId !== vehicle.organizationId) {
+      return { error: 'Das ausgewählte Mitglied gehört nicht zu dieser Feuerwehr.' };
+    }
+
+    const driverName = `${driver.firstName} ${driver.lastName}`;
+    const organizationLabel = vehicle.organization.shortName ?? vehicle.organization.name;
+
+    const booking = await prisma.vehicleBooking.create({
+      data: {
+        vehicleId: data.vehicleId,
+        userId: driver.id,
+        bookedByAdminId: user.id,
+        startsAt,
+        endsAt,
+        details: data.details,
+        status: 'GENEHMIGT',
+      },
+    });
+
+    const bookingEvent = await prisma.event.create({
+      data: {
+        title: `Fahrzeug: ${vehicle.taktischeBezeichnung} (${driverName})`,
+        startsAt,
+        endsAt,
+        organizationId: vehicle.organizationId,
+        isSectionWide: false,
+        category: 'ALLGEMEIN',
+        createdById: user.id,
+        vehicleBookingId: booking.id,
+      },
+    });
+    await pushEventToGoogleCalendar(bookingEvent);
+
+    const emailCtx = {
+      startsAt,
+      endsAt,
+      details: data.details,
+      vehicleTaktischeBezeichnung: vehicle.taktischeBezeichnung,
+      vehicleKennzeichen: vehicle.kennzeichen,
+      organizationLabel,
+      adminName: user.name,
+      driverName,
+      driverEmail: driver.email,
+    };
+    await sendVehicleBookingAdminInfoEmail(emailCtx, vehicle.organization.fahrzeugReservierungEmails);
+    await sendVehicleBookingDriverNotificationEmail(emailCtx);
+
+    revalidatePath('/meine-feuerwehr');
+    revalidatePath('/kalender');
+    redirect('/meine-feuerwehr');
   }
 
   const approvalEmails = vehicle.organization.fahrzeugReservierungEmails;

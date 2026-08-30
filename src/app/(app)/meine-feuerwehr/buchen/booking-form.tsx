@@ -12,8 +12,15 @@ interface VehicleOption {
   kennzeichen: string;
 }
 
+interface MemberOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface BookingFormValues {
   vehicleId: string;
+  bookingForUserId: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -24,9 +31,19 @@ interface BookingFormProps {
   vehicles: VehicleOption[];
   action: (prevState: VehicleBookingFormState, formData: FormData) => Promise<VehicleBookingFormState>;
   initialVehicleId?: string;
+  bookingForMembers?: MemberOption[];
+  currentUserId?: string;
+  currentUserName?: string;
 }
 
-export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormProps) {
+export function BookingForm({
+  vehicles,
+  action,
+  initialVehicleId,
+  bookingForMembers,
+  currentUserId,
+  currentUserName,
+}: BookingFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
 
@@ -36,7 +53,14 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
     handleSubmit,
     formState: { errors },
   } = useForm<BookingFormValues>({
-    defaultValues: { vehicleId: initialVehicleId ?? vehicles[0]?.id ?? '', date: '', startTime: '', endTime: '', details: '' },
+    defaultValues: {
+      vehicleId: initialVehicleId ?? vehicles[0]?.id ?? '',
+      bookingForUserId: currentUserId ?? '',
+      date: '',
+      startTime: '',
+      endTime: '',
+      details: '',
+    },
   });
 
   function onSubmit(values: BookingFormValues) {
@@ -55,6 +79,7 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
 
     const formData = new FormData();
     formData.set('vehicleId', values.vehicleId);
+    if (bookingForMembers) formData.set('bookingForUserId', values.bookingForUserId);
     formData.set('startsAt', `${values.date}T${values.startTime}`);
     formData.set('endsAt', `${values.date}T${values.endTime}`);
     formData.set('details', values.details);
@@ -78,6 +103,24 @@ export function BookingForm({ vehicles, action, initialVehicleId }: BookingFormP
         </select>
         {errors.vehicleId && <p className="text-sm text-red-700">{errors.vehicleId.message}</p>}
       </div>
+
+      {bookingForMembers && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Fahrzeugreservierung für</label>
+          <select {...register('bookingForUserId')} className="rounded border border-neutral-300 px-3 py-2">
+            {currentUserId && (
+              <option value={currentUserId}>Ich selbst{currentUserName ? ` (${currentUserName})` : ''}</option>
+            )}
+            {bookingForMembers
+              .filter((member) => member.id !== currentUserId)
+              .map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.firstName} {member.lastName}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Datum</label>
