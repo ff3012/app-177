@@ -128,3 +128,94 @@ export async function sendVehicleBookingDecisionEmail(
     ].join(''),
   });
 }
+
+interface AdminBookingEmailContext {
+  startsAt: Date;
+  endsAt: Date;
+  details: string;
+  vehicleTaktischeBezeichnung: string;
+  vehicleKennzeichen: string;
+  organizationLabel: string;
+  adminName: string;
+  driverName: string;
+  driverEmail: string;
+}
+
+/**
+ * Rein informative E-Mail an die für die Feuerwehr hinterlegten fahrzeugReservierungEmails, wenn
+ * ein Admin stellvertretend für ein anderes Mitglied gebucht hat - keine Genehmigen/Ablehnen-Links,
+ * da hier nichts zu entscheiden ist (die Reservierung ist bereits GENEHMIGT). Eine E-Mail PRO
+ * Empfänger, nie ein gemeinsames To/Cc - dieselbe Regel wie sendVehicleBookingApprovalRequest. Jeder
+ * Versand einzeln try/catch-abgesichert, die Funktion selbst wirft nie. Kein Versand, falls
+ * toEmails leer ist (gleiches Verhalten wie beim bestehenden Genehmigungs-Anfrage-Pfad).
+ */
+export async function sendVehicleBookingAdminInfoEmail(ctx: AdminBookingEmailContext, toEmails: string[]): Promise<void> {
+  if (toEmails.length === 0) return;
+
+  const range = formatRange(ctx.startsAt, ctx.endsAt);
+  const subject = `Fahrzeug reserviert: ${ctx.vehicleTaktischeBezeichnung} (${ctx.organizationLabel})`;
+  const textPart = [
+    `${ctx.adminName} hat eine Fahrzeug-Reservierung für ${ctx.driverName} angelegt (bereits genehmigt):`,
+    '',
+    `Fahrzeug: ${ctx.vehicleTaktischeBezeichnung} (${ctx.vehicleKennzeichen})`,
+    `Zeitraum: ${range}`,
+    ctx.details ? `Details: ${ctx.details}` : null,
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+  const htmlPart = [
+    `<p>${escapeHtml(ctx.adminName)} hat eine Fahrzeug-Reservierung für ${escapeHtml(ctx.driverName)} angelegt (bereits genehmigt):</p>`,
+    '<ul>',
+    `<li>Fahrzeug: ${escapeHtml(ctx.vehicleTaktischeBezeichnung)} (${escapeHtml(ctx.vehicleKennzeichen)})</li>`,
+    `<li>Zeitraum: ${escapeHtml(range)}</li>`,
+    ctx.details ? `<li>Details: ${escapeHtml(ctx.details)}</li>` : '',
+    '</ul>',
+  ].join('');
+
+  for (const to of toEmails) {
+    try {
+      await sendEmail({ to, subject, textPart, htmlPart });
+    } catch (error) {
+      console.error('Info-E-Mail für stellvertretende Fahrzeug-Reservierung fehlgeschlagen:', error);
+    }
+  }
+}
+
+/**
+ * Benachrichtigt das Mitglied, für das ein Admin stellvertretend gebucht hat - verhindert, dass
+ * jemand erst im Kalender entdeckt, dass für ihn ein Fahrzeug reserviert wurde. Best-effort wie
+ * jeder andere E-Mail-Versand in diesem Modul, wirft nie.
+ */
+export async function sendVehicleBookingDriverNotificationEmail(ctx: AdminBookingEmailContext): Promise<void> {
+  const range = formatRange(ctx.startsAt, ctx.endsAt);
+
+  try {
+    await sendEmail({
+      to: ctx.driverEmail,
+      toName: ctx.driverName,
+      subject: `Für dich wurde ein Fahrzeug reserviert: ${ctx.vehicleTaktischeBezeichnung}`,
+      textPart: [
+        `${ctx.adminName} hat für dich eine Fahrzeug-Reservierung angelegt.`,
+        '',
+        `Fahrzeug: ${ctx.vehicleTaktischeBezeichnung} (${ctx.vehicleKennzeichen})`,
+        `Zeitraum: ${range}`,
+        ctx.details ? `Details: ${ctx.details}` : null,
+        '',
+        'Die Reservierung ist bereits genehmigt und im Kalender deiner Feuerwehr sichtbar.',
+      ]
+        .filter((line) => line !== null)
+        .join('\n'),
+      htmlPart: [
+        `<p>${escapeHtml(ctx.adminName)} hat für dich eine Fahrzeug-Reservierung angelegt.</p>`,
+        '<ul>',
+        `<li>Fahrzeug: ${escapeHtml(ctx.vehicleTaktischeBezeichnung)} (${escapeHtml(ctx.vehicleKennzeichen)})</li>`,
+        `<li>Zeitraum: ${escapeHtml(range)}</li>`,
+        ctx.details ? `<li>Details: ${escapeHtml(ctx.details)}</li>` : '',
+        '</ul>',
+        '<p>Die Reservierung ist bereits genehmigt und im Kalender deiner Feuerwehr sichtbar.</p>',
+      ].join(''),
+    });
+  } catch (error) {
+    console.error('Benachrichtigungs-E-Mail an Fahrer für stellvertretende Fahrzeug-Reservierung fehlgeschlagen:', error);
+  }
+}
