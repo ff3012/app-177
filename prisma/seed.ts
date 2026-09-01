@@ -208,6 +208,12 @@ const DIENSTGRADE: {
     kategorie: DienstgradKategorie.EHRENDIENSTGRAD,
     sortOrder: 460,
   },
+  {
+    kurzform: 'EOV',
+    bezeichnung: 'Ehren-Oberverwalter',
+    kategorie: DienstgradKategorie.EHRENDIENSTGRAD,
+    sortOrder: 470,
+  },
 ];
 
 /**
