@@ -53,7 +53,7 @@ export function QuickFlightForm({ token, drones, pilots }: { token: string; dron
     formData.set('location', values.location);
     formData.set('droneId', values.droneId);
     formData.set('purpose', values.purpose);
-    formData.set('notes', '');
+    formData.set('notes', values.notes ?? '');
 
     startTransition(async () => {
       const outcome = await registerFlightViaQuickLink(token, {}, formData);
@@ -112,6 +112,12 @@ export function QuickFlightForm({ token, drones, pilots }: { token: string; dron
           <option value="UEBUNG">Übung</option>
           <option value="EINSATZ">Einsatz</option>
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-neutral-700">Anmerkungen</label>
+        <textarea {...register('notes')} rows={3} className="rounded border border-neutral-300 px-3 py-2" />
+        {errors.notes && <p className="text-sm text-red-700">{errors.notes.message}</p>}
       </div>
 
       {result.error && <p className="text-sm text-red-700">{result.error}</p>}
