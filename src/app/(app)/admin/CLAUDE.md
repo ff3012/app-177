@@ -703,9 +703,15 @@ in this app.
   Docker-based tool that additionally requires bucket versioning enabled, which was judged disproportionate
   for a handful of small backup files. "NTP-Synchronisierung"
   can't run a real NTP client check inside the container either (it shares the host's clock, so there's
-  nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against the
-  `Date` response header of an external HTTPS call (`api.mailjet.com`) as a drift proxy, flagging >10s as
-  out of sync. **"S3 Exoscale Verbindung" and "Letztes S3-Backup" (GitHub issue #2)** cover the off-box
+  nothing container-local to check) — `src/lib/system/ntp-check.ts` instead compares local time against
+  Cloudflare's `/cdn-cgi/trace` diagnostic endpoint's `ts=` field as a drift proxy, flagging >10s as out of
+  sync. **Not `api.mailjet.com` (original implementation)** — that endpoint turned out to sit behind
+  CloudFront, which cached the response (Date header included) for 20+ hours in a real 2026-09-01 incident,
+  making the check report a growing, entirely fake multi-hour drift while the server's actual clock was
+  correct the whole time; switching to Mailjet's authenticated REST API would have worked around the
+  caching but coupled a clock check to Mailjet credentials for no conceptual reason, so this now uses a
+  dedicated, always-fresh, no-auth-needed time source instead. **"S3 Exoscale Verbindung" and "Letztes
+  S3-Backup" (GitHub issue #2)** cover the off-box
   copy specifically, since the checks above only ever reflected the local `pg_dump` succeeding, not whether
   the S3 upload did: `src/lib/system/s3-check.ts`'s `checkS3Connection()` is a live, read-only `HeadBucket`
   call via `@aws-sdk/client-s3` (the one SDK dependency in this codebase — hand-rolling SigV4 request
