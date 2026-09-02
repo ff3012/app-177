@@ -1,11 +1,11 @@
 import { requireUser } from '@/lib/auth/session';
-import { isBezirksAdmin } from '@/lib/auth/permissions';
+import { canAccessUserManagementAdmin } from '@/lib/auth/permissions';
 import { ImportUsersForm } from './import-form';
 
 export default async function BenutzerImportPage() {
   const user = await requireUser();
-  if (!isBezirksAdmin(user)) {
-    return <p className="text-neutral-700">Dieser Bereich ist nur für die Abschnittskommando-Verwaltung sichtbar.</p>;
+  if (!canAccessUserManagementAdmin(user)) {
+    return <p className="text-neutral-700">Dieser Bereich ist nur für die Benutzerverwaltung sichtbar.</p>;
   }
 
   return (

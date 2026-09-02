@@ -429,13 +429,38 @@ Action logic changed on any of the three pages.
   Server Action call, even though the UI checkbox list already excludes that option. **Only a full
   Abschnittskommando-Admin (`isSiteAdmin`) still sees/manages every Feuerwehr's users** — this is enforced by
   `canManageUsersFor`/`canManageHeimatfeuerwehrFor` unconditionally returning `true` for a site admin
-  regardless of `feuerwehrAdminOrgIds`. The Excel Export/Import links and routes
-  (`/admin/benutzer/export`/`/admin/benutzer/import`) stayed **`isSiteAdmin`-only** — not scoped, hidden
-  entirely from a plain Feuerwehr-Admin's UI (`UserManagementSection`'s new `isFullAdmin` prop) rather than
-  built out to a per-org export, since a bulk cross-Feuerwehr spreadsheet feature wasn't part of this ask.
-  Verified directly (not just type-checked): synthetic Feuerwehr-only-admin/site-admin/plain-member
-  `SessionUser` objects run through `canManageUsersFor`/`canAccessUserManagementAdmin` produced exactly the
-  expected true/false matrix (own org yes, other org no, site admin always yes, plain member never).
+  regardless of `feuerwehrAdminOrgIds`. Verified directly (not just type-checked): synthetic
+  Feuerwehr-only-admin/site-admin/plain-member `SessionUser` objects run through
+  `canManageUsersFor`/`canAccessUserManagementAdmin` produced exactly the expected true/false matrix (own
+  org yes, other org no, site admin always yes, plain member never).
+
+- **Excel Export/Import opened to every Heimatfeuerwehr-Admin (follow-up, was `isSiteAdmin`-only)**: both
+  `/admin/benutzer/export` (`GET`) and the `importUsers` Server Action (`import/actions.ts`) now gate on
+  `canAccessUserManagementAdmin` instead of `isBezirksAdmin`, matching the rest of this page. Export scopes
+  its `prisma.user.findMany` exactly like `page.tsx`'s own `users` query
+  (`where: isBezirksAdmin(user) ? undefined : { homeOrganizationId: { in: user.feuerwehrAdminOrgIds } }`) —
+  a Feuerwehr-/Abschnittsadmin's download contains only their own Heimatfeuerwehr's members, active and
+  deactivated. `UserManagementSection`'s two Export/Import UI spots no longer gate on `isFullAdmin` at all
+  (that prop now exclusively drives the Bezirksadmin-only Abschnitt-filter further down the same file) —
+  every visitor who reaches this page can already only be a Bezirksadmin/Feuerwehr-Admin/Abschnittsadmin
+  per the page's own top-level `canAccessUserManagementAdmin` gate, so no separate UI condition was needed.
+  Import gained a genuinely new per-row check: after resolving the row's `Heimat-Feuerwehr` column to an
+  `Organization`, `canManageUsersFor(currentUser, organization.id)` must hold or the row is **rejected with
+  an error** (`"Du bist nicht berechtigt, Mitglieder für "X" zu importieren."`) rather than silently
+  skipped — a Feuerwehr-Admin's spreadsheet can never create a user in a Feuerwehr they don't manage. This
+  surfaced a real, previously-invisible privilege-escalation gap in the *existing* admin-rights columns
+  (`Admin für`/`Bezirksadmin`/`Bezirks-Drohnenadmin`, all part of `USER_IMPORT_COLUMN_KEYS` since GitHub
+  issue #11): those were written straight from the spreadsheet with no per-row check at all, safe only
+  because the whole action was Bezirksadmin-only before — `canGrantBezirksAdmin`/`canGrantBezirksDrohnenAdmin`
+  are unconditionally `true` for a Bezirksadmin, so the gap never had a chance to matter. Opening the action
+  to Feuerwehr-Admins without fixing this would have let one grant themselves (or anyone) Bezirksadmin
+  rights, or "Admin für" a Feuerwehr they don't manage, via a spreadsheet column, despite the single-user
+  form (`actions.ts`'s `createUser`) already blocking exactly that through `canGrantAdminFor`/
+  `canGrantBezirksAdmin`/`canGrantBezirksDrohnenAdmin`. Fixed by adding the same three checks per row here
+  too (rejecting with an error, never silently downgrading the requested value). Verified directly against
+  the local dev database: the scoped export query returns only the target org's rows for a synthetic
+  Feuerwehr-Admin and every row for a synthetic Bezirksadmin, and `canManageUsersFor`/`canGrantBezirksAdmin`/
+  `canGrantBezirksDrohnenAdmin` produce the expected true/false matrix for both roles.
 
 **Benutzerverwaltung-Brief.md ("Benutzer bearbeiten"-Sheet, Claude Design)** — a follow-up mockup-driven
 rework of `UserFormSheet` specifically (the table/filters/bulk-actions from Verwaltung-Brief.md Phase 3-6

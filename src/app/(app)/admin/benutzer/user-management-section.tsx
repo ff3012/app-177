@@ -659,22 +659,23 @@ export function UserManagementSection({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          {isFullAdmin && (
-            <>
-              <a
-                href="/admin/benutzer/export"
-                className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
-              >
-                Excel Export
-              </a>
-              <Link
-                href="/admin/benutzer/import"
-                className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
-              >
-                Excel Import
-              </Link>
-            </>
-          )}
+          {/* Export/Import stehen jedem Betrachter dieser Seite zur Verfügung (Bezirks-/
+              Feuerwehr-/Abschnittsadmin) - die Routen selbst scopen Export/Import serverseitig auf
+              den eigenen Verwaltungsbereich (export/route.ts, import/actions.ts), kein UI-Gate
+              nötig. isFullAdmin bleibt hier bewusst ungenutzt, es steuert nur noch den weiter unten
+              stehenden Abschnitt-Filter, der genuin Bezirksadmin-only ist. */}
+          <a
+            href="/admin/benutzer/export"
+            className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+          >
+            Excel Export
+          </a>
+          <Link
+            href="/admin/benutzer/import"
+            className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+          >
+            Excel Import
+          </Link>
           <button
             type="button"
             onClick={() => setSheetState({ mode: 'create' })}
@@ -801,22 +802,12 @@ export function UserManagementSection({
         // "leer nach Filterung" unten - primäre Aktion ist hier der Import, nicht "zurücksetzen".
         <div className="flex flex-col items-center gap-3 rounded-lg bg-surface p-8 text-center shadow-card">
           <p className="text-[15px] text-ink-muted">Noch keine Benutzer angelegt.</p>
-          {isFullAdmin ? (
-            <Link
-              href="/admin/benutzer/import"
-              className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-            >
-              Excel Import
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSheetState({ mode: 'create' })}
-              className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-            >
-              Neuer Benutzer
-            </button>
-          )}
+          <Link
+            href="/admin/benutzer/import"
+            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Excel Import
+          </Link>
         </div>
       ) : filteredCount === 0 ? (
         <div className="rounded-lg bg-surface p-6 text-center text-[15px] text-ink-muted shadow-card">

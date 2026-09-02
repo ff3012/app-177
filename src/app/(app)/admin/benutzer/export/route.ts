@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { MembershipRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { isBezirksAdmin } from '@/lib/auth/permissions';
+import { canAccessUserManagementAdmin, isBezirksAdmin } from '@/lib/auth/permissions';
 import { USER_EXCEL_COLUMNS, EXCEL_BOOLEAN_LABEL, DRONE_ROLE_LABEL } from '@/lib/admin/user-excel-columns';
 import { getUserStatus } from '@/lib/auth/user-status';
 
@@ -17,12 +17,16 @@ function isoDate(date: Date | null | undefined): string {
 
 export async function GET() {
   const user = await requireUser();
-  if (!isBezirksAdmin(user)) {
+  if (!canAccessUserManagementAdmin(user)) {
     return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
   }
 
-  // Bewusst kein isActive-Filter: der Report soll aktive UND deaktivierte Benutzer enthalten.
+  // Für alle Heimatfeuerwehr-Admins geöffnet (vorher Bezirksadmin-only): ein Feuerwehr-/
+  // Abschnittsadmin sieht dabei nur die Mitglieder seines eigenen Verwaltungsbereichs, exakt
+  // derselbe scopeWhere-Ansatz wie page.tsx's Benutzer-Query. Bewusst kein isActive-Filter: der
+  // Report soll aktive UND deaktivierte Benutzer enthalten.
   const users = await prisma.user.findMany({
+    where: isBezirksAdmin(user) ? undefined : { homeOrganizationId: { in: user.feuerwehrAdminOrgIds } },
     include: {
       homeOrganization: true,
       memberships: { where: { role: MembershipRole.ADMIN }, include: { organization: true } },

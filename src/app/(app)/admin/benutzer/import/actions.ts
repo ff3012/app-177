@@ -6,7 +6,13 @@ import { revalidatePath } from 'next/cache';
 import { DroneRole, TokenPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, isBezirksAdmin } from '@/lib/auth/permissions';
+import {
+  assertPermission,
+  canAccessUserManagementAdmin,
+  canGrantBezirksAdmin,
+  canGrantBezirksDrohnenAdmin,
+  canManageUsersFor,
+} from '@/lib/auth/permissions';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail } from '@/lib/email/templates';
@@ -67,16 +73,21 @@ function findAusbildungsGapError(values: Record<Ausbildungsstufe, string>): stri
 /**
  * Erweiterung auf alle Benutzerfelder (GitHub Issue #11) - dieselbe Zeilen-für-Zeilen-Verarbeitung
  * wie zuvor, jetzt zusätzlich mit Dienstgrad/Admin-für/Drohnengruppe+Rolle/Ausbildungsstufen/
- * Atemschutzgeräteträger/Bezirksadmin/Bezirks-Drohnenadmin. Die admin-rechte-relevanten Felder
- * (Bezirksadmin, Bezirks-Drohnenadmin, Admin für) werden hier bewusst OHNE die feingranularen
- * canGrantBezirksAdmin/canGrantBezirksDrohnenAdmin/canGrantAdminFor-Prüfungen aus actions.ts
- * geschrieben - importUsers ist bereits oben auf isBezirksAdmin gegated, und
- * canGrantBezirksAdmin/canGrantBezirksDrohnenAdmin sind für einen Bezirksadmin ohnehin
- * unconditionally true (siehe permissions.ts), ein Feuerwehr-Admin erreicht diese Aktion gar nicht.
+ * Atemschutzgeräteträger/Bezirksadmin/Bezirks-Drohnenadmin.
+ *
+ * Für alle Heimatfeuerwehr-Admins geöffnet (vorher Bezirksadmin-only) - jede Zeile wird jetzt
+ * einzeln gegen canManageUsersFor(currentUser, organization.id) geprüft: eine Zeile mit einer
+ * Feuerwehr außerhalb des eigenen Verwaltungsbereichs wird BLOCKIERT (Fehlermeldung, Zeile wird
+ * nicht angelegt), nicht stillschweigend übersprungen. Die admin-rechte-relevanten Felder
+ * (Bezirksadmin, Bezirks-Drohnenadmin, Admin für) bekamen dafür jetzt dieselben feingranularen
+ * canGrantBezirksAdmin/canGrantBezirksDrohnenAdmin/canManageUsersFor-Prüfungen wie das
+ * Einzel-Benutzer-Formular (actions.ts's createUser) - ohne die hätte ein Feuerwehr-Admin über eine
+ * Spreadsheet-Spalte Bezirksadmin-Rechte oder Admin-Rechte für eine fremde Feuerwehr vergeben
+ * können, obwohl das Einzel-Formular genau das verhindert.
  */
 export async function importUsers(_prevState: ImportUsersState, formData: FormData): Promise<ImportUsersState> {
   const currentUser = await requireUser();
-  assertPermission(isBezirksAdmin(currentUser));
+  assertPermission(canAccessUserManagementAdmin(currentUser));
 
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {
@@ -177,6 +188,11 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
       continue;
     }
 
+    if (!canManageUsersFor(currentUser, organization.id)) {
+      errors.push(`Zeile ${rowNumber}: Du bist nicht berechtigt, Mitglieder für "${orgName}" zu importieren.`);
+      continue;
+    }
+
     if (phone && !E164_PHONE_REGEX.test(phone)) {
       errors.push(`Zeile ${rowNumber}: Telefonnummer "${phone}" ist kein gültiges E.164-Format.`);
       continue;
@@ -214,6 +230,23 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
         )!;
         if (!adminOrgIds.includes(org.id)) adminOrgIds.push(org.id);
       }
+    }
+
+    const unauthorizedAdminOrgId = adminOrgIds.find((orgId) => !canManageUsersFor(currentUser, orgId));
+    if (unauthorizedAdminOrgId) {
+      errors.push(`Zeile ${rowNumber}: Du bist nicht berechtigt, Admin-Rechte für diese Feuerwehr zu vergeben.`);
+      continue;
+    }
+
+    const wantsBezirksAdmin = parseJaNein(bezirksAdmin);
+    const wantsBezirksDrohnenAdmin = parseJaNein(bezirksDrohnenAdmin);
+    if (wantsBezirksAdmin && !canGrantBezirksAdmin(currentUser)) {
+      errors.push(`Zeile ${rowNumber}: Du bist nicht berechtigt, Bezirksadmin-Rechte zu vergeben.`);
+      continue;
+    }
+    if (wantsBezirksDrohnenAdmin && !canGrantBezirksDrohnenAdmin(currentUser)) {
+      errors.push(`Zeile ${rowNumber}: Du bist nicht berechtigt, Bezirks-Drohnenadmin-Rechte zu vergeben.`);
+      continue;
     }
 
     const normalizedRoleLabel = droneRoleLabel.toLowerCase();
@@ -289,8 +322,8 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
           dienstgradId,
           istAtemschutzgeraeteTraeger: parseJaNein(atemschutz),
           homeOrganizationId: organization.id,
-          isBezirksAdmin: parseJaNein(bezirksAdmin),
-          isBezirksDrohnenAdmin: parseJaNein(bezirksDrohnenAdmin),
+          isBezirksAdmin: wantsBezirksAdmin,
+          isBezirksDrohnenAdmin: wantsBezirksDrohnenAdmin,
           passwordHash,
         },
       });
