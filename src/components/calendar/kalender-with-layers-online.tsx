@@ -37,9 +37,9 @@ export function KalenderWithLayersOnline({
         layers={layers}
         sondergruppen={sondergruppen}
         initialHiddenSondergruppenIds={initialHiddenSondergruppenIds}
-        onToggleSondergruppe={(sondergruppeId, hidden) =>
+        onToggleSondergruppe={(hiddenIds) =>
           startTransition(() => {
-            void setSondergruppenFilter(sondergruppeId, hidden);
+            void setSondergruppenFilter(hiddenIds);
           })
         }
         onNavigate={(path) => router.push(path)}

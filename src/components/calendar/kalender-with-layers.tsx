@@ -25,7 +25,7 @@ interface KalenderWithLayersProps {
   layers: CalendarLayer[];
   sondergruppen?: SondergruppeOption[];
   initialHiddenSondergruppenIds?: string[];
-  onToggleSondergruppe?: (sondergruppeId: string, hidden: boolean) => void;
+  onToggleSondergruppe?: (hiddenSondergruppenIds: string[]) => void;
   readOnly?: boolean;
   onNavigate?: (path: string) => void;
 }
@@ -156,16 +156,14 @@ export function KalenderWithLayers({
   }
 
   function handleSondergruppeToggle(sondergruppeId: string, visible: boolean) {
-    setHiddenSondergruppen((prev) => {
-      const next = new Set(prev);
-      if (visible) {
-        next.delete(sondergruppeId);
-      } else {
-        next.add(sondergruppeId);
-      }
-      return next;
-    });
-    onToggleSondergruppe?.(sondergruppeId, !visible);
+    const next = new Set(hiddenSondergruppen);
+    if (visible) {
+      next.delete(sondergruppeId);
+    } else {
+      next.add(sondergruppeId);
+    }
+    setHiddenSondergruppen(next);
+    onToggleSondergruppe?.(Array.from(next));
   }
 
   return (
