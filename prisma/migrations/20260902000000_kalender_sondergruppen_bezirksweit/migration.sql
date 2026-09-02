@@ -3,7 +3,7 @@ ALTER TABLE "Event" ADD COLUMN     "isDistrictWide" BOOLEAN NOT NULL DEFAULT fal
 ADD COLUMN     "sondergruppeId" TEXT;
 
 -- AlterTable
-ALTER TABLE "User" ADD COLUMN     "ausgeblendeteSondergruppenIds" TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "User" ADD COLUMN     "ausgeblendeteSondergruppenIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 
 -- CreateTable
 CREATE TABLE "Sondergruppe" (
