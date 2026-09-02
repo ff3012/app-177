@@ -138,6 +138,18 @@ export function EventForm({
   const showCategorySelect = categoryOptions.length > 1 && organizations.length > 0;
   const isDroneCategory = category === 'DROHNENGRUPPE';
 
+  // Verteidigung in der Tiefe (der Server prüft das ebenfalls, siehe kalender/actions.ts): sobald die
+  // Geltungsbereichs-Auswahl selbst unmountet (Organisation ist kein Abschnittskommando mehr, oder
+  // canSectionWide ist false), müssen isSectionWide/isDistrictWide im Formular-State mit zurückgesetzt
+  // werden - sonst bliebe z. B. ein zuvor gewähltes "Bezirk-weit" stehen, wenn die Organisation
+  // danach auf eine einfache Feuerwehr gewechselt wird, und würde unsichtbar mit abgeschickt.
+  useEffect(() => {
+    if (!showSectionWideOption) {
+      setValue('isSectionWide', false);
+      setValue('isDistrictWide', false);
+    }
+  }, [showSectionWideOption, setValue]);
+
   // Ende übernimmt bei jeder Änderung von Start automatisch dessen Datum. Solange Ende noch gar
   // keine eigene Uhrzeit hat, wird zusätzlich Start + 15 Minuten als Uhrzeit vorgeschlagen; hat
   // Ende bereits eine (manuell oder zuvor automatisch gesetzte) Uhrzeit, bleibt nur das Datum synchron.

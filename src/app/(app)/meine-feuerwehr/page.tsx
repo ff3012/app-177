@@ -200,7 +200,14 @@ export default async function MeineFeuerwehrPage() {
 
   const eventCards: HomeEventCardData[] = await Promise.all(
     candidateEvents.map(async (event) => {
-      const layer = event.category === 'DROHNENGRUPPE' ? 'drohnengruppe' : event.isSectionWide ? 'abschnitt' : 'own';
+      const layer =
+        event.category === 'DROHNENGRUPPE'
+          ? 'drohnengruppe'
+          : event.isDistrictWide
+            ? 'bezirk'
+            : event.isSectionWide
+              ? 'abschnitt'
+              : 'own';
       const isVehicleBooking = event.vehicleBookingId !== null;
       const canManage = canManageEventsFor(user, event.organizationId);
       // Ein automatisch aus einer Fahrzeug-Buchung erzeugter Termin hat kein Zusage-Konzept - exakt

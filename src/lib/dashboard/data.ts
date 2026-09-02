@@ -16,12 +16,16 @@ export interface DashboardEvent {
   allDay: boolean;
   category: 'ALLGEMEIN' | 'DROHNENGRUPPE';
   isSectionWide: boolean;
+  isDistrictWide: boolean;
 }
 
-/** Kommende Termine der eigenen Heimatfeuerwehr + Abschnitt-weite + Drohnengruppe, OHNE RSVP-Felder
- * (Design-Spec §3: "Ohne RSVP-Felder"). Anders als die normale Kalenderansicht wird die
+/** Kommende Termine der eigenen Heimatfeuerwehr + Abschnitt-weite + Bezirk-weite + Drohnengruppe, OHNE
+ * RSVP-Felder (Design-Spec §3: "Ohne RSVP-Felder"). Anders als die normale Kalenderansicht wird die
  * Drohnengruppe-Kategorie hier NICHT nach canViewDroneModule gefiltert - der Dashboard-Screen hat
- * keinen Viewer mit eigenen Rechten, er zeigt alle Kategorien der eigenen Org/des Abschnitts. */
+ * keinen Viewer mit eigenen Rechten, er zeigt alle Kategorien der eigenen Org/des Abschnitts. Die
+ * dritte OR-Bedingung (isDistrictWide) ist unabhängig von organizationId/Abschnitt - dieser
+ * Dashboard-Screen war der sechste, ursprünglich übersehene Aufrufsstelle der ALLGEMEIN-
+ * Sichtbarkeitsregel, siehe die Aufrufsstellen-Liste im Root-CLAUDE.md. */
 export async function getDashboardEvents(organizationId: string): Promise<DashboardEvent[]> {
   const now = new Date();
   const organization = await prisma.organization.findUniqueOrThrow({
@@ -39,6 +43,7 @@ export async function getDashboardEvents(organizationId: string): Promise<Dashbo
           isSectionWide: true,
           organization: { OR: [{ id: abschnittOrganizationId }, { parentId: abschnittOrganizationId }] },
         },
+        { category: 'ALLGEMEIN' as const, isDistrictWide: true },
       ],
     },
     orderBy: { startsAt: 'asc' },
@@ -52,6 +57,7 @@ export async function getDashboardEvents(organizationId: string): Promise<Dashbo
       allDay: true,
       category: true,
       isSectionWide: true,
+      isDistrictWide: true,
     },
   });
 }

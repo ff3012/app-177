@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { ZusageStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageEvent, canViewEvent } from '@/lib/auth/permissions';
+import { assertPermission, canCreateBezirksWideEvent, canManageEvent, canViewEvent } from '@/lib/auth/permissions';
 import { rsvpSchema } from '@/lib/validation/rsvp.schema';
 import { sendEventPushNow } from '@/lib/push/send-event-push';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
@@ -89,6 +89,14 @@ export async function triggerEventPushNotification(eventId: string): Promise<Eve
         })
       : null;
   assertPermission(canManageEvent(user, event, droneGroup));
+  // Bezirk-weite ALLGEMEIN-Termine sind über canManageEvent nur an das (ggf. nur eine einzelne
+  // Feuerwehr verwaltende) canManageEventsFor der Anker-Organisation gekoppelt - eine bezirksweite
+  // Push-Benachrichtigung (Audience: der gesamte Bezirk, siehe resolveEventAudienceUserIds) braucht
+  // zusätzlich das eigenständige Bezirk-weit-Recht, sonst könnte ein einfacher Feuerwehr-Admin über
+  // diesen Umweg an den gesamten Bezirk pushen, ohne canCreateBezirksWideEvent zu besitzen.
+  if (event.category !== 'DROHNENGRUPPE' && event.isDistrictWide) {
+    assertPermission(canCreateBezirksWideEvent(user));
+  }
 
   try {
     const { sent, recipients } = await sendEventPushNow(event);

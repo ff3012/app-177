@@ -21,6 +21,11 @@ const CATEGORY_COLOR: Record<string, string> = {
   DROHNENGRUPPE: '#22a06b',
 };
 const SECTION_WIDE_COLOR = '#f0a92c';
+// Gleicher Wert wie lib/calendar/layer-colors.ts's LAYER_COLORS.bezirk, aber bewusst hier als eigene
+// Konstante dupliziert statt importiert - das Dashboard ist ein eigener, token-authentifizierter
+// Kiosk-Rendering-Kontext (kein Session-Viewer, siehe getDashboardEvents), nicht Teil der
+// Kalender-Sichtbarkeitslogik dieses Moduls.
+const DISTRICT_WIDE_COLOR = '#5856d6';
 
 const WEEKDAY_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 
@@ -138,7 +143,12 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
           ) : (
             <HeightFittedList minVisible={4} maxVisible={10}>
               {events.map((event) => {
-                const color = event.isSectionWide && event.category === 'ALLGEMEIN' ? SECTION_WIDE_COLOR : CATEGORY_COLOR[event.category];
+                const color =
+                  event.category === 'ALLGEMEIN' && event.isDistrictWide
+                    ? DISTRICT_WIDE_COLOR
+                    : event.isSectionWide && event.category === 'ALLGEMEIN'
+                      ? SECTION_WIDE_COLOR
+                      : CATEGORY_COLOR[event.category];
                 const time = formatEventTime(event.startsAt, event.endsAt, event.allDay);
                 return (
                   <div

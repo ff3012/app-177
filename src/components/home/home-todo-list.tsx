@@ -16,7 +16,7 @@ export interface HomeEventCardData {
   allDay: boolean;
   location: string | null;
   organizationName: string;
-  layer: 'own' | 'abschnitt' | 'drohnengruppe';
+  layer: 'own' | 'abschnitt' | 'bezirk' | 'drohnengruppe';
   myStatus: RsvpStatusOption | null;
   /** Gesetzt, wenn der Betrachter diese Organisation verwaltet (canManageEventsFor) - Startbildschirm-
    * Brief.md §4: "Beim Kommandanten zeigt die Terminkarte zusätzlich den Rückmeldestand der Mannschaft

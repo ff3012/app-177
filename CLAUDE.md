@@ -263,13 +263,22 @@ everywhere else in this file):
   everyone, and every existing Abschnittskommando-owned event became uneditable (`canManageEventsFor` reads
   only this array and has no Bezirksadmin bypass, by long-standing design).
 
-**Event visibility for `category === 'ALLGEMEIN'` is Abschnitt-scoped, not app-wide; `DROHNENGRUPPE` is a
-completely separate, category-first rule.** `canViewEvent` (`src/lib/auth/permissions.ts`, and the identical
-rule mirrored in `kalender/page.tsx`'s own query, `meine-feuerwehr/page.tsx`'s own query, the single-event
-`.ics` route, and `push/audience.ts`) branches on `event.category` first:
+**Event visibility for `category === 'ALLGEMEIN'` is Abschnitt-scoped, not app-wide (except for the third,
+genuinely Bezirk-wide tier below); `DROHNENGRUPPE` is a completely separate, category-first rule.**
+`canViewEvent` (`src/lib/auth/permissions.ts`) is the single source of truth; the identical rule must be
+kept in sync at every call site that duplicates it instead of calling it directly:
+`kalender/page.tsx`'s own query, `meine-feuerwehr/page.tsx`'s own query, `kalender/ics/[token]/route.ts`
+(both its per-organization and legacy-combined queries), `kalender/[eventId]/ics/route.ts` (calls
+`canViewEvent` directly), `lib/push/audience.ts`'s `resolveEventAudienceUserIds`, and
+`lib/dashboard/data.ts`'s `getDashboardEvents` (a sixth call site, missed by the original Kalender-
+Sondergruppen implementation and added in a later final-review fix pass — this list is exhaustive as of
+that fix, keep it current). `canViewEvent` branches on `event.category` first:
 - `ALLGEMEIN`: `event.organizationId === user.homeOrganizationId` **OR** (`event.isSectionWide` **AND** the
-  event's Abschnitt equals the viewer's own `homeAbschnittOrganizationId`). A section-wide event never
-  leaves its own Abschnitt. Unchanged from before the multi-Drohnengruppe plan.
+  event's Abschnitt equals the viewer's own `homeAbschnittOrganizationId`) **OR** `event.isDistrictWide`
+  (bezirksweit — visible to every user in the whole Bezirk, independent of `organizationId`/Abschnitt; see
+  `canCreateBezirksWideEvent` above for who may set it). A section-wide event never leaves its own
+  Abschnitt; only the district-wide tier crosses Abschnitt boundaries. Unchanged from before the
+  multi-Drohnengruppe plan except for this third tier.
 - `DROHNENGRUPPE`: `canViewDroneModule(user)` **AND** (`event.droneGroupId === null` **OR**
   `event.droneGroupId === user.droneGroupId`) — completely **independent** of `organizationId`/
   `isSectionWide`. Those two fields are still populated on a `DROHNENGRUPPE` event (server-derived in

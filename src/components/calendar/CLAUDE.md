@@ -313,6 +313,22 @@ since that ignores the group-scoped/bezirksweit rule entirely. Current call site
   (fixed to use this function instead of `canManageEventsFor` during the final-review pass that also added
   this checklist — see the CLAUDE.md history/git log if you need the "before" shape).
 
+**`isDistrictWide` (bezirksweit) authorization is deliberately NOT folded into `canManageEvent` itself.**
+Unlike the Drohnengruppe tiers (group-scoped vs. bezirksweit droneGroupId===null), where `canManageEvent`
+alone already fully decides the answer, an `ALLGEMEIN` event's `isDistrictWide` flag is checked via
+separate, explicit inline calls to `canCreateBezirksWideEvent(user)` at each write/action call site
+(`kalender/actions.ts`'s `createEvent`/`updateEvent`/`deleteEvent`) rather than being folded into
+`canManageEvent`'s own `ALLGEMEIN` branch, which still delegates only to the flat `canManageEventsFor`. A
+later final-review fix pass found this meant `triggerEventPushNotification` — gated on `canManageEvent`
+alone — let any admin of a bezirksweit event's anchor organization (which can be a single plain Feuerwehr)
+trigger a push whose audience is the entire Bezirk, without that admin ever needing
+`canCreateBezirksWideEvent`. Fixed by adding an explicit companion check right after the existing
+`assertPermission(canManageEvent(...))` line: `if (event.category !== 'DROHNENGRUPPE' &&
+event.isDistrictWide) { assertPermission(canCreateBezirksWideEvent(user)); }`. Don't assume
+`canManageEvent` alone is sufficient authorization for a Bezirk-weit `ALLGEMEIN` event the way it is for
+Drohnengruppe events — any new call site touching an event that could be `isDistrictWide` needs this same
+companion check.
+
 **Outbound .ics subscribe links — UI removed (security concern), backend routes still live.** The two
 outbound subscribe links (per-organization feed keyed by `Organization.icsToken`, and a **legacy combined
 Abschnitts-feed** keyed by the single `ABSCHNITTS_ICS_TOKEN` environment variable) used to be shown in a

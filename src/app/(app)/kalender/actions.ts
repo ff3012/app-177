@@ -93,8 +93,22 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       return { error: 'Keine Berechtigung für Abschnitt-weite Termine in diesem Abschnitt.' };
     }
   }
-  if (data.isDistrictWide && !canCreateBezirksWideEvent(user)) {
-    return { error: 'Keine Berechtigung für Bezirk-weite Termine.' };
+  if (data.isDistrictWide) {
+    if (!canCreateBezirksWideEvent(user)) {
+      return { error: 'Keine Berechtigung für Bezirk-weite Termine.' };
+    }
+    // Datenintegritäts-Invariante, unabhängig davon, was das Formular selbst (nach der eigenen
+    // useEffect-Absicherung in event-form.tsx) noch abschickt: ein Bezirk-weiter Termin darf nur an
+    // einem Abschnittskommando verankert sein, sonst entstünde ein Termin, dessen eigene Feuerwehr-
+    // Admin-Rechte (canManageEventsFor über organizationId) über die für Bezirk-weite Termine
+    // vorgesehene Rechtestufe (canCreateBezirksWideEvent) hinausgingen.
+    const organization = await prisma.organization.findUniqueOrThrow({
+      where: { id: data.organizationId },
+      select: { type: true },
+    });
+    if (organization.type !== 'ABSCHNITTSKOMMANDO') {
+      return { error: 'Bezirk-weite Termine können nur für ein Abschnittskommando angelegt werden.' };
+    }
   }
   if (data.sondergruppeId) {
     const sondergruppe = await prisma.sondergruppe.findUnique({ where: { id: data.sondergruppeId } });
@@ -208,8 +222,18 @@ export async function updateEvent(
       return { error: 'Keine Berechtigung für Abschnitt-weite Termine in diesem Abschnitt.' };
     }
   }
-  if (data.isDistrictWide && !canCreateBezirksWideEvent(user)) {
-    return { error: 'Keine Berechtigung für Bezirk-weite Termine.' };
+  if (data.isDistrictWide) {
+    if (!canCreateBezirksWideEvent(user)) {
+      return { error: 'Keine Berechtigung für Bezirk-weite Termine.' };
+    }
+    // Gleiche Datenintegritäts-Invariante wie in createEvent oben - siehe Kommentar dort.
+    const organization = await prisma.organization.findUniqueOrThrow({
+      where: { id: data.organizationId },
+      select: { type: true },
+    });
+    if (organization.type !== 'ABSCHNITTSKOMMANDO') {
+      return { error: 'Bezirk-weite Termine können nur für ein Abschnittskommando angelegt werden.' };
+    }
   }
   if (data.sondergruppeId) {
     const sondergruppe = await prisma.sondergruppe.findUnique({ where: { id: data.sondergruppeId } });

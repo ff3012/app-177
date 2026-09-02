@@ -1,6 +1,6 @@
 import { LAYER_COLORS, LAYER_LABELS } from '@/lib/calendar/layer-colors';
 
-/** Explains the 3 event colors used both in the month grid (calendar-view.tsx) and the mobile
+/** Explains the 4 event colors used both in the month grid (calendar-view.tsx) and the mobile
  * card accent bar (event-list-view.tsx) - reads from the same layer-colors.ts as both, so the
  * swatches shown here can never drift from what's actually painted elsewhere. */
 export function LayerLegend({ showDrone }: { showDrone: boolean }) {
