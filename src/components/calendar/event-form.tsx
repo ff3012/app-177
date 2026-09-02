@@ -26,10 +26,17 @@ interface DroneGroupOption {
   name: string;
 }
 
+interface SondergruppeOption {
+  id: string;
+  name: string;
+}
+
 interface EventFormProps {
   organizations: OrganizationOption[];
   canSectionWide: boolean;
+  canDistrictWide: boolean;
   droneGroupOptions: DroneGroupOption[];
+  sondergruppeOptions: SondergruppeOption[];
   defaultValues?: Partial<EventInput>;
   action: (prevState: EventFormState, formData: FormData) => Promise<EventFormState>;
   submitLabel: string;
@@ -38,7 +45,9 @@ interface EventFormProps {
 export function EventForm({
   organizations,
   canSectionWide,
+  canDistrictWide,
   droneGroupOptions,
+  sondergruppeOptions,
   defaultValues,
   action,
   submitLabel,
@@ -70,11 +79,13 @@ export function EventForm({
       allDay: false,
       organizationId: organizations[0]?.id ?? '',
       isSectionWide: false,
+      isDistrictWide: false,
       // Ein Nutzer ohne jede eigene Feuerwehr-Admin-Mitgliedschaft (reiner Bezirksadmin/Bezirks-
       // Drohnenadmin/Admin Drohnengruppe) hat organizations=[] - für den ist "Allgemein" gar keine
       // sinnvolle Standardauswahl (leeres Organisation-<select>), "Drohnengruppe" dagegen schon.
       category: organizations.length === 0 && droneGroupOptions.length > 0 ? 'DROHNENGRUPPE' : 'ALLGEMEIN',
       droneGroupId: droneGroupOptions[0]?.id ?? null,
+      sondergruppeId: null,
       ...defaultValues,
     },
   });
@@ -84,6 +95,22 @@ export function EventForm({
   const showSectionWideOption = canSectionWide && selectedOrg?.type === 'ABSCHNITTSKOMMANDO';
   const category = watch('category');
   const startsAt = watch('startsAt');
+  const isSectionWideValue = watch('isSectionWide');
+  const isDistrictWideValue = watch('isDistrictWide');
+  const geltungsbereich: 'FEUERWEHR' | 'ABSCHNITT' | 'BEZIRK' = isDistrictWideValue
+    ? 'BEZIRK'
+    : isSectionWideValue
+      ? 'ABSCHNITT'
+      : 'FEUERWEHR';
+
+  // 3-stufige Geltungsbereichs-Auswahl (Eigene Feuerwehr/Abschnitt-weit/Bezirk-weit) für
+  // ALLGEMEIN-Termine - siehe docs/superpowers/specs/2026-09-01-kalender-sondergruppen-design.md.
+  // isSectionWide/isDistrictWide bleiben zwei unabhängige Zod-Felder statt eines gemeinsamen Enums
+  // (additive Erweiterung neben dem bestehenden Feld), diese Funktion hält sie im UI synchron.
+  function handleGeltungsbereichChange(value: 'FEUERWEHR' | 'ABSCHNITT' | 'BEZIRK') {
+    setValue('isSectionWide', value === 'ABSCHNITT');
+    setValue('isDistrictWide', value === 'BEZIRK');
+  }
 
   // "Drohnengruppe" nur als Kategorie-Option anbieten, wenn es überhaupt eine wählbare Gruppe gibt
   // (droneGroupOptions kommt bereits vorgefiltert vom Aufrufer - alle Gruppen, die dieser Nutzer
@@ -145,8 +172,10 @@ export function EventForm({
     if (values.allDay) formData.set('allDay', 'on');
     formData.set('organizationId', values.organizationId);
     if (values.isSectionWide) formData.set('isSectionWide', 'on');
+    if (values.isDistrictWide) formData.set('isDistrictWide', 'on');
     formData.set('category', values.category);
     if (values.droneGroupId) formData.set('droneGroupId', values.droneGroupId);
+    if (values.sondergruppeId) formData.set('sondergruppeId', values.sondergruppeId);
 
     startTransition(async () => {
       const result = await action({}, formData);
@@ -241,10 +270,52 @@ export function EventForm({
       )}
 
       {showSectionWideOption && !isDroneCategory && (
-        <label className="flex items-center gap-2 text-sm text-neutral-700">
-          <input type="checkbox" {...register('isSectionWide')} />
-          Abschnitt-weiter Termin (in allen Feuerwehr-Kalendern sichtbar)
-        </label>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-neutral-700">Geltungsbereich</label>
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="radio"
+              name="geltungsbereich"
+              checked={geltungsbereich === 'FEUERWEHR'}
+              onChange={() => handleGeltungsbereichChange('FEUERWEHR')}
+            />
+            Eigene Feuerwehr
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="radio"
+              name="geltungsbereich"
+              checked={geltungsbereich === 'ABSCHNITT'}
+              onChange={() => handleGeltungsbereichChange('ABSCHNITT')}
+            />
+            Abschnitt-weit (in allen Feuerwehr-Kalendern des Abschnitts sichtbar)
+          </label>
+          {canDistrictWide && (
+            <label className="flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                type="radio"
+                name="geltungsbereich"
+                checked={geltungsbereich === 'BEZIRK'}
+                onChange={() => handleGeltungsbereichChange('BEZIRK')}
+              />
+              Bezirk-weit (im gesamten Bezirk sichtbar)
+            </label>
+          )}
+        </div>
+      )}
+
+      {!isDroneCategory && sondergruppeOptions.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Sondergruppe (optional)</label>
+          <select {...register('sondergruppeId')} className="rounded border border-neutral-300 px-3 py-2">
+            <option value="">Keine</option>
+            {sondergruppeOptions.map((gruppe) => (
+              <option key={gruppe.id} value={gruppe.id}>
+                {gruppe.name}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {showCategorySelect && (

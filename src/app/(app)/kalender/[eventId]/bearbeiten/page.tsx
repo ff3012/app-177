@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateAnySectionWideEvent, canManageEvent } from '@/lib/auth/permissions';
+import { canCreateAnySectionWideEvent, canCreateBezirksWideEvent, canManageEvent } from '@/lib/auth/permissions';
 import { getManageableDroneGroupOptions } from '@/lib/calendar/drone-group-options';
+import { getSondergruppeOptions } from '@/lib/calendar/sondergruppe-options';
 import { BEZIRKSWEIT_DRONE_GROUP_VALUE } from '@/lib/validation/event.schema';
 import { EventForm } from '@/components/calendar/event-form';
 import { AddToCalendarLink } from '@/components/calendar/add-to-calendar-link';
@@ -57,12 +58,13 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
     );
   }
 
-  const [organizations, droneGroupOptions] = await Promise.all([
+  const [organizations, droneGroupOptions, sondergruppeOptions] = await Promise.all([
     prisma.organization.findMany({
       where: { OR: [{ id: { in: user.feuerwehrAdminOrgIds }, isActive: true }, { id: event.organizationId }] },
       orderBy: { name: 'asc' },
     }),
     getManageableDroneGroupOptions(user, event.category === 'DROHNENGRUPPE' ? event.droneGroupId : undefined),
+    getSondergruppeOptions(event.sondergruppeId),
   ]);
 
   const boundUpdate = updateEvent.bind(null, event.id);
@@ -82,7 +84,9 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
       <EventForm
         organizations={organizations}
         canSectionWide={canCreateAnySectionWideEvent(user)}
+        canDistrictWide={canCreateBezirksWideEvent(user)}
         droneGroupOptions={droneGroupOptions}
+        sondergruppeOptions={sondergruppeOptions}
         action={boundUpdate}
         submitLabel="Änderungen speichern"
         defaultValues={{
@@ -94,8 +98,10 @@ export default async function TerminBearbeitenPage({ params }: { params: Promise
           allDay: event.allDay,
           organizationId: event.organizationId,
           isSectionWide: event.isSectionWide,
+          isDistrictWide: event.isDistrictWide,
           category: event.category,
           droneGroupId: event.droneGroupId ?? (event.category === 'DROHNENGRUPPE' ? BEZIRKSWEIT_DRONE_GROUP_VALUE : null),
+          sondergruppeId: event.sondergruppeId,
         }}
       />
       <form action={boundDelete}>

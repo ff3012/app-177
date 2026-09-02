@@ -1,7 +1,8 @@
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canCreateAnySectionWideEvent, isBezirksAdmin, isDroneGroupAdmin } from '@/lib/auth/permissions';
+import { canCreateAnySectionWideEvent, canCreateBezirksWideEvent, isBezirksAdmin, isDroneGroupAdmin } from '@/lib/auth/permissions';
 import { getManageableDroneGroupOptions } from '@/lib/calendar/drone-group-options';
+import { getSondergruppeOptions } from '@/lib/calendar/sondergruppe-options';
 import { EventForm } from '@/components/calendar/event-form';
 import { createEvent } from '../actions';
 
@@ -24,13 +25,15 @@ export default async function NeuerTerminPage({
 
   const { sectionWide } = await searchParams;
   const canSectionWide = canCreateAnySectionWideEvent(user);
+  const canDistrictWide = canCreateBezirksWideEvent(user);
 
-  const [organizations, droneGroupOptions] = await Promise.all([
+  const [organizations, droneGroupOptions, sondergruppeOptions] = await Promise.all([
     prisma.organization.findMany({
       where: { id: { in: user.feuerwehrAdminOrgIds }, isActive: true },
       orderBy: { name: 'asc' },
     }),
     getManageableDroneGroupOptions(user),
+    getSondergruppeOptions(),
   ]);
 
   return (
@@ -39,7 +42,9 @@ export default async function NeuerTerminPage({
       <EventForm
         organizations={organizations}
         canSectionWide={canSectionWide}
+        canDistrictWide={canDistrictWide}
         droneGroupOptions={droneGroupOptions}
+        sondergruppeOptions={sondergruppeOptions}
         action={createEvent}
         submitLabel="Termin anlegen"
         defaultValues={canSectionWide && sectionWide === '1' ? { isSectionWide: true } : undefined}
