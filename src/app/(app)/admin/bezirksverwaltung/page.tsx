@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { FeuerwehrenTable, type FeuerwehrRow } from './feuerwehren-table';
 import { RenameDroneGroupForm } from './rename-drone-group-form';
 import { AddDroneGroupForm } from './add-drone-group-form';
+import { DeleteDroneGroupButton } from './delete-drone-group-button';
 import { toggleDroneGroupActive } from './actions';
 
 export default async function BezirksverwaltungPage() {
@@ -109,11 +110,14 @@ export default async function BezirksverwaltungPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <form action={boundToggle}>
-                        <button type="submit" className="text-sm text-brand hover:underline">
-                          {group.isActive ? 'Deaktivieren' : 'Reaktivieren'}
-                        </button>
-                      </form>
+                      <span className="inline-flex items-center gap-3">
+                        <form action={boundToggle}>
+                          <button type="submit" className="text-sm text-brand hover:underline">
+                            {group.isActive ? 'Deaktivieren' : 'Reaktivieren'}
+                          </button>
+                        </form>
+                        {!group.isActive && <DeleteDroneGroupButton droneGroupId={group.id} name={group.name} />}
+                      </span>
                     </TableCell>
                   </TableRow>
                 );

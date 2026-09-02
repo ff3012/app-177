@@ -197,3 +197,47 @@ export async function toggleDroneGroupActive(droneGroupId: string): Promise<void
   await prisma.droneGroup.update({ where: { id: droneGroupId }, data: { isActive: !existing.isActive } });
   revalidate();
 }
+
+/**
+ * Löscht eine Drohnengruppe endgültig - blockiert mit einer zählenden Fehlermeldung, solange noch
+ * irgendwelche Daten daran hängen (Drohnen/Mitgliedschaften/Dokumente/Termine/News-Beiträge), statt
+ * sie stillschweigend mitzureißen. Gleiches "erst zählen, dann blockieren statt kaskadieren"-Muster
+ * wie deleteVehicle (admin/heimatfeuerwehr/actions.ts) - keiner der DroneGroup-Relationen im Schema
+ * hat ein explizites onDelete, Prisma/Postgres würde ein `delete` mit noch vorhandenen verknüpften
+ * Zeilen ohnehin nur mit einem rohen Foreign-Key-Fehler ablehnen; diese Prüfung liefert stattdessen
+ * eine verständliche, zählende Meldung.
+ */
+export async function deleteDroneGroup(droneGroupId: string): Promise<BezirksverwaltungFormState> {
+  const user = await requireUser();
+  assertPermission(canManageDrohnengruppenBezirksweit(user));
+
+  const existing = await prisma.droneGroup.findUnique({ where: { id: droneGroupId } });
+  if (!existing) {
+    return {};
+  }
+
+  const [droneCount, memberCount, documentCount, eventCount, newsPostCount] = await Promise.all([
+    prisma.drone.count({ where: { droneGroupId } }),
+    prisma.drohnengruppeMembership.count({ where: { droneGroupId } }),
+    prisma.droneDocument.count({ where: { droneGroupId } }),
+    prisma.event.count({ where: { droneGroupId } }),
+    prisma.newsPost.count({ where: { droneGroupId } }),
+  ]);
+
+  const blockers: string[] = [];
+  if (droneCount > 0) blockers.push(`${droneCount} Drohne${droneCount === 1 ? '' : 'n'}`);
+  if (memberCount > 0) blockers.push(`${memberCount} Mitglied${memberCount === 1 ? '' : 'er'}`);
+  if (documentCount > 0) blockers.push(`${documentCount} Dokument${documentCount === 1 ? '' : 'e'}`);
+  if (eventCount > 0) blockers.push(`${eventCount} Termin${eventCount === 1 ? '' : 'e'}`);
+  if (newsPostCount > 0) blockers.push(`${newsPostCount} ${newsPostCount === 1 ? 'News-Beitrag' : 'News-Beiträge'}`);
+
+  if (blockers.length > 0) {
+    return {
+      error: `Diese Drohnengruppe hat noch ${blockers.join(', ')} und kann nicht gelöscht werden - erst entfernen oder einer anderen Gruppe zuordnen.`,
+    };
+  }
+
+  await prisma.droneGroup.delete({ where: { id: droneGroupId } });
+  revalidate();
+  return {};
+}
