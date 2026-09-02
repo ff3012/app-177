@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canCreateSectionWideEvent, canManageEvent, canManageEventsFor } from '@/lib/auth/permissions';
+import {
+  assertPermission,
+  canCreateBezirksWideEvent,
+  canCreateSectionWideEvent,
+  canManageEvent,
+  canManageEventsFor,
+} from '@/lib/auth/permissions';
 import { eventSchema, parseEventFormData } from '@/lib/validation/event.schema';
 import { deleteEventFromGoogleCalendar, pushEventToGoogleCalendar } from '@/lib/calendar/google-calendar-push';
 import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
@@ -65,6 +71,8 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
         allDay: data.allDay,
         organizationId,
         isSectionWide: false,
+        isDistrictWide: false,
+        sondergruppeId: null,
         category: data.category,
         droneGroupId: data.droneGroupId,
         createdById: user.id,
@@ -85,6 +93,15 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       return { error: 'Keine Berechtigung für Abschnitt-weite Termine in diesem Abschnitt.' };
     }
   }
+  if (data.isDistrictWide && !canCreateBezirksWideEvent(user)) {
+    return { error: 'Keine Berechtigung für Bezirk-weite Termine.' };
+  }
+  if (data.sondergruppeId) {
+    const sondergruppe = await prisma.sondergruppe.findUnique({ where: { id: data.sondergruppeId } });
+    if (!sondergruppe) {
+      return { error: 'Sondergruppe wurde nicht gefunden.' };
+    }
+  }
 
   const created = await prisma.event.create({
     data: {
@@ -96,8 +113,10 @@ export async function createEvent(_prevState: EventFormState, formData: FormData
       allDay: data.allDay,
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
+      isDistrictWide: data.isDistrictWide,
       category: data.category,
       droneGroupId: null,
+      sondergruppeId: data.sondergruppeId,
       createdById: user.id,
     },
   });
@@ -128,6 +147,9 @@ export async function updateEvent(
       if (!canCreateSectionWideEvent(user, existingAbschnittOrganizationId)) {
         return { error: 'Keine Berechtigung, diesen Abschnitt-weiten Termin zu bearbeiten.' };
       }
+    }
+    if (existing.isDistrictWide && !canCreateBezirksWideEvent(user)) {
+      return { error: 'Keine Berechtigung, diesen Bezirk-weiten Termin zu bearbeiten.' };
     }
   }
   if (existing.vehicleBookingId) {
@@ -165,6 +187,8 @@ export async function updateEvent(
         allDay: data.allDay,
         organizationId,
         isSectionWide: false,
+        isDistrictWide: false,
+        sondergruppeId: null,
         category: data.category,
         droneGroupId: data.droneGroupId,
       },
@@ -184,6 +208,15 @@ export async function updateEvent(
       return { error: 'Keine Berechtigung für Abschnitt-weite Termine in diesem Abschnitt.' };
     }
   }
+  if (data.isDistrictWide && !canCreateBezirksWideEvent(user)) {
+    return { error: 'Keine Berechtigung für Bezirk-weite Termine.' };
+  }
+  if (data.sondergruppeId) {
+    const sondergruppe = await prisma.sondergruppe.findUnique({ where: { id: data.sondergruppeId } });
+    if (!sondergruppe) {
+      return { error: 'Sondergruppe wurde nicht gefunden.' };
+    }
+  }
 
   const updated = await prisma.event.update({
     where: { id: eventId },
@@ -196,8 +229,10 @@ export async function updateEvent(
       allDay: data.allDay,
       organizationId: data.organizationId,
       isSectionWide: data.isSectionWide,
+      isDistrictWide: data.isDistrictWide,
       category: data.category,
       droneGroupId: null,
+      sondergruppeId: data.sondergruppeId,
     },
   });
   await pushEventToGoogleCalendar(updated);
@@ -221,6 +256,9 @@ export async function deleteEvent(eventId: string): Promise<void> {
     if (existing.isSectionWide) {
       const abschnittOrganizationId = await resolveAbschnittOrganizationId(existing.organizationId);
       assertPermission(canCreateSectionWideEvent(user, abschnittOrganizationId));
+    }
+    if (existing.isDistrictWide) {
+      assertPermission(canCreateBezirksWideEvent(user));
     }
   }
   assertPermission(
