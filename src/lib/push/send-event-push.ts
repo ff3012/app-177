@@ -10,6 +10,7 @@ export interface EventForPush {
   location: string | null;
   organizationId: string;
   isSectionWide: boolean;
+  isDistrictWide: boolean;
   category: string;
   droneGroupId: string | null;
 }

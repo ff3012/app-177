@@ -141,6 +141,7 @@ export default async function MeineFeuerwehrPage() {
               OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
             },
           },
+          { category: 'ALLGEMEIN' as const, isDistrictWide: true },
           ...(droneMember
             ? [{ category: 'DROHNENGRUPPE' as const, OR: [{ droneGroupId: user.droneGroupId }, { droneGroupId: null }] }]
             : []),

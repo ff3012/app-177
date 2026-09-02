@@ -28,6 +28,10 @@ export default async function KalenderPage() {
               OR: [{ id: user.homeAbschnittOrganizationId }, { parentId: user.homeAbschnittOrganizationId }],
             },
           },
+          // Bezirk-weite ALLGEMEIN-Termine sind für jeden im Bezirk sichtbar, unabhängig von
+          // Organisation/Abschnitt (siehe canViewEvent, docs/superpowers/specs/
+          // 2026-09-01-kalender-sondergruppen-design.md).
+          { category: 'ALLGEMEIN' as const, isDistrictWide: true },
           // Drohnengruppen-Termine sind komplett unabhängig von Organisation/Abschnitt sichtbar (siehe
           // canViewEvent) - eigene Gruppe ODER bezirksweit (droneGroupId null), unabhängig davon, bei
           // welcher Feuerwehr/Abschnitt das Event technisch "organizationId" trägt.
@@ -80,6 +84,7 @@ export default async function KalenderPage() {
   const layers: CalendarLayer[] = [
     { key: 'own', label: 'Meine Feuerwehr' },
     { key: 'abschnitt', label: 'Abschnitt-Kalender' },
+    { key: 'bezirk', label: 'Bezirk-weit' },
   ];
   if (canSeeDroneCategory) {
     layers.push({ key: 'drohnengruppe', label: 'Drohnengruppe' });
@@ -92,7 +97,14 @@ export default async function KalenderPage() {
         (canSeeDroneCategory && (event.droneGroupId === null || event.droneGroupId === user.droneGroupId)),
     )
     .map((event) => {
-      const layer = event.category === 'DROHNENGRUPPE' ? 'drohnengruppe' : event.isSectionWide ? 'abschnitt' : 'own';
+      const layer =
+        event.category === 'DROHNENGRUPPE'
+          ? 'drohnengruppe'
+          : event.isDistrictWide
+            ? 'bezirk'
+            : event.isSectionWide
+              ? 'abschnitt'
+              : 'own';
       const droneGroup = event.droneGroupId ? droneGroupsById.get(event.droneGroupId) ?? null : null;
       return {
         id: event.id,

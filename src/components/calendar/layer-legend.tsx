@@ -4,7 +4,9 @@ import { LAYER_COLORS, LAYER_LABELS } from '@/lib/calendar/layer-colors';
  * card accent bar (event-list-view.tsx) - reads from the same layer-colors.ts as both, so the
  * swatches shown here can never drift from what's actually painted elsewhere. */
 export function LayerLegend({ showDrone }: { showDrone: boolean }) {
-  const keys = showDrone ? (['own', 'abschnitt', 'drohnengruppe'] as const) : (['own', 'abschnitt'] as const);
+  const keys = showDrone
+    ? (['own', 'abschnitt', 'bezirk', 'drohnengruppe'] as const)
+    : (['own', 'abschnitt', 'bezirk'] as const);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm sm:rounded-lg sm:p-3">

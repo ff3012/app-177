@@ -26,9 +26,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     }
     const events = await prisma.event.findMany({
       where: {
-        isSectionWide: true,
         category: { not: 'DROHNENGRUPPE' },
-        organization: { OR: [{ id: abschnitt.id }, { parentId: abschnitt.id }] },
+        OR: [
+          { isSectionWide: true, organization: { OR: [{ id: abschnitt.id }, { parentId: abschnitt.id }] } },
+          { isDistrictWide: true },
+        ],
       },
       orderBy: { startsAt: 'asc' },
     });
@@ -50,6 +52,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
           isSectionWide: true,
           organization: { OR: [{ id: abschnittOrganizationId }, { parentId: abschnittOrganizationId }] },
         },
+        { isDistrictWide: true },
       ],
       category: { not: 'DROHNENGRUPPE' },
     },

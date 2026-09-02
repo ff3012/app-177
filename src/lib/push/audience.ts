@@ -15,6 +15,7 @@ import { getAbschnittOrganizationId } from '@/lib/organizations/abschnitt';
 export async function resolveEventAudienceUserIds(event: {
   organizationId: string;
   isSectionWide: boolean;
+  isDistrictWide: boolean;
   category: string;
   droneGroupId: string | null;
 }): Promise<string[]> {
@@ -35,11 +36,15 @@ export async function resolveEventAudienceUserIds(event: {
     return members.map((member) => member.id);
   }
 
-  // Die Organisations-/Abschnittshälfte der Sichtbarkeitsregel - identisch zu canViewEvent:
-  // eigene Feuerwehr ODER (abschnittsweit UND im selben Abschnitt). Bei einem abschnittsweiten Termin
-  // umfasst die Abschnittsbedingung die eigene-Feuerwehr-Bedingung bereits vollständig.
+  // Die Organisations-/Abschnitts-/Bezirkshälfte der Sichtbarkeitsregel - identisch zu canViewEvent:
+  // eigene Feuerwehr ODER (abschnittsweit UND im selben Abschnitt) ODER bezirksweit (jedes aktive
+  // Mitglied). Bei einem abschnittsweiten Termin umfasst die Abschnittsbedingung die
+  // eigene-Feuerwehr-Bedingung bereits vollständig; bei einem bezirksweiten Termin die
+  // Abschnittsbedingung ebenfalls.
   let visibilityWhere: Prisma.UserWhereInput;
-  if (event.isSectionWide) {
+  if (event.isDistrictWide) {
+    visibilityWhere = {};
+  } else if (event.isSectionWide) {
     const organization = await prisma.organization.findUniqueOrThrow({
       where: { id: event.organizationId },
       select: { type: true, id: true, parentId: true },
