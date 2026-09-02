@@ -24,3 +24,13 @@ export const renameDroneGroupSchema = z.object({
   name: z.string().trim().min(1, 'Name ist erforderlich.').max(200),
 });
 export type RenameDroneGroupInput = z.infer<typeof renameDroneGroupSchema>;
+
+export const createSondergruppeSchema = z.object({
+  name: z.string().trim().min(1, 'Name ist erforderlich.').max(200),
+});
+export type CreateSondergruppeInput = z.infer<typeof createSondergruppeSchema>;
+
+export const renameSondergruppeSchema = z.object({
+  name: z.string().trim().min(1, 'Name ist erforderlich.').max(200),
+});
+export type RenameSondergruppeInput = z.infer<typeof renameSondergruppeSchema>;

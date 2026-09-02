@@ -1,7 +1,12 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canAccessBezirksverwaltung, canManageDrohnengruppenBezirksweit, canManageFeuerwehrenBezirksweit } from '@/lib/auth/permissions';
+import {
+  canAccessBezirksverwaltung,
+  canManageDrohnengruppenBezirksweit,
+  canManageFeuerwehrenBezirksweit,
+  canManageSondergruppenBezirksweit,
+} from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { getReachableScopes } from '@/lib/admin/scope';
 import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-selector';
@@ -12,7 +17,9 @@ import { FeuerwehrenTable, type FeuerwehrRow } from './feuerwehren-table';
 import { RenameDroneGroupForm } from './rename-drone-group-form';
 import { AddDroneGroupForm } from './add-drone-group-form';
 import { DeleteDroneGroupButton } from './delete-drone-group-button';
-import { toggleDroneGroupActive } from './actions';
+import { RenameSondergruppeForm } from './rename-sondergruppe-form';
+import { AddSondergruppeForm } from './add-sondergruppe-form';
+import { toggleDroneGroupActive, toggleSondergruppeActive } from './actions';
 
 export default async function BezirksverwaltungPage() {
   const user = await requireUser();
@@ -22,6 +29,7 @@ export default async function BezirksverwaltungPage() {
   const reachableScopes = await getReachableScopes(user);
   const showFeuerwehren = canManageFeuerwehrenBezirksweit(user);
   const showDrohnengruppen = canManageDrohnengruppenBezirksweit(user);
+  const showSondergruppen = canManageSondergruppenBezirksweit(user);
 
   const abschnitte = await prisma.organization.findMany({
     where: { type: 'ABSCHNITTSKOMMANDO' },
@@ -31,7 +39,7 @@ export default async function BezirksverwaltungPage() {
   const abschnittOptions = abschnitte.map((a) => ({ id: a.id, name: a.shortName ?? a.name }));
   const abschnittNameById = new Map(abschnittOptions.map((a) => [a.id, a.name]));
 
-  const [feuerwehren, droneGroups, bezirksadmins] = await Promise.all([
+  const [feuerwehren, droneGroups, bezirksadmins, sondergruppen] = await Promise.all([
     showFeuerwehren
       ? prisma.organization.findMany({
           where: { type: 'FEUERWEHR' },
@@ -50,6 +58,12 @@ export default async function BezirksverwaltungPage() {
           where: { isBezirksAdmin: true },
           select: { id: true, firstName: true, lastName: true, email: true, homeOrganization: { select: { name: true, shortName: true } } },
           orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        })
+      : Promise.resolve([]),
+    showSondergruppen
+      ? prisma.sondergruppe.findMany({
+          select: { id: true, name: true, isActive: true },
+          orderBy: { sortOrder: 'asc' },
         })
       : Promise.resolve([]),
   ]);
@@ -133,6 +147,58 @@ export default async function BezirksverwaltungPage() {
           </Table>
           <div className="mt-3">
             <AddDroneGroupForm abschnitte={abschnittOptions} />
+          </div>
+        </div>
+      )}
+
+      {showSondergruppen && (
+        <div className="rounded-lg bg-surface p-4 shadow-card">
+          <h2 className="mb-3 text-[15px] font-semibold text-ink">Sondergruppen</h2>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sondergruppen.map((gruppe) => {
+                const boundToggle = toggleSondergruppeActive.bind(null, gruppe.id);
+                return (
+                  <TableRow key={gruppe.id} className="border-line">
+                    <TableCell>
+                      <RenameSondergruppeForm sondergruppeId={gruppe.id} currentName={gruppe.name} />
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={gruppe.isActive ? 'border-transparent bg-success-subtle text-success-text' : 'border-transparent bg-danger-subtle text-danger'}
+                      >
+                        {gruppe.isActive ? 'Aktiv' : 'Deaktiviert'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <form action={boundToggle}>
+                        <button type="submit" className="text-sm text-brand hover:underline">
+                          {gruppe.isActive ? 'Deaktivieren' : 'Reaktivieren'}
+                        </button>
+                      </form>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {sondergruppen.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-ink-muted">
+                    Noch keine Sondergruppe angelegt.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          <div className="mt-3">
+            <AddSondergruppeForm />
           </div>
         </div>
       )}

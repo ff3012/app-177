@@ -3,12 +3,19 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageDrohnengruppenBezirksweit, canManageFeuerwehrenBezirksweit } from '@/lib/auth/permissions';
+import {
+  assertPermission,
+  canManageDrohnengruppenBezirksweit,
+  canManageFeuerwehrenBezirksweit,
+  canManageSondergruppenBezirksweit,
+} from '@/lib/auth/permissions';
 import {
   createFeuerwehrSchema,
   renameFeuerwehrSchema,
   createDroneGroupSchema,
   renameDroneGroupSchema,
+  createSondergruppeSchema,
+  renameSondergruppeSchema,
 } from '@/lib/validation/bezirksverwaltung.schema';
 
 export interface BezirksverwaltungFormState {
@@ -240,4 +247,68 @@ export async function deleteDroneGroup(droneGroupId: string): Promise<Bezirksver
   await prisma.droneGroup.delete({ where: { id: droneGroupId } });
   revalidate();
   return {};
+}
+
+export async function createSondergruppe(
+  _prevState: BezirksverwaltungFormState,
+  formData: FormData,
+): Promise<BezirksverwaltungFormState> {
+  const user = await requireUser();
+  assertPermission(canManageSondergruppenBezirksweit(user));
+
+  const parsed = createSondergruppeSchema.safeParse({ name: String(formData.get('name') ?? '') });
+  if (!parsed.success) {
+    return { fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  const data = parsed.data;
+
+  const existingName = await prisma.sondergruppe.findUnique({ where: { name: data.name } });
+  if (existingName) {
+    return { fieldErrors: { name: ['Eine Sondergruppe mit diesem Namen existiert bereits.'] } };
+  }
+
+  const maxSortOrder = await prisma.sondergruppe.aggregate({ _max: { sortOrder: true } });
+  const sortOrder = (maxSortOrder._max.sortOrder ?? 0) + 10;
+
+  await prisma.sondergruppe.create({ data: { name: data.name, sortOrder } });
+  revalidate();
+  return {};
+}
+
+export async function renameSondergruppe(
+  sondergruppeId: string,
+  _prevState: BezirksverwaltungFormState,
+  formData: FormData,
+): Promise<BezirksverwaltungFormState> {
+  const user = await requireUser();
+  assertPermission(canManageSondergruppenBezirksweit(user));
+
+  const existing = await prisma.sondergruppe.findUnique({ where: { id: sondergruppeId } });
+  if (!existing) {
+    return { error: 'Sondergruppe wurde nicht gefunden.' };
+  }
+
+  const parsed = renameSondergruppeSchema.safeParse({ name: String(formData.get('name') ?? '') });
+  if (!parsed.success) {
+    return { fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  const data = parsed.data;
+
+  const existingName = await prisma.sondergruppe.findUnique({ where: { name: data.name } });
+  if (existingName && existingName.id !== sondergruppeId) {
+    return { fieldErrors: { name: ['Eine Sondergruppe mit diesem Namen existiert bereits.'] } };
+  }
+
+  await prisma.sondergruppe.update({ where: { id: sondergruppeId }, data: { name: data.name } });
+  revalidate();
+  return {};
+}
+
+export async function toggleSondergruppeActive(sondergruppeId: string): Promise<void> {
+  const user = await requireUser();
+  assertPermission(canManageSondergruppenBezirksweit(user));
+
+  const existing = await prisma.sondergruppe.findUniqueOrThrow({ where: { id: sondergruppeId } });
+  await prisma.sondergruppe.update({ where: { id: sondergruppeId }, data: { isActive: !existing.isActive } });
+  revalidate();
 }
