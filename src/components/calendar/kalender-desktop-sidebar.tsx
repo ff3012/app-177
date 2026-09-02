@@ -1,5 +1,5 @@
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
-import type { CalendarLayer, StatusFilter } from './kalender-with-layers';
+import type { CalendarLayer, SondergruppeOption, StatusFilter } from './kalender-with-layers';
 
 interface KalenderDesktopSidebarProps {
   layers: CalendarLayer[];
@@ -9,6 +9,9 @@ interface KalenderDesktopSidebarProps {
   statusFilter: StatusFilter;
   onStatusFilterChange: (filter: StatusFilter) => void;
   openCount: number;
+  sondergruppen: SondergruppeOption[];
+  hiddenSondergruppen: Set<string>;
+  onSondergruppeToggle: (sondergruppeId: string, visible: boolean) => void;
 }
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: (openCount: number) => string }[] = [
@@ -34,6 +37,9 @@ export function KalenderDesktopSidebar({
   statusFilter,
   onStatusFilterChange,
   openCount,
+  sondergruppen,
+  hiddenSondergruppen,
+  onSondergruppeToggle,
 }: KalenderDesktopSidebarProps) {
   return (
     <div className="flex w-full flex-col gap-3">
@@ -56,6 +62,20 @@ export function KalenderDesktopSidebar({
           <p className="border-t border-neutral-100 pt-3 text-xs text-neutral-400">
             Die Farbe links am Termin zeigt die Ebene. Drohnengruppen-Termine sehen nur deren Mitglieder.
           </p>
+        </div>
+      )}
+
+      {sondergruppen.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-lg bg-white p-3 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Sondergruppen</span>
+          {sondergruppen.map((gruppe) => (
+            <ToggleSwitch
+              key={gruppe.id}
+              label={gruppe.name}
+              checked={!hiddenSondergruppen.has(gruppe.id)}
+              onChange={(checked) => onSondergruppeToggle(gruppe.id, checked)}
+            />
+          ))}
         </div>
       )}
 

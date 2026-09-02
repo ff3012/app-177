@@ -13,11 +13,19 @@ export interface CalendarLayer {
   label: string;
 }
 
+export interface SondergruppeOption {
+  id: string;
+  name: string;
+}
+
 export type StatusFilter = 'ALLE' | 'OFFEN' | 'ZUGESAGT';
 
 interface KalenderWithLayersProps {
   events: CalendarEventInput[];
   layers: CalendarLayer[];
+  sondergruppen?: SondergruppeOption[];
+  initialHiddenSondergruppenIds?: string[];
+  onToggleSondergruppe?: (sondergruppeId: string, hidden: boolean) => void;
   readOnly?: boolean;
   onNavigate?: (path: string) => void;
 }
@@ -60,9 +68,31 @@ function FilterIcon({ hasHiddenLayers }: { hasHiddenLayers: boolean }) {
 // Komponente (KalenderDesktopSidebar) statt KalenderFiltersContent - die Legende entfällt dort
 // zugunsten einer Fußzeile, eine neue "Nur anzeigen"-Statusfilter-Karte kommt dazu. Unterhalb lg:
 // bleibt KalenderFiltersContent (BottomSheet) unverändert und bekommt nie einen statusFilter.
-export function KalenderWithLayers({ events, layers, readOnly = false, onNavigate }: KalenderWithLayersProps) {
+export function KalenderWithLayers({
+  events,
+  layers,
+  sondergruppen = [],
+  initialHiddenSondergruppenIds = [],
+  onToggleSondergruppe,
+  readOnly = false,
+  onNavigate,
+}: KalenderWithLayersProps) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(layers.map((layer) => [layer.key, true])),
+  );
+  // Opt-in-Standard (siehe Design-Spec "Persönlicher Filter"): ein leeres
+  // initialHiddenSondergruppenIds bedeutet "noch nie eine Auswahl getroffen", NICHT "alles
+  // anzeigen" - in diesem Fall gelten alle aktuell bekannten Sondergruppen als ausgeblendet. Ein
+  // NICHT-leeres initialHiddenSondergruppenIds ist dagegen die echte, gespeicherte Wahl des
+  // Mitglieds und wird unverändert übernommen, auch wenn sie inzwischen eine Sondergruppe nennt,
+  // die aus `sondergruppen` verschwunden ist (z. B. deaktiviert).
+  const [hiddenSondergruppen, setHiddenSondergruppen] = useState<Set<string>>(
+    () =>
+      new Set(
+        initialHiddenSondergruppenIds.length > 0
+          ? initialHiddenSondergruppenIds
+          : sondergruppen.map((gruppe) => gruppe.id),
+      ),
   );
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALLE');
@@ -89,9 +119,17 @@ export function KalenderWithLayers({ events, layers, readOnly = false, onNavigat
   // Vergangene Termine werden nur in der Listenansicht ausgeblendet (siehe Issue #1) - fest, ohne
   // Umschalter. Die Kalenderansicht (Gitter) zeigt weiterhin jeden Monat vollständig, da ein
   // Kalendergitter mit ausgeblendeten vergangenen Tagen/Terminen eher verwirrend als aufgeräumt wirkt.
+  // Sondergruppen-Filter (siehe docs/superpowers/specs/2026-09-01-kalender-sondergruppen-design.md) ist
+  // rein clientseitig, unabhängig vom Ebenen-Toggle - ein Termin ohne sondergruppeId ist davon nie
+  // betroffen.
   const filteredEvents = useMemo(
-    () => events.filter((event) => enabled[event.layer ?? ''] !== false),
-    [events, enabled],
+    () =>
+      events.filter(
+        (event) =>
+          enabled[event.layer ?? ''] !== false &&
+          (!event.sondergruppeId || !hiddenSondergruppen.has(event.sondergruppeId)),
+      ),
+    [events, enabled, hiddenSondergruppen],
   );
 
   const sortedEvents = useMemo(() => {
@@ -117,6 +155,19 @@ export function KalenderWithLayers({ events, layers, readOnly = false, onNavigat
     setEnabled((prev) => ({ ...prev, [key]: checked }));
   }
 
+  function handleSondergruppeToggle(sondergruppeId: string, visible: boolean) {
+    setHiddenSondergruppen((prev) => {
+      const next = new Set(prev);
+      if (visible) {
+        next.delete(sondergruppeId);
+      } else {
+        next.add(sondergruppeId);
+      }
+      return next;
+    });
+    onToggleSondergruppe?.(sondergruppeId, !visible);
+  }
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="hidden lg:flex lg:w-64 lg:shrink-0">
@@ -128,6 +179,9 @@ export function KalenderWithLayers({ events, layers, readOnly = false, onNavigat
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           openCount={openCount}
+          sondergruppen={sondergruppen}
+          hiddenSondergruppen={hiddenSondergruppen}
+          onSondergruppeToggle={handleSondergruppeToggle}
         />
       </div>
 
@@ -137,6 +191,9 @@ export function KalenderWithLayers({ events, layers, readOnly = false, onNavigat
           enabled={enabled}
           onToggle={handleToggle}
           showDrone={showDrone}
+          sondergruppen={sondergruppen}
+          hiddenSondergruppen={hiddenSondergruppen}
+          onSondergruppeToggle={handleSondergruppeToggle}
         />
       </BottomSheet>
 

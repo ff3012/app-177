@@ -28,6 +28,7 @@ export interface CalendarEventInput {
   rsvpCounts?: { ZUGESAGT: number; ABGESAGT: number; UNKLAR: number };
   isVehicleBooking?: boolean;
   isDistrictWideDrone?: boolean;
+  sondergruppeId?: string | null;
 }
 
 function formatEventTime(event: CalendarEventInput) {

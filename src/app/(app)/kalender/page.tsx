@@ -16,7 +16,7 @@ export default async function KalenderPage() {
   // der DB geladen, unabhängig vom späteren .filter().
   const canSeeDroneCategory = canViewDroneModule(user);
 
-  const [organization, allEvents, droneGroups] = await Promise.all([
+  const [organization, allEvents, droneGroups, sondergruppen, currentUser] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: user.homeOrganizationId } }),
     prisma.event.findMany({
       where: {
@@ -49,6 +49,15 @@ export default async function KalenderPage() {
     canSeeDroneCategory
       ? prisma.droneGroup.findMany({ select: { id: true, organizationId: true } })
       : Promise.resolve([]),
+    prisma.sondergruppe.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { sortOrder: 'asc' },
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { ausgeblendeteSondergruppenIds: true },
+    }),
   ]);
 
   const droneGroupsById = new Map(droneGroups.map((group) => [group.id, group]));
@@ -123,6 +132,7 @@ export default async function KalenderPage() {
         rsvpCounts: rsvpCountsByEvent.get(event.id) ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 },
         isVehicleBooking: event.vehicleBookingId !== null,
         isDistrictWideDrone: event.category === 'DROHNENGRUPPE' && event.droneGroupId === null,
+        sondergruppeId: event.sondergruppeId,
       };
     });
 
@@ -136,7 +146,12 @@ export default async function KalenderPage() {
           </Link>
         )}
       </div>
-      <KalenderWithLayersOnline events={calendarEvents} layers={layers} />
+      <KalenderWithLayersOnline
+        events={calendarEvents}
+        layers={layers}
+        sondergruppen={sondergruppen}
+        initialHiddenSondergruppenIds={currentUser.ausgeblendeteSondergruppenIds}
+      />
     </div>
   );
 }

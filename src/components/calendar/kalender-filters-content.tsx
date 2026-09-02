@@ -1,12 +1,15 @@
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { LayerLegend } from './layer-legend';
-import type { CalendarLayer } from './kalender-with-layers';
+import type { CalendarLayer, SondergruppeOption } from './kalender-with-layers';
 
 interface KalenderFiltersContentProps {
   layers: CalendarLayer[];
   enabled: Record<string, boolean>;
   onToggle: (key: string, checked: boolean) => void;
   showDrone: boolean;
+  sondergruppen: SondergruppeOption[];
+  hiddenSondergruppen: Set<string>;
+  onSondergruppeToggle: (sondergruppeId: string, visible: boolean) => void;
 }
 
 /**
@@ -28,6 +31,9 @@ export function KalenderFiltersContent({
   enabled,
   onToggle,
   showDrone,
+  sondergruppen,
+  hiddenSondergruppen,
+  onSondergruppeToggle,
 }: KalenderFiltersContentProps) {
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
@@ -47,6 +53,20 @@ export function KalenderFiltersContent({
               Termine der Kategorie Drohnengruppe sind nur für Mitglieder der Drohnengruppe sichtbar.
             </p>
           )}
+        </div>
+      )}
+
+      {sondergruppen.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:rounded-lg sm:p-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Sondergruppen</span>
+          {sondergruppen.map((gruppe) => (
+            <ToggleSwitch
+              key={gruppe.id}
+              label={gruppe.name}
+              checked={!hiddenSondergruppen.has(gruppe.id)}
+              onChange={(checked) => onSondergruppeToggle(gruppe.id, checked)}
+            />
+          ))}
         </div>
       )}
 
