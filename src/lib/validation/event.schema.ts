@@ -18,8 +18,14 @@ export const eventSchema = z
     allDay: z.boolean(),
     organizationId: z.string(),
     isSectionWide: z.boolean(),
+    // Dritte Geltungsbereichs-Stufe für category ALLGEMEIN, additiv neben isSectionWide - siehe
+    // canViewEvent und docs/superpowers/specs/2026-09-01-kalender-sondergruppen-design.md.
+    isDistrictWide: z.boolean(),
     category: z.enum(EVENT_CATEGORIES),
     droneGroupId: z.string().nullable(),
+    // Optionales Sondergruppen-Tag, nur für category ALLGEMEIN gedacht (siehe event-form.tsx) - null
+    // heißt "keine Sondergruppe zugewiesen", fließt nicht in Sichtbarkeit/Berechtigung ein.
+    sondergruppeId: z.string().nullable(),
   })
   .refine((data) => new Date(data.endsAt).getTime() >= new Date(data.startsAt).getTime(), {
     message: 'Ende darf nicht vor dem Start liegen.',
@@ -41,6 +47,7 @@ export type EventInput = z.infer<typeof eventSchema>;
 export function parseEventFormData(formData: FormData) {
   const rawCategory = String(formData.get('category') ?? 'ALLGEMEIN');
   const rawDroneGroupId = String(formData.get('droneGroupId') ?? '');
+  const rawSondergruppeId = String(formData.get('sondergruppeId') ?? '');
   return {
     title: String(formData.get('title') ?? ''),
     description: String(formData.get('description') ?? ''),
@@ -50,9 +57,11 @@ export function parseEventFormData(formData: FormData) {
     allDay: formData.get('allDay') === 'on',
     organizationId: String(formData.get('organizationId') ?? ''),
     isSectionWide: formData.get('isSectionWide') === 'on',
+    isDistrictWide: formData.get('isDistrictWide') === 'on',
     category: (EVENT_CATEGORIES as readonly string[]).includes(rawCategory)
       ? (rawCategory as EventCategoryOption)
       : 'ALLGEMEIN',
     droneGroupId: rawDroneGroupId && rawDroneGroupId !== BEZIRKSWEIT_DRONE_GROUP_VALUE ? rawDroneGroupId : null,
+    sondergruppeId: rawSondergruppeId ? rawSondergruppeId : null,
   };
 }

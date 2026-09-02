@@ -40,6 +40,21 @@ export function canCreateAnySectionWideEvent(user: SessionUser): boolean {
   return isBezirksAdmin(user) || user.abschnittAdminOrgIds.length > 0;
 }
 
+/**
+ * Darf einen Bezirk-weiten (isDistrictWide) ALLGEMEIN-Termin anlegen/bearbeiten/löschen - Bezirksadmin
+ * oder JEDER Abschnittsadmin (nicht nur für den eigenen Abschnitt - explizite Nutzerentscheidung, siehe
+ * Design-Spec Abschnitt "Termin-Formular & Berechtigungen"). Bewusst eine eigene Funktion mit
+ * identischem Körper zu canCreateAnySectionWideEvent statt deren Wiederverwendung: jene Funktion ist
+ * eine reine UI-Vorabprüfung für die Abschnitt-weite Checkbox, diese hier ist die tatsächliche
+ * serverseitige Durchsetzung für eine andere, unabhängige Geltungsbereichs-Stufe - beide dürfen sich
+ * unabhängig voneinander weiterentwickeln, ohne sich gegenseitig zu beeinflussen. Sowohl UI-Vorprüfung
+ * als auch serverseitige Durchsetzung, da es (anders als bei Abschnitt-weit) keinen sinnvollen
+ * Zwischenschritt ("für WELCHEN Bezirk") gibt - es gibt nur einen Bezirk.
+ */
+export function canCreateBezirksWideEvent(user: SessionUser): boolean {
+  return isBezirksAdmin(user) || user.abschnittAdminOrgIds.length > 0;
+}
+
 /** Admin Drohnengruppe: eigenes Recht innerhalb der Drohnengruppe, unabhängig vom Abschnittskommando-Admin. */
 export function isDroneGroupAdmin(user: SessionUser): boolean {
   return user.droneGroupRole === 'ADMIN';
@@ -184,6 +199,13 @@ export function canManageFeuerwehrenBezirksweit(user: SessionUser): boolean {
   return isBezirksAdmin(user);
 }
 
+/** Sondergruppen-Verwaltung (Anlegen/Umbenennen/Aktivieren/Deaktivieren) - exklusiv Bezirksadmin: eine
+ * Sondergruppe ist (anders als DroneGroup) an keinem Abschnitt verankert, und es gibt keine eigene
+ * Sondergruppen-Admin-Rolle (siehe Design-Spec). */
+export function canManageSondergruppenBezirksweit(user: SessionUser): boolean {
+  return isBezirksAdmin(user);
+}
+
 /**
  * Drohnengruppen-Abschnitt (Anlegen/Umbenennen/Deaktivieren) - Bezirksadmin ODER Bezirks-Drohnenadmin.
  * Bewusst NICHT canManageDroneGroupFor wiederverwendet: jene Funktion prüft Rechte für eine
@@ -244,19 +266,21 @@ export function canSendAnyNews(user: SessionUser): boolean {
  * Sichtbarkeit eines einzelnen Termins - kategorieabhängig, identische Regel wie die
  * Kalenderübersicht-Query selbst (muss bei einer Änderung hier immer mitgezogen werden,
  * siehe kalender/page.tsx):
- * - Kategorie DROHNENGRUPPE ist VÖLLIG UNABHÄNGIG von organizationId/isSectionWide (die für
- *   Drohnengruppen-Termine nur noch serverseitig abgeleitete, technische Werte sind, siehe
- *   kalender/actions.ts) - sichtbar mit Modulzugriff UND (droneGroupId null [bezirksweit, alle 4
- *   Gruppen] ODER droneGroupId exakt die eigene Gruppe).
- * - Kategorie ALLGEMEIN bleibt bei der alten Regel: eigene Feuerwehr ODER abschnittsweit
- *   innerhalb des eigenen Abschnitts. `eventAbschnittOrganizationId` muss der Aufrufer selbst via
- *   getAbschnittOrganizationId(event.organization) berechnen - diese Funktion hat keinen DB-Zugriff.
+ * - Kategorie DROHNENGRUPPE ist VÖLLIG UNABHÄNGIG von organizationId/isSectionWide/isDistrictWide -
+ *   sichtbar mit Modulzugriff UND (droneGroupId null [bezirksweit, alle 4 Gruppen] ODER droneGroupId
+ *   exakt die eigene Gruppe).
+ * - Kategorie ALLGEMEIN: eigene Feuerwehr ODER abschnittsweit innerhalb des eigenen Abschnitts ODER
+ *   isDistrictWide (bezirksweit, sichtbar für jeden im Bezirk unabhängig von Organisation/Abschnitt -
+ *   siehe docs/superpowers/specs/2026-09-01-kalender-sondergruppen-design.md). `eventAbschnittOrganizationId`
+ *   muss der Aufrufer selbst via getAbschnittOrganizationId(event.organization) berechnen - diese
+ *   Funktion hat keinen DB-Zugriff.
  */
 export function canViewEvent(
   user: SessionUser,
   event: {
     organizationId: string;
     isSectionWide: boolean;
+    isDistrictWide: boolean;
     category: string;
     eventAbschnittOrganizationId: string;
     droneGroupId: string | null;
@@ -267,7 +291,8 @@ export function canViewEvent(
   }
   return (
     event.organizationId === user.homeOrganizationId ||
-    (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId)
+    (event.isSectionWide && event.eventAbschnittOrganizationId === user.homeAbschnittOrganizationId) ||
+    event.isDistrictWide
   );
 }
 
