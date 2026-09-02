@@ -354,6 +354,19 @@ async function main() {
     });
   }
 
+  const SONDERGRUPPEN: { name: string; sortOrder: number }[] = [
+    { name: 'Feuerwehrjugend', sortOrder: 10 },
+    { name: 'Schadstoffgruppe', sortOrder: 20 },
+    { name: 'Kommanden', sortOrder: 30 },
+  ];
+  for (const { name, sortOrder } of SONDERGRUPPEN) {
+    await prisma.sondergruppe.upsert({
+      where: { name },
+      update: { sortOrder },
+      create: { name, sortOrder },
+    });
+  }
+
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@abschnitt-purkersdorf.at';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'change-me-after-first-login';
   const passwordHash = await bcrypt.hash(adminPassword, 12);

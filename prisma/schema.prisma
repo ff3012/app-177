@@ -298,6 +298,13 @@ model User {
   // beide haben. Siehe docs/superpowers/specs/2026-08-10-bezirksadmin-drohnenadmin-rollen-design.md.
   isBezirksDrohnenAdmin Boolean @default(false)
 
+  // Persönliche, gespeicherte Kalender-Filtereinstellung (siehe docs/superpowers/specs/
+  // 2026-09-01-kalender-sondergruppen-design.md) - welche Sondergruppen dieses Mitglied im eigenen
+  // Kalender ausblendet. Leeres Array ist ein bewusster Opt-in-Sentinel ("noch keine Auswahl
+  // getroffen" = alle Sondergruppen ausgeblendet), keine Bedeutung als "nichts ausgeblendet" - siehe
+  // die Standardlogik in kalender/page.tsx.
+  ausgeblendeteSondergruppenIds String[] @default([])
+
   homeOrganization       Organization             @relation("HomeOrganization", fields: [homeOrganizationId], references: [id])
   memberships            Membership[]
   droneMembership        DrohnengruppeMembership?
@@ -337,6 +344,22 @@ model Dienstgrad {
   pendingRegistrations PendingRegistration[]
 
   @@index([kategorie])
+}
+
+// Erweiterbare, über die Bezirksverwaltung gepflegte Liste von Sonderinteressen-Gruppen
+// (Feuerwehrjugend/Schadstoffgruppe/Kommanden/...) für die Kalender-Kategorisierung - siehe
+// docs/superpowers/specs/2026-09-01-kalender-sondergruppen-design.md. Rein informativ: keine eigene
+// Mitgliedschaft/kein eigenes Sichtbarkeits-Gate wie bei DroneGroup, nur ein optionales Tag an
+// ALLGEMEIN-Terminen plus eine persönliche Anzeige-Filtereinstellung pro Mitglied (siehe
+// User.ausgeblendeteSondergruppenIds). sortOrder ist @unique wie bei Dienstgrad, für eine feste
+// Anzeige-Reihenfolge statt alphabetisch.
+model Sondergruppe {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  sortOrder Int     @unique
+  isActive  Boolean @default(true)
+
+  events Event[]
 }
 
 // Login-Rate-Limiting: getrackt pro eingegebener E-Mail-Adresse (auch wenn sie zu keinem
@@ -517,6 +540,19 @@ model Event {
   // schränkt die Sichtbarkeit auf deren Mitglieder ein (siehe Task 8).
   droneGroupId String?
   droneGroup   DroneGroup? @relation(fields: [droneGroupId], references: [id])
+
+  // Nur für category == ALLGEMEIN relevant (siehe docs/superpowers/specs/
+  // 2026-09-01-kalender-sondergruppen-design.md) - rein informative Zusatzkategorie
+  // (Feuerwehrjugend/Schadstoffgruppe/Kommanden/...), fließt NICHT in canViewEvent/canManageEvent
+  // ein. onDelete: SetNull, damit eine später deaktivierte/gelöschte Sondergruppe bestehende
+  // Termine nicht blockiert.
+  sondergruppeId String?
+  sondergruppe   Sondergruppe? @relation(fields: [sondergruppeId], references: [id], onDelete: SetNull)
+
+  // Dritte Geltungsbereichs-Stufe für category == ALLGEMEIN, additiv neben dem bestehenden
+  // isSectionWide - siehe canViewEvent. Für category == DROHNENGRUPPE bleibt dies immer false
+  // (Sichtbarkeit läuft dort ausschließlich über droneGroupId).
+  isDistrictWide Boolean @default(false)
 
   organization Organization   @relation(fields: [organizationId], references: [id])
   createdBy    User           @relation("EventCreatedBy", fields: [createdById], references: [id])
