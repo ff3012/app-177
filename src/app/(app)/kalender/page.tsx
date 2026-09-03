@@ -132,6 +132,7 @@ export default async function KalenderPage() {
         rsvpCounts: rsvpCountsByEvent.get(event.id) ?? { ZUGESAGT: 0, ABGESAGT: 0, UNKLAR: 0 },
         isVehicleBooking: event.vehicleBookingId !== null,
         isDistrictWideDrone: event.category === 'DROHNENGRUPPE' && event.droneGroupId === null,
+        isDistrictWide: event.isDistrictWide,
         sondergruppeId: event.sondergruppeId,
       };
     });

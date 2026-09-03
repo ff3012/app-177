@@ -119,7 +119,7 @@ function EventListRow({
       <td className="whitespace-nowrap px-3 py-1">{start.toLocaleDateString('de-AT', { weekday: 'long' })}</td>
       <td className="break-words px-3 py-1">
         {event.isVehicleBooking && <VehicleBookingIcon className="mr-1 inline-block align-[-2px] text-neutral-500" />}
-        {event.isDistrictWideDrone && (
+        {(event.isDistrictWideDrone || event.isDistrictWide) && (
           <span className="mr-1 rounded bg-neutral-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
             Bezirksweit
           </span>
@@ -204,7 +204,7 @@ function EventCard({
         </div>
         <span className="font-medium text-neutral-900">
           {event.isVehicleBooking && <VehicleBookingIcon className="mr-1 inline-block align-[-2px] text-neutral-500" />}
-          {event.isDistrictWideDrone && (
+          {(event.isDistrictWideDrone || event.isDistrictWide) && (
             <span className="mr-1 rounded bg-neutral-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
               Bezirksweit
             </span>
@@ -363,7 +363,7 @@ function DesktopEventRow({
                 Fahrzeug
               </span>
             )}
-            {event.isDistrictWideDrone && (
+            {(event.isDistrictWideDrone || event.isDistrictWide) && (
               <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                 Bezirksweit
               </span>

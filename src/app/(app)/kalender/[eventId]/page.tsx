@@ -66,7 +66,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
         })
       : null;
   const canManageThisEvent = canManageEvent(user, event, droneGroup);
-  const isDistrictWideDrone = event.category === 'DROHNENGRUPPE' && event.droneGroupId === null;
+  const isBezirksweit = (event.category === 'DROHNENGRUPPE' && event.droneGroupId === null) || event.isDistrictWide;
 
   const zusagen = await prisma.terminZusage.findMany({
     where: { eventId },
@@ -84,7 +84,7 @@ export default async function TerminDetailPage({ params }: { params: Promise<{ e
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold text-neutral-900">{event.title}</h1>
-          {isDistrictWideDrone && (
+          {isBezirksweit && (
             <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
               Bezirksweit
             </span>
