@@ -371,12 +371,20 @@ export default async function HeimatfeuerwehrVerwaltungPage({
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold text-ink">Atemschutz</h2>
-          <a
-            href={`/admin/heimatfeuerwehr/atemschutz-export?org=${selectedOrgId}`}
-            className="text-sm font-medium text-brand hover:underline"
-          >
-            Excel Export
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/admin/heimatfeuerwehr/atemschutz-import?org=${selectedOrgId}`}
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Excel Import
+            </a>
+            <a
+              href={`/admin/heimatfeuerwehr/atemschutz-export?org=${selectedOrgId}`}
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Excel Export
+            </a>
+          </div>
         </div>
         <p className="mb-3 text-xs text-ink-faint">
           Zeigt nur Mitglieder, die in der Benutzerverwaltung als Atemschutzgeräteträger markiert sind.
