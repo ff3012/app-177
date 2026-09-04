@@ -269,6 +269,15 @@ model User {
   atemschutzGueltigBis        DateTime?
   atemschutzFinnentestAm      DateTime?
 
+  // Rohtext der medizinischen Tauglichkeitsbewertung aus dem Atemschutz-Untersuchungs-Import (siehe
+  // docs/superpowers/specs/2026-09-04-atemschutz-import-design.md) - bewusst kein Enum, um keine
+  // Information aus dem Original-Export zu verlieren. Bewusst NICHT "Status" genannt: dieser Begriff ist
+  // in atemschutz-status.ts/ATEMSCHUTZ_EXCEL_COLUMNS bereits für den Gültigkeits-/Ablauf-Zustand
+  // (Aktiv/Läuft bald ab/Abgelaufen) belegt - ein anderes, unabhängiges Konzept vom medizinischen
+  // Tauglich/Untauglich-Ergebnis hier.
+  atemschutzTauglichkeitsart           String?
+  atemschutzFinnentestTauglichkeitsart String?
+
   // Dienstgrad laut zentraler NÖ-Dienstgradtabelle (siehe Dienstgrad-Modell unten) - nullable, da
   // Bestandsbenutzer noch keinen zugewiesen haben.
   dienstgradId String?
