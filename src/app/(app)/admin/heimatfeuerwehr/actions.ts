@@ -147,6 +147,8 @@ export async function updateAtemschutzStatus(
       atemschutzUntersuchungAm: data.atemschutzUntersuchungAm ? new Date(data.atemschutzUntersuchungAm) : null,
       atemschutzGueltigBis: data.atemschutzGueltigBis ? new Date(data.atemschutzGueltigBis) : null,
       atemschutzFinnentestAm: data.atemschutzFinnentestAm ? new Date(data.atemschutzFinnentestAm) : null,
+      atemschutzTauglichkeitsart: data.atemschutzTauglichkeitsart || null,
+      atemschutzFinnentestTauglichkeitsart: data.atemschutzFinnentestTauglichkeitsart || null,
     },
   });
 

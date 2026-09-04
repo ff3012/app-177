@@ -7,6 +7,8 @@ export const atemschutzSchema = z.object({
   atemschutzUntersuchungAm: z.string().optional().or(z.literal('')),
   atemschutzGueltigBis: z.string().optional().or(z.literal('')),
   atemschutzFinnentestAm: z.string().optional().or(z.literal('')),
+  atemschutzTauglichkeitsart: z.string().max(200).optional().or(z.literal('')),
+  atemschutzFinnentestTauglichkeitsart: z.string().max(200).optional().or(z.literal('')),
 });
 
 export type AtemschutzInput = z.infer<typeof atemschutzSchema>;
@@ -16,5 +18,7 @@ export function parseAtemschutzFormData(formData: FormData) {
     atemschutzUntersuchungAm: String(formData.get('atemschutzUntersuchungAm') ?? ''),
     atemschutzGueltigBis: String(formData.get('atemschutzGueltigBis') ?? ''),
     atemschutzFinnentestAm: String(formData.get('atemschutzFinnentestAm') ?? ''),
+    atemschutzTauglichkeitsart: String(formData.get('atemschutzTauglichkeitsart') ?? ''),
+    atemschutzFinnentestTauglichkeitsart: String(formData.get('atemschutzFinnentestTauglichkeitsart') ?? ''),
   };
 }

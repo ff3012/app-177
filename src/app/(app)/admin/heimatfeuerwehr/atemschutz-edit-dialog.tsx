@@ -12,6 +12,8 @@ interface AtemschutzTarget {
   atemschutzUntersuchungAm: string; // "YYYY-MM-DD" oder ""
   atemschutzGueltigBis: string;
   atemschutzFinnentestAm: string;
+  atemschutzTauglichkeitsart: string;
+  atemschutzFinnentestTauglichkeitsart: string;
 }
 
 function addYears(dateStr: string, years: number): string {
@@ -35,6 +37,10 @@ export function AtemschutzEditDialog({ trigger, target }: { trigger: React.React
   const [untersuchungAm, setUntersuchungAm] = useState(target.atemschutzUntersuchungAm);
   const [gueltigBis, setGueltigBis] = useState(target.atemschutzGueltigBis);
   const [finnentestAm, setFinnentestAm] = useState(target.atemschutzFinnentestAm);
+  const [tauglichkeitsart, setTauglichkeitsart] = useState(target.atemschutzTauglichkeitsart);
+  const [finnentestTauglichkeitsart, setFinnentestTauglichkeitsart] = useState(
+    target.atemschutzFinnentestTauglichkeitsart,
+  );
   const gueltigBisTouchedRef = useRef(Boolean(target.atemschutzGueltigBis));
 
   function handleUntersuchungChange(value: string) {
@@ -104,6 +110,18 @@ export function AtemschutzEditDialog({ trigger, target }: { trigger: React.React
             <p className="mt-1 text-xs text-ink-faint">Standard 5 Jahre, laut Arzt auch kürzer möglich.</p>
           </div>
           <div>
+            <label htmlFor="atemschutzTauglichkeitsart" className="mb-1 block text-[13px] font-medium text-ink">
+              Tauglichkeit
+            </label>
+            <Input
+              id="atemschutzTauglichkeitsart"
+              name="atemschutzTauglichkeitsart"
+              type="text"
+              value={tauglichkeitsart}
+              onChange={(event) => setTauglichkeitsart(event.target.value)}
+            />
+          </div>
+          <div>
             <label htmlFor="atemschutzFinnentestAm" className="mb-1 block text-[13px] font-medium text-ink">
               Finnentest am
             </label>
@@ -115,6 +133,21 @@ export function AtemschutzEditDialog({ trigger, target }: { trigger: React.React
               onChange={(event) => setFinnentestAm(event.target.value)}
             />
             <p className="mt-1 text-xs text-ink-faint">Gültigkeit fix 1 Jahr.</p>
+          </div>
+          <div>
+            <label
+              htmlFor="atemschutzFinnentestTauglichkeitsart"
+              className="mb-1 block text-[13px] font-medium text-ink"
+            >
+              Tauglichkeit (Finnentest)
+            </label>
+            <Input
+              id="atemschutzFinnentestTauglichkeitsart"
+              name="atemschutzFinnentestTauglichkeitsart"
+              type="text"
+              value={finnentestTauglichkeitsart}
+              onChange={(event) => setFinnentestTauglichkeitsart(event.target.value)}
+            />
           </div>
           {state.error && <p className="text-sm text-danger">{state.error}</p>}
         </form>

@@ -12,6 +12,7 @@ import {
   getFinnentestExpiryDate,
   type AtemschutzExpiryStatus,
 } from '@/lib/heimatfeuerwehr/atemschutz-status';
+import { getTauglichkeitAmpel, type TauglichkeitAmpel } from '@/lib/heimatfeuerwehr/atemschutz-tauglichkeit';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -94,6 +95,32 @@ function ExpiryBadge({ status }: { status: AtemschutzExpiryStatus }) {
   );
 }
 
+const TAUGLICHKEIT_BADGE_LABEL: Record<TauglichkeitAmpel, string> = {
+  tauglich: 'Tauglich',
+  untauglich: 'Untauglich',
+  unbekannt: '–',
+};
+
+const TAUGLICHKEIT_BADGE_CLASS: Record<TauglichkeitAmpel, string> = {
+  tauglich: 'border-transparent bg-success-subtle text-success-text',
+  untauglich: 'border-transparent bg-danger-subtle text-danger',
+  unbekannt: 'border-transparent bg-surface-sunken text-ink-faint',
+};
+
+/** Ampel + Rohtext daneben - der Text bleibt immer sichtbar, die Ampel ist nur eine Vereinfachung
+ * (siehe lib/heimatfeuerwehr/atemschutz-tauglichkeit.ts). */
+function TauglichkeitBadge({ text }: { text: string | null }) {
+  const ampel = getTauglichkeitAmpel(text);
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <Badge variant="outline" className={TAUGLICHKEIT_BADGE_CLASS[ampel]}>
+        {TAUGLICHKEIT_BADGE_LABEL[ampel]}
+      </Badge>
+      {text && <span className="text-xs text-ink-faint">{text}</span>}
+    </span>
+  );
+}
+
 // Admin-Gate läuft in admin/layout.tsx (isSiteAdmin ODER canAccessHeimatfeuerwehrAdmin) - diese
 // Seite prüft zusätzlich, ob für die AUSGEWÄHLTE Organisation tatsächlich Rechte bestehen, siehe
 // CLAUDE.md "Sicherheits-Härtung".
@@ -154,6 +181,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         atemschutzUntersuchungAm: true,
         atemschutzGueltigBis: true,
         atemschutzFinnentestAm: true,
+        atemschutzTauglichkeitsart: true,
+        atemschutzFinnentestTauglichkeitsart: true,
       },
     }),
     prisma.vehicleBooking.findMany({
@@ -368,6 +397,12 @@ export default async function HeimatfeuerwehrVerwaltungPage({
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Finnentest
               </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Tauglichkeit
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
+                Tauglichkeit (Finnentest)
+              </TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -386,6 +421,12 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                   <TableCell>
                     <ExpiryBadge status={finnentestStatus} />
                   </TableCell>
+                  <TableCell>
+                    <TauglichkeitBadge text={member.atemschutzTauglichkeitsart} />
+                  </TableCell>
+                  <TableCell>
+                    <TauglichkeitBadge text={member.atemschutzFinnentestTauglichkeitsart} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <AtemschutzEditDialog
                       target={{
@@ -394,6 +435,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                         atemschutzUntersuchungAm: toDateInputValue(member.atemschutzUntersuchungAm),
                         atemschutzGueltigBis: toDateInputValue(member.atemschutzGueltigBis),
                         atemschutzFinnentestAm: toDateInputValue(member.atemschutzFinnentestAm),
+                        atemschutzTauglichkeitsart: member.atemschutzTauglichkeitsart ?? '',
+                        atemschutzFinnentestTauglichkeitsart: member.atemschutzFinnentestTauglichkeitsart ?? '',
                       }}
                       trigger={
                         <button type="button" className="text-sm text-brand hover:underline">
@@ -407,7 +450,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             })}
             {members.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-ink-muted">
+                <TableCell colSpan={6} className="text-center text-ink-muted">
                   Keine Atemschutzgeräteträger in dieser Feuerwehr.
                 </TableCell>
               </TableRow>
