@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canManageHeimatfeuerwehrFor } from '@/lib/auth/permissions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
 import { parseGueltigkeitsdauerJahre, addYearsToIsoDate } from '@/lib/heimatfeuerwehr/atemschutz-tauglichkeit';
 import {
@@ -16,7 +17,29 @@ import {
 
 export interface ImportAtemschutzState {
   error?: string;
-  result?: { imported: number; skippedNotFound: number; skippedNotTraeger: number; errors: string[] };
+  result?: {
+    imported: number;
+    skippedNotFound: number;
+    skippedNotTraeger: number;
+    skippedOtherFeuerwehr: number;
+    errors: string[];
+  };
+}
+
+/** exceljs kann für Rich-Text/Formel/Hyperlink/Fehler-Zellen ein Objekt statt eines primitiven Werts
+ * liefern - ein bloßes String(...) würde das dann als "[object Object]" in eine sicherheitsrelevante
+ * medizinische Textspalte schreiben. Löst die gängigen Fälle gezielt auf, bevor auf String(...) als
+ * letzten Fallback zurückgefallen wird. */
+function cellText(value: unknown): string {
+  if (value && typeof value === 'object') {
+    if ('richText' in value && Array.isArray((value as any).richText)) {
+      return (value as any).richText.map((part: any) => part.text ?? '').join('');
+    }
+    if ('error' in value) return '';
+    if ('result' in value) return String((value as any).result ?? '');
+    if ('text' in value) return String((value as any).text ?? '');
+  }
+  return String(value ?? '');
 }
 
 /** Parst ein Datum aus einer Excel-Zelle - entweder ein von exceljs bereits als Date erkannter Zellwert
@@ -30,7 +53,7 @@ function parseExcelDateToIso(value: unknown): string | null {
     const d = String(value.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
-  const text = String(value ?? '').trim();
+  const text = cellText(value).trim();
   const match = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (!match) return null;
   const [, day, month, year] = match;
@@ -101,7 +124,7 @@ export async function importAtemschutz(
   }
 
   const members = await prisma.user.findMany({
-    where: { homeOrganizationId: organizationId },
+    where: { homeOrganizationId: organizationId, ...NOT_DEACTIVATED_WHERE },
     select: { id: true, stbNr: true, istAtemschutzgeraeteTraeger: true },
   });
   const membersByStbNr = new Map<string, { id: string; istAtemschutzgeraeteTraeger: boolean }[]>();
@@ -123,13 +146,14 @@ export async function importAtemschutz(
   const errors: string[] = [];
   let skippedNotFound = 0;
   let skippedNotTraeger = 0;
+  let skippedOtherFeuerwehr = 0;
 
   for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
     const row = sheet.getRow(rowNumber);
     const getValue = (key: keyof AtemschutzImportRow): string => {
       const colIndex = columnIndexByKey.get(key);
       if (!colIndex) return '';
-      return String(row.getCell(colIndex).value ?? '').trim();
+      return cellText(row.getCell(colIndex).value).trim();
     };
 
     const fwNr = getValue('fwNr');
@@ -142,7 +166,7 @@ export async function importAtemschutz(
     if (!fwNr && !stbNr && !untersuchtungsart) continue; // leere Zeile überspringen
 
     if (fwNr !== organization.nummer) {
-      errors.push(`Zeile ${rowNumber}: Zeile gehört zu einer anderen Feuerwehr (FW-Nr ${fwNr}).`);
+      skippedOtherFeuerwehr++;
       continue;
     }
 
@@ -211,5 +235,5 @@ export async function importAtemschutz(
   }
 
   revalidatePath('/admin/heimatfeuerwehr');
-  return { result: { imported, skippedNotFound, skippedNotTraeger, errors } };
+  return { result: { imported, skippedNotFound, skippedNotTraeger, skippedOtherFeuerwehr, errors } };
 }

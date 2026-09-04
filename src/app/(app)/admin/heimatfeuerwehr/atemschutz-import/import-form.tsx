@@ -50,6 +50,9 @@ export function ImportAtemschutzForm({ organizationId }: { organizationId: strin
           <p className="font-medium text-neutral-900">
             {state.result.imported} importiert, {state.result.skippedNotFound} übersprungen (nicht
             gefunden), {state.result.skippedNotTraeger} übersprungen (kein Atemschutzgeräteträger)
+            {state.result.skippedOtherFeuerwehr > 0
+              ? `, ${state.result.skippedOtherFeuerwehr} übersprungen (andere Feuerwehr)`
+              : ''}
             {state.result.errors.length > 0 ? `, ${state.result.errors.length} mit Fehler` : ''}.
           </p>
           {state.result.errors.length > 0 && (

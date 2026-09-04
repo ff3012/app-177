@@ -128,19 +128,29 @@ history, and vehicle deletion), all requested and scoped in separate rounds afte
   failed on a local-network TLS issue (this dev machine, unrelated to the code — the same failure would hit
   any of this app's other Mailjet calls tested the same way here) and was caught exactly as designed, with
   the route still returning success.
-- **Excel export/import — Fuhrpark gets both, Atemschutz export-only**: `lib/heimatfeuerwehr/
+- **Excel export/import — Fuhrpark and Atemschutz both have it now**: `lib/heimatfeuerwehr/
   vehicle-excel-columns.ts` and `.../atemschutz-excel-columns.ts` mirror `lib/admin/user-excel-columns.ts`'s
   shape exactly (shared header/key/width list; the vehicle one also splits out `VEHICLE_IMPORT_COLUMN_KEYS`
   the same way `USER_IMPORT_COLUMN_KEYS` does, so a re-uploaded export works as an import template
   unmodified). Both export routes (`fuhrpark-export`, `atemschutz-export`) are `?org=<id>`-scoped and
   `canManageHeimatfeuerwehrFor`-checked, unlike `/admin/benutzer/export` which has no such scoping since
-  users aren't per-org data in the same way. The Atemschutz export has **no import counterpart** — a
-  deliberate choice, confirmed with the app owner: bulk-editing safety-critical medical/compliance data via
-  spreadsheet upload was judged too risky, so that data stays editable only one member at a time through
-  `AtemschutzEditDialog`. Fuhrpark import (`fuhrpark-import/actions.ts`) duplicate-detects by `kennzeichen`
-  alone (already `@unique`, simpler than the User importer's composite `stbNr`+`homeOrganizationId` key) and
-  targets whichever org is selected on the page (unlike User import, which reads the destination org from a
-  column per row, since a vehicle export is already single-org-scoped).
+  users aren't per-org data in the same way. Fuhrpark import (`fuhrpark-import/actions.ts`)
+  duplicate-detects by `kennzeichen` alone (already `@unique`, simpler than the User importer's composite
+  `stbNr`+`homeOrganizationId` key) and targets whichever org is selected on the page (unlike User import,
+  which reads the destination org from a column per row, since a vehicle export is already
+  single-org-scoped).
+  **The former "Atemschutz export has no import counterpart" decision was revisited** (a new, explicit
+  request from the app owner — "das Erfassen der Atemschutztauglichkeit ist zu kompliziert…" — over the
+  original "too risky for bulk spreadsheet editing" stance): a bulk import now exists at
+  `/admin/heimatfeuerwehr/atemschutz-import`, mirroring the Fuhrpark-import pattern (`exceljs`, header-name
+  column resolution, per-row error handling, org-scoped to the page's selected Feuerwehr, gated by
+  `canManageHeimatfeuerwehrFor` + the `featureAtemschutz` toggle). It only ever updates members already
+  flagged `istAtemschutzgeraeteTraeger` — it never sets that flag itself. Alongside it, two new fields
+  (`atemschutzTauglichkeitsart`/`atemschutzFinnentestTauglichkeitsart` — raw medical-result text, deliberately
+  not named "Status" since that word already means the Aktiv/Läuft-bald-ab/Abgelaufen expiry concept
+  elsewhere in this file's own Atemschutz section) were added, each with a derived traffic-light badge in
+  the Atemschutz table, editable both via this import and via the existing `AtemschutzEditDialog`. Full
+  rationale: `docs/superpowers/specs/2026-09-04-atemschutz-import-design.md`.
 - **Buchungshistorie**: `admin/heimatfeuerwehr/fahrzeug/[vehicleId]/page.tsx` (linked from each Fuhrpark row's
   new "Historie" action) shows **every** booking for that vehicle, past and future — `/meine-feuerwehr`
   deliberately only ever queries upcoming ones (`endsAt: { gte: now }`), so this is a genuinely separate,
