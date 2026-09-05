@@ -389,6 +389,9 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         <p className="mb-3 text-xs text-ink-faint">
           Zeigt nur Mitglieder, die in der Benutzerverwaltung als Atemschutzgeräteträger markiert sind.
           "Läuft bald ab" bedeutet: Untersuchung oder Leistungstest laufen innerhalb der nächsten 30 Tage ab.
+          Der FDISK Export "Atemschutztauglichkeit - letzte Untersuchungen Mitglieder (Atemschutztauglichkeit,
+          jährlicher Leistungstest)" kann als XLSX importiert werden, es werden nur Untersuchungen eingetragen
+          wenn der Status Atemschutzgeräteträger bei einem Benutzer auf AKTIV ist.
         </p>
         <AtemschutzSachbearbeiterForm
           key={selectedOrgId}
