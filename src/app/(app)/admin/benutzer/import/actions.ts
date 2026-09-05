@@ -178,6 +178,11 @@ export async function importUsers(_prevState: ImportUsersState, formData: FormDa
       continue;
     }
 
+    if (!/^[1-9]\d*$/.test(stbNr)) {
+      errors.push(`Zeile ${rowNumber}: Standesbuchnummer "${stbNr}" darf nur aus Ziffern bestehen und nicht mit 0 beginnen.`);
+      continue;
+    }
+
     const organization = organizations.find(
       (org) =>
         org.name.toLowerCase() === orgName.toLowerCase() ||

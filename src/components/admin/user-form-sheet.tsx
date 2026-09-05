@@ -482,7 +482,7 @@ export function UserFormSheet({
                       </div>
                       <div>
                         <FieldLabel htmlFor="stbNr">Standesbuchnummer</FieldLabel>
-                        <Input id="stbNr" {...register('stbNr')} />
+                        <Input id="stbNr" inputMode="numeric" {...register('stbNr')} />
                         <FieldError message={errors.stbNr?.message} />
                       </div>
                     </div>

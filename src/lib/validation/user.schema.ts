@@ -20,7 +20,12 @@ export const userSchema = z
     firstName: z.string().trim().min(1, 'Vorname ist erforderlich.').max(100),
     lastName: z.string().trim().min(1, 'Nachname ist erforderlich.').max(100),
     email: z.string().trim().email('Ungültige E-Mail-Adresse.'),
-    stbNr: z.string().trim().min(1, 'Standesbuchnummer ist erforderlich.').max(50),
+    stbNr: z
+      .string()
+      .trim()
+      .min(1, 'Standesbuchnummer ist erforderlich.')
+      .max(50)
+      .regex(/^[1-9]\d*$/, 'Standesbuchnummer darf nur aus Ziffern bestehen und nicht mit 0 beginnen.'),
     phone: z
       .string()
       .trim()
