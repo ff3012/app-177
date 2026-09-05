@@ -90,11 +90,15 @@ aktiviert dieses Flag nicht selbst.
 
 **Pro gültiger Zeile, verzweigt nach `Untersuchtungsart`**:
 - `"Atemschutztauglichkeit"` → setzt `atemschutzUntersuchungAm` = `Untersuchtungsdatum`,
-  `atemschutzTauglichkeitsart` = `Tauglichkeitsart` (Rohtext, ungekürzt). Enthält der Text ein Muster
-  `für\s+(\d+)\s+Jahr` (Regex, case-insensitive), wird zusätzlich `atemschutzGueltigBis` =
-  `Untersuchtungsdatum + N Jahre` gesetzt - **überschreibt einen vorhandenen Wert unbedingt**, auch wenn
-  der zuvor manuell vom Admin angepasst wurde (bewusste Entscheidung des App-Betreibers). Ohne
-  erkennbares Muster bleibt `atemschutzGueltigBis` unverändert.
+  `atemschutzTauglichkeitsart` = `Tauglichkeitsart` (Rohtext, ungekürzt), und immer auch
+  `atemschutzGueltigBis`: enthält der Text ein Muster `für\s+(\d+)\s+Jahr` (Regex, case-insensitive),
+  wird `Untersuchtungsdatum + N Jahre` verwendet; ohne erkennbares Muster (z.B. "tauglich (ab
+  1.1.2017)", "untauglich") fällt es auf `Untersuchtungsdatum + 5 Jahre` zurück - denselben Standard,
+  den `AtemschutzEditDialog` schon beim manuellen Erfassen vorschlägt. **Überschreibt einen vorhandenen
+  Wert in beiden Fällen unbedingt**, auch wenn der zuvor manuell vom Admin angepasst wurde (bewusste
+  Entscheidung des App-Betreibers, korrigiert nach echtem Nutzerfeedback in Produktion: ohne den
+  5-Jahres-Fallback blieb `atemschutzGueltigBis` bei den meisten Importzeilen `null`, wodurch der
+  abgeleitete Ablaufstatus fälschlich "Keine Angabe" statt "Aktiv" zeigte).
 - `"Atemschutz Leistungstest"` → setzt `atemschutzFinnentestAm` = `Untersuchtungsdatum`,
   `atemschutzFinnentestTauglichkeitsart` = `Tauglichkeitsart` (Rohtext). Kein Gültig-bis-Feld betroffen (Finnentest
   hat weiterhin nur die bestehende fixe 1-Jahres-Frist, siehe `getFinnentestExpiryDate`).
@@ -148,6 +152,7 @@ Kein automatisierter Test-Suite im Projekt (Projektkonvention). Verifikation: `n
 `npm run build`, plus manuelle Prüfung gegen die lokale Dev-Datenbank mit einem Ausschnitt der echten
 Beispieldatei (`202608 - Untersuchungen.xlsx`) - Import-Ergebniszusammenfassung korrekt (importiert/
 übersprungen/Fehler-Zählung stimmt mit den Testzeilen überein), Ampel-Farbe korrekt für alle 11 in der
-Beispieldatei vorkommenden Tauglichkeitsart-Werte, `atemschutzGueltigBis` nur bei den zwei "für N Jahre"-
-Zeilen gesetzt und bei den übrigen 9 unverändert, Gate korrekt (ein Mitglied ohne
-`istAtemschutzgeraeteTraeger` wird übersprungen und nicht automatisch aktiviert).
+Beispieldatei vorkommenden Tauglichkeitsart-Werte, `atemschutzGueltigBis` bei den zwei "für N Jahre"-
+Zeilen mit der jeweils genannten Dauer gesetzt und bei den übrigen 9 mit dem 5-Jahres-Standard, Gate
+korrekt (ein Mitglied ohne `istAtemschutzgeraeteTraeger` wird übersprungen und nicht automatisch
+aktiviert).

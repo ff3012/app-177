@@ -207,15 +207,18 @@ export async function importAtemschutz(
   for (const resolved of resolvedByKey.values()) {
     try {
       if (resolved.untersuchtungsart === UNTERSUCHUNGSART_TAUGLICHKEIT) {
-        const jahre = parseGueltigkeitsdauerJahre(resolved.tauglichkeitsart);
+        // Enthält der Tauglichkeitsart-Text keine erkennbare Dauer (z.B. "tauglich (ab 1.1.2017)"),
+        // wird auf 5 Jahre zurückgefallen - derselbe Standard, den AtemschutzEditDialog schon beim
+        // manuellen Erfassen vorschlägt (siehe dessen addYears-Aufruf). Reales Nutzerfeedback: ohne
+        // diesen Fallback blieb atemschutzGueltigBis bei den meisten Importzeilen unangetastet, wodurch
+        // der abgeleitete Ablaufstatus fälschlich "Keine Angabe" statt "Aktiv" zeigte.
+        const jahre = parseGueltigkeitsdauerJahre(resolved.tauglichkeitsart) ?? 5;
         await prisma.user.update({
           where: { id: resolved.userId },
           data: {
             atemschutzUntersuchungAm: new Date(resolved.untersuchtungsdatumIso),
             atemschutzTauglichkeitsart: resolved.tauglichkeitsart || null,
-            ...(jahre !== null
-              ? { atemschutzGueltigBis: new Date(addYearsToIsoDate(resolved.untersuchtungsdatumIso, jahre)) }
-              : {}),
+            atemschutzGueltigBis: new Date(addYearsToIsoDate(resolved.untersuchtungsdatumIso, jahre)),
           },
         });
       } else {
