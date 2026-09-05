@@ -4,7 +4,12 @@ export const registrationSchema = z.object({
   organizationId: z.string().min(1, 'Feuerwehr ist erforderlich.'),
   firstName: z.string().trim().min(1, 'Vorname ist erforderlich.').max(100),
   lastName: z.string().trim().min(1, 'Nachname ist erforderlich.').max(100),
-  stbNr: z.string().trim().min(1, 'Standesbuchnummer ist erforderlich.').max(50),
+  stbNr: z
+    .string()
+    .trim()
+    .min(1, 'Standesbuchnummer ist erforderlich.')
+    .max(50)
+    .regex(/^[1-9]\d*$/, 'Standesbuchnummer darf nur aus Ziffern bestehen und nicht mit 0 beginnen.'),
   dienstgradId: z.string().optional(),
   email: z.string().trim().email('Ungültige E-Mail-Adresse.'),
   confirmed: z.boolean().refine((v) => v === true, {

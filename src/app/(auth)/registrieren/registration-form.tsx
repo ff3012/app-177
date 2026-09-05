@@ -110,7 +110,11 @@ export function RegistrationForm({ organizations, dienstgrade }: RegistrationFor
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Standesbuchnummer</label>
-        <input {...register('stbNr')} className="rounded border border-neutral-300 px-3 py-2" />
+        <input
+          {...register('stbNr')}
+          inputMode="numeric"
+          className="rounded border border-neutral-300 px-3 py-2"
+        />
         {errors.stbNr && <p className="text-sm text-red-700">{errors.stbNr.message}</p>}
       </div>
 
