@@ -67,7 +67,7 @@ export async function checkAndNotifyAtemschutzWarnungen(): Promise<void> {
           ...warnings.map((w) => {
             const parts: string[] = [];
             if (w.untersuchungBald) parts.push(`Untersuchung gültig bis ${w.atemschutzGueltigBis!.toLocaleDateString('de-AT')}`);
-            if (w.finnentestBald) parts.push(`Finnentest gültig bis ${w.finnentestExpiryDate!.toLocaleDateString('de-AT')}`);
+            if (w.finnentestBald) parts.push(`Leistungstest gültig bis ${w.finnentestExpiryDate!.toLocaleDateString('de-AT')}`);
             return `- ${w.name}: ${parts.join(', ')}`;
           }),
           '',
@@ -82,7 +82,7 @@ export async function checkAndNotifyAtemschutzWarnungen(): Promise<void> {
               parts.push(`Untersuchung gültig bis ${escapeHtml(w.atemschutzGueltigBis!.toLocaleDateString('de-AT'))}`);
             }
             if (w.finnentestBald) {
-              parts.push(`Finnentest gültig bis ${escapeHtml(w.finnentestExpiryDate!.toLocaleDateString('de-AT'))}`);
+              parts.push(`Leistungstest gültig bis ${escapeHtml(w.finnentestExpiryDate!.toLocaleDateString('de-AT'))}`);
             }
             return `<li>${escapeHtml(w.name)}: ${parts.join(', ')}</li>`;
           }),

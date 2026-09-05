@@ -388,7 +388,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         </div>
         <p className="mb-3 text-xs text-ink-faint">
           Zeigt nur Mitglieder, die in der Benutzerverwaltung als Atemschutzgeräteträger markiert sind.
-          "Läuft bald ab" bedeutet: Untersuchung oder Finnentest laufen innerhalb der nächsten 30 Tage ab.
+          "Läuft bald ab" bedeutet: Untersuchung oder Leistungstest laufen innerhalb der nächsten 30 Tage ab.
         </p>
         <AtemschutzSachbearbeiterForm
           key={selectedOrgId}
@@ -403,13 +403,10 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                 Untersuchung
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Finnentest
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
                 Tauglichkeit
               </TableHead>
               <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                Tauglichkeit (Finnentest)
+                Leistungstest
               </TableHead>
               <TableHead />
             </TableRow>
@@ -427,13 +424,15 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                     <ExpiryBadge status={untersuchungStatus} />
                   </TableCell>
                   <TableCell>
-                    <ExpiryBadge status={finnentestStatus} />
-                  </TableCell>
-                  <TableCell>
                     <TauglichkeitBadge text={member.atemschutzTauglichkeitsart} />
                   </TableCell>
                   <TableCell>
-                    <TauglichkeitBadge text={member.atemschutzFinnentestTauglichkeitsart} />
+                    <span className="flex flex-wrap items-center gap-2">
+                      <ExpiryBadge status={finnentestStatus} />
+                      {member.atemschutzFinnentestTauglichkeitsart && (
+                        <span className="text-xs text-ink-faint">{member.atemschutzFinnentestTauglichkeitsart}</span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right">
                     <AtemschutzEditDialog
@@ -458,7 +457,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             })}
             {members.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-ink-muted">
+                <TableCell colSpan={5} className="text-center text-ink-muted">
                   Keine Atemschutzgeräteträger in dieser Feuerwehr.
                 </TableCell>
               </TableRow>

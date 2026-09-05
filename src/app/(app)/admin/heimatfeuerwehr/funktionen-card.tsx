@@ -62,12 +62,12 @@ export function FunktionenCard({
         organizationId={organizationId}
         feature="ATEMSCHUTZ"
         title="Modul Atemschutzgeräteträger"
-        description="Zeigt Untersuchung und Finnentest unter „Meine Feuerwehr“ und aktiviert die Atemschutz-Liste in dieser Verwaltung."
+        description="Zeigt Untersuchung und Leistungstest unter „Meine Feuerwehr“ und aktiviert die Atemschutz-Liste in dieser Verwaltung."
         enabled={featureAtemschutz}
         meta={atemschutzMeta}
         confirmTitle="Modul Atemschutzgeräteträger abschalten?"
         confirmDescription={`Alle Mitglieder dieser Feuerwehr sehen den Atemschutz-Bereich unter „Meine Feuerwehr“ nicht mehr. Die ${membersErfasstCount} erfassten Atemschutzgeräteträger behalten ihre Daten - die Atemschutz-Liste verschwindet auch aus dieser Verwaltung.`}
-        confirmNote="Alle erfassten Untersuchungen und Finnentests bleiben gespeichert und erscheinen unverändert, sobald das Modul wieder aktiviert wird."
+        confirmNote="Alle erfassten Untersuchungen und Leistungstests bleiben gespeichert und erscheinen unverändert, sobald das Modul wieder aktiviert wird."
       />
 
       <FeatureToggleRow

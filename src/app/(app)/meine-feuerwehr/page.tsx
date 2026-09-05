@@ -82,7 +82,7 @@ function buildAtemschutzTodo(me: {
   }
   const finnentestExpiry = getFinnentestExpiryDate(me.atemschutzFinnentestAm);
   if (finnentestExpiry && finnentestExpiry.getTime() - now < ATEMSCHUTZ_TODO_WINDOW_MS) {
-    candidates.push({ label: 'Finnentest läuft ab', expiry: finnentestExpiry });
+    candidates.push({ label: 'Leistungstest läuft ab', expiry: finnentestExpiry });
   }
   if (candidates.length === 0) return null;
 
@@ -453,7 +453,7 @@ export default async function MeineFeuerwehrPage() {
               </span>
             </p>
             <p className="flex flex-wrap items-center gap-2">
-              Finnentest <StatusBadge status={finnentestStatus} />
+              Leistungstest <StatusBadge status={finnentestStatus} />
               <span className="text-neutral-500">
                 {me.atemschutzFinnentestAm
                   ? `zuletzt am ${me.atemschutzFinnentestAm.toLocaleDateString('de-AT')}`

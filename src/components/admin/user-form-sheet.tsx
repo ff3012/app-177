@@ -669,7 +669,7 @@ export function UserFormSheet({
                     <div className="flex items-center justify-between gap-3.5 border-b border-line px-3.5 py-3">
                       <div>
                         <div className="text-[15px] font-medium text-ink">Atemschutzgeräteträger</div>
-                        <div className="mt-0.5 text-[13px] text-ink-muted">Untersuchung und Finnentest werden geführt</div>
+                        <div className="mt-0.5 text-[13px] text-ink-muted">Untersuchung und Leistungstest werden geführt</div>
                       </div>
                       <Controller
                         control={control}

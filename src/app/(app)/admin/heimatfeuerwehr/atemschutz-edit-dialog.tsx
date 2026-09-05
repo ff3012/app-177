@@ -123,7 +123,7 @@ export function AtemschutzEditDialog({ trigger, target }: { trigger: React.React
           </div>
           <div>
             <label htmlFor="atemschutzFinnentestAm" className="mb-1 block text-[13px] font-medium text-ink">
-              Finnentest am
+              Leistungstest am
             </label>
             <Input
               id="atemschutzFinnentestAm"
@@ -139,7 +139,7 @@ export function AtemschutzEditDialog({ trigger, target }: { trigger: React.React
               htmlFor="atemschutzFinnentestTauglichkeitsart"
               className="mb-1 block text-[13px] font-medium text-ink"
             >
-              Tauglichkeit (Finnentest)
+              Tauglichkeit (Leistungstest)
             </label>
             <Input
               id="atemschutzFinnentestTauglichkeitsart"

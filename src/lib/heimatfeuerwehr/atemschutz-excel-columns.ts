@@ -15,7 +15,7 @@ export const ATEMSCHUTZ_EXCEL_COLUMNS: { header: string; key: keyof AtemschutzEx
   { header: 'Name', key: 'name', width: 24 },
   { header: 'Untersuchung am', key: 'untersuchungAm', width: 16 },
   { header: 'Gültig bis', key: 'gueltigBis', width: 16 },
-  { header: 'Finnentest am', key: 'finnentestAm', width: 16 },
+  { header: 'Leistungstest am', key: 'finnentestAm', width: 16 },
   { header: 'Status Untersuchung', key: 'statusUntersuchung', width: 16 },
-  { header: 'Status Finnentest', key: 'statusFinnentest', width: 16 },
+  { header: 'Status Leistungstest', key: 'statusFinnentest', width: 16 },
 ];
