@@ -101,6 +101,8 @@ export async function sendVehicleBookingDecisionEmail(
     cc: ccEmails.length > 0 ? ccEmails : undefined,
     subject: `Deine Fahrzeug-Reservierung wurde ${decisionLabel}: ${ctx.vehicleTaktischeBezeichnung}`,
     textPart: [
+      `Hallo ${ctx.requesterName},`,
+      '',
       `Deine Fahrzeug-Reservierung wurde ${decisionLabel}.`,
       '',
       `Fahrzeug: ${ctx.vehicleTaktischeBezeichnung} (${ctx.vehicleKennzeichen})`,
@@ -110,10 +112,17 @@ export async function sendVehicleBookingDecisionEmail(
       decision === 'GENEHMIGT'
         ? 'Die Reservierung ist jetzt im Kalender deiner Feuerwehr sichtbar.'
         : 'Das Fahrzeug ist für diesen Zeitraum weiterhin frei zum Reservieren.',
+      '',
+      `Weitere Fahrzeugreservierungen können über die App-17 (${baseUrl()}/) durchgeführt werden.`,
+      '',
+      'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.',
+      '',
+      'Bezirksfeuerwehrkommando St. Pölten',
     ]
       .filter((line) => line !== null)
       .join('\n'),
     htmlPart: [
+      `<p>Hallo ${escapeHtml(ctx.requesterName)},</p>`,
       `<p>Deine Fahrzeug-Reservierung wurde <strong>${decisionLabel}</strong>.</p>`,
       '<ul>',
       `<li>Fahrzeug: ${escapeHtml(ctx.vehicleTaktischeBezeichnung)} (${escapeHtml(ctx.vehicleKennzeichen)})</li>`,
@@ -125,6 +134,9 @@ export async function sendVehicleBookingDecisionEmail(
           ? 'Die Reservierung ist jetzt im Kalender deiner Feuerwehr sichtbar.'
           : 'Das Fahrzeug ist für diesen Zeitraum weiterhin frei zum Reservieren.'
       }</p>`,
+      `<p>Weitere Fahrzeugreservierungen können über die App-17 (<a href="${baseUrl()}/">${baseUrl()}/</a>) durchgeführt werden.</p>`,
+      '<p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
+      '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
     ].join(''),
   });
 }
@@ -197,20 +209,32 @@ export async function sendVehicleBookingDriverNotificationEmail(ctx: AdminBookin
       toName: ctx.driverName,
       subject: `Für dich wurde ein Fahrzeug reserviert: ${ctx.vehicleTaktischeBezeichnung}`,
       textPart: [
+        `Hallo ${ctx.driverName},`,
+        '',
         `${ctx.adminName} hat für dich eine Fahrzeug-Reservierung angelegt.`,
         '',
         `Fahrzeug: ${ctx.vehicleTaktischeBezeichnung} (${ctx.vehicleKennzeichen})`,
         `Zeitraum: ${range}`,
         '',
         'Die Reservierung ist bereits genehmigt und im Kalender deiner Feuerwehr sichtbar.',
+        '',
+        `Weitere Fahrzeugreservierungen können über die App-17 (${baseUrl()}/) durchgeführt werden.`,
+        '',
+        'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.',
+        '',
+        'Bezirksfeuerwehrkommando St. Pölten',
       ].join('\n'),
       htmlPart: [
+        `<p>Hallo ${escapeHtml(ctx.driverName)},</p>`,
         `<p>${escapeHtml(ctx.adminName)} hat für dich eine Fahrzeug-Reservierung angelegt.</p>`,
         '<ul>',
         `<li>Fahrzeug: ${escapeHtml(ctx.vehicleTaktischeBezeichnung)} (${escapeHtml(ctx.vehicleKennzeichen)})</li>`,
         `<li>Zeitraum: ${escapeHtml(range)}</li>`,
         '</ul>',
         '<p>Die Reservierung ist bereits genehmigt und im Kalender deiner Feuerwehr sichtbar.</p>',
+        `<p>Weitere Fahrzeugreservierungen können über die App-17 (<a href="${baseUrl()}/">${baseUrl()}/</a>) durchgeführt werden.</p>`,
+        '<p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
+        '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
       ].join(''),
     });
   } catch (error) {
