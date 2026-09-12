@@ -60,34 +60,41 @@ export async function notifyOrganizationAdminsOfRegistration(ctx: RegistrationEm
 
   const link = `${baseUrl()}/admin/benutzer`;
   const subject = `Neue Registrierung: ${ctx.firstName} ${ctx.lastName} (${ctx.organizationLabel})`;
-  const textPart = [
-    `${ctx.firstName} ${ctx.lastName} hat sich für ${ctx.organizationLabel} registriert:`,
-    '',
-    `Standesbuchnummer: ${ctx.stbNr}`,
-    ctx.dienstgradLabel ? `Dienstgrad: ${ctx.dienstgradLabel}` : null,
-    `E-Mail: ${ctx.email}`,
-    '',
-    `Zur Prüfung: ${link}`,
-    '',
-    'Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.',
-    '',
-    'Bezirksfeuerwehrkommando St. Pölten',
-  ]
-    .filter((line) => line !== null)
-    .join('\n');
-  const htmlPart = [
-    `<p>${escapeHtml(ctx.firstName)} ${escapeHtml(ctx.lastName)} hat sich für ${escapeHtml(ctx.organizationLabel)} registriert:</p>`,
-    '<ul>',
-    `<li>Standesbuchnummer: ${escapeHtml(ctx.stbNr)}</li>`,
-    ctx.dienstgradLabel ? `<li>Dienstgrad: ${escapeHtml(ctx.dienstgradLabel)}</li>` : '',
-    `<li>E-Mail: ${escapeHtml(ctx.email)}</li>`,
-    '</ul>',
-    `<p><a href="${link}">Zur Prüfung in der Benutzerverwaltung</a></p>`,
-    '<p>Diese E-Mail wurde automatisch versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>',
-    '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
-  ].join('');
 
   for (const to of recipients) {
+    const textPart = [
+      `Servus ${to.firstName} der ${ctx.organizationLabel}`,
+      '',
+      `für deine Feuerwehr ${ctx.organizationLabel} hat sich ${ctx.firstName} ${ctx.lastName} registriert:`,
+      '',
+      `Standesbuchnummer: ${ctx.stbNr}`,
+      ctx.dienstgradLabel ? `Dienstgrad: ${ctx.dienstgradLabel}` : null,
+      `E-Mail: ${ctx.email}`,
+      '',
+      `Zur Prüfung: ${link}`,
+      '',
+      'Um den neuen Benutzer zu aktivieren, melde dich in der App-17 an und erweitere bei Bedarf Details wie Untersuchungen für Atemschutzgeräteträger und Ausbildungen für Drohnenpiloten.',
+      '',
+      `Diese E-Mail wurde automatisch an den Administrator der ${ctx.organizationLabel} versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an florian.krebs@feuerwehr.gv.at.`,
+      '',
+      'Bezirksfeuerwehrkommando St. Pölten',
+    ]
+      .filter((line) => line !== null)
+      .join('\n');
+    const htmlPart = [
+      `<p>Servus ${escapeHtml(to.firstName)} der ${escapeHtml(ctx.organizationLabel)}</p>`,
+      `<p>für deine Feuerwehr ${escapeHtml(ctx.organizationLabel)} hat sich ${escapeHtml(ctx.firstName)} ${escapeHtml(ctx.lastName)} registriert:</p>`,
+      '<ul>',
+      `<li>Standesbuchnummer: ${escapeHtml(ctx.stbNr)}</li>`,
+      ctx.dienstgradLabel ? `<li>Dienstgrad: ${escapeHtml(ctx.dienstgradLabel)}</li>` : '',
+      `<li>E-Mail: ${escapeHtml(ctx.email)}</li>`,
+      '</ul>',
+      `<p><a href="${link}">Zur Prüfung in der Benutzerverwaltung</a></p>`,
+      '<p>Um den neuen Benutzer zu aktivieren, melde dich in der App-17 an und erweitere bei Bedarf Details wie Untersuchungen für Atemschutzgeräteträger und Ausbildungen für Drohnenpiloten.</p>',
+      `<p>Diese E-Mail wurde automatisch an den Administrator der ${escapeHtml(ctx.organizationLabel)} versendet, bitte nicht direkt darauf antworten. Bei Fragen wende dich an <a href="mailto:florian.krebs@feuerwehr.gv.at">florian.krebs@feuerwehr.gv.at</a>.</p>`,
+      '<p>Bezirksfeuerwehrkommando St. Pölten</p>',
+    ].join('');
+
     try {
       await sendEmail({ to: to.email, toName: `${to.firstName} ${to.lastName}`, subject, textPart, htmlPart });
     } catch (error) {
