@@ -32,14 +32,21 @@ aufgelöst:
    der vier Gruppen). Nicht-Mitglieder werden übersprungen und in der Zusammenfassung gezählt.
 2. **"Bestehende Daten nicht überschreiben" gilt pro Feld, nicht pro Zeile.** Jedes der 4 Datumsfelder wird
    einzeln behandelt: nur ein aktuell leeres Feld wird befüllt, ein bereits gesetztes bleibt unangetastet.
-3. **Die Präfix-Invariante der 5 Ausbildungsstufen (A1/A3 → A2 → Stützpunktausbildung → BOS1 → BOS2, jede
-   Stufe nur gültig wenn alle vorherigen gesetzt sind) muss erhalten bleiben**, obwohl die Datei keine
-   Stützpunktausbildungs-Spalte hat. `getExactStage()` (`qualification-filter.ts`) bricht beim ersten
-   ungesetzten Feld ab — ein importiertes BOS1-Datum ohne gesetzte Stützpunktausbildung würde die Person in
-   der Einsatzbereitschaft-Auswertung fälschlich als "nur bis A2" zeigen. Lösung: pro Stufe einzeln prüfen,
-   ob alle vorherigen Stufen entweder schon gesetzt sind oder in derselben Zeile mitgeliefert werden — fehlt
-   eine Vorstufe, wird nur diese eine Stufe übersprungen und gemeldet, der Rest der Zeile wird trotzdem
-   verarbeitet.
+3. **Stützpunktausbildung ist für BOS1/BOS2 KEINE Voraussetzung** — fachlich eine eigenständige, pro
+   Drohnengruppe unterschiedliche Schulung, keine Stufe auf dem Weg zu BOS1/BOS2 (Korrektur des App-Betreibers
+   gegenüber der ursprünglichen Annahme, die 5 Stufen bildeten überall eine strikte Kette). **Diese Korrektur
+   gilt bewusst nur für diesen Import**, nicht app-weit: `userSchema`s Formular-Validierung, der bestehende
+   Benutzer-Bulk-Import (`findAusbildungsGapError`) und `qualification-filter.ts`/`einsatzbereitschaft.ts`
+   (`getExactStage()`, bricht beim ersten ungesetzten Feld ab) behandeln die 5 Stufen weiterhin als eine
+   einzige strikte Kette inkl. Stützpunktausbildung — unverändert. Der Import selbst prüft die
+   Vorstufen-Kette deshalb nur innerhalb der 4 tatsächlich in der Datei vorhandenen Stufen (A1/A3 → A2 →
+   BOS1 → BOS2, Stützpunktausbildung wird aus dieser Kette herausgenommen): BOS1 braucht nur A1/A3 + A2
+   (gesetzt oder in derselben Zeile mitgeliefert), BOS2 zusätzlich BOS1 — nie Stützpunktausbildung. Fehlt
+   eine dieser 4 Vorstufen, wird nur die betroffene Stufe übersprungen und gemeldet, der Rest der Zeile wird
+   trotzdem verarbeitet. **Akzeptierte Inkonsistenz** (dem App-Betreiber bewusst): eine so importierte
+   Person mit gesetztem BOS1 aber ohne Stützpunktausbildung wird von `getExactStage()` andernorts (z. B.
+   Einsatzbereitschaft-Stufenverteilung) weiterhin nur als "bis A2" eingestuft, bis diese anderen Stellen
+   irgendwann separat angepasst werden.
 
 ## 3. Zuordnung (Matching)
 
@@ -63,12 +70,13 @@ menschlichen Zuordnung/Kontrolle in der Zusammenfassung, werden aber nicht auf d
 4. E-Mail-Abweichung prüfen → Hinweis sammeln (blockiert nichts weiteres).
 5. `DrohnengruppeMembership` für diesen `User` laden (`userId` ist `@unique`, höchstens eine Zeile).
    Keine Mitgliedschaft → Zeile überspringen, Zähler "kein Drohnengruppen-Mitglied" erhöhen.
-6. Für jede der 4 in der Datei vorhandenen Stufen (A1/A3, A2, BOS1, BOS2), in dieser Reihenfolge:
+6. Für jede der 4 in der Datei vorhandenen Stufen, in dieser Reihenfolge: A1/A3 → A2 → BOS1 → BOS2
+   (Stützpunktausbildung ist bewusst NICHT Teil dieser Kette, siehe Abschnitt 2.3):
    - Datei-Wert leer → nichts tun.
    - Feld in der DB bereits gesetzt → überspringen, Zähler "bereits vorhanden" erhöhen.
-   - Feld in der DB leer, aber eine vorherige Stufe (gemäß der 5-stufigen Reihenfolge, inkl.
-     Stützpunktausbildung) ist weder in der DB gesetzt noch durch dieselbe Zeile gerade gesetzt worden →
-     überspringen, Zähler "Vorstufe fehlt" erhöhen, Stufenname in der Meldung nennen.
+   - Feld in der DB leer, aber eine vorherige Stufe **dieser 4er-Kette** ist weder in der DB gesetzt noch
+     durch dieselbe Zeile gerade gesetzt worden → überspringen, Zähler "Vorstufe fehlt" erhöhen, Stufenname
+     in der Meldung nennen.
    - Sonst: Wert übernehmen (`prisma.drohnengruppeMembership.update`).
 7. Ergebnis pro Zeile in die Gesamt-Zusammenfassung einsortieren.
 
@@ -115,14 +123,17 @@ Einsatzbereitschaft-Seite.
 
 - Kein Anlegen neuer Benutzer oder neuer Drohnengruppen-Mitgliedschaften.
 - Kein Schreiben von Dienstgrad/Name/E-Mail aus der Datei.
-- Keine Änderung an der bestehenden Präfix-Invarianten-Regel selbst — der Import respektiert sie nur.
+- Keine Änderung an der bestehenden Präfix-Invarianten-Regel im übrigen Code (Formular, Benutzer-Bulk-Import,
+  Qualifikations-Filter, Einsatzbereitschaft) — nur dieser neue Import behandelt Stützpunktausbildung als
+  unabhängig von BOS1/BOS2.
 
 ## 9. Testing/Verifikation
 
 Kein automatisierter Testlauf in diesem Repo (Projekt-Konvention). Verifikation wie beim Atemschutz-Import:
 `npx tsc --noEmit` + `npm run build`, plus ein Skript gegen die lokale Dev-Datenbank mit synthetischen
 Zeilen, das folgende Fälle abdeckt: normales Auffüllen eines leeren Felds, ein bereits gesetztes Feld wird
-NICHT überschrieben, eine Stufe wird wegen fehlender Vorstufe übersprungen (und danach durch eine zweite
-Zeile, die die Vorstufe UND die Stufe selbst liefert, korrekt beides gesetzt), Nicht-Mitglied wird
-übersprungen, abweichende E-Mail erzeugt einen Hinweis ohne die gespeicherte Adresse zu ändern, unbekannte
-FW-Nr/StbNr erzeugen einen Fehler.
+NICHT überschrieben, eine Stufe wird wegen fehlender Vorstufe **innerhalb der 4er-Kette** übersprungen (z. B.
+BOS1 ohne A2) und danach durch eine zweite Zeile, die die Vorstufe UND die Stufe selbst liefert, korrekt
+beides gesetzt, **BOS1 wird erfolgreich gesetzt, obwohl Stützpunktausbildung in der DB leer bleibt**
+(bestätigt die Ausnahme aus Abschnitt 2.3), Nicht-Mitglied wird übersprungen, abweichende E-Mail erzeugt
+einen Hinweis ohne die gespeicherte Adresse zu ändern, unbekannte FW-Nr/StbNr erzeugen einen Fehler.
