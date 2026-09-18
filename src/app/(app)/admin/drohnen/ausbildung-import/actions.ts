@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canImportDroneAusbildung } from '@/lib/auth/permissions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { AUSBILDUNG_IMPORT_COLUMNS, type AusbildungImportRow } from '@/lib/drone/ausbildung-import-columns';
 import {
   AUSBILDUNG_IMPORT_CHAIN,
@@ -125,6 +126,7 @@ export async function importAusbildung(
   const organizationIdByNummer = new Map(organizations.map((org) => [org.nummer, org.id]));
 
   const members = await prisma.user.findMany({
+    where: { ...NOT_DEACTIVATED_WHERE },
     select: {
       id: true,
       stbNr: true,
@@ -239,6 +241,7 @@ export async function importAusbildung(
         data: resolution.updates,
       });
       updatedFields += updateKeys.length;
+      Object.assign(member.droneMembership, resolution.updates);
     } catch (error) {
       console.error(`Ausbildungs-Import Zeile ${rowNumber} fehlgeschlagen:`, error);
       errors.push(`Zeile ${rowNumber}: Unerwarteter Fehler beim Speichern.`);
