@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
+import { canImportDroneAusbildung } from '@/lib/auth/permissions';
 import { prisma } from '@/lib/db/prisma';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
@@ -115,6 +116,22 @@ export default async function DrohnenVerwaltungPage({
           </a>
         </div>
       </div>
+
+      {canImportDroneAusbildung(user) && (
+        <div className="rounded-lg bg-surface p-4 shadow-card">
+          <h2 className="mb-1 text-[15px] font-semibold text-ink">Ausbildungsstufen importieren</h2>
+          <p className="mb-3 text-sm text-ink-muted">
+            FDISK-Export mit A1/A3-, A2-, BOS1- und BOS2-Ausbildungsdaten für bestehende
+            Drohnengruppen-Mitglieder importieren, bezirksweit über alle Gruppen.
+          </p>
+          <Link
+            href="/admin/drohnen/ausbildung-import"
+            className="inline-block rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Import öffnen
+          </Link>
+        </div>
+      )}
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-3 text-[15px] font-semibold text-ink">Drohnen</h2>
