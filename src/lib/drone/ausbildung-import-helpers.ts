@@ -26,11 +26,15 @@ export interface AusbildungResolution {
  * `fileValues` die aus der Import-Datei gelesenen Werte für dieselben 4 Stufen (null = Zelle leer
  * oder Spalte nicht vorhanden).
  *
- * Ein in der Datei vorhandener Wert wird IMMER übernommen, auch wenn die Stufe in der DB bereits ein
+ * Ein in der Datei vorhandener Wert wird übernommen, auch wenn die Stufe in der DB bereits ein
  * (ggf. abweichendes) Datum trägt - jeder Import soll den aktuellen Stand aus der Datei widerspiegeln,
  * nicht nur Lücken auffüllen (reale Nutzerrückmeldung: ein erneuter Import mit einem aktualisierten
- * Datum wurde bisher stillschweigend übersprungen). Eine leere Zelle in der Datei lässt den
- * bestehenden DB-Wert dagegen unangetastet - "kein Wert in der Datei" heißt nicht "löschen".
+ * Datum wurde bisher stillschweigend übersprungen). Ist der Datei-Wert mit dem DB-Wert IDENTISCH, wird
+ * nichts geschrieben (kein unnötiges Update, und die "N Felder aktualisiert"-Zusammenfassung zählt dann
+ * korrekt nur echte Änderungen - zweite Nutzerrückmeldung: ein erneuter Import derselben, unveränderten
+ * Datei zeigte fälschlich jedes Mal dieselbe hohe Zahl an "aktualisiert", obwohl nichts geändert wurde).
+ * Eine leere Zelle in der Datei lässt den bestehenden DB-Wert ebenfalls unangetastet - "kein Wert in der
+ * Datei" heißt nicht "löschen".
  *
  * Die Vorstufen-Prüfung bleibt bestehen: eine Stufe wird nur geschrieben, wenn die vorherige Stufe der
  * 4er-Kette entweder schon in der DB steht oder durch dieselbe Zeile ebenfalls gerade gesetzt wird -
@@ -61,6 +65,12 @@ export function resolveAusbildungUpdates(
     if (vorstufe && !resolved.get(vorstufe)) {
       skippedMissingPrereq.push({ stufe, fehlendeVorstufe: vorstufe });
       resolved.set(stufe, currentValue !== null);
+      continue;
+    }
+
+    if (currentValue !== null && currentValue.getTime() === fileValue.getTime()) {
+      // Datei-Wert ist identisch mit dem bereits gespeicherten Datum - nichts zu tun.
+      resolved.set(stufe, true);
       continue;
     }
 
