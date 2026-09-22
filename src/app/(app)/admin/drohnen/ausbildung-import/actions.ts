@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canImportDroneAusbildung } from '@/lib/auth/permissions';
+import { assertPermission, canImportDroneAusbildung, isBezirksAdmin } from '@/lib/auth/permissions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { AUSBILDUNG_IMPORT_COLUMNS, type AusbildungImportRow } from '@/lib/drone/ausbildung-import-columns';
 import {
@@ -20,6 +20,7 @@ export interface ImportAusbildungState {
     skippedAlreadySet: number;
     skippedMissingPrereq: string[];
     skippedNotMember: number;
+    skippedOtherGroup: number;
     emailMismatches: string[];
     errors: string[];
   };
@@ -74,13 +75,19 @@ const DATE_COLUMN_BY_STUFE: Record<AusbildungStufe, keyof AusbildungImportRow> =
 };
 
 /**
- * Bezirksweit (nicht org-gebunden wie der Atemschutz-Import): FW-Nr löst die Feuerwehr auf, StbNr
- * matcht INNERHALB dieser Feuerwehr gegen User.stbNr (nicht global eindeutig) - mehrfach vorhandene
- * StbNr wird als nicht eindeutig zuordenbar abgelehnt statt eine willkürliche Zeile zu treffen. Nur
- * bereits bestehende DrohnengruppeMembership-Zeilen werden aktualisiert - der Import legt nie eine neue
- * an (siehe Design-Spec Abschnitt 2 Punkt 1). Pro der 4 Stufen wird nur ein aktuell leeres Feld befüllt,
- * nie ein bereits gesetztes überschrieben (resolveAusbildungUpdates, siehe Design-Spec Abschnitt 2 Punkt 2
- * und 3) - macht einen erneuten Import derselben Datei ungefährlich (0 Updates beim zweiten Lauf).
+ * FW-Nr löst die Feuerwehr auf, StbNr matcht INNERHALB dieser Feuerwehr gegen User.stbNr (nicht global
+ * eindeutig) - mehrfach vorhandene StbNr wird als nicht eindeutig zuordenbar abgelehnt statt eine
+ * willkürliche Zeile zu treffen. Nur bereits bestehende DrohnengruppeMembership-Zeilen werden
+ * aktualisiert - der Import legt nie eine neue an (siehe Design-Spec Abschnitt 2 Punkt 1). Pro der 4
+ * Stufen wird nur ein aktuell leeres Feld befüllt, nie ein bereits gesetztes überschrieben
+ * (resolveAusbildungUpdates, siehe Design-Spec Abschnitt 2 Punkt 2 und 3) - macht einen erneuten Import
+ * derselben Datei ungefährlich (0 Updates beim zweiten Lauf).
+ *
+ * Bezirksadmin/Bezirks-Drohnenadmin dürfen bezirksweit importieren (jede Gruppe/Feuerwehr in der
+ * Datei); ein einzelner Drohnengruppen-Admin (droneGroupRole === 'ADMIN', per canImportDroneAusbildung
+ * ebenfalls zum Öffnen des Imports berechtigt) darf die Datei zwar hochladen, aber nur Zeilen von
+ * Mitgliedern SEINER EIGENEN Gruppe wirken sich aus - Zeilen anderer Gruppen werden übersprungen und
+ * gezählt, nie stillschweigend mitverarbeitet (siehe canImportDroneAusbildung's Kommentar).
  */
 export async function importAusbildung(
   _prevState: ImportAusbildungState,
@@ -88,6 +95,7 @@ export async function importAusbildung(
 ): Promise<ImportAusbildungState> {
   const user = await requireUser();
   assertPermission(canImportDroneAusbildung(user));
+  const isBezirksWide = isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
 
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {
@@ -133,7 +141,13 @@ export async function importAusbildung(
       email: true,
       homeOrganizationId: true,
       droneMembership: {
-        select: { a1a3LizenzAm: true, a2LizenzAm: true, bos1AusbildungAm: true, bos2AusbildungAm: true },
+        select: {
+          droneGroupId: true,
+          a1a3LizenzAm: true,
+          a2LizenzAm: true,
+          bos1AusbildungAm: true,
+          bos2AusbildungAm: true,
+        },
       },
     },
   });
@@ -152,6 +166,7 @@ export async function importAusbildung(
   let updatedFields = 0;
   let skippedAlreadySet = 0;
   let skippedNotMember = 0;
+  let skippedOtherGroup = 0;
 
   for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
     const row = sheet.getRow(rowNumber);
@@ -192,6 +207,11 @@ export async function importAusbildung(
 
     if (!member.droneMembership) {
       skippedNotMember++;
+      continue;
+    }
+
+    if (!isBezirksWide && member.droneMembership.droneGroupId !== user.droneGroupId) {
+      skippedOtherGroup++;
       continue;
     }
 
@@ -250,6 +270,14 @@ export async function importAusbildung(
 
   revalidatePath('/admin/drohnen');
   return {
-    result: { updatedFields, skippedAlreadySet, skippedMissingPrereq, skippedNotMember, emailMismatches, errors },
+    result: {
+      updatedFields,
+      skippedAlreadySet,
+      skippedMissingPrereq,
+      skippedNotMember,
+      skippedOtherGroup,
+      emailMismatches,
+      errors,
+    },
   };
 }

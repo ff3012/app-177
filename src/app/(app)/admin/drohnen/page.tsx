@@ -122,7 +122,8 @@ export default async function DrohnenVerwaltungPage({
           <h2 className="mb-1 text-[15px] font-semibold text-ink">Ausbildungsstufen importieren</h2>
           <p className="mb-3 text-sm text-ink-muted">
             FDISK-Export mit A1/A3-, A2-, BOS1- und BOS2-Ausbildungsdaten für bestehende
-            Drohnengruppen-Mitglieder importieren, bezirksweit über alle Gruppen.
+            Drohnengruppen-Mitglieder importieren. Bezirksadmin/Bezirks-Drohnenadmin: alle Gruppen.
+            Admin einer einzelnen Drohnengruppe: nur Mitglieder der eigenen Gruppe.
           </p>
           <Link
             href="/admin/drohnen/ausbildung-import"

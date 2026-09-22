@@ -144,13 +144,15 @@ export function canManageBezirksWideDroneEvent(user: SessionUser): boolean {
   return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
 }
 
-/** Bulk-Import der Drohnengruppen-Ausbildungsstufen (/admin/drohnen/ausbildung-import) - Bezirksadmin
- * ODER Bezirks-Drohnenadmin, NICHT der Einzelgruppen-Admin (canManageDroneGroupFor): eine Import-Datei
- * kann Mitglieder mehrerer Feuerwehren/Gruppen gleichzeitig enthalten, ein einzelner Gruppen-Admin darf
- * darüber nicht auf fremde Gruppen zugreifen. Identische Regel wie canManageBezirksWideDroneEvent,
- * eigener Name für Lesbarkeit an den Aufrufstellen. */
+/** Sichtbarkeit des Bulk-Imports der Drohnengruppen-Ausbildungsstufen (/admin/drohnen/ausbildung-import)
+ * - Bezirksadmin, Bezirks-Drohnenadmin ODER Admin der eigenen Drohnengruppe (droneGroupRole === 'ADMIN').
+ * Diese Funktion entscheidet nur, wer die Seite/den Button überhaupt sieht - eine Import-Datei kann
+ * Mitglieder mehrerer Feuerwehren/Gruppen gleichzeitig enthalten, daher scoped importAusbildung selbst
+ * (actions.ts) jede Zeile zusätzlich: Bezirksadmin/Bezirks-Drohnenadmin dürfen jede Gruppe, ein einzelner
+ * Gruppen-Admin nur Zeilen von Mitgliedern der EIGENEN Gruppe (user.droneGroupId) - Zeilen fremder Gruppen
+ * werden übersprungen und gemeldet, nie stillschweigend verarbeitet. */
 export function canImportDroneAusbildung(user: SessionUser): boolean {
-  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin;
+  return isBezirksAdmin(user) || user.isBezirksDrohnenAdmin || user.droneGroupRole === 'ADMIN';
 }
 
 /**

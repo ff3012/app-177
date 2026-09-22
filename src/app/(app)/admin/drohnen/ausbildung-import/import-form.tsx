@@ -50,6 +50,9 @@ export function ImportAusbildungForm() {
             {state.result.updatedFields} Felder aktualisiert, {state.result.skippedAlreadySet} übersprungen
             (bereits vorhanden), {state.result.skippedNotMember} Zeilen übersprungen (kein
             Drohnengruppen-Mitglied)
+            {state.result.skippedOtherGroup > 0
+              ? `, ${state.result.skippedOtherGroup} Zeilen übersprungen (andere Drohnengruppe)`
+              : ''}
             {state.result.skippedMissingPrereq.length > 0
               ? `, ${state.result.skippedMissingPrereq.length} Felder übersprungen (Vorstufe fehlt)`
               : ''}
