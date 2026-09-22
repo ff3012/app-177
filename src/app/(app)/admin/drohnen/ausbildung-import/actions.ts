@@ -17,7 +17,6 @@ export interface ImportAusbildungState {
   error?: string;
   result?: {
     updatedFields: number;
-    skippedAlreadySet: number;
     skippedMissingPrereq: string[];
     skippedNotMember: number;
     skippedOtherGroup: number;
@@ -79,9 +78,10 @@ const DATE_COLUMN_BY_STUFE: Record<AusbildungStufe, keyof AusbildungImportRow> =
  * eindeutig) - mehrfach vorhandene StbNr wird als nicht eindeutig zuordenbar abgelehnt statt eine
  * willkürliche Zeile zu treffen. Nur bereits bestehende DrohnengruppeMembership-Zeilen werden
  * aktualisiert - der Import legt nie eine neue an (siehe Design-Spec Abschnitt 2 Punkt 1). Pro der 4
- * Stufen wird nur ein aktuell leeres Feld befüllt, nie ein bereits gesetztes überschrieben
- * (resolveAusbildungUpdates, siehe Design-Spec Abschnitt 2 Punkt 2 und 3) - macht einen erneuten Import
- * derselben Datei ungefährlich (0 Updates beim zweiten Lauf).
+ * Stufen wird der Datei-Wert IMMER übernommen, sobald die Zelle nicht leer ist - auch wenn die DB
+ * bereits ein (ggf. abweichendes) Datum trägt (resolveAusbildungUpdates; frühere "nie überschreiben"-
+ * Regel auf ausdrücklichen Nutzerwunsch entfernt, nachdem ein erneuter Import mit aktualisiertem Datum
+ * stillschweigend übersprungen wurde). Eine leere Zelle lässt den bestehenden Wert unangetastet.
  *
  * Bezirksadmin/Bezirks-Drohnenadmin dürfen bezirksweit importieren (jede Gruppe/Feuerwehr in der
  * Datei); ein einzelner Drohnengruppen-Admin (droneGroupRole === 'ADMIN', per canImportDroneAusbildung
@@ -164,7 +164,6 @@ export async function importAusbildung(
   const emailMismatches: string[] = [];
   const skippedMissingPrereq: string[] = [];
   let updatedFields = 0;
-  let skippedAlreadySet = 0;
   let skippedNotMember = 0;
   let skippedOtherGroup = 0;
 
@@ -245,7 +244,6 @@ export async function importAusbildung(
     };
 
     const resolution = resolveAusbildungUpdates(current, fileValues);
-    skippedAlreadySet += resolution.skippedAlreadySet.length;
     for (const { stufe, fehlendeVorstufe } of resolution.skippedMissingPrereq) {
       skippedMissingPrereq.push(
         `Zeile ${rowNumber}: ${STUFE_LABEL[stufe]} übersprungen, da ${STUFE_LABEL[fehlendeVorstufe]} fehlt.`,
@@ -272,7 +270,6 @@ export async function importAusbildung(
   return {
     result: {
       updatedFields,
-      skippedAlreadySet,
       skippedMissingPrereq,
       skippedNotMember,
       skippedOtherGroup,

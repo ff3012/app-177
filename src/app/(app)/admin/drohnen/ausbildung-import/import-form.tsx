@@ -24,7 +24,8 @@ export function ImportAusbildungForm() {
           <p className="text-xs text-neutral-500">
             Erwartet den FDISK-Ausbildungs-Export mit den Spalten FW-Nr, StbNr, email, A1/A3 Datum, A2
             Datum, BOS1 Datum, BOS2 Datum. Aktualisiert nur Mitglieder, die bereits einer Drohnengruppe
-            angehören, und überschreibt nie bereits gesetzte Ausbildungsdaten.
+            angehören. Ein Datum in der Datei überschreibt ein ggf. bereits gespeichertes Datum für
+            dieselbe Stufe; eine leere Zelle lässt den vorhandenen Wert unangetastet.
           </p>
         </div>
 
@@ -47,9 +48,8 @@ export function ImportAusbildungForm() {
       {state.result && (
         <div className="rounded border border-neutral-200 bg-neutral-50 p-4 text-sm">
           <p className="font-medium text-neutral-900">
-            {state.result.updatedFields} Felder aktualisiert, {state.result.skippedAlreadySet} übersprungen
-            (bereits vorhanden), {state.result.skippedNotMember} Zeilen übersprungen (kein
-            Drohnengruppen-Mitglied)
+            {state.result.updatedFields} Felder aktualisiert, {state.result.skippedNotMember} Zeilen
+            übersprungen (kein Drohnengruppen-Mitglied)
             {state.result.skippedOtherGroup > 0
               ? `, ${state.result.skippedOtherGroup} Zeilen übersprungen (andere Drohnengruppe)`
               : ''}

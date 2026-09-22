@@ -12,10 +12,9 @@ export const AUSBILDUNG_IMPORT_CHAIN: readonly AusbildungStufe[] = [
 ];
 
 export interface AusbildungResolution {
-  /** Stufen, die tatsächlich geschrieben werden sollen (Date-Wert aus der Datei). */
+  /** Stufen, die tatsächlich geschrieben werden sollen (Date-Wert aus der Datei) - überschreibt einen
+   * eventuell bereits vorhandenen DB-Wert, siehe Funktionskommentar unten. */
   updates: Partial<Record<AusbildungStufe, Date>>;
-  /** Stufen, die übersprungen wurden, weil in der DB bereits ein Wert steht. */
-  skippedAlreadySet: AusbildungStufe[];
   /** Stufen, die übersprungen wurden, weil eine Vorstufe (innerhalb der 4er-Kette) fehlt - je Eintrag
    * die betroffene Stufe und die fehlende Vorstufe, für die Zeilen-Meldung. */
   skippedMissingPrereq: { stufe: AusbildungStufe; fehlendeVorstufe: AusbildungStufe }[];
@@ -25,16 +24,24 @@ export interface AusbildungResolution {
  * Reine Funktion, keine DB-Zugriffe: berechnet für eine Zeile, welche der 4 Stufen tatsächlich
  * geschrieben werden dürfen. `current` sind die JETZT in der DB stehenden Werte (null = leer),
  * `fileValues` die aus der Import-Datei gelesenen Werte für dieselben 4 Stufen (null = Zelle leer
- * oder Spalte nicht vorhanden). Verarbeitet die Kette in AUSBILDUNG_IMPORT_CHAIN-Reihenfolge, damit
- * eine Vorstufe, die durch dieselbe Zeile neu gesetzt wird, bereits als "erfüllt" zählt, wenn die
- * nächste Stufe geprüft wird.
+ * oder Spalte nicht vorhanden).
+ *
+ * Ein in der Datei vorhandener Wert wird IMMER übernommen, auch wenn die Stufe in der DB bereits ein
+ * (ggf. abweichendes) Datum trägt - jeder Import soll den aktuellen Stand aus der Datei widerspiegeln,
+ * nicht nur Lücken auffüllen (reale Nutzerrückmeldung: ein erneuter Import mit einem aktualisierten
+ * Datum wurde bisher stillschweigend übersprungen). Eine leere Zelle in der Datei lässt den
+ * bestehenden DB-Wert dagegen unangetastet - "kein Wert in der Datei" heißt nicht "löschen".
+ *
+ * Die Vorstufen-Prüfung bleibt bestehen: eine Stufe wird nur geschrieben, wenn die vorherige Stufe der
+ * 4er-Kette entweder schon in der DB steht oder durch dieselbe Zeile ebenfalls gerade gesetzt wird -
+ * verarbeitet die Kette deshalb in AUSBILDUNG_IMPORT_CHAIN-Reihenfolge, damit eine Vorstufe, die durch
+ * dieselbe Zeile neu gesetzt wird, bereits als "erfüllt" zählt, wenn die nächste Stufe geprüft wird.
  */
 export function resolveAusbildungUpdates(
   current: Record<AusbildungStufe, Date | null>,
   fileValues: Record<AusbildungStufe, Date | null>,
 ): AusbildungResolution {
   const updates: Partial<Record<AusbildungStufe, Date>> = {};
-  const skippedAlreadySet: AusbildungStufe[] = [];
   const skippedMissingPrereq: { stufe: AusbildungStufe; fehlendeVorstufe: AusbildungStufe }[] = [];
   const resolved = new Map<AusbildungStufe, boolean>();
 
@@ -43,21 +50,17 @@ export function resolveAusbildungUpdates(
     const currentValue = current[stufe];
     const fileValue = fileValues[stufe];
 
-    if (currentValue !== null) {
-      resolved.set(stufe, true);
-      if (fileValue !== null) skippedAlreadySet.push(stufe);
-      continue;
-    }
-
     if (fileValue === null) {
-      resolved.set(stufe, false);
+      // Datei liefert für diese Stufe nichts - bestehenden Wert nicht anfassen, aber für die
+      // Vorstufen-Prüfung der nächsten Stufe berücksichtigen, ob die DB hier schon etwas stehen hat.
+      resolved.set(stufe, currentValue !== null);
       continue;
     }
 
     const vorstufe = i > 0 ? AUSBILDUNG_IMPORT_CHAIN[i - 1] : null;
     if (vorstufe && !resolved.get(vorstufe)) {
       skippedMissingPrereq.push({ stufe, fehlendeVorstufe: vorstufe });
-      resolved.set(stufe, false);
+      resolved.set(stufe, currentValue !== null);
       continue;
     }
 
@@ -65,5 +68,5 @@ export function resolveAusbildungUpdates(
     resolved.set(stufe, true);
   }
 
-  return { updates, skippedAlreadySet, skippedMissingPrereq };
+  return { updates, skippedMissingPrereq };
 }
