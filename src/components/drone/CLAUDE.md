@@ -309,3 +309,65 @@ wie bei den beiden Heimatfeuerwehr-Feldern zuvor).
   Picker-Query liefert für Gruppe A ausschließlich deren eigenes Mitglied, nie ein Mitglied einer
   anderen Gruppe (zwei separat angelegte Testgruppen-Mitgliedschaften gegenübergestellt).
 
+**Ausbildungsstufen-Bulk-Import (`/admin/drohnen/ausbildung-import`, FDISK-Export)** — liest einen
+externen FDISK-Excel-Export (Sheet "ExportResults", Spalten FW-Nr/StbNr/email/A1/A3 Datum/A2 Datum/
+BOS1 Datum/BOS2 Datum) und füllt die vier `DrohnengruppeMembership`-Datumsfelder bestehender
+Mitglieder. Volles Design: `docs/superpowers/specs/2026-09-17-drohnen-ausbildung-import-design.md`.
+
+- **Keine Datenmodell-Änderung**: bewusst KEINE Migration von `DrohnengruppeMembership` auf `User`,
+  obwohl ein `User` ohne `droneMembership`-Relation dadurch gar nicht importierbar ist — so eine Zeile
+  wird übersprungen und gezählt ("kein Drohnengruppen-Mitglied"), nie wird eine neue Mitgliedschaft
+  angelegt. Zuordnung wie beim Atemschutz-Import: FW-Nr → `Organization.nummer`, StbNr INNERHALB
+  dieser Feuerwehr gegen `User.stbNr` (nicht global eindeutig, mehrfach vorhanden → Fehler statt
+  willkürlicher Treffer). Vorname/Zuname/Dienstgrad/Feuerwehr aus der Datei werden nie geschrieben;
+  eine abweichende `email` erzeugt nur einen Hinweis, ändert nie die gespeicherte Adresse.
+- **Eigene, bewusst NUR 4-stufige Vorstufen-Kette** (`src/lib/drone/ausbildung-import-helpers.ts`,
+  `AUSBILDUNG_IMPORT_CHAIN`: A1/A3 → A2 → BOS1 → BOS2) — anders als die app-weite 5-stufige Kette
+  weiter oben in dieser Datei (inkl. Stützpunktausbildung), die von diesem Import komplett unberührt
+  bleibt. Grund: Stützpunktausbildung ist laut App-Betreiber eine eigene, pro Drohnengruppe
+  unterschiedliche Schulung, keine Voraussetzung für BOS1/BOS2 — diese Korrektur gilt **nur** für
+  diesen Import, `userSchema`s `.superRefine()`, `findAusbildungsGapError` und
+  `qualification-filter.ts`s `getExactStage()`/`EXACT_STAGE_KEYS` behandeln die 5 Stufen weiterhin als
+  strikte Kette. Akzeptierte Inkonsistenz: eine über diesen Import gesetzte BOS1-Stufe ohne gesetzte
+  Stützpunktausbildung wird von `getExactStage()` andernorts (z. B. Einsatzbereitschaft) trotzdem nur
+  als "bis A2" eingestuft.
+- **Berechtigung** (`canImportDroneAusbildung`, `permissions.ts`): Bezirksadmin/Bezirks-Drohnenadmin
+  ODER Admin einer einzelnen Drohnengruppe (`droneGroupRole === 'ADMIN'`) — ursprünglich nur die
+  ersten beiden, nach einem Nutzerbericht ("ein Admin für Drohnengruppe kann keine Mitglieder
+  importieren") auf einzelne Gruppen-Admins erweitert. Die Erweiterung ist serverseitig **scoped**,
+  nicht nur sichtbarkeitsseitig: `importAusbildung` (`actions.ts`) berechnet `isBezirksWide =
+  isBezirksAdmin(user) || user.isBezirksDrohnenAdmin` und überspringt für einen einzelnen
+  Gruppen-Admin jede Zeile, deren `member.droneMembership.droneGroupId !== user.droneGroupId`
+  (gezählt als "andere Drohnengruppe") — eine Import-Datei kann mehrere Gruppen/Feuerwehren
+  gleichzeitig enthalten, ein Gruppen-Admin darf darüber nie fremde Gruppen mitschreiben. Bezirksadmin/
+  Bezirks-Drohnenadmin bleiben unrestricted (jede Gruppe/Feuerwehr in der Datei).
+- **Überschreib-Semantik, zweimal per Nutzerfeedback korrigiert**: ursprünglich (Erstversion, Design-
+  Spec-Vorgabe) wurde ein Feld NUR befüllt, wenn es in der DB noch leer war ("nie überschreiben"). Ein
+  erneuter Import mit einem aktualisierten Datum wurde dadurch stillschweigend übersprungen
+  (Nutzerbericht) — geändert auf "jeder Datei-Wert wird übernommen, sobald die Zelle nicht leer ist,
+  auch wenn die DB bereits ein abweichendes Datum trägt" (eine leere Zelle lässt den bestehenden Wert
+  weiterhin unangetastet, das war nie das Problem). Das führte zu einem zweiten, ebenfalls gemeldeten
+  Bug: ein erneuter Import derselben, UNVERÄNDERTEN Datei schrieb und zählte trotzdem jedes Mal
+  dieselben Felder als "aktualisiert". Endgültige Lösung in `resolveAusbildungUpdates`: der Datei-Wert
+  wird mit dem DB-Wert per `.getTime()` verglichen — sind beide identisch, wird nichts geschrieben und
+  nichts gezählt; nur eine echte Wertänderung (oder eine neu befüllte, vorher leere Stufe) zählt als
+  "aktualisiert". Die Vorstufen-Prüfung bleibt davon unberührt: eine unveränderte (also nicht
+  geschriebene) Vorstufe gilt für die Prüfung der nächsten Stufe trotzdem als "erfüllt", solange sie in
+  der DB einen Wert hat.
+- **Mehrfach-Zeilen-Fix (finales Review)**: `member`/`member.droneMembership` wird einmal vor der
+  Zeilenschleife geladen; ohne Auffrischung hätte eine zweite Zeile für dasselbe Mitglied im selben
+  Lauf den veralteten Snapshot gesehen — sowohl ein Risiko für ein fälschliches Überschreiben als auch
+  für eine fälschliche "Vorstufe fehlt"-Meldung, wenn die Vorstufe erst durch eine frühere Zeile
+  desselben Laufs gesetzt wurde. Nach jedem erfolgreichen `prisma.drohnengruppeMembership.update` wird
+  deshalb `Object.assign(member.droneMembership, resolution.updates)` ausgeführt, damit spätere Zeilen
+  desselben Mitglieds den aktuellen Stand sehen.
+- Struktur mirrort den Atemschutz-Import bewusst (`atemschutz-import/actions.ts`'s `cellText`/
+  `parseExcelDateToIso` sind bewusst dupliziert, nicht extrahiert — Duplikation statt verfrühter
+  Abstraktion für zwei Aufrufstellen, dem sonstigen Stil dieser Codebase entsprechend):
+  `src/lib/drone/ausbildung-import-columns.ts` (Spalten-Definition),
+  `src/lib/drone/ausbildung-import-helpers.ts` (reine Vorstufen-/Überschreib-Logik,
+  `resolveAusbildungUpdates`), `admin/drohnen/ausbildung-import/{actions,import-form,page}.tsx`. Link
+  dazu sitzt als In-Page-Karte auf `/admin/drohnen`, sichtbar nur für `canImportDroneAusbildung(user)`
+  — kein eigener `AdminSidebarNav`/`AdminMobileTabs`-Eintrag, gleiches Muster wie die
+  Einsatzbereitschaft-Verlinkung oben.
+
