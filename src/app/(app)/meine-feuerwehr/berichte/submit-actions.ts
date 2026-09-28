@@ -1,134 +1,199 @@
 'use server';
 
 import { prisma } from '@/lib/db/prisma';
-import { loadReportForEdit, assertReportIsEditable } from '@/lib/heimatfeuerwehr/report-access';
+import { requireUser } from '@/lib/auth/session';
+import { assertPermission, canCreateReportFor } from '@/lib/auth/permissions';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
+import { ACTIVITY_KINDS, MATERIALS, EQUIPMENT } from '@/lib/heimatfeuerwehr/report-constants';
 import { getNextReportNumber } from '@/lib/heimatfeuerwehr/report-sequence';
 import { generateReportPdf, reportPdfFileName, reportPdfStorageKey, type ReportForPdf } from '@/lib/heimatfeuerwehr/report-pdf';
 import { putReportPdf } from '@/lib/storage/report-pdf-s3';
 import { sendReportSubmittedEmail } from '@/lib/heimatfeuerwehr/notify-report-submitted';
+import type { ReportType, ReportMemberFunktion } from '@prisma/client';
 
-const ALREADY_SUBMITTED_ERROR = 'Dieser Bericht wurde bereits abgegeben.';
-
-/** Wird innerhalb der Abgabe-Transaktion geworfen, wenn ein konkurrierender Aufruf den Bericht bereits
- * abgegeben hat - rollt die Transaktion (inkl. der schon hochgezählten Berichtsnummer) sauber zurück. */
-class ReportAlreadySubmittedError extends Error {
-  constructor() {
-    super(ALREADY_SUBMITTED_ERROR);
-    this.name = 'ReportAlreadySubmittedError';
-  }
+export interface SubmitReportInput {
+  type: ReportType;
+  filledById: string;
+  startAt: string;
+  endAt: string;
+  ownActivity: boolean;
+  activityKinds: string[];
+  activityOther: string | null;
+  vehicleId: string | null;
+  vehicleKm: number | null;
+  remark: string;
+  members: { userId: string; funktion: ReportMemberFunktion }[];
+  quantities: { kind: 'MATERIAL' | 'EQUIPMENT'; code: string; value: number }[];
 }
 
-/**
- * Abgabe-Transaktion (Bericht-Brief.md §6, Design-Spec §7): serverseitige Pflichtfeldprüfung, dann
- * Nummer/Jahr vergeben und status auf SUBMITTED setzen - alles in einer prisma.$transaction, damit ein
- * gleichzeitiger zweiter Abgabe-Versuch derselben Feuerwehr/desselben Jahres nie zwei Berichte mit
- * derselben Nummer erzeugen kann. PDF-Erzeugung/S3-Upload/E-Mail passieren NICHT hier (siehe Task 9) -
- * das sind keine DB-Operationen und dürfen die Transaktion nicht offen halten.
- */
-export async function submitReport(reportId: string): Promise<{ error?: string }> {
-  const report = await loadReportForEdit(reportId);
-  // Freundliche Meldung statt eines rohen ForbiddenError aus assertReportIsEditable für den häufigsten
-  // Fall (zweiter Klick/zweites Gerät, nachdem die erste Abgabe schon durch ist). Der eigentliche Schutz
-  // gegen GLEICHZEITIGE Abgaben ist der atomare Status-Guard in der Transaktion unten.
-  if (report.status === 'SUBMITTED') {
-    return { error: ALREADY_SUBMITTED_ERROR };
-  }
-  assertReportIsEditable(report);
+const FUNKTIONEN: ReportMemberFunktion[] = ['KOMMANDANT', 'FAHRER', 'MANNSCHAFT'];
 
-  if (report.ownActivity === null) {
+/**
+ * Legt einen Tätigkeitsbericht in EINEM atomaren Schritt an und gibt ihn sofort ab - kein
+ * Entwurf-Konzept mehr (siehe Report-Modell-Kommentar in prisma/schema.prisma): die Zeile existiert
+ * erst ab hier, mit number/year/submittedAt bereits gesetzt. Der Aufrufer (ReportWizard) hat alle
+ * Eingaben rein clientseitig gesammelt, daher MUSS diese Funktion jede einzelne Angabe serverseitig
+ * neu prüfen - anders als früher gibt es keine vorherige Autospeicherung, die schon etwas geprüft
+ * hätte. Ein doppelter Klick/zwei parallele Tabs könnten theoretisch zwei separate Berichte erzeugen
+ * (kein Entwurf-Datensatz mehr, an dem ein atomarer Status-Guard ansetzen könnte) - das clientseitige
+ * Deaktivieren des Buttons nach dem ersten Klick ist der einzige Schutz dagegen, bewusst akzeptiert.
+ */
+export async function submitReport(input: SubmitReportInput): Promise<{ error?: string; reportId?: string }> {
+  const user = await requireUser();
+  assertPermission(canCreateReportFor(user, user.homeOrganizationId));
+  const fireDepartmentId = user.homeOrganizationId;
+
+  if (typeof input.ownActivity !== 'boolean') {
     return { error: '"Eigene Tätigkeit" muss angegeben werden.' };
   }
-  if (report.activityKinds.length === 0 && !report.activityOther?.trim()) {
+  const activityOther = input.activityOther?.trim() || null;
+  if (input.activityKinds.length === 0 && !activityOther) {
     return { error: 'Mindestens eine Tätigkeitsart oder "Sonstige" muss angegeben werden.' };
   }
-  if (!report.remark?.trim()) {
+  if (input.activityKinds.length > 1) {
+    return { error: 'Es kann nur eine Tätigkeitsart ausgewählt werden.' };
+  }
+  if (input.activityKinds.length === 1 && !ACTIVITY_KINDS.some((option) => option.code === input.activityKinds[0])) {
+    return { error: 'Unbekannte Tätigkeitsart.' };
+  }
+  const remark = input.remark.trim();
+  if (!remark) {
     return { error: 'Eine Bemerkung ist erforderlich.' };
   }
-  if (report.vehicleId !== null && report.vehicleKm === null) {
-    return { error: 'Bitte die gefahrenen Kilometer angeben.' };
+  const startAt = new Date(input.startAt);
+  const endAt = new Date(input.endAt);
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
+    return { error: 'Das Ende muss nach dem Beginn liegen.' };
   }
+
+  let vehicle: { taktischeBezeichnung: string; kennzeichen: string } | null = null;
+  if (input.vehicleId !== null) {
+    if (input.vehicleKm === null) {
+      return { error: 'Bitte die gefahrenen Kilometer angeben.' };
+    }
+    vehicle = await prisma.vehicle.findFirst({
+      where: { id: input.vehicleId, organizationId: fireDepartmentId, isActive: true },
+      select: { taktischeBezeichnung: true, kennzeichen: true },
+    });
+    if (!vehicle) {
+      return { error: 'Das ausgewählte Fahrzeug gehört nicht zu dieser Feuerwehr.' };
+    }
+  }
+
+  const filledBy = await prisma.user.findFirst({
+    where: { id: input.filledById, homeOrganizationId: fireDepartmentId, ...NOT_DEACTIVATED_WHERE },
+    select: { id: true, firstName: true, lastName: true, stbNr: true, email: true },
+  });
+  if (!filledBy) {
+    return { error: 'Das ausgewählte Mitglied gehört nicht zu dieser Feuerwehr.' };
+  }
+
+  const memberIds = input.members.map((m) => m.userId);
+  if (new Set(memberIds).size !== memberIds.length) {
+    return { error: 'Ein Mitglied ist mehrfach eingetragen.' };
+  }
+  if (input.members.some((m) => !FUNKTIONEN.includes(m.funktion))) {
+    return { error: 'Unbekannte Funktion.' };
+  }
+  const validMembers = memberIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: memberIds }, homeOrganizationId: fireDepartmentId, ...NOT_DEACTIVATED_WHERE },
+        select: { id: true, firstName: true, lastName: true, stbNr: true },
+      })
+    : [];
+  if (validMembers.length !== memberIds.length) {
+    return { error: 'Mindestens ein eingesetztes Mitglied gehört nicht zu dieser Feuerwehr.' };
+  }
+
+  for (const quantity of input.quantities) {
+    const options = quantity.kind === 'MATERIAL' ? MATERIALS : EQUIPMENT;
+    if (!options.some((option) => option.code === quantity.code)) {
+      return { error: 'Unbekannter Material-/Gerätecode.' };
+    }
+    if (!(quantity.value >= 0)) {
+      return { error: 'Mengenangaben müssen 0 oder größer sein.' };
+    }
+  }
+  const usedQuantities = input.quantities.filter((q) => q.value > 0);
 
   const now = new Date();
   const year = now.getFullYear();
 
-  // TOCTOU-Guard (gleiches Muster wie decideVehicleBooking in vehicle-booking-decision.ts): die
-  // Statusprüfung oben ist nur ein Lesezugriff - Ersteller und Ausfüller dürfen beide abgeben, und ein
-  // Doppelklick kann zwei Aufrufe gleichzeitig durch diese Prüfung bringen. Daher steckt `status: 'DRAFT'`
-  // in der WHERE-Klausel des eigentlichen Schreibzugriffs; Postgres wertet sie beim UPDATE gegen den
-  // zuletzt committeten Stand neu aus, genau EIN Aufruf gewinnt. Der Verlierer wirft innerhalb der
-  // Transaktion, wodurch auch seine bereits hochgezählte Berichtsnummer zurückgerollt wird - keine Lücke.
+  let reportId: string;
+  let number: number;
   try {
-    await prisma.$transaction(async (tx) => {
-      const number = await getNextReportNumber(tx, report.fireDepartmentId, year);
-      const claimed = await tx.report.updateMany({
-        where: { id: reportId, status: 'DRAFT' },
-        data: { number, year, status: 'SUBMITTED', submittedAt: now },
+    const created = await prisma.$transaction(async (tx) => {
+      const nextNumber = await getNextReportNumber(tx, fireDepartmentId, year);
+      const report = await tx.report.create({
+        data: {
+          type: input.type,
+          fireDepartmentId,
+          filledById: filledBy.id,
+          createdById: user.id,
+          startAt,
+          endAt,
+          ownActivity: input.ownActivity,
+          activityKinds: input.activityKinds,
+          activityOther,
+          vehicleId: input.vehicleId,
+          vehicleKm: input.vehicleId !== null ? input.vehicleKm : null,
+          remark,
+          number: nextNumber,
+          year,
+          submittedAt: now,
+          members: { createMany: { data: input.members.map((m) => ({ userId: m.userId, funktion: m.funktion })) } },
+          materials: { createMany: { data: usedQuantities.map((q) => ({ kind: q.kind, code: q.code, value: q.value })) } },
+        },
+        select: { id: true, number: true },
       });
-      if (claimed.count === 0) {
-        throw new ReportAlreadySubmittedError();
-      }
+      return report;
     });
+    reportId = created.id;
+    number = created.number;
   } catch (error) {
-    if (error instanceof ReportAlreadySubmittedError) {
-      return { error: ALREADY_SUBMITTED_ERROR };
-    }
-    // Jeder andere Fehler (z. B. ein Unique-Konflikt der Nummernvergabe bei einem echten Wettlauf):
-    // wenn der Bericht inzwischen abgegeben ist, hat ein anderer Aufruf gewonnen - sonst generische
-    // Meldung statt einer unbehandelten Exception im Client.
-    const current = await prisma.report.findUnique({ where: { id: reportId }, select: { status: true } });
-    if (current?.status === 'SUBMITTED') {
-      return { error: ALREADY_SUBMITTED_ERROR };
-    }
-    console.error(`Abgabe von Bericht ${reportId} fehlgeschlagen:`, error);
+    console.error('Bericht konnte nicht angelegt werden:', error);
     return { error: 'Der Bericht konnte nicht abgegeben werden. Bitte erneut versuchen.' };
   }
 
   // Ab hier: keine DB-Transaktion mehr offen. PDF/S3/E-Mail sind bewusst NICHT Teil der Transaktion
-  // oben (Design-Spec §7) - ein Fehler hier darf die bereits abgegebene Nummer nie zurückrollen.
-  const [fullReport, fireDepartment] = await Promise.all([
-    prisma.report.findUniqueOrThrow({
-      where: { id: reportId },
-      include: {
-        filledBy: { select: { firstName: true, lastName: true, stbNr: true, email: true } },
-        vehicle: { select: { taktischeBezeichnung: true, kennzeichen: true } },
-        members: { include: { user: { select: { firstName: true, lastName: true, stbNr: true } } } },
-        materials: true,
-      },
-    }),
-    prisma.organization.findUniqueOrThrow({
-      where: { id: report.fireDepartmentId },
-      select: { name: true, reportRecipients: true },
-    }),
-  ]);
+  // oben - ein Fehler hier darf die bereits abgegebene Nummer nie zurückrollen.
+  const fireDepartment = await prisma.organization.findUniqueOrThrow({
+    where: { id: fireDepartmentId },
+    select: { name: true, reportRecipients: true },
+  });
 
+  const membersById = new Map(validMembers.map((m) => [m.id, m]));
   const pdfData: ReportForPdf = {
-    number: fullReport.number!,
-    year: fullReport.year!,
-    type: fullReport.type,
+    number,
+    year,
+    type: input.type,
     fireDepartmentName: fireDepartment.name,
-    filledByName: `${fullReport.filledBy.firstName} ${fullReport.filledBy.lastName}`,
-    filledByStbNr: fullReport.filledBy.stbNr,
-    startAt: fullReport.startAt,
-    endAt: fullReport.endAt,
-    ownActivity: fullReport.ownActivity!,
-    activityKinds: fullReport.activityKinds,
-    activityOther: fullReport.activityOther,
-    vehicleLabel: fullReport.vehicle ? `${fullReport.vehicle.taktischeBezeichnung} (${fullReport.vehicle.kennzeichen})` : null,
-    vehicleKm: fullReport.vehicleKm,
-    remark: fullReport.remark!,
-    members: fullReport.members.map((m) => ({ name: `${m.user.firstName} ${m.user.lastName}`, stbNr: m.user.stbNr, funktion: m.funktion })),
-    materials: fullReport.materials.filter((m) => m.kind === 'MATERIAL').map((m) => ({ code: m.code, value: Number(m.value) })),
-    equipment: fullReport.materials.filter((m) => m.kind === 'EQUIPMENT').map((m) => ({ code: m.code, value: Number(m.value) })),
+    filledByName: `${filledBy.firstName} ${filledBy.lastName}`,
+    filledByStbNr: filledBy.stbNr,
+    startAt,
+    endAt,
+    ownActivity: input.ownActivity,
+    activityKinds: input.activityKinds,
+    activityOther,
+    vehicleLabel: vehicle ? `${vehicle.taktischeBezeichnung} (${vehicle.kennzeichen})` : null,
+    vehicleKm: input.vehicleId !== null ? input.vehicleKm : null,
+    remark,
+    members: input.members.map((m) => {
+      const member = membersById.get(m.userId)!;
+      return { name: `${member.firstName} ${member.lastName}`, stbNr: member.stbNr, funktion: m.funktion };
+    }),
+    materials: usedQuantities.filter((q) => q.kind === 'MATERIAL').map((q) => ({ code: q.code, value: q.value })),
+    equipment: usedQuantities.filter((q) => q.kind === 'EQUIPMENT').map((q) => ({ code: q.code, value: q.value })),
   };
 
   const pdfFileName = reportPdfFileName(pdfData.number, now);
-  const storageKey = reportPdfStorageKey(report.fireDepartmentId, pdfData.number, now);
+  const storageKey = reportPdfStorageKey(fireDepartmentId, pdfData.number, now);
 
   try {
     const pdfBuffer = await generateReportPdf(pdfData);
     await putReportPdf(storageKey, pdfBuffer);
     const emailResult = await sendReportSubmittedEmail(
-      { ...pdfData, fireDepartmentEmails: fireDepartment.reportRecipients, filledByEmail: fullReport.filledBy.email },
+      { ...pdfData, fireDepartmentEmails: fireDepartment.reportRecipients, filledByEmail: filledBy.email },
       pdfBuffer,
       pdfFileName,
     );
@@ -151,5 +216,5 @@ export async function submitReport(reportId: string): Promise<{ error?: string }
     });
   }
 
-  return {};
+  return { reportId };
 }

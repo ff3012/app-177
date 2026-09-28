@@ -144,16 +144,17 @@ export async function deleteReport(reportId: string): Promise<DeleteReportState>
   }
   assertPermission(canManageHeimatfeuerwehrFor(user, report.fireDepartmentId));
 
-  if (report.status === 'SUBMITTED' && report.number !== null && report.submittedAt !== null) {
-    const storageKey = reportPdfStorageKey(report.fireDepartmentId, report.number, report.submittedAt);
-    try {
-      await deleteReportPdf(storageKey);
-    } catch (error) {
-      // Best-effort wie überall bei S3 in diesem Modul (siehe notify-report-submitted.ts) - ein
-      // Fehler beim Löschen des PDFs (z. B. S3 nicht erreichbar) darf das Löschen des Berichts selbst
-      // nicht verhindern, sonst bliebe ein nicht mehr gewollter Bericht auf unbestimmte Zeit stehen.
-      console.error(`PDF für Bericht ${reportId} konnte nicht gelöscht werden:`, error);
-    }
+  // Kein Entwurf-Konzept mehr - jeder existierende Bericht hat ein PDF erzeugt (best-effort, kann bei
+  // S3-Fehlern trotzdem gefehlt haben, DeleteObjectCommand ist idempotent gegen ein nicht existierendes
+  // Objekt).
+  const storageKey = reportPdfStorageKey(report.fireDepartmentId, report.number, report.submittedAt);
+  try {
+    await deleteReportPdf(storageKey);
+  } catch (error) {
+    // Best-effort wie überall bei S3 in diesem Modul (siehe notify-report-submitted.ts) - ein
+    // Fehler beim Löschen des PDFs (z. B. S3 nicht erreichbar) darf das Löschen des Berichts selbst
+    // nicht verhindern, sonst bliebe ein nicht mehr gewollter Bericht auf unbestimmte Zeit stehen.
+    console.error(`PDF für Bericht ${reportId} konnte nicht gelöscht werden:`, error);
   }
 
   await prisma.report.delete({ where: { id: reportId } });

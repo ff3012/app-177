@@ -1,16 +1,12 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { loadReportForPage } from '@/lib/heimatfeuerwehr/report-access';
 import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 
 export default async function ReportAbgeschlossenPage({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
+  // Kein Entwurf-Konzept mehr - jeder existierende Bericht ist bereits abgegeben (number/submittedAt
+  // sind nicht mehr nullable), daher hier kein Status-Zweig/notFound-Fall mehr nötig.
   const report = await loadReportForPage(reportId);
-  // Ein noch nicht abgegebener Bericht hat weder Nummer noch submittedAt - diese Seite ergibt für ihn
-  // keinen Sinn (z. B. per Zurück-Navigation erreicht).
-  if (report.status !== 'SUBMITTED') {
-    notFound();
-  }
 
   // "Als PDF öffnen" zeigt bewusst auf die eigene, sitzungsgeprüfte Redirect-Route statt auf eine hier
   // beim Rendern vorab signierte S3-URL - die wäre nach 60 Sekunden abgelaufen, wenn der Tab länger offen

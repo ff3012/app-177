@@ -124,7 +124,6 @@ export default async function MeineFeuerwehrPage() {
     orgFeatures,
     recentPhotoUploads,
     visibleNews,
-    openReportDrafts,
     myRecentReports,
   ] = await Promise.all([
     prisma.user.findUniqueOrThrow({
@@ -191,14 +190,11 @@ export default async function MeineFeuerwehrPage() {
       },
     }),
     getVisibleNews(user.id),
-    prisma.report.findMany({
-      where: { status: 'DRAFT', vehicleBookingId: { not: null }, OR: [{ createdById: user.id }, { filledById: user.id }] },
-      orderBy: { startAt: 'asc' },
-      include: { vehicle: { select: { taktischeBezeichnung: true } } },
-    }),
+    // Kein Entwurf-Konzept mehr - jeder existierende Bericht ist bereits abgegeben, daher hier kein
+    // status-Filter mehr und keine separate "Zu erledigen"-Abfrage für offene Entwürfe.
     prisma.report.findMany({
       where: { OR: [{ createdById: user.id }, { filledById: user.id }] },
-      orderBy: [{ submittedAt: 'desc' }, { updatedAt: 'desc' }],
+      orderBy: { submittedAt: 'desc' },
       take: 3,
     }),
   ]);
@@ -382,31 +378,6 @@ export default async function MeineFeuerwehrPage() {
         </Link>
       )}
 
-      {openReportDrafts.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Zu erledigen</span>
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-bold text-white">
-              {openReportDrafts.length}
-            </span>
-          </div>
-          {openReportDrafts.map((draft) => (
-            <Link
-              key={draft.id}
-              href={`/meine-feuerwehr/berichte/${draft.id}/schritt-1`}
-              className="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm"
-            >
-              <span className="text-[14px] text-[#1c1c1e]">
-                {draft.vehicle?.taktischeBezeichnung ?? 'Kein Fahrzeug'} · {draft.startAt.toLocaleDateString('de-AT')} ·{' '}
-                {draft.startAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}–
-                {draft.endAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-              <span className="flex-none rounded-lg bg-brand px-3 py-1.5 text-[13px] font-semibold text-white">Ausfüllen</span>
-            </Link>
-          ))}
-        </div>
-      )}
-
       {myRecentReports.length > 0 && (
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
@@ -416,29 +387,19 @@ export default async function MeineFeuerwehrPage() {
             </Link>
           </div>
           <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-            {/* Jede Zeile ist ein Link - sonst wäre ein manuell begonnener (nicht aus einer Reservierung
-                entstandener) Entwurf nach dem Verlassen des Assistenten unerreichbar ("Abbrechen und später
-                weitermachen muss funktionieren"). Entwurf -> weiter bearbeiten, abgegeben -> Bestätigung/PDF. */}
+            {/* Kein Entwurf-Konzept mehr - jeder Bericht hier ist bereits abgegeben, verlinkt also
+                immer auf die Bestätigungsseite/den PDF-Zugang. */}
             {myRecentReports.map((report, index) => (
               <Link
                 key={report.id}
-                href={
-                  report.status === 'SUBMITTED'
-                    ? `/meine-feuerwehr/berichte/${report.id}/abgeschlossen`
-                    : `/meine-feuerwehr/berichte/${report.id}/schritt-1`
-                }
+                href={`/meine-feuerwehr/berichte/${report.id}/abgeschlossen`}
                 className={`flex items-center justify-between gap-3 px-4 py-3 ${index === myRecentReports.length - 1 ? '' : 'border-b border-[#f0f0f2]'}`}
               >
                 <span className="text-[14px] text-[#1c1c1e]">
-                  {report.status === 'SUBMITTED' ? `Nr. ${report.number}/${report.year}` : 'Entwurf'} ·{' '}
-                  {report.startAt.toLocaleDateString('de-AT')}
+                  Nr. {report.number}/{report.year} · {report.startAt.toLocaleDateString('de-AT')}
                 </span>
-                <span
-                  className={`flex-none rounded-full px-2.5 py-1 text-[12px] font-semibold ${
-                    report.status === 'SUBMITTED' ? 'bg-[#eaf6f0] text-[#1b7a52]' : 'bg-neutral-100 text-neutral-600'
-                  }`}
-                >
-                  {report.status === 'SUBMITTED' ? 'Abgegeben' : 'Entwurf'}
+                <span className="flex-none rounded-full bg-[#eaf6f0] px-2.5 py-1 text-[12px] font-semibold text-[#1b7a52]">
+                  Abgegeben
                 </span>
               </Link>
             ))}

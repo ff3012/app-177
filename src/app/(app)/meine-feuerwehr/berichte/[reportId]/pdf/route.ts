@@ -16,8 +16,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rep
   const user = await requireUser();
 
   const report = await prisma.report.findUnique({ where: { id: reportId } });
-  // Nicht sichtbar wird genauso beantwortet wie nicht vorhanden - verrät nicht, ob eine fremde ID existiert.
-  if (!report || report.status !== 'SUBMITTED' || !report.number || !report.submittedAt || !canViewReport(user, report)) {
+  // Nicht sichtbar wird genauso beantwortet wie nicht vorhanden - verrät nicht, ob eine fremde ID
+  // existiert. Kein Entwurf-Konzept mehr, jeder existierende Bericht hat number/submittedAt gesetzt.
+  if (!report || !canViewReport(user, report)) {
     return NextResponse.json({ error: 'Bericht nicht gefunden.' }, { status: 404 });
   }
 

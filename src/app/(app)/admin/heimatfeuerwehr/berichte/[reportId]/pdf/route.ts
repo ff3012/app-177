@@ -9,8 +9,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rep
   const { reportId } = await params;
   const user = await requireUser();
 
+  // Kein Entwurf-Konzept mehr, jeder existierende Bericht hat number/submittedAt gesetzt.
   const report = await prisma.report.findUnique({ where: { id: reportId } });
-  if (!report || report.status !== 'SUBMITTED' || !report.number || !report.submittedAt) {
+  if (!report) {
     return NextResponse.json({ error: 'Bericht nicht gefunden.' }, { status: 404 });
   }
   assertPermission(canManageHeimatfeuerwehrFor(user, report.fireDepartmentId));

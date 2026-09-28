@@ -243,8 +243,10 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     select: { id: true, firstName: true, lastName: true, email: true },
   });
 
+  // Kein Entwurf-Konzept mehr - jeder existierende Bericht ist bereits abgegeben, kein status-Filter
+  // mehr nötig.
   const recentReports = await prisma.report.findMany({
-    where: { fireDepartmentId: selectedOrgId, status: 'SUBMITTED' },
+    where: { fireDepartmentId: selectedOrgId },
     orderBy: { submittedAt: 'desc' },
     take: 20,
     include: { filledBy: { select: { firstName: true, lastName: true } } },
@@ -610,7 +612,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           </TableHeader>
           <TableBody>
             {recentReports.map((report) => {
-              const pdfFileName = reportPdfFileName(report.number!, report.submittedAt!);
+              const pdfFileName = reportPdfFileName(report.number, report.submittedAt);
               return (
                 <TableRow key={report.id}>
                   <TableCell>{report.number}/{report.year}</TableCell>

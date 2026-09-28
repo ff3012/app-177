@@ -210,25 +210,14 @@ CRON_TZ=Europe/Vienna
 0 8 * * * /opt/app-177/docker/atemschutz-warnung-email.sh >> /var/log/ffapp-atemschutz-warnung.log 2>&1
 ```
 
-## Tätigkeitsbericht-Entwürfe bei Reservierungsende (alle 15 Minuten)
-
-`docker/report-drafts.sh` ruft `/api/cron/report-drafts` auf, das automatisch einen
-Tätigkeitsbericht-Entwurf anlegt, sobald eine genehmigte Fahrzeug-Reservierung endet. Alle 15 Minuten
-ausführen:
-
-```bash
-crontab -e
-*/15 * * * * /opt/app-177/docker/report-drafts.sh >> /var/log/ffapp-report-drafts.log 2>&1
-```
-
 ## Tätigkeitsbericht-Aufbewahrung (14 Tage, täglich)
 
-`docker/report-retention.sh` ruft `/api/cron/report-retention` auf, das jeden abgegebenen Bericht
-(SUBMITTED) löscht, dessen Abgabedatum mehr als 14 Tage zurückliegt (inkl. des gespeicherten PDFs in
-`S3_REPORTS_BUCKET`), sowie jeden Entwurf (DRAFT), der seit mehr als 14 Tagen angelegt und nicht
-abgegeben wurde. Die dauerhafte Aufbewahrung des offiziellen Dokuments erfolgt ab Abgabe über die
-bereits verschickte E-Mail-Kopie beim konfigurierten Empfänger, nicht mehr über die App selbst.
-Einmal täglich ausführen:
+`docker/report-retention.sh` ruft `/api/cron/report-retention` auf, das jeden Tätigkeitsbericht
+löscht, dessen Abgabedatum mehr als 14 Tage zurückliegt (inkl. des gespeicherten PDFs in
+`S3_REPORTS_BUCKET`). Ein Bericht entsteht immer erst mit der Abgabe selbst (kein Entwurf-Konzept,
+kein separater Anlege-Zeitpunkt) - die dauerhafte Aufbewahrung des offiziellen Dokuments erfolgt ab
+Abgabe über die bereits verschickte E-Mail-Kopie beim konfigurierten Empfänger, nicht mehr über die
+App selbst. Einmal täglich ausführen:
 
 ```bash
 crontab -e

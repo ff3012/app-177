@@ -4,14 +4,15 @@ import { useMemo, useState } from 'react';
 import { ACTIVITY_KINDS, type ActivityKindOption } from '@/lib/heimatfeuerwehr/report-constants';
 
 /**
- * Vollbild-Auswahl der Tätigkeitsart (Bericht-Brief.md §5): Suchfeld, "Zuletzt verwendet" (max. 3),
- * darunter alle 39 Codes alphabetisch als Checkbox-Zeilen. Feuerwehrjugend ist eine reine
- * Gruppenüberschrift über ihren 7 Unterpunkten (kein eigener Checkbox-Eintrag, Design-Spec §1 Punkt 7) -
- * daher schließt `filtered` diese 7 Codes aus, solange nicht gesucht wird, damit sie nicht doppelt
- * erscheinen (einmal in der eigenen Sektion, einmal in der alphabetischen Liste); bei aktiver Suche
- * bleiben sie in `filtered` enthalten, damit z.B. "Lager" weiterhin "selbst veranstaltete Lager" findet.
- * "Sonstige" ist ein eigener Freitext-Eintrag, kein ACTIVITY_KINDS-Code - als eigene Checkbox+Textfeld
- * verwaltet (`otherChecked`/`localOther`), nicht Teil der gemeinsamen Checkbox-Liste.
+ * Vollbild-Auswahl der Tätigkeitsart: Suchfeld, "Zuletzt verwendet" (max. 3), darunter alle 39 Codes
+ * alphabetisch als Radio-Zeilen. Bewusst EINZELauswahl (echte HTML-Radios, gemeinsamer `name`) - ein
+ * Bericht hat immer genau eine Tätigkeitsart ODER "Sonstige", nie mehrere gleichzeitig. "Sonstige" ist
+ * deshalb Teil derselben Radio-Gruppe (eigene Zeile mit Freitextfeld darunter) - das Auswählen eines
+ * Codes löscht automatisch eine zuvor gewählte "Sonstige" und umgekehrt. Feuerwehrjugend ist eine reine
+ * Gruppenüberschrift über ihren 7 Unterpunkten (kein eigener Radio-Eintrag) - daher schließt `filtered`
+ * diese 7 Codes aus, solange nicht gesucht wird, damit sie nicht doppelt erscheinen (einmal in der
+ * eigenen Sektion, einmal in der alphabetischen Liste); bei aktiver Suche bleiben sie in `filtered`
+ * enthalten, damit z.B. "Lager" weiterhin "selbst veranstaltete Lager" findet.
  */
 export function ActivityKindPicker({
   selected,
@@ -27,7 +28,7 @@ export function ActivityKindPicker({
   onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [localSelected, setLocalSelected] = useState<string[]>(selected);
+  const [selectedCode, setSelectedCode] = useState<string | null>(selected[0] ?? null);
   const [localOther, setLocalOther] = useState(activityOther);
   const [otherChecked, setOtherChecked] = useState(activityOther.length > 0);
 
@@ -49,17 +50,21 @@ export function ActivityKindPicker({
     [recentActivityKinds],
   );
 
-  function toggle(code: string) {
-    setLocalSelected((current) => (current.includes(code) ? current.filter((c) => c !== code) : [...current, code]));
+  function selectCode(code: string) {
+    setSelectedCode(code);
+    setOtherChecked(false);
   }
 
-  const totalCount = localSelected.length + (otherChecked && localOther.trim() ? 1 : 0);
+  function selectOther() {
+    setSelectedCode(null);
+    setOtherChecked(true);
+  }
 
   function renderRow(option: ActivityKindOption) {
-    const checked = localSelected.includes(option.code);
+    const checked = selectedCode === option.code;
     return (
       <label key={option.code} className="flex min-h-[44px] items-center gap-3 border-b border-neutral-100 px-1 py-2">
-        <input type="checkbox" checked={checked} onChange={() => toggle(option.code)} className="h-5 w-5 accent-brand" />
+        <input type="radio" name="activityKind" checked={checked} onChange={() => selectCode(option.code)} className="h-5 w-5 accent-brand" />
         <span className="text-sm text-[#1c1c1e]">{option.label}</span>
       </label>
     );
@@ -89,11 +94,11 @@ export function ActivityKindPicker({
         />
       </div>
 
-      {/* "Fertig" ist jetzt eine eigene, fixe Leiste unten (wie "Weiter"/"Bericht abgeben" in den
-          Formular-Schritten) statt eines Buttons in der oberen Kopfzeile - auf einem iPhone war die
-          Kopfzeile teils hinter der Statusleiste verdeckt, wodurch "Fertig" nicht antippbar war. Der
-          scrollbare Listenbereich bekommt entsprechend zusätzlichen unteren Abstand (pb-24), damit
-          die letzten Zeilen nicht hinter dieser Leiste verschwinden. */}
+      {/* "Fertig" ist eine eigene, fixe Leiste unten (wie "Weiter"/"Bericht abgeben" im Assistenten)
+          statt eines Buttons in der oberen Kopfzeile - auf einem iPhone war die Kopfzeile teils hinter
+          der Statusleiste verdeckt, wodurch "Fertig" nicht antippbar war. Der scrollbare Listenbereich
+          bekommt entsprechend zusätzlichen unteren Abstand (pb-24), damit die letzten Zeilen nicht
+          hinter dieser Leiste verschwinden. */}
       <div className="flex-1 overflow-y-auto px-4 pb-24">
         {recentOptions.length > 0 && search.trim() === '' && (
           <div className="mb-3">
@@ -103,7 +108,7 @@ export function ActivityKindPicker({
         )}
 
         <label className="flex min-h-[44px] items-center gap-3 border-b border-neutral-100 px-1 py-2">
-          <input type="checkbox" checked={otherChecked} onChange={(e) => setOtherChecked(e.target.checked)} className="h-5 w-5 accent-brand" />
+          <input type="radio" name="activityKind" checked={otherChecked} onChange={selectOther} className="h-5 w-5 accent-brand" />
           <span className="text-sm text-[#1c1c1e]">Sonstige</span>
         </label>
         {otherChecked && (
@@ -131,10 +136,10 @@ export function ActivityKindPicker({
       <div className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">
         <button
           type="button"
-          onClick={() => onDone(localSelected, otherChecked ? localOther.trim() : '')}
+          onClick={() => onDone(selectedCode ? [selectedCode] : [], otherChecked ? localOther.trim() : '')}
           className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
         >
-          Fertig · {totalCount}
+          Fertig
         </button>
       </div>
     </div>

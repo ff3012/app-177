@@ -1,28 +1,20 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { REPORT_TYPE_LABEL, ACTIVE_REPORT_TYPES } from '@/lib/heimatfeuerwehr/report-constants';
-import { createReportDraft } from './actions';
 
 const REPORT_TYPES = ['ACTIVITY', 'EXERCISE', 'INCIDENT'] as const;
 
-/** Bericht-Brief.md §1b: "Welcher Bericht?" - öffnet bei jedem Einstieg (mit oder ohne Reservierung) vor
- * dem eigentlichen Formular. Nicht aktive Typen sind ausgegraut und nicht antippbar. */
+/** "Welcher Bericht?" - öffnet bei "Neuer Bericht" vor dem eigentlichen Formular. Nicht aktive Typen
+ * sind ausgegraut und nicht antippbar. Legt KEINEN Bericht in der DB an (kein Entwurf-Konzept mehr) -
+ * navigiert nur zum Assistenten, der die Eingaben rein clientseitig hält, bis "Bericht abgeben"
+ * gedrückt wird. */
 export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   function choose(type: (typeof REPORT_TYPES)[number]) {
     if (!ACTIVE_REPORT_TYPES.includes(type)) return;
-    setError(null);
-    // Kein try/catch: createReportDraft endet mit redirect(), das intern einen speziellen,
-    // digest-getaggten Error wirft, der ungefangen bis zum Framework durchgereicht werden MUSS, um die
-    // Navigation auszulösen (siehe user-form-sheet.tsx's createUser/updateUser-Aufruf für dasselbe
-    // Muster in dieser Codebase). Ein try/catch hier würde diesen Error abfangen und die Navigation
-    // verschlucken.
-    startTransition(async () => {
-      await createReportDraft(type);
-    });
+    router.push(`/meine-feuerwehr/berichte/neu?type=${type}`);
   }
 
   return (
@@ -39,7 +31,7 @@ export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
               <button
                 key={type}
                 type="button"
-                disabled={!active || pending}
+                disabled={!active}
                 onClick={() => choose(type)}
                 className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left text-[15px] font-medium ${
                   active
@@ -53,7 +45,6 @@ export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
-        {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
       </div>
     </div>
   );

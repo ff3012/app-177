@@ -28,30 +28,52 @@ const styles = StyleSheet.create({
   section: { marginBottom: 8 },
   sectionTitle: { fontSize: 10, fontWeight: 700, marginBottom: 3 },
   row: { flexDirection: 'row' },
-  twoCol: { flexDirection: 'row', flexWrap: 'wrap' },
-  kindItem: { width: '50%', flexDirection: 'row', marginBottom: 2 },
   checkbox: { width: 9, height: 9, borderWidth: 1, borderColor: '#000', marginRight: 4 },
   checkboxChecked: { backgroundColor: '#000' },
   table: { borderTopWidth: 1, borderColor: '#000' },
   tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderColor: '#999', paddingVertical: 2 },
   tableCell: { flex: 1, paddingHorizontal: 2 },
   tableCellRight: { flex: 1, paddingHorizontal: 2, textAlign: 'right' },
+  memberHeaderRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#000', paddingVertical: 2 },
+  memberHeaderCell: { fontWeight: 700 },
+  memberNameCell: { flex: 2, paddingHorizontal: 2 },
+  memberStbCell: { flex: 1, paddingHorizontal: 2 },
+  memberFunktionCell: { flex: 1, paddingHorizontal: 2 },
   footer: { marginTop: 14, flexDirection: 'row', justifyContent: 'space-between' },
 });
+
+/** "FF Wolfsgraben" -> "Feuerwehr Wolfsgraben" für den Ausdruck (auf ausdrücklichen Wunsch, statt der
+ * in Organization.name gespeicherten Kurzform "FF ...", siehe prisma/seed.ts). Ein Name ohne dieses
+ * Präfix (z. B. ein Abschnittskommando) bleibt unverändert. */
+function formatFireDepartmentName(name: string): string {
+  return name.startsWith('FF ') ? `Feuerwehr ${name.slice(3)}` : name;
+}
 
 function formatDateTime(date: Date): string {
   return `${date.toLocaleDateString('de-AT')} ${date.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function ReportDocument({ report }: { report: ReportForPdf }) {
-  const selectedKinds = new Set(report.activityKinds);
+  // Einzelauswahl: activityKinds enthält höchstens einen Code (siehe activity-kind-picker.tsx) -
+  // Label direkt auflösen statt aller 39 Optionen mit Checkboxen (vorheriges Verhalten, auf
+  // ausdrücklichen Wunsch geändert: nur die tatsächlich gewählte Tätigkeitsart im Ausdruck zeigen).
+  const selectedKindLabel =
+    report.activityKinds.length > 0
+      ? (ACTIVITY_KINDS.find((option) => option.code === report.activityKinds[0])?.label ?? report.activityKinds[0])
+      : report.activityOther
+        ? `Sonstige: ${report.activityOther}`
+        : '-';
+  // Nur tatsächlich verwendetes Material/Geräte zeigen (Wert > 0), nicht mehr alle 9/5 Zeilen inkl.
+  // Nullwerten - ebenfalls auf ausdrücklichen Wunsch geändert.
+  const usedMaterials = MATERIALS.filter((option) => (report.materials.find((m) => m.code === option.code)?.value ?? 0) > 0);
+  const usedEquipment = EQUIPMENT.filter((option) => (report.equipment.find((e) => e.code === option.code)?.value ?? 0) > 0);
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>{REPORT_TYPE_LABEL[report.type].toUpperCase()}</Text>
           <Text>
-            {report.fireDepartmentName} · Nr. {String(report.number).padStart(3, '0')} / {report.year}
+            {formatFireDepartmentName(report.fireDepartmentName)} · App-17 | {String(report.number).padStart(3, '0')}/{report.year}
           </Text>
         </View>
 
@@ -71,23 +93,7 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tätigkeitsart</Text>
-          <View style={styles.twoCol}>
-            {ACTIVITY_KINDS.map((option) => {
-              const checked = selectedKinds.has(option.code);
-              return (
-                <View key={option.code} style={styles.kindItem}>
-                  <View style={[styles.checkbox, checked ? styles.checkboxChecked : {}]} />
-                  <Text style={checked ? { fontWeight: 700 } : {}}>{option.label}</Text>
-                </View>
-              );
-            })}
-            <View style={styles.kindItem}>
-              <View style={[styles.checkbox, report.activityOther ? styles.checkboxChecked : {}]} />
-              <Text style={report.activityOther ? { fontWeight: 700 } : {}}>
-                Sonstige{report.activityOther ? `: ${report.activityOther}` : ''}
-              </Text>
-            </View>
-          </View>
+          <Text>{selectedKindLabel}</Text>
         </View>
 
         <View style={styles.section}>
@@ -104,17 +110,31 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Eingesetzte Mitglieder</Text>
-          {report.members.map((member, index) => (
-            <Text key={index}>
-              {member.name} ({member.stbNr ?? '-'}) · {FUNKTION_LABEL[member.funktion] ?? member.funktion}
-            </Text>
-          ))}
+          <View style={styles.table}>
+            <View style={styles.memberHeaderRow}>
+              <Text style={[styles.memberNameCell, styles.memberHeaderCell]}>Name</Text>
+              <Text style={[styles.memberStbCell, styles.memberHeaderCell]}>Stb.-Nr.</Text>
+              <Text style={[styles.memberFunktionCell, styles.memberHeaderCell]}>Funktion</Text>
+            </View>
+            {report.members.map((member, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={styles.memberNameCell}>{member.name}</Text>
+                <Text style={styles.memberStbCell}>{member.stbNr ?? '-'}</Text>
+                <Text style={styles.memberFunktionCell}>{FUNKTION_LABEL[member.funktion] ?? member.funktion}</Text>
+              </View>
+            ))}
+            {report.members.length === 0 && (
+              <View style={styles.tableRow}>
+                <Text style={styles.memberNameCell}>Keine</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Verbrauchsmaterial</Text>
           <View style={styles.table}>
-            {MATERIALS.map((option) => {
+            {usedMaterials.map((option) => {
               const value = report.materials.find((m) => m.code === option.code)?.value ?? 0;
               return (
                 <View key={option.code} style={styles.tableRow}>
@@ -123,13 +143,18 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
                 </View>
               );
             })}
+            {usedMaterials.length === 0 && (
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCell}>Keines</Text>
+              </View>
+            )}
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Eingesetzte Geräte</Text>
           <View style={styles.table}>
-            {EQUIPMENT.map((option) => {
+            {usedEquipment.map((option) => {
               const value = report.equipment.find((e) => e.code === option.code)?.value ?? 0;
               return (
                 <View key={option.code} style={styles.tableRow}>
@@ -138,6 +163,11 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
                 </View>
               );
             })}
+            {usedEquipment.length === 0 && (
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCell}>Keine</Text>
+              </View>
+            )}
           </View>
         </View>
 

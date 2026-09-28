@@ -813,7 +813,6 @@ model VehicleBooking {
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation("VehicleBookingDriver", fields: [userId], references: [id], onDelete: Cascade)
   event   Event?
-  report  Report?
 
   @@index([vehicleId, startsAt])
 }
@@ -822,11 +821,6 @@ enum ReportType {
   ACTIVITY
   EXERCISE
   INCIDENT
-}
-
-enum ReportStatus {
-  DRAFT
-  SUBMITTED
 }
 
 enum ReportMemberFunktion {
@@ -841,20 +835,21 @@ enum ReportQuantityKind {
 }
 
 // Tätigkeitsbericht (und künftig Übungs-/Einsatzbericht, siehe `type`) - eine Feuerwehr-Aktivität, die ein
-// Mitglied erfasst und (nach Prüfung serverseitig) abgibt. `number`/`year` sind bewusst nullable und werden
-// erst bei der Abgabe vergeben (siehe submitReport, Task 7) - ein DRAFT hat noch keine Nummer, damit
-// verworfene Entwürfe keine Lücken in der fortlaufenden Nummerierung reißen.
+// Mitglied erfasst und in EINEM atomaren Schritt abgibt (submitReport) - kein Entwurf-Konzept: die Zeile
+// entsteht erst, wenn "Bericht abgeben" gedrückt wird, mit number/year/submittedAt bereits gesetzt. Der
+// 3-Schritt-Assistent hält alle Eingaben bis dahin rein clientseitig (siehe berichte/neu/report-wizard.tsx) -
+// verwirft man die Seite vorher, ist nichts in der DB und nichts geht "verloren" im Sinne einer
+// Datenintegrität, es wurde nie etwas gespeichert. Ursprünglich gab es einen DRAFT-Status mit nullable
+// number/year (Nummer erst bei Abgabe, um Lücken durch verworfene Entwürfe zu vermeiden) - auf
+// ausdrücklichen Wunsch entfernt; das Lücken-Problem entfällt jetzt strukturell, da eine Zeile nur noch
+// im bereits-abgegebenen Zustand existiert.
 model Report {
   id               String       @id @default(cuid())
-  number           Int?
-  year             Int?
+  number           Int
+  year             Int
   type             ReportType
-  status           ReportStatus @default(DRAFT)
   fireDepartmentId String
   fireDepartment   Organization @relation(fields: [fireDepartmentId], references: [id])
-
-  vehicleBookingId String?         @unique
-  vehicleBooking   VehicleBooking? @relation(fields: [vehicleBookingId], references: [id], onDelete: SetNull)
 
   filledById  String
   filledBy    User   @relation("ReportFilledBy", fields: [filledById], references: [id])
@@ -864,7 +859,7 @@ model Report {
   startAt DateTime
   endAt   DateTime
 
-  ownActivity   Boolean?
+  ownActivity   Boolean
   activityKinds String[]
   activityOther String?
 
@@ -872,20 +867,19 @@ model Report {
   vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
   vehicleKm Int?
 
-  remark String?
+  remark String
 
   emailSentAt DateTime?
   emailError  String?
 
-  submittedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  submittedAt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   members   ReportMember[]
   materials ReportQuantity[]
 
   @@unique([fireDepartmentId, year, number])
-  @@index([fireDepartmentId, status])
 }
 
 model ReportMember {

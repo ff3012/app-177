@@ -324,16 +324,17 @@ export function canCreateReportFor(user: SessionUser, organizationId: string): b
 }
 
 /**
- * Sichtbarkeit eines Berichts: ein DRAFT sehen Ersteller und Ausfüller; ein SUBMITTED zusätzlich der Admin
- * der Feuerwehr (Bericht-Brief.md §9). `report` ist bereits geladen (organizationId/status/createdById/
- * filledById), diese Funktion hat keinen DB-Zugriff.
+ * Sichtbarkeit eines Berichts: Ersteller und Ausfüller immer, zusätzlich der Admin der Feuerwehr
+ * (Bericht-Brief.md §9). Kein Entwurf-Konzept mehr (ein Report entsteht erst mit der Abgabe, siehe
+ * submitReport) - jeder existierende Bericht ist also bereits abgegeben, keine status-Prüfung mehr
+ * nötig. `report` ist bereits geladen, diese Funktion hat keinen DB-Zugriff.
  */
 export function canViewReport(
   user: SessionUser,
-  report: { createdById: string; filledById: string; fireDepartmentId: string; status: string },
+  report: { createdById: string; filledById: string; fireDepartmentId: string },
 ): boolean {
   if (report.createdById === user.id || report.filledById === user.id) return true;
-  return report.status === 'SUBMITTED' && canManageHeimatfeuerwehrFor(user, report.fireDepartmentId);
+  return canManageHeimatfeuerwehrFor(user, report.fireDepartmentId);
 }
 
 /** Sichtbarkeit des Verwaltungsmenüs "Heimatfeuerwehr" - Site-Admin ODER Admin von mindestens
