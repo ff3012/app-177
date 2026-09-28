@@ -212,12 +212,13 @@ CRON_TZ=Europe/Vienna
 
 ## Tätigkeitsbericht-Entwürfe bei Reservierungsende (alle 15 Minuten)
 
-`/api/cron/report-drafts` legt automatisch einen Tätigkeitsbericht-Entwurf an, sobald eine genehmigte
-Fahrzeug-Reservierung endet (alle 15 Minuten):
+`docker/report-drafts.sh` ruft `/api/cron/report-drafts` auf, das automatisch einen
+Tätigkeitsbericht-Entwurf anlegt, sobald eine genehmigte Fahrzeug-Reservierung endet. Alle 15 Minuten
+ausführen:
 
 ```bash
 crontab -e
-*/15 * * * * curl -fsS "https://<domain>/api/cron/report-drafts?secret=$CRON_SECRET" >> /var/log/report-drafts.log 2>&1
+*/15 * * * * /opt/app-177/docker/report-drafts.sh >> /var/log/ffapp-report-drafts.log 2>&1
 ```
 
 ## Restore-Test
