@@ -210,6 +210,16 @@ CRON_TZ=Europe/Vienna
 0 8 * * * /opt/app-177/docker/atemschutz-warnung-email.sh >> /var/log/ffapp-atemschutz-warnung.log 2>&1
 ```
 
+## Tätigkeitsbericht-Entwürfe bei Reservierungsende (alle 15 Minuten)
+
+`/api/cron/report-drafts` legt automatisch einen Tätigkeitsbericht-Entwurf an, sobald eine genehmigte
+Fahrzeug-Reservierung endet (alle 15 Minuten):
+
+```bash
+crontab -e
+*/15 * * * * curl -fsS "https://<domain>/api/cron/report-drafts?secret=$CRON_SECRET" >> /var/log/report-drafts.log 2>&1
+```
+
 ## Restore-Test
 
 DB-Restore (auf einem bereits laufenden Stack mit leerer/vorhandener DB):
