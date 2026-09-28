@@ -60,9 +60,13 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
             <Text>Von: {formatDateTime(report.startAt)}</Text>
             <Text style={{ marginLeft: 16 }}>Bis: {formatDateTime(report.endAt)}</Text>
           </View>
-          <Text style={{ marginTop: 2 }}>
-            Eigene Tätigkeit: {report.ownActivity ? '☒ Ja  ☐ Nein' : '☐ Ja  ☒ Nein'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+            <Text>Eigene Tätigkeit: </Text>
+            <View style={[styles.checkbox, report.ownActivity ? styles.checkboxChecked : {}]} />
+            <Text style={{ marginRight: 8 }}> Ja</Text>
+            <View style={[styles.checkbox, !report.ownActivity ? styles.checkboxChecked : {}]} />
+            <Text> Nein</Text>
+          </View>
         </View>
 
         <View style={styles.section}>
