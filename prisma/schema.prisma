@@ -810,6 +810,14 @@ model VehicleBooking {
   bookedByAdmin   User?   @relation("VehicleBookingBookedByAdmin", fields: [bookedByAdminId], references: [id], onDelete: SetNull)
   bookedByAdminId String?
 
+  // "Zu erledigen"-Erinnerung auf der Startseite ("Erstelle einen Tätigkeitsbericht für die
+  // Fahrzeug Reservierung", ab startsAt) - KEIN Entwurf-Konzept: es wird nie ein Report für diese
+  // Buchung angelegt/verknüpft, dieses Feld ist rein die Bestätigung "erledigt/nicht mehr zeigen".
+  // Wird gesetzt, sobald EINER der beiden Buttons (Bericht erstellen ODER Erledigt) gedrückt wird -
+  // unabhängig davon, ob danach tatsächlich ein Bericht abgegeben wird (siehe
+  // dismissReportReminder in meine-feuerwehr/actions.ts).
+  reportReminderDismissedAt DateTime?
+
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation("VehicleBookingDriver", fields: [userId], references: [id], onDelete: Cascade)
   event   Event?

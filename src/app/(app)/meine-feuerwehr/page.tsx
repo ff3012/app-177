@@ -14,6 +14,7 @@ import { RecentPhotoUploadsBlock } from '@/components/photo-uploads/recent-photo
 import { getVisibleNews } from '@/lib/news/audience';
 import { cancelVehicleBooking } from './actions';
 import { ActionRow } from './action-row';
+import { VehicleReportReminderCard } from '@/components/home/vehicle-report-reminder-card';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
   aktiv: 'Aktiv',
@@ -125,6 +126,7 @@ export default async function MeineFeuerwehrPage() {
     recentPhotoUploads,
     visibleNews,
     myRecentReports,
+    openVehicleReportReminders,
   ] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
@@ -196,6 +198,21 @@ export default async function MeineFeuerwehrPage() {
       where: { OR: [{ createdById: user.id }, { filledById: user.id }] },
       orderBy: { submittedAt: 'desc' },
       take: 3,
+    }),
+    // "Zu erledigen": Erinnerung, einen Tätigkeitsbericht für eine gefahrene Fahrzeug-Reservierung
+    // zu erstellen - ab deren Start-Zeitpunkt, kein Entwurf-Konzept (siehe
+    // VehicleBooking.reportReminderDismissedAt). Untere Schranke (30 Tage) aus demselben Grund wie
+    // beim ehemaligen report-drafts-Cron: ohne sie würde diese neue Spalte beim ersten Laden für
+    // JEDE je genehmigte, nicht dismissed Buchung der gesamten Historie eine Erinnerung zeigen.
+    prisma.vehicleBooking.findMany({
+      where: {
+        userId: user.id,
+        status: 'GENEHMIGT',
+        startsAt: { lte: now, gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
+        reportReminderDismissedAt: null,
+      },
+      orderBy: { startsAt: 'asc' },
+      include: { vehicle: { select: { taktischeBezeichnung: true, kennzeichen: true } } },
     }),
   ]);
 
@@ -372,6 +389,30 @@ export default async function MeineFeuerwehrPage() {
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
       <ActionRow showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)} />
+
+      {openVehicleReportReminders.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Zu erledigen</span>
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-bold text-white">
+              {openVehicleReportReminders.length}
+            </span>
+          </div>
+          {openVehicleReportReminders.map((booking) => (
+            <VehicleReportReminderCard
+              key={booking.id}
+              reminder={{
+                bookingId: booking.id,
+                vehicleId: booking.vehicleId,
+                vehicleLabel: `${booking.vehicle.taktischeBezeichnung} (${booking.vehicle.kennzeichen})`,
+                startsAt: booking.startsAt.toISOString(),
+                endsAt: booking.endsAt.toISOString(),
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {canManagePhotoUploadsFor(user, user.homeOrganizationId) && (
         <Link href="/foto-uploads" className="-mt-2 self-end text-sm font-medium text-neutral-600 hover:underline">
           Alle Foto Uploads

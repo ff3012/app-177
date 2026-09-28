@@ -73,32 +73,42 @@ export function ReportWizard({
   members,
   vehicles,
   recentActivityKinds,
+  prefillVehicleId,
+  prefillStartAt,
+  prefillEndAt,
 }: {
   type: ReportType;
   filledById: string;
   members: ReportMemberOption[];
   vehicles: { id: string; taktischeBezeichnung: string; kennzeichen: string }[];
   recentActivityKinds: string[];
+  /** Vorbefüllung aus einer "Zu erledigen"-Fahrzeug-Erinnerung (vehicle-report-reminder-card.tsx) -
+   * alle drei optional/null, wenn der Assistent ganz normal über "Neuer Bericht" gestartet wurde. */
+  prefillVehicleId?: string | null;
+  prefillStartAt?: string | null;
+  prefillEndAt?: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const now = useState(() => new Date())[0];
   const oneHourLater = useState(() => new Date(now.getTime() + 60 * 60 * 1000))[0];
+  const initialStart = prefillStartAt ? new Date(prefillStartAt) : now;
+  const initialEnd = prefillEndAt ? new Date(prefillEndAt) : oneHourLater;
 
   // Schritt 1
   const [filledById, setFilledById] = useState(initialFilledById);
-  const [startDate, setStartDate] = useState(toDateInputValue(now));
-  const [startTime, setStartTime] = useState(toTimeInputValue(now));
-  const [endDate, setEndDate] = useState(toDateInputValue(oneHourLater));
-  const [endTime, setEndTime] = useState(toTimeInputValue(oneHourLater));
+  const [startDate, setStartDate] = useState(toDateInputValue(initialStart));
+  const [startTime, setStartTime] = useState(toTimeInputValue(initialStart));
+  const [endDate, setEndDate] = useState(toDateInputValue(initialEnd));
+  const [endTime, setEndTime] = useState(toTimeInputValue(initialEnd));
   const [ownActivity, setOwnActivity] = useState<boolean | null>(null);
   const [activityKinds, setActivityKinds] = useState<string[]>([]);
   const [activityOther, setActivityOther] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Schritt 2
-  const [vehicleId, setVehicleId] = useState('');
+  const [vehicleId, setVehicleId] = useState(prefillVehicleId ?? '');
   const [vehicleKm, setVehicleKm] = useState('');
   const [reportMembers, setReportMembers] = useState<ReportMemberEntry[]>([
     { userId: initialFilledById, funktion: 'MANNSCHAFT' },

@@ -227,3 +227,25 @@ export async function cancelVehicleBooking(bookingId: string, redirectTo = '/mei
   revalidatePath('/kalender');
   redirect(safeRedirectTo);
 }
+
+/**
+ * Blendet die "Zu erledigen"-Erinnerung ("Erstelle einen Tätigkeitsbericht für die Fahrzeug
+ * Reservierung") auf der Startseite für diese Buchung aus - egal ob per "Bericht erstellen" oder
+ * "Erledigt" ausgelöst, beide Buttons rufen dies gleich auf (siehe vehicle-report-reminder-card.tsx).
+ * Kein Entwurf-Konzept: dies verknüpft NICHTS mit einem Report, es ist rein eine
+ * Bestätigung "nicht mehr zeigen" - ob danach tatsächlich ein Bericht abgegeben wird oder nicht,
+ * spielt für diese Funktion keine Rolle.
+ */
+export async function dismissReportReminder(bookingId: string): Promise<void> {
+  const user = await requireUser();
+
+  const booking = await prisma.vehicleBooking.findUnique({ where: { id: bookingId }, select: { userId: true } });
+  if (!booking) return;
+  assertPermission(booking.userId === user.id);
+
+  await prisma.vehicleBooking.update({
+    where: { id: bookingId },
+    data: { reportReminderDismissedAt: new Date() },
+  });
+  revalidatePath('/meine-feuerwehr');
+}

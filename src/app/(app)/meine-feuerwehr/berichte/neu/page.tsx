@@ -32,11 +32,15 @@ async function getRecentActivityKinds(userId: string): Promise<string[]> {
  * keine Navigation), bis "Bericht abgeben" die Daten in EINEM Server-Action-Aufruf abschickt. Diese
  * Seite lädt einmalig alles, was der Assistent für alle 3 Schritte braucht (Mitgliederliste,
  * Fuhrpark, zuletzt verwendete Tätigkeitsarten). */
-export default async function NeuerBerichtPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
+export default async function NeuerBerichtPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string; vehicleId?: string; startAt?: string; endAt?: string }>;
+}) {
   const user = await requireUser();
   assertPermission(canCreateReportFor(user, user.homeOrganizationId));
 
-  const { type: typeParam } = await searchParams;
+  const { type: typeParam, vehicleId: vehicleIdParam, startAt: startAtParam, endAt: endAtParam } = await searchParams;
   const type: ReportType = ACTIVE_REPORT_TYPES.includes(typeParam ?? '') ? (typeParam as ReportType) : 'ACTIVITY';
 
   const [members, vehicles, recentActivityKinds] = await Promise.all([
@@ -53,6 +57,14 @@ export default async function NeuerBerichtPage({ searchParams }: { searchParams:
     getRecentActivityKinds(user.id),
   ]);
 
+  // Vorbefüllung aus einer "Zu erledigen"-Erinnerung (vehicle-report-reminder-card.tsx): vehicleId nur
+  // übernehmen, wenn es tatsächlich zu einem Fahrzeug dieser (bereits geladenen) Liste gehört - ein
+  // roher Query-Parameter wird nie ungeprüft übernommen, auch wenn submitReport selbst ohnehin
+  // nochmals validiert. startAt/endAt nur bei gültigem, parsbarem Datum.
+  const prefillVehicleId = vehicles.some((v) => v.id === vehicleIdParam) ? vehicleIdParam! : null;
+  const prefillStartAt = startAtParam && !Number.isNaN(new Date(startAtParam).getTime()) ? startAtParam : null;
+  const prefillEndAt = endAtParam && !Number.isNaN(new Date(endAtParam).getTime()) ? endAtParam : null;
+
   return (
     <ReportWizard
       type={type}
@@ -60,6 +72,9 @@ export default async function NeuerBerichtPage({ searchParams }: { searchParams:
       members={members}
       vehicles={vehicles}
       recentActivityKinds={recentActivityKinds}
+      prefillVehicleId={prefillVehicleId}
+      prefillStartAt={prefillStartAt}
+      prefillEndAt={prefillEndAt}
     />
   );
 }
