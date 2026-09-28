@@ -13,6 +13,7 @@ import { HomeTodoList, type HomeEventCardData, type StaticTodoItemData } from '@
 import { RecentPhotoUploadsBlock } from '@/components/photo-uploads/recent-photo-uploads-block';
 import { getVisibleNews } from '@/lib/news/audience';
 import { cancelVehicleBooking } from './actions';
+import { ActionRow } from './action-row';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
   aktiv: 'Aktiv',
@@ -115,7 +116,17 @@ export default async function MeineFeuerwehrPage() {
   // (Abschnitt-)Feuerwehr innerhalb der eigenen Drohnengruppe gar nicht erst aus der DB geladen.
   const droneMember = canViewDroneModule(user);
 
-  const [me, candidateEventsRaw, vehicles, myBookings, orgFeatures, recentPhotoUploads, visibleNews] = await Promise.all([
+  const [
+    me,
+    candidateEventsRaw,
+    vehicles,
+    myBookings,
+    orgFeatures,
+    recentPhotoUploads,
+    visibleNews,
+    openReportDrafts,
+    myRecentReports,
+  ] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: {
@@ -180,6 +191,16 @@ export default async function MeineFeuerwehrPage() {
       },
     }),
     getVisibleNews(user.id),
+    prisma.report.findMany({
+      where: { status: 'DRAFT', vehicleBookingId: { not: null }, OR: [{ createdById: user.id }, { filledById: user.id }] },
+      orderBy: { startAt: 'asc' },
+      include: { vehicle: { select: { taktischeBezeichnung: true } } },
+    }),
+    prisma.report.findMany({
+      where: { OR: [{ createdById: user.id }, { filledById: user.id }] },
+      orderBy: [{ submittedAt: 'desc' }, { updatedAt: 'desc' }],
+      take: 3,
+    }),
   ]);
 
   const unreadNews = visibleNews.filter((post) => !post.isRead).slice(0, 2);
@@ -354,17 +375,66 @@ export default async function MeineFeuerwehrPage() {
 
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
+      <ActionRow showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)} />
       {canManagePhotoUploadsFor(user, user.homeOrganizationId) && (
-        <div className="flex items-center gap-3">
-          <Link
-            href="/foto-uploads/neu"
-            className="flex min-h-12 flex-1 items-center justify-center rounded-lg border-2 border-brand text-sm font-semibold text-brand"
-          >
-            Foto Upload
-          </Link>
-          <Link href="/foto-uploads" className="text-sm font-medium text-neutral-600 hover:underline">
-            Alle Foto Uploads
-          </Link>
+        <Link href="/foto-uploads" className="-mt-2 self-end text-sm font-medium text-neutral-600 hover:underline">
+          Alle Foto Uploads
+        </Link>
+      )}
+
+      {openReportDrafts.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Zu erledigen</span>
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-bold text-white">
+              {openReportDrafts.length}
+            </span>
+          </div>
+          {openReportDrafts.map((draft) => (
+            <Link
+              key={draft.id}
+              href={`/meine-feuerwehr/berichte/${draft.id}/schritt-1`}
+              className="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm"
+            >
+              <span className="text-[14px] text-[#1c1c1e]">
+                {draft.vehicle?.taktischeBezeichnung ?? 'Kein Fahrzeug'} · {draft.startAt.toLocaleDateString('de-AT')} ·{' '}
+                {draft.startAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}–
+                {draft.endAt.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span className="flex-none rounded-lg bg-brand px-3 py-1.5 text-[13px] font-semibold text-white">Ausfüllen</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {myRecentReports.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Meine Berichte</span>
+            <Link href="/meine-feuerwehr/berichte" className="text-sm font-medium text-brand">
+              Alle
+            </Link>
+          </div>
+          <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+            {myRecentReports.map((report, index) => (
+              <div
+                key={report.id}
+                className={`flex items-center justify-between gap-3 px-4 py-3 ${index === myRecentReports.length - 1 ? '' : 'border-b border-[#f0f0f2]'}`}
+              >
+                <span className="text-[14px] text-[#1c1c1e]">
+                  {report.status === 'SUBMITTED' ? `Nr. ${report.number}/${report.year}` : 'Entwurf'} ·{' '}
+                  {report.startAt.toLocaleDateString('de-AT')}
+                </span>
+                <span
+                  className={`flex-none rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+                    report.status === 'SUBMITTED' ? 'bg-[#eaf6f0] text-[#1b7a52]' : 'bg-neutral-100 text-neutral-600'
+                  }`}
+                >
+                  {report.status === 'SUBMITTED' ? 'Abgegeben' : 'Entwurf'}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
