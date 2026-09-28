@@ -1,0 +1,76 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { prisma } from '@/lib/db/prisma';
+import { requireUser } from '@/lib/auth/session';
+import { assertPermission, canCreateReportFor } from '@/lib/auth/permissions';
+import { loadReportForEdit, assertReportIsEditable } from '@/lib/heimatfeuerwehr/report-access';
+import type { ReportType } from '@prisma/client';
+
+/** Berichtsart-Sheet (Bericht-Brief.md §1b) -> "Neuer Bericht" ohne Reservierung. Legt sofort einen
+ * leeren DRAFT an und leitet zu Schritt 1 weiter. Nur ACTIVITY ist heute wirklich anlegbar - die
+ * UI-Sperre für EXERCISE/INCIDENT sitzt im Berichtsart-Sheet selbst (report-type-sheet.tsx), diese
+ * Funktion erlaubt aber ausdrücklich alle drei type-Werte, damit das Datenmodell für später keine
+ * Migration braucht. */
+export async function createReportDraft(type: ReportType): Promise<never> {
+  const user = await requireUser();
+  assertPermission(canCreateReportFor(user, user.homeOrganizationId));
+
+  const now = new Date();
+  const report = await prisma.report.create({
+    data: {
+      type,
+      fireDepartmentId: user.homeOrganizationId,
+      filledById: user.id,
+      createdById: user.id,
+      startAt: now,
+      endAt: now,
+    },
+  });
+
+  redirect(`/meine-feuerwehr/berichte/${report.id}/schritt-1`);
+}
+
+export interface ReportDraftPatch {
+  filledById?: string;
+  startAt?: string;
+  endAt?: string;
+  ownActivity?: boolean;
+  activityKinds?: string[];
+  activityOther?: string | null;
+  vehicleId?: string | null;
+  vehicleKm?: number | null;
+  remark?: string;
+}
+
+/** Debounced Autospeichern für jeden Formular-Schritt (Bericht-Brief.md §5: "Jede Änderung speichert den
+ * Entwurf, kein eigener Speichern-Button") - ein einziger, generischer Patch-Endpunkt statt einer
+ * Server Action pro Feld, da alle drei Schritte denselben Report bearbeiten. Nimmt nur die Felder an, die
+ * sich geändert haben (partial patch), schreibt sie 1:1 durch. */
+export async function updateReportDraft(
+  reportId: string,
+  patch: ReportDraftPatch,
+): Promise<{ error?: string }> {
+  const report = await loadReportForEdit(reportId);
+  assertReportIsEditable(report);
+
+  const data: Record<string, unknown> = {};
+  if (patch.filledById !== undefined) data.filledById = patch.filledById;
+  if (patch.startAt !== undefined) data.startAt = new Date(patch.startAt);
+  if (patch.endAt !== undefined) data.endAt = new Date(patch.endAt);
+  if (patch.ownActivity !== undefined) data.ownActivity = patch.ownActivity;
+  if (patch.activityKinds !== undefined) data.activityKinds = patch.activityKinds;
+  if (patch.activityOther !== undefined) data.activityOther = patch.activityOther;
+  if (patch.vehicleId !== undefined) data.vehicleId = patch.vehicleId;
+  if (patch.vehicleKm !== undefined) data.vehicleKm = patch.vehicleKm;
+  if (patch.remark !== undefined) data.remark = patch.remark;
+
+  if (data.startAt && data.endAt && data.endAt <= data.startAt) {
+    return { error: 'Das Ende muss nach dem Beginn liegen.' };
+  }
+
+  await prisma.report.update({ where: { id: reportId }, data });
+  revalidatePath(`/meine-feuerwehr/berichte/${reportId}`);
+  return {};
+}
