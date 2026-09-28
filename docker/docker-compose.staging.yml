@@ -52,6 +52,7 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_PHOTOS_BUCKET: ${S3_PHOTOS_BUCKET}
+      S3_REPORTS_BUCKET: ${S3_REPORTS_BUCKET}
     container_name: app177-dev-app
     networks:
       - default
