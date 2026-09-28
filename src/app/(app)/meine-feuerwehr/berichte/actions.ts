@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canCreateReportFor } from '@/lib/auth/permissions';
 import { loadReportForEdit, assertReportIsEditable } from '@/lib/heimatfeuerwehr/report-access';
+import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import type { ReportType } from '@prisma/client';
 
 /** Berichtsart-Sheet (Bericht-Brief.md §1b) -> "Neuer Bericht" ohne Reservierung. Legt sofort einen
@@ -54,6 +55,20 @@ export async function updateReportDraft(
 ): Promise<{ error?: string }> {
   const report = await loadReportForEdit(reportId);
   assertReportIsEditable(report);
+
+  // Sicherheits-Check: die UI bietet "Ausgefüllt von" nur über MemberSearchSelect an (nur Mitglieder
+  // dieser Feuerwehr), aber diese Server Action ist ein direkt aufrufbares Endpunkt, kein Formular-only
+  // Pfad - ein manipulierter Aufruf könnte sonst filledById auf jeden beliebigen User setzen. Gleiches
+  // Muster wie createVehicleBooking's "Stellvertretende Buchung"-Check in meine-feuerwehr/actions.ts.
+  if (patch.filledById !== undefined) {
+    const filledByUser = await prisma.user.findFirst({
+      where: { id: patch.filledById, homeOrganizationId: report.fireDepartmentId, ...NOT_DEACTIVATED_WHERE },
+      select: { id: true },
+    });
+    if (!filledByUser) {
+      return { error: 'Das ausgewählte Mitglied gehört nicht zu dieser Feuerwehr.' };
+    }
+  }
 
   const data: Record<string, unknown> = {};
   if (patch.filledById !== undefined) data.filledById = patch.filledById;

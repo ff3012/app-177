@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
-import { loadReportForEdit } from '@/lib/heimatfeuerwehr/report-access';
+import { loadReportForPage } from '@/lib/heimatfeuerwehr/report-access';
 import { ReportWizardHeader } from '../report-wizard-header';
 import { Schritt1Form } from './schritt-1-form';
 
@@ -26,7 +26,7 @@ async function getRecentActivityKinds(userId: string): Promise<string[]> {
 
 export default async function ReportSchritt1Page({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
-  const report = await loadReportForEdit(reportId);
+  const report = await loadReportForPage(reportId);
   const user = await requireUser();
 
   const [members, recentActivityKinds] = await Promise.all([

@@ -15,12 +15,13 @@ export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
   function choose(type: (typeof REPORT_TYPES)[number]) {
     if (!ACTIVE_REPORT_TYPES.includes(type)) return;
     setError(null);
+    // Kein try/catch: createReportDraft endet mit redirect(), das intern einen speziellen,
+    // digest-getaggten Error wirft, der ungefangen bis zum Framework durchgereicht werden MUSS, um die
+    // Navigation auszulösen (siehe user-form-sheet.tsx's createUser/updateUser-Aufruf für dasselbe
+    // Muster in dieser Codebase). Ein try/catch hier würde diesen Error abfangen und die Navigation
+    // verschlucken.
     startTransition(async () => {
-      try {
-        await createReportDraft(type);
-      } catch {
-        setError('Bericht konnte nicht angelegt werden.');
-      }
+      await createReportDraft(type);
     });
   }
 
