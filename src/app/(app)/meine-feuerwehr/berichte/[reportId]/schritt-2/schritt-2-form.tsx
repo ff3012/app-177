@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { MemberMultiSelect, type ReportMemberOption } from '@/components/heimatfeuerwehr/member-multi-select';
 import { FUNKTION_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 import { updateReportDraft, updateReportMembers, type ReportMemberPatchEntry } from '../../actions';
 
 const FUNKTIONEN = ['KOMMANDANT', 'FAHRER', 'MANNSCHAFT'] as const;
+const SAVE_FAILED = 'Speichern fehlgeschlagen. Bitte erneut versuchen.';
 
 export function Schritt2Form({
   reportId,
@@ -32,24 +33,79 @@ export function Schritt2Form({
   const [reportMembers, setReportMembers] = useState<ReportMemberPatchEntry[]>(
     initialMembers.length > 0 ? initialMembers : [{ userId: filledById, funktion: 'MANNSCHAFT' }],
   );
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [continuing, setContinuing] = useState(false);
+  // Getrennte Fehlerzustände: sonst würde ein erfolgreicher Fahrzeug-Speichervorgang die Fehlermeldung
+  // eines fehlgeschlagenen Mitglieder-Speichervorgangs (oder umgekehrt) stillschweigend überschreiben.
+  const [vehicleError, setVehicleError] = useState<string | null>(null);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const router = useRouter();
+  const vehicleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const membersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Ein tatsächlich eingegebenes "0" ist ein gültiger Wert (nicht null), und Report.vehicleKm ist eine
+  // Int-Spalte - Dezimalzahlen würden sonst erst beim Prisma-Schreibzugriff als unbehandelter Fehler
+  // scheitern, daher hier gerundet.
+  function buildVehiclePatch() {
+    const trimmedKm = vehicleKm.trim();
+    return {
+      vehicleId: vehicleId || null,
+      vehicleKm: vehicleId
+        ? trimmedKm !== '' && !Number.isNaN(Number(trimmedKm))
+          ? Math.round(Number(trimmedKm))
+          : null
+        : null,
+    };
+  }
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      updateReportDraft(reportId, {
-        vehicleId: vehicleId || null,
-        vehicleKm: vehicleId ? Number(vehicleKm) || null : null,
-      });
+    if (vehicleDebounceRef.current) clearTimeout(vehicleDebounceRef.current);
+    vehicleDebounceRef.current = setTimeout(() => {
+      vehicleDebounceRef.current = null;
+      updateReportDraft(reportId, buildVehiclePatch()).then(
+        (result) => setVehicleError(result.error ?? null),
+        () => setVehicleError(SAVE_FAILED),
+      );
     }, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId, vehicleKm]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => updateReportMembers(reportId, reportMembers), 500);
-    return () => clearTimeout(timeout);
+    if (membersDebounceRef.current) clearTimeout(membersDebounceRef.current);
+    membersDebounceRef.current = setTimeout(() => {
+      membersDebounceRef.current = null;
+      updateReportMembers(reportId, reportMembers).then(
+        (result) => setMembersError(result.error ?? null),
+        () => setMembersError(SAVE_FAILED),
+      );
+    }, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportMembers]);
+
+  // Beide entprellten Speichervorgänge (Fahrzeug + Mitglieder) verwerfen und mit den aktuellen Werten
+  // sofort abwarten, bevor navigiert wird - sonst ginge eine Änderung der letzten ~500 ms verloren.
+  async function handleContinue() {
+    if (continuing) return;
+    if (vehicleDebounceRef.current) {
+      clearTimeout(vehicleDebounceRef.current);
+      vehicleDebounceRef.current = null;
+    }
+    if (membersDebounceRef.current) {
+      clearTimeout(membersDebounceRef.current);
+      membersDebounceRef.current = null;
+    }
+    setContinuing(true);
+    const [vehicleResult, membersResult] = await Promise.all([
+      updateReportDraft(reportId, buildVehiclePatch()).catch((): { error?: string } => ({ error: SAVE_FAILED })),
+      updateReportMembers(reportId, reportMembers).catch((): { error?: string } => ({ error: SAVE_FAILED })),
+    ]);
+    setVehicleError(vehicleResult.error ?? null);
+    setMembersError(membersResult.error ?? null);
+    if (vehicleResult.error || membersResult.error) {
+      setContinuing(false);
+      return;
+    }
+    router.push(`/meine-feuerwehr/berichte/${reportId}/schritt-3`);
+  }
 
   function addMember(ids: string[]) {
     const newId = ids[ids.length - 1];
@@ -135,13 +191,21 @@ export function Schritt2Form({
         </div>
       </div>
 
+      {vehicleError && <p className="text-sm text-red-700">{vehicleError}</p>}
+      {membersError && <p className="text-sm text-red-700">{membersError}</p>}
+
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">
-        <Link
-          href={canContinue ? `/meine-feuerwehr/berichte/${reportId}/schritt-3` : '#'}
-          className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={!canContinue || continuing}
+          aria-disabled={!canContinue || continuing}
+          className={`flex h-[52px] w-full items-center justify-center rounded-lg text-[15px] font-semibold text-white ${
+            canContinue && !continuing ? 'bg-brand' : 'pointer-events-none bg-neutral-300'
+          }`}
         >
           Weiter
-        </Link>
+        </button>
       </div>
     </div>
   );

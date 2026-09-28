@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
@@ -27,6 +28,12 @@ async function getRecentActivityKinds(userId: string): Promise<string[]> {
 export default async function ReportSchritt1Page({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
   const report = await loadReportForPage(reportId);
+  // Ein abgegebener Bericht ist unveränderlich (assertReportIsEditable blockiert jeden Schreibzugriff) -
+  // statt eines scheinbar bearbeitbaren Formulars, das stillschweigend nichts speichert, direkt zur
+  // Bestätigungsseite.
+  if (report.status === 'SUBMITTED') {
+    redirect(`/meine-feuerwehr/berichte/${reportId}/abgeschlossen`);
+  }
   const user = await requireUser();
 
   const [members, recentActivityKinds] = await Promise.all([

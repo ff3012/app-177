@@ -6,6 +6,8 @@ import { MATERIALS, EQUIPMENT, LOESCHER_CODES } from '@/lib/heimatfeuerwehr/repo
 import { updateReportDraft, updateReportQuantities, type ReportQuantityPatchEntry } from '../../actions';
 import { submitReport } from '../../submit-actions';
 
+const SAVE_FAILED = 'Speichern fehlgeschlagen. Bitte erneut versuchen.';
+
 function useQuantityMap(initial: ReportQuantityPatchEntry[]) {
   const map: Record<string, number> = {};
   for (const entry of initial) map[`${entry.kind}:${entry.code}`] = entry.value;
@@ -37,17 +39,30 @@ export function Schritt3Form({
     setVisible((current) => new Set(current).add(`${kind}:${code}`));
   }
 
+  function buildQuantities(): ReportQuantityPatchEntry[] {
+    return Object.entries(values)
+      .filter(([key]) => visible.has(key))
+      .map(([key, value]) => {
+        const [kind, code] = key.split(':') as ['MATERIAL' | 'EQUIPMENT', string];
+        return { kind, code, value };
+      });
+  }
+
+  // Speichert Mengen + Bemerkung mit den AKTUELLEN Werten und liefert die erste Fehlermeldung (oder null).
+  // Wirft nie - ein Wurf der Server Action wird in eine generische Meldung umgewandelt.
+  async function saveNow(): Promise<string | null> {
+    const [quantitiesResult, remarkResult] = await Promise.all([
+      updateReportQuantities(reportId, buildQuantities()).catch((): { error?: string } => ({ error: SAVE_FAILED })),
+      updateReportDraft(reportId, { remark }).catch((): { error?: string } => ({ error: SAVE_FAILED })),
+    ]);
+    return quantitiesResult.error ?? remarkResult.error ?? null;
+  }
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const quantities: ReportQuantityPatchEntry[] = Object.entries(values)
-        .filter(([key]) => visible.has(key))
-        .map(([key, value]) => {
-          const [kind, code] = key.split(':') as ['MATERIAL' | 'EQUIPMENT', string];
-          return { kind, code, value };
-        });
-      updateReportQuantities(reportId, quantities);
-      updateReportDraft(reportId, { remark });
+      debounceRef.current = null;
+      void saveNow().then((saveError) => setError(saveError));
     }, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values, visible, remark]);
@@ -87,15 +102,37 @@ export function Schritt3Form({
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
-    const result = await submitReport(reportId);
-    setSubmitting(false);
-    if (result.error) {
-      setError(result.error);
-    } else {
-      router.push(`/meine-feuerwehr/berichte/${reportId}/abgeschlossen`);
+
+    // Ausstehenden entprellten Speichervorgang verwerfen und mit den aktuellen Werten sofort abwarten -
+    // submitReport liest den Bericht aus der DB, und nach der Abgabe ist er unveränderlich. Eine Änderung
+    // der letzten ~500 ms ginge sonst für immer verloren.
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
+    const saveError = await saveNow();
+    if (saveError) {
+      setError(saveError);
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const result = await submitReport(reportId);
+      if (result.error) {
+        setError(result.error);
+        setSubmitting(false);
+        return;
+      }
+    } catch {
+      setError('Der Bericht konnte nicht abgegeben werden. Bitte erneut versuchen.');
+      setSubmitting(false);
+      return;
+    }
+    router.push(`/meine-feuerwehr/berichte/${reportId}/abgeschlossen`);
   }
 
   const canSubmit = remark.trim().length > 0;

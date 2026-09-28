@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { loadReportForPage } from '@/lib/heimatfeuerwehr/report-access';
 import { ReportWizardHeader } from '../report-wizard-header';
@@ -6,6 +7,10 @@ import { Schritt3Form } from './schritt-3-form';
 export default async function ReportSchritt3Page({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
   const report = await loadReportForPage(reportId);
+  // Abgegeben = unveränderlich, siehe schritt-1/page.tsx.
+  if (report.status === 'SUBMITTED') {
+    redirect(`/meine-feuerwehr/berichte/${reportId}/abgeschlossen`);
+  }
   const quantities = await prisma.reportQuantity.findMany({ where: { reportId } });
 
   return (

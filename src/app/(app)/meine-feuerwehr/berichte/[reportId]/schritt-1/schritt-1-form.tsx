@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { MemberSearchSelect, type ReportMemberOption } from '@/components/heimatfeuerwehr/member-search-select';
 import { ACTIVITY_KINDS } from '@/lib/heimatfeuerwehr/report-constants';
 import { ActivityKindPicker } from './activity-kind-picker';
@@ -17,8 +17,16 @@ interface Schritt1ReportData {
   activityOther: string | null;
 }
 
+// Datum UND Uhrzeit müssen aus demselben Bezugsrahmen (lokale Zeit) kommen - ein rohes
+// iso.slice(0, 10) wäre das UTC-Datum und würde für Zeiten zwischen ca. 00:00-02:00 Wiener Zeit den
+// Vortag anzeigen, während toTimeInputValue die lokale Uhrzeit zeigt; combine() würde daraus dann einen
+// um einen ganzen Tag verschobenen Zeitpunkt zurückschreiben.
 function toDateInputValue(iso: string): string {
-  return iso.slice(0, 10);
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 function toTimeInputValue(iso: string): string {
   return new Date(iso).toTimeString().slice(0, 5);
@@ -48,13 +56,14 @@ export function Schritt1Form({
   const [activityOther, setActivityOther] = useState(report.activityOther ?? '');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
 
-  function scheduleSave() {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      setSaving(true);
+  async function saveNow(): Promise<{ error?: string }> {
+    setSaving(true);
+    try {
       const result = await updateReportDraft(report.id, {
         filledById,
         startAt: combine(startDate, startTime),
@@ -63,9 +72,42 @@ export function Schritt1Form({
         activityKinds,
         activityOther: activityOther || null,
       });
-      setSaving(false);
       setError(result.error ?? null);
+      return result;
+    } catch {
+      const message = 'Speichern fehlgeschlagen. Bitte erneut versuchen.';
+      setError(message);
+      return { error: message };
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function scheduleSave() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      void saveNow();
     }, 500);
+  }
+
+  // "Weiter" darf nicht einfach navigieren, solange noch ein entprellter Speichervorgang aussteht - eine
+  // Änderung innerhalb der letzten ~500 ms ginge sonst verloren. Daher: ausstehenden Timer verwerfen, mit
+  // den aktuellen Werten sofort speichern (und abwarten), erst dann weiter. Bei einem Validierungsfehler
+  // (z. B. Ende vor Beginn) bleibt der Benutzer auf diesem Schritt und sieht die Meldung.
+  async function handleContinue() {
+    if (!canContinue || continuing) return;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setContinuing(true);
+    const result = await saveNow();
+    if (result.error) {
+      setContinuing(false);
+      return;
+    }
+    router.push(`/meine-feuerwehr/berichte/${report.id}/schritt-2`);
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,15 +206,17 @@ export function Schritt1Form({
       <p className="text-xs text-neutral-400">{saving ? 'Speichert …' : 'Gespeichert'}</p>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">
-        <Link
-          href={canContinue ? `/meine-feuerwehr/berichte/${report.id}/schritt-2` : '#'}
-          aria-disabled={!canContinue}
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={!canContinue || continuing}
+          aria-disabled={!canContinue || continuing}
           className={`flex h-[52px] w-full items-center justify-center rounded-lg text-[15px] font-semibold text-white ${
-            canContinue ? 'bg-brand' : 'pointer-events-none bg-neutral-300'
+            canContinue && !continuing ? 'bg-brand' : 'pointer-events-none bg-neutral-300'
           }`}
         >
           Weiter
-        </Link>
+        </button>
       </div>
     </div>
   );

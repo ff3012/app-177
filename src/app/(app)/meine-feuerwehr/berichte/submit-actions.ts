@@ -7,6 +7,17 @@ import { generateReportPdf, reportPdfFileName, type ReportForPdf } from '@/lib/h
 import { putReportPdf } from '@/lib/storage/report-pdf-s3';
 import { sendReportSubmittedEmail } from '@/lib/heimatfeuerwehr/notify-report-submitted';
 
+const ALREADY_SUBMITTED_ERROR = 'Dieser Bericht wurde bereits abgegeben.';
+
+/** Wird innerhalb der Abgabe-Transaktion geworfen, wenn ein konkurrierender Aufruf den Bericht bereits
+ * abgegeben hat - rollt die Transaktion (inkl. der schon hochgezählten Berichtsnummer) sauber zurück. */
+class ReportAlreadySubmittedError extends Error {
+  constructor() {
+    super(ALREADY_SUBMITTED_ERROR);
+    this.name = 'ReportAlreadySubmittedError';
+  }
+}
+
 /**
  * Abgabe-Transaktion (Bericht-Brief.md §6, Design-Spec §7): serverseitige Pflichtfeldprüfung, dann
  * Nummer/Jahr vergeben und status auf SUBMITTED setzen - alles in einer prisma.$transaction, damit ein
@@ -16,6 +27,12 @@ import { sendReportSubmittedEmail } from '@/lib/heimatfeuerwehr/notify-report-su
  */
 export async function submitReport(reportId: string): Promise<{ error?: string }> {
   const report = await loadReportForEdit(reportId);
+  // Freundliche Meldung statt eines rohen ForbiddenError aus assertReportIsEditable für den häufigsten
+  // Fall (zweiter Klick/zweites Gerät, nachdem die erste Abgabe schon durch ist). Der eigentliche Schutz
+  // gegen GLEICHZEITIGE Abgaben ist der atomare Status-Guard in der Transaktion unten.
+  if (report.status === 'SUBMITTED') {
+    return { error: ALREADY_SUBMITTED_ERROR };
+  }
   assertReportIsEditable(report);
 
   if (report.ownActivity === null) {
@@ -34,13 +51,37 @@ export async function submitReport(reportId: string): Promise<{ error?: string }
   const now = new Date();
   const year = now.getFullYear();
 
-  await prisma.$transaction(async (tx) => {
-    const number = await getNextReportNumber(tx, report.fireDepartmentId, year);
-    await tx.report.update({
-      where: { id: reportId },
-      data: { number, year, status: 'SUBMITTED', submittedAt: now },
+  // TOCTOU-Guard (gleiches Muster wie decideVehicleBooking in vehicle-booking-decision.ts): die
+  // Statusprüfung oben ist nur ein Lesezugriff - Ersteller und Ausfüller dürfen beide abgeben, und ein
+  // Doppelklick kann zwei Aufrufe gleichzeitig durch diese Prüfung bringen. Daher steckt `status: 'DRAFT'`
+  // in der WHERE-Klausel des eigentlichen Schreibzugriffs; Postgres wertet sie beim UPDATE gegen den
+  // zuletzt committeten Stand neu aus, genau EIN Aufruf gewinnt. Der Verlierer wirft innerhalb der
+  // Transaktion, wodurch auch seine bereits hochgezählte Berichtsnummer zurückgerollt wird - keine Lücke.
+  try {
+    await prisma.$transaction(async (tx) => {
+      const number = await getNextReportNumber(tx, report.fireDepartmentId, year);
+      const claimed = await tx.report.updateMany({
+        where: { id: reportId, status: 'DRAFT' },
+        data: { number, year, status: 'SUBMITTED', submittedAt: now },
+      });
+      if (claimed.count === 0) {
+        throw new ReportAlreadySubmittedError();
+      }
     });
-  });
+  } catch (error) {
+    if (error instanceof ReportAlreadySubmittedError) {
+      return { error: ALREADY_SUBMITTED_ERROR };
+    }
+    // Jeder andere Fehler (z. B. ein Unique-Konflikt der Nummernvergabe bei einem echten Wettlauf):
+    // wenn der Bericht inzwischen abgegeben ist, hat ein anderer Aufruf gewonnen - sonst generische
+    // Meldung statt einer unbehandelten Exception im Client.
+    const current = await prisma.report.findUnique({ where: { id: reportId }, select: { status: true } });
+    if (current?.status === 'SUBMITTED') {
+      return { error: ALREADY_SUBMITTED_ERROR };
+    }
+    console.error(`Abgabe von Bericht ${reportId} fehlgeschlagen:`, error);
+    return { error: 'Der Bericht konnte nicht abgegeben werden. Bitte erneut versuchen.' };
+  }
 
   // Ab hier: keine DB-Transaktion mehr offen. PDF/S3/E-Mail sind bewusst NICHT Teil der Transaktion
   // oben (Design-Spec §7) - ein Fehler hier darf die bereits abgegebene Nummer nie zurückrollen.
@@ -86,12 +127,23 @@ export async function submitReport(reportId: string): Promise<{ error?: string }
   try {
     const pdfBuffer = await generateReportPdf(pdfData);
     await putReportPdf(storageKey, pdfBuffer);
-    await sendReportSubmittedEmail(
+    const emailResult = await sendReportSubmittedEmail(
       { ...pdfData, fireDepartmentEmails: fireDepartment.reportRecipients, filledByEmail: fullReport.filledBy.email },
       pdfBuffer,
       pdfFileName,
     );
-    await prisma.report.update({ where: { id: reportId }, data: { emailSentAt: now, emailError: null } });
+    // Nur dann "Gesendet", wenn wirklich etwas versucht wurde UND nichts fehlschlug. Keine Empfänger
+    // konfiguriert = "nicht zutreffend" (beide Felder bleiben null), kein Fehler. Teil-/Totalausfall =
+    // emailError mit Anzahl, emailSentAt bleibt null.
+    if (emailResult.attempted > 0) {
+      await prisma.report.update({
+        where: { id: reportId },
+        data:
+          emailResult.failed === 0
+            ? { emailSentAt: now, emailError: null }
+            : { emailSentAt: null, emailError: `${emailResult.failed} von ${emailResult.attempted} E-Mails fehlgeschlagen` },
+      });
+    }
   } catch (error) {
     await prisma.report.update({
       where: { id: reportId },

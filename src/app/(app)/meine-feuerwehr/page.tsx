@@ -416,9 +416,17 @@ export default async function MeineFeuerwehrPage() {
             </Link>
           </div>
           <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+            {/* Jede Zeile ist ein Link - sonst wäre ein manuell begonnener (nicht aus einer Reservierung
+                entstandener) Entwurf nach dem Verlassen des Assistenten unerreichbar ("Abbrechen und später
+                weitermachen muss funktionieren"). Entwurf -> weiter bearbeiten, abgegeben -> Bestätigung/PDF. */}
             {myRecentReports.map((report, index) => (
-              <div
+              <Link
                 key={report.id}
+                href={
+                  report.status === 'SUBMITTED'
+                    ? `/meine-feuerwehr/berichte/${report.id}/abgeschlossen`
+                    : `/meine-feuerwehr/berichte/${report.id}/schritt-1`
+                }
                 className={`flex items-center justify-between gap-3 px-4 py-3 ${index === myRecentReports.length - 1 ? '' : 'border-b border-[#f0f0f2]'}`}
               >
                 <span className="text-[14px] text-[#1c1c1e]">
@@ -432,7 +440,7 @@ export default async function MeineFeuerwehrPage() {
                 >
                   {report.status === 'SUBMITTED' ? 'Abgegeben' : 'Entwurf'}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
