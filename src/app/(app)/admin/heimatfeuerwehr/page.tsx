@@ -28,6 +28,9 @@ import { WappenUploadForm } from './wappen-upload-form';
 import { FunktionenCard } from './funktionen-card';
 import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
 import { PhotoUploadNotificationEmailsForm } from './photo-upload-notification-emails-form';
+import { ReportRecipientsForm } from './report-recipients-form';
+import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
+import { reportPdfFileName } from '@/lib/heimatfeuerwehr/report-pdf';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
@@ -214,6 +217,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         wappenImageMimeType: true,
         fahrzeugReservierungEmails: true,
         photoUploadNotificationEmails: true,
+        reportRecipients: true,
         googleCalendarServiceAccountJson: true,
         googleCalendarId: true,
         googleCalendarLastSyncAt: true,
@@ -236,6 +240,13 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     where: { homeOrganizationId: selectedOrgId, ...NOT_DEACTIVATED_WHERE },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     select: { id: true, firstName: true, lastName: true, email: true },
+  });
+
+  const recentReports = await prisma.report.findMany({
+    where: { fireDepartmentId: selectedOrgId, status: 'SUBMITTED' },
+    orderBy: { submittedAt: 'desc' },
+    take: 20,
+    include: { filledBy: { select: { firstName: true, lastName: true } } },
   });
 
   const tokenQrCodeDataUris = await Promise.all(
@@ -568,6 +579,60 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           initialEmails={selectedOrgFull.photoUploadNotificationEmails}
           members={heimatfeuerwehrPickerMembers}
         />
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Berichte</h2>
+        <p className="mb-2 text-xs text-ink-faint">
+          Tätigkeitsbericht: Aktiv · Übungsbericht: Nicht aktiv · Einsatzbericht: Nicht aktiv
+        </p>
+        <p className="mb-3 text-xs text-ink-faint">
+          Diese Adressen erhalten eine E-Mail mit PDF-Anhang, sobald ein Tätigkeitsbericht abgegeben wird.
+        </p>
+        <ReportRecipientsForm
+          key={selectedOrgId}
+          organizationId={selectedOrgId}
+          initialEmails={selectedOrgFull.reportRecipients}
+          members={heimatfeuerwehrPickerMembers}
+        />
+        <Table className="mt-3">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nr.</TableHead>
+              <TableHead>Art</TableHead>
+              <TableHead>Ausgefüllt von</TableHead>
+              <TableHead>Abgegeben am</TableHead>
+              <TableHead>E-Mail</TableHead>
+              <TableHead>PDF</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {recentReports.map((report) => {
+              const pdfFileName = reportPdfFileName(report.number!, report.submittedAt!);
+              return (
+                <TableRow key={report.id}>
+                  <TableCell>{report.number}/{report.year}</TableCell>
+                  <TableCell>{REPORT_TYPE_LABEL[report.type]}</TableCell>
+                  <TableCell>{report.filledBy.lastName} {report.filledBy.firstName}</TableCell>
+                  <TableCell>{report.submittedAt?.toLocaleString('de-AT')}</TableCell>
+                  <TableCell>{report.emailSentAt ? 'Gesendet' : report.emailError ? 'Fehlgeschlagen' : '–'}</TableCell>
+                  <TableCell>
+                    <a href={`/admin/heimatfeuerwehr/berichte/${report.id}/pdf`} className="text-brand hover:underline">
+                      {pdfFileName}
+                    </a>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {recentReports.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-ink-muted">
+                  Noch keine abgegebenen Berichte für diese Feuerwehr.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">

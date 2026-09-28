@@ -554,3 +554,32 @@ export async function setOrganizationFeature(
   revalidatePath('/meine-feuerwehr');
   return {};
 }
+
+export interface ReportRecipientsState {
+  success?: boolean;
+  error?: string;
+}
+
+/** Bericht-Brief.md §8: Empfänger der Tätigkeitsbericht-E-Mail - identisches Muster wie
+ * setFahrzeugReservierungEmails/setPhotoUploadNotificationEmails. */
+export async function setReportRecipients(
+  organizationId: string,
+  _prevState: ReportRecipientsState,
+  formData: FormData,
+): Promise<ReportRecipientsState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const parsed = emailListSchema.safeParse(formData.get('emails'));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige Eingabe.' };
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { reportRecipients: [...new Set(parsed.data)] },
+  });
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  return { success: true };
+}
