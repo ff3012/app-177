@@ -3,14 +3,15 @@
 import { useMemo, useState } from 'react';
 import { ACTIVITY_KINDS, type ActivityKindOption } from '@/lib/heimatfeuerwehr/report-constants';
 
-const SONSTIGE_CODE = '__SONSTIGE__';
-
 /**
  * Vollbild-Auswahl der Tätigkeitsart (Bericht-Brief.md §5): Suchfeld, "Zuletzt verwendet" (max. 3),
  * darunter alle 39 Codes alphabetisch als Checkbox-Zeilen. Feuerwehrjugend ist eine reine
- * Gruppenüberschrift über ihren 7 Unterpunkten (kein eigener Checkbox-Eintrag, Design-Spec §1 Punkt 7).
- * "Sonstige" ist ein eigener Freitext-Eintrag, kein ACTIVITY_KINDS-Code - lokal via SONSTIGE_CODE
- * verwaltet, damit dieselbe Checkbox-Liste ihn wie jeden anderen Eintrag behandeln kann.
+ * Gruppenüberschrift über ihren 7 Unterpunkten (kein eigener Checkbox-Eintrag, Design-Spec §1 Punkt 7) -
+ * daher schließt `filtered` diese 7 Codes aus, solange nicht gesucht wird, damit sie nicht doppelt
+ * erscheinen (einmal in der eigenen Sektion, einmal in der alphabetischen Liste); bei aktiver Suche
+ * bleiben sie in `filtered` enthalten, damit z.B. "Lager" weiterhin "selbst veranstaltete Lager" findet.
+ * "Sonstige" ist ein eigener Freitext-Eintrag, kein ACTIVITY_KINDS-Code - als eigene Checkbox+Textfeld
+ * verwaltet (`otherChecked`/`localOther`), nicht Teil der gemeinsamen Checkbox-Liste.
  */
 export function ActivityKindPicker({
   selected,
@@ -35,7 +36,12 @@ export function ActivityKindPicker({
     [],
   );
   const filtered = useMemo(
-    () => sortedAlphabetical.filter((option) => option.label.toLowerCase().includes(search.trim().toLowerCase())),
+    () =>
+      sortedAlphabetical.filter(
+        (option) =>
+          option.label.toLowerCase().includes(search.trim().toLowerCase()) &&
+          (search.trim() !== '' || option.group !== 'FEUERWEHRJUGEND'),
+      ),
     [sortedAlphabetical, search],
   );
   const recentOptions = useMemo(
