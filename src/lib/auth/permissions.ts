@@ -317,6 +317,25 @@ export function canManageHeimatfeuerwehrFor(user: SessionUser, organizationId: s
   return isBezirksAdmin(user) || canManageEventsFor(user, organizationId);
 }
 
+/** Jedes Mitglied der eigenen Heimatfeuerwehr darf einen Bericht für diese Organisation anlegen -
+ * Bericht-Brief.md §9: "Jedes Mitglied der Wehr kann Berichte anlegen." */
+export function canCreateReportFor(user: SessionUser, organizationId: string): boolean {
+  return user.homeOrganizationId === organizationId;
+}
+
+/**
+ * Sichtbarkeit eines Berichts: ein DRAFT sehen Ersteller und Ausfüller; ein SUBMITTED zusätzlich der Admin
+ * der Feuerwehr (Bericht-Brief.md §9). `report` ist bereits geladen (organizationId/status/createdById/
+ * filledById), diese Funktion hat keinen DB-Zugriff.
+ */
+export function canViewReport(
+  user: SessionUser,
+  report: { createdById: string; filledById: string; fireDepartmentId: string; status: string },
+): boolean {
+  if (report.createdById === user.id || report.filledById === user.id) return true;
+  return report.status === 'SUBMITTED' && canManageHeimatfeuerwehrFor(user, report.fireDepartmentId);
+}
+
 /** Sichtbarkeit des Verwaltungsmenüs "Heimatfeuerwehr" - Site-Admin ODER Admin von mindestens
  * einer Feuerwehr (auch ohne Abschnittskommando-Admin zu sein). */
 export function canAccessHeimatfeuerwehrAdmin(user: SessionUser): boolean {

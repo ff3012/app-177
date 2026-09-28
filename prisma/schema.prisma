@@ -188,6 +188,11 @@ model Organization {
   // Array = keine Benachrichtigung (siehe lib/heimatfeuerwehr/notify-photo-upload.ts).
   photoUploadNotificationEmails String[] @default([])
 
+  // Empfängeradressen für die Tätigkeitsbericht-E-Mail (Bericht-Brief.md §8) - gleiches Muster wie
+  // photoUploadNotificationEmails/fahrzeugReservierungEmails: ein Array bereits aufgelöster E-Mail-Adressen,
+  // keine Live-Referenz auf einen User.
+  reportRecipients String[] @default([])
+
   // Funktionsschalter je Heimatfeuerwehr (Funktionsschalter-Brief.md) - Abschalten blendet nur aus,
   // löscht nichts; Reaktivierung zeigt alle Daten unverändert wieder. featureAtemschutz defaultet auf
   // true (Bestandswehren verlieren nichts durch die Migration), featureFacebook auf false - ohne Token
@@ -198,17 +203,18 @@ model Organization {
   featuresUpdatedAt     DateTime?
   featuresUpdatedByName String?
 
-  members      User[]        @relation("HomeOrganization")
-  secondaryHomeMembers User[] @relation("SecondaryHomeOrganization")
-  memberships  Membership[]
-  events       Event[]
-  newsPosts    NewsPost[]
-  vehicles     Vehicle[]
-  photoUploads PhotoUpload[]
+  members              User[]                @relation("HomeOrganization")
+  secondaryHomeMembers User[]                @relation("SecondaryHomeOrganization")
+  memberships          Membership[]
+  events               Event[]
+  newsPosts            NewsPost[]
+  vehicles             Vehicle[]
+  photoUploads         PhotoUpload[]
   pendingRegistrations PendingRegistration[]
 
   dashboardTokens   DashboardToken[]
   facebookPostCache FacebookPostCache?
+  reports           Report[]
 
   // Nur für type == ABSCHNITTSKOMMANDO gesetzt: der Bezirk, dem dieser Abschnitt angehört.
   districtId String?
@@ -296,6 +302,9 @@ model User {
 
   createdPhotoUploads PhotoUpload[]
   uploadedPhotos      Photo[]
+  filledReports       Report[]       @relation("ReportFilledBy")
+  createdReports      Report[]       @relation("ReportCreatedBy")
+  reportMemberships   ReportMember[]
 
   // Bezirksweites, von jeder Organisation unabhängiges Admin-Recht (siehe permissions.ts) - ersetzt
   // die bisherige globale Wirkung von isSiteAdmin, die mit mehreren Abschnitten nicht mehr korrekt
@@ -348,9 +357,9 @@ model Dienstgrad {
   kategorie   DienstgradKategorie
   sortOrder   Int                 @unique
 
-  users User[]
-  secondaryDienstgradUsers User[] @relation("SecondaryDienstgrad")
-  pendingRegistrations PendingRegistration[]
+  users                    User[]
+  secondaryDienstgradUsers User[]                @relation("SecondaryDienstgrad")
+  pendingRegistrations     PendingRegistration[]
 
   @@index([kategorie])
 }
@@ -752,6 +761,7 @@ model Vehicle {
 
   organization Organization     @relation(fields: [organizationId], references: [id])
   bookings     VehicleBooking[]
+  reports      Report[]
 
   @@index([organizationId])
 }
@@ -803,8 +813,112 @@ model VehicleBooking {
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   user    User    @relation("VehicleBookingDriver", fields: [userId], references: [id], onDelete: Cascade)
   event   Event?
+  report  Report?
 
   @@index([vehicleId, startsAt])
+}
+
+enum ReportType {
+  ACTIVITY
+  EXERCISE
+  INCIDENT
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum ReportMemberFunktion {
+  KOMMANDANT
+  FAHRER
+  MANNSCHAFT
+}
+
+enum ReportQuantityKind {
+  MATERIAL
+  EQUIPMENT
+}
+
+// Tätigkeitsbericht (und künftig Übungs-/Einsatzbericht, siehe `type`) - eine Feuerwehr-Aktivität, die ein
+// Mitglied erfasst und (nach Prüfung serverseitig) abgibt. `number`/`year` sind bewusst nullable und werden
+// erst bei der Abgabe vergeben (siehe submitReport, Task 7) - ein DRAFT hat noch keine Nummer, damit
+// verworfene Entwürfe keine Lücken in der fortlaufenden Nummerierung reißen.
+model Report {
+  id               String       @id @default(cuid())
+  number           Int?
+  year             Int?
+  type             ReportType
+  status           ReportStatus @default(DRAFT)
+  fireDepartmentId String
+  fireDepartment   Organization @relation(fields: [fireDepartmentId], references: [id])
+
+  vehicleBookingId String?         @unique
+  vehicleBooking   VehicleBooking? @relation(fields: [vehicleBookingId], references: [id], onDelete: SetNull)
+
+  filledById  String
+  filledBy    User   @relation("ReportFilledBy", fields: [filledById], references: [id])
+  createdById String
+  createdBy   User   @relation("ReportCreatedBy", fields: [createdById], references: [id])
+
+  startAt DateTime
+  endAt   DateTime
+
+  ownActivity   Boolean?
+  activityKinds String[]
+  activityOther String?
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+  vehicleKm Int?
+
+  remark String?
+
+  emailSentAt DateTime?
+  emailError  String?
+
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members   ReportMember[]
+  materials ReportQuantity[]
+
+  @@unique([fireDepartmentId, year, number])
+  @@index([fireDepartmentId, status])
+}
+
+model ReportMember {
+  id       String               @id @default(cuid())
+  reportId String
+  report   Report               @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User                 @relation(fields: [userId], references: [id])
+  funktion ReportMemberFunktion
+
+  @@unique([reportId, userId])
+}
+
+model ReportQuantity {
+  id       String             @id @default(cuid())
+  reportId String
+  report   Report             @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  kind     ReportQuantityKind
+  code     String
+  value    Decimal
+
+  @@unique([reportId, kind, code])
+}
+
+// Zähler-Tabelle für die fortlaufende, lückenlose Nummerierung je Feuerwehr/Jahr - siehe
+// report-sequence.ts. Postgres serialisiert konkurrierende upserts auf denselben Primärschlüssel
+// automatisch, kein zusätzliches Row-Lock nötig.
+model ReportSequence {
+  fireDepartmentId String
+  year             Int
+  lastNumber       Int    @default(0)
+
+  @@id([fireDepartmentId, year])
 }
 
 // ---------- Module 5: Fotos hochladen ----------

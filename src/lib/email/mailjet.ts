@@ -4,6 +4,13 @@ interface SendEmailParams {
   /** Bislang nur von der Fahrzeug-Reservierungs-Ergebnis-Mail genutzt (An: Ausborger, Cc: die
    * hinterlegte Freigabe-Adresse, damit sie die Entscheidung ebenfalls im Blick hat). */
   cc?: string[];
+  /** Neu für die Tätigkeitsbericht-E-Mail (Bericht-Brief.md §8): Antworten sollen beim Ausfüller landen,
+   * nicht bei noreply@. Optional, da jeder bisherige Aufrufer ohne replyTo weiterhin exakt wie vorher
+   * versendet. */
+  replyTo?: string;
+  /** Neu für die Tätigkeitsbericht-E-Mail: das erzeugte PDF als Anhang. Mailjet v3.1 erwartet den Inhalt
+   * base64-kodiert im Feld Base64Content. */
+  attachments?: { filename: string; contentType: string; content: Buffer }[];
   subject: string;
   textPart: string;
   htmlPart: string;
@@ -48,6 +55,16 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
           Subject: params.subject,
           TextPart: params.textPart,
           HTMLPart: wrapHtmlPart(params.htmlPart),
+          ...(params.replyTo ? { ReplyTo: { Email: params.replyTo } } : {}),
+          ...(params.attachments && params.attachments.length > 0
+            ? {
+                Attachments: params.attachments.map((attachment) => ({
+                  ContentType: attachment.contentType,
+                  Filename: attachment.filename,
+                  Base64Content: attachment.content.toString('base64'),
+                })),
+              }
+            : {}),
         },
       ],
     }),
