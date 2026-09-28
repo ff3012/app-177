@@ -129,7 +129,7 @@ export function Schritt1Form({
   const canContinue = ownActivity !== null && (activityKinds.length > 0 || activityOther.trim().length > 0);
 
   return (
-    <div className="flex flex-col gap-5 pb-24">
+    <div className="flex flex-col gap-5 pb-48">
       <div className="rounded-xl bg-white p-4 shadow-sm">
         <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Ausgefüllt von</label>
         <MemberSearchSelect members={members} value={filledById} onChange={setFilledById} placeholder="Mitglied wählen" />
@@ -205,7 +205,13 @@ export function Schritt1Form({
       {error && <p className="text-sm text-red-700">{error}</p>}
       <p className="text-xs text-neutral-400">{saving ? 'Speichert …' : 'Gespeichert'}</p>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">
+      {/* bottom-[98px]/z-40: die permanente mobile Tab-Leiste (MobileTabBar) ist ebenfalls
+          fixed bottom-0 z-30 - bei gleichem z-index gewinnt sie das Zeichnen (später im DOM) und
+          verdeckt diese Leiste vollständig (realer Nutzerbericht: "Weiter" nicht sichtbar). Exakt
+          dasselbe Muster wie photo-upload-form.tsx's eigener fixer Button löst das bereits: über der
+          Tab-Leiste positionieren, höherer z-index. sm:bottom-0, da die Tab-Leiste ab sm: (640px)
+          ohnehin sm:hidden ist. */}
+      <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
         <button
           type="button"
           onClick={handleContinue}

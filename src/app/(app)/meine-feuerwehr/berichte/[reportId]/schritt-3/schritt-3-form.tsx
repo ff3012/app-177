@@ -138,7 +138,7 @@ export function Schritt3Form({
   const canSubmit = remark.trim().length > 0;
 
   return (
-    <div className="flex flex-col gap-5 pb-24">
+    <div className="flex flex-col gap-5 pb-48">
       <div className="rounded-xl bg-white p-4 shadow-sm">
         <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Verbrauchsmaterial</label>
         <div className="flex flex-col gap-1">{nonLoescherMaterials.map((m) => renderRow('MATERIAL', m))}</div>
@@ -168,7 +168,10 @@ export function Schritt3Form({
 
       {error && <p className="text-sm text-red-700">{error}</p>}
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">
+      {/* bottom-[98px]/z-40: gleicher Fix wie in schritt-1-form.tsx - vermeidet die Kollision mit
+          der permanenten mobilen Tab-Leiste (ebenfalls fixed bottom-0 z-30), die diese Leiste sonst
+          vollständig verdeckt. */}
+      <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
         <button
           type="button"
           disabled={!canSubmit || submitting}
