@@ -5,6 +5,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem } from '@/components/ui/command';
 import type { ReportMemberOption } from './member-search-select';
 
+export type { ReportMemberOption };
+
 function memberName(member: ReportMemberOption): string {
   return `${member.lastName} ${member.firstName}`;
 }

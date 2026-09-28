@@ -89,3 +89,56 @@ export async function updateReportDraft(
   revalidatePath(`/meine-feuerwehr/berichte/${reportId}`);
   return {};
 }
+
+export interface ReportMemberPatchEntry {
+  userId: string;
+  funktion: 'KOMMANDANT' | 'FAHRER' | 'MANNSCHAFT';
+}
+
+/** Schritt 2 "Eingesetzte Mitglieder" - vollständiger Ersatz der ReportMember-Zeilen bei jedem Speichern,
+ * einfacher und race-sicherer als ein Diff gegen den vorherigen Stand (die Liste ist klein, typischerweise
+ * < 10 Einträge). */
+export async function updateReportMembers(
+  reportId: string,
+  members: ReportMemberPatchEntry[],
+): Promise<{ error?: string }> {
+  const report = await loadReportForEdit(reportId);
+  assertReportIsEditable(report);
+
+  await prisma.$transaction([
+    prisma.reportMember.deleteMany({ where: { reportId } }),
+    prisma.reportMember.createMany({
+      data: members.map((member) => ({ reportId, userId: member.userId, funktion: member.funktion })),
+    }),
+  ]);
+  revalidatePath(`/meine-feuerwehr/berichte/${reportId}`);
+  return {};
+}
+
+export interface ReportQuantityPatchEntry {
+  kind: 'MATERIAL' | 'EQUIPMENT';
+  code: string;
+  value: number;
+}
+
+/** Schritt 3 "Verbrauchsmaterial"/"Eingesetzte Geräte" - vollständiger Ersatz je Kind (MATERIAL/EQUIPMENT),
+ * nur Zeilen mit value > 0 werden tatsächlich gespeichert (Bericht-Brief.md §5: "Nur befüllte Positionen"). */
+export async function updateReportQuantities(
+  reportId: string,
+  quantities: ReportQuantityPatchEntry[],
+): Promise<{ error?: string }> {
+  const report = await loadReportForEdit(reportId);
+  assertReportIsEditable(report);
+
+  const kinds = [...new Set(quantities.map((q) => q.kind))];
+  const toKeep = quantities.filter((q) => q.value > 0);
+
+  await prisma.$transaction([
+    prisma.reportQuantity.deleteMany({ where: { reportId, kind: { in: kinds } } }),
+    prisma.reportQuantity.createMany({
+      data: toKeep.map((q) => ({ reportId, kind: q.kind, code: q.code, value: q.value })),
+    }),
+  ]);
+  revalidatePath(`/meine-feuerwehr/berichte/${reportId}`);
+  return {};
+}
