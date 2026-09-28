@@ -67,18 +67,16 @@ export function ActivityKindPicker({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-neutral-200 p-4">
+      {/* pt-safe: dieses Overlay liegt außerhalb von (app)/layout.tsx's Kopfzeile/Chrome (eigenes
+          fixed inset-0), bekommt dessen üblichen Abstand zur Notch/Statusleiste also nicht
+          automatisch mit - ohne pt-safe rendert die Kopfzeile (inkl. "Abbrechen") auf einem iPhone
+          teils hinter der Statusleiste/Dynamic Island (realer Nutzerbericht). */}
+      <div className="pt-safe flex items-center justify-between border-b border-neutral-200 px-4 pb-4">
         <button type="button" onClick={onClose} className="text-sm font-medium text-neutral-600">
           Abbrechen
         </button>
         <h2 className="text-[15px] font-semibold text-[#1c1c1e]">Tätigkeitsart</h2>
-        <button
-          type="button"
-          onClick={() => onDone(localSelected, otherChecked ? localOther.trim() : '')}
-          className="text-sm font-semibold text-brand"
-        >
-          Fertig · {totalCount}
-        </button>
+        <span className="w-[52px]" />
       </div>
 
       <div className="p-4">
@@ -91,7 +89,12 @@ export function ActivityKindPicker({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8">
+      {/* "Fertig" ist jetzt eine eigene, fixe Leiste unten (wie "Weiter"/"Bericht abgeben" in den
+          Formular-Schritten) statt eines Buttons in der oberen Kopfzeile - auf einem iPhone war die
+          Kopfzeile teils hinter der Statusleiste verdeckt, wodurch "Fertig" nicht antippbar war. Der
+          scrollbare Listenbereich bekommt entsprechend zusätzlichen unteren Abstand (pb-24), damit
+          die letzten Zeilen nicht hinter dieser Leiste verschwinden. */}
+      <div className="flex-1 overflow-y-auto px-4 pb-24">
         {recentOptions.length > 0 && search.trim() === '' && (
           <div className="mb-3">
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">Zuletzt verwendet</h3>
@@ -123,6 +126,16 @@ export function ActivityKindPicker({
             {ACTIVITY_KINDS.filter((option) => option.group === 'FEUERWEHRJUGEND').map(renderRow)}
           </div>
         )}
+      </div>
+
+      <div className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">
+        <button
+          type="button"
+          onClick={() => onDone(localSelected, otherChecked ? localOther.trim() : '')}
+          className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
+        >
+          Fertig · {totalCount}
+        </button>
       </div>
     </div>
   );
