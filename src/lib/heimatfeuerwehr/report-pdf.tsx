@@ -160,3 +160,12 @@ export function reportPdfFileName(number: number, submittedAt: Date): string {
   const yyyymmdd = submittedAt.toISOString().slice(0, 10).replace(/-/g, '');
   return `Taetigkeitsbericht_${String(number).padStart(3, '0')}_${yyyymmdd}.pdf`;
 }
+
+/** Einzige Quelle für den S3-Storage-Key eines Berichts-PDFs - vorher an mehreren Stellen
+ * (submitReport, beide PDF-Download-Routen) als `${fireDepartmentId}/${pdfFileName}` dupliziert.
+ * Mit dem 14-Tage-Aufbewahrungs-Cron und dem manuellen Löschen-Button kamen zwei weitere Aufrufer
+ * dazu, die exakt denselben Key treffen müssen (sonst wird beim Löschen das falsche/kein Objekt
+ * gefunden) - ab jetzt nur noch hier berechnet. */
+export function reportPdfStorageKey(fireDepartmentId: string, number: number, submittedAt: Date): string {
+  return `${fireDepartmentId}/${reportPdfFileName(number, submittedAt)}`;
+}

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 function regionFromEndpoint(endpointUrl: string): string {
@@ -45,4 +45,13 @@ export async function presignReportPdfDownload(storageKey: string): Promise<stri
   const client = getReportPdfS3Client();
   const command = new GetObjectCommand({ Bucket: getReportsBucket(), Key: storageKey });
   return getSignedUrl(client, command, { expiresIn: 60 });
+}
+
+/** Genutzt vom manuellen Löschen-Button (admin/heimatfeuerwehr/actions.ts) und dem 14-Tage-
+ * Aufbewahrungs-Cron (api/cron/report-retention) - beide löschen den Bericht dauerhaft, das PDF muss
+ * also mitgehen. Ein bereits nicht (mehr) existierendes Objekt ist kein Fehler (z. B. wenn die
+ * PDF-Erzeugung damals selbst schon fehlgeschlagen war) - DeleteObjectCommand ist idempotent. */
+export async function deleteReportPdf(storageKey: string): Promise<void> {
+  const client = getReportPdfS3Client();
+  await client.send(new DeleteObjectCommand({ Bucket: getReportsBucket(), Key: storageKey }));
 }

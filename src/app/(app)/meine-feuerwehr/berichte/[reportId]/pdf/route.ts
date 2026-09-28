@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { canViewReport } from '@/lib/auth/permissions';
 import { presignReportPdfDownload } from '@/lib/storage/report-pdf-s3';
-import { reportPdfFileName } from '@/lib/heimatfeuerwehr/report-pdf';
+import { reportPdfStorageKey } from '@/lib/heimatfeuerwehr/report-pdf';
 
 /** Mitglieder-Gegenstück zu admin/heimatfeuerwehr/berichte/[reportId]/pdf/route.ts: dünne,
  * sitzungsgeprüfte Redirect-Route, die bei JEDEM Klick eine frische (60 s gültige) presigned S3-URL
@@ -21,8 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rep
     return NextResponse.json({ error: 'Bericht nicht gefunden.' }, { status: 404 });
   }
 
-  const pdfFileName = reportPdfFileName(report.number, report.submittedAt);
-  const storageKey = `${report.fireDepartmentId}/${pdfFileName}`;
+  const storageKey = reportPdfStorageKey(report.fireDepartmentId, report.number, report.submittedAt);
   // PDF/S3 sind best-effort (submitReport) - ohne S3-Konfiguration wirft presign. Die Bestätigungsseite
   // hat bis zu diesem Fix genau deshalb den Link ausgeblendet; jetzt zeigt sie ihn immer, daher hier
   // eine verständliche Antwort statt eines rohen 500.

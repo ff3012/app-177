@@ -29,6 +29,7 @@ import { FunktionenCard } from './funktionen-card';
 import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
 import { PhotoUploadNotificationEmailsForm } from './photo-upload-notification-emails-form';
 import { ReportRecipientsForm } from './report-recipients-form';
+import { ReportDeleteButton } from './report-delete-button';
 import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 import { reportPdfFileName } from '@/lib/heimatfeuerwehr/report-pdf';
 import { listDashboardTokens } from '@/lib/dashboard/token';
@@ -604,6 +605,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
               <TableHead>Abgegeben am</TableHead>
               <TableHead>E-Mail</TableHead>
               <TableHead>PDF</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -621,12 +623,18 @@ export default async function HeimatfeuerwehrVerwaltungPage({
                       {pdfFileName}
                     </a>
                   </TableCell>
+                  <TableCell className="text-right">
+                    <ReportDeleteButton
+                      reportId={report.id}
+                      reportLabel={`${REPORT_TYPE_LABEL[report.type]} Nr. ${report.number}/${report.year}`}
+                    />
+                  </TableCell>
                 </TableRow>
               );
             })}
             {recentReports.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-ink-muted">
+                <TableCell colSpan={7} className="text-center text-ink-muted">
                   Noch keine abgegebenen Berichte für diese Feuerwehr.
                 </TableCell>
               </TableRow>

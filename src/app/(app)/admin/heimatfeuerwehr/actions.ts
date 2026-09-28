@@ -12,6 +12,8 @@ import { syncIcsCalendarForOrganization } from '@/lib/calendar/ics-import';
 import { verifyServiceAccountCredentials } from '@/lib/calendar/google-calendar-push';
 import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
 import { ALLOWED_WAPPEN_MIME_TYPES } from '@/lib/organizations/wappen';
+import { reportPdfStorageKey } from '@/lib/heimatfeuerwehr/report-pdf';
+import { deleteReportPdf } from '@/lib/storage/report-pdf-s3';
 
 export interface VehicleFormState {
   error?: string;
@@ -119,6 +121,42 @@ export async function deleteVehicle(vehicleId: string): Promise<DeleteVehicleSta
   }
 
   await prisma.vehicle.delete({ where: { id: vehicleId } });
+  revalidatePath('/admin/heimatfeuerwehr');
+  return {};
+}
+
+export interface DeleteReportState {
+  error?: string;
+}
+
+/** Manuelles Löschen-Pendant zum 14-Tage-Aufbewahrungs-Cron (api/cron/report-retention) - Admins
+ * können einen abgegebenen Bericht auch vor Ablauf der Frist entfernen. Löscht das gespeicherte PDF
+ * (falls eines erzeugt wurde) IMMER mit, nie nur die DB-Zeile - ein verwaistes S3-Objekt hätte
+ * keinen Zweck mehr, sobald die App selbst keinen Bezug mehr dazu hat. ReportMember/ReportQuantity
+ * werden per onDelete: Cascade automatisch mitgelöscht, ReportSequence bleibt unverändert (die
+ * bereits vergebene Nummer wird nicht wiederverwendet). */
+export async function deleteReport(reportId: string): Promise<DeleteReportState> {
+  const user = await requireUser();
+
+  const report = await prisma.report.findUnique({ where: { id: reportId } });
+  if (!report) {
+    return {};
+  }
+  assertPermission(canManageHeimatfeuerwehrFor(user, report.fireDepartmentId));
+
+  if (report.status === 'SUBMITTED' && report.number !== null && report.submittedAt !== null) {
+    const storageKey = reportPdfStorageKey(report.fireDepartmentId, report.number, report.submittedAt);
+    try {
+      await deleteReportPdf(storageKey);
+    } catch (error) {
+      // Best-effort wie überall bei S3 in diesem Modul (siehe notify-report-submitted.ts) - ein
+      // Fehler beim Löschen des PDFs (z. B. S3 nicht erreichbar) darf das Löschen des Berichts selbst
+      // nicht verhindern, sonst bliebe ein nicht mehr gewollter Bericht auf unbestimmte Zeit stehen.
+      console.error(`PDF für Bericht ${reportId} konnte nicht gelöscht werden:`, error);
+    }
+  }
+
+  await prisma.report.delete({ where: { id: reportId } });
   revalidatePath('/admin/heimatfeuerwehr');
   return {};
 }

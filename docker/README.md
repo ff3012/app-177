@@ -221,6 +221,20 @@ crontab -e
 */15 * * * * /opt/app-177/docker/report-drafts.sh >> /var/log/ffapp-report-drafts.log 2>&1
 ```
 
+## Tätigkeitsbericht-Aufbewahrung (14 Tage, täglich)
+
+`docker/report-retention.sh` ruft `/api/cron/report-retention` auf, das jeden abgegebenen Bericht
+(SUBMITTED) löscht, dessen Abgabedatum mehr als 14 Tage zurückliegt (inkl. des gespeicherten PDFs in
+`S3_REPORTS_BUCKET`), sowie jeden Entwurf (DRAFT), der seit mehr als 14 Tagen angelegt und nicht
+abgegeben wurde. Die dauerhafte Aufbewahrung des offiziellen Dokuments erfolgt ab Abgabe über die
+bereits verschickte E-Mail-Kopie beim konfigurierten Empfänger, nicht mehr über die App selbst.
+Einmal täglich ausführen:
+
+```bash
+crontab -e
+0 5 * * * /opt/app-177/docker/report-retention.sh >> /var/log/ffapp-report-retention.log 2>&1
+```
+
 ## Restore-Test
 
 DB-Restore (auf einem bereits laufenden Stack mit leerer/vorhandener DB):

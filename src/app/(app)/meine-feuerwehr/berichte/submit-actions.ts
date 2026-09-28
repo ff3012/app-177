@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { loadReportForEdit, assertReportIsEditable } from '@/lib/heimatfeuerwehr/report-access';
 import { getNextReportNumber } from '@/lib/heimatfeuerwehr/report-sequence';
-import { generateReportPdf, reportPdfFileName, type ReportForPdf } from '@/lib/heimatfeuerwehr/report-pdf';
+import { generateReportPdf, reportPdfFileName, reportPdfStorageKey, type ReportForPdf } from '@/lib/heimatfeuerwehr/report-pdf';
 import { putReportPdf } from '@/lib/storage/report-pdf-s3';
 import { sendReportSubmittedEmail } from '@/lib/heimatfeuerwehr/notify-report-submitted';
 
@@ -122,7 +122,7 @@ export async function submitReport(reportId: string): Promise<{ error?: string }
   };
 
   const pdfFileName = reportPdfFileName(pdfData.number, now);
-  const storageKey = `${report.fireDepartmentId}/${pdfFileName}`;
+  const storageKey = reportPdfStorageKey(report.fireDepartmentId, pdfData.number, now);
 
   try {
     const pdfBuffer = await generateReportPdf(pdfData);
