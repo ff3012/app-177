@@ -94,13 +94,28 @@ export function BookingForm({
     <form onSubmit={handleSubmit(onSubmit)} className="flex max-w-lg flex-col gap-4">
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-neutral-700">Fahrzeug</label>
-        <select {...register('vehicleId')} className="rounded border border-neutral-300 px-3 py-2">
-          {vehicles.map((vehicle) => (
-            <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.taktischeBezeichnung} ({vehicle.kennzeichen})
-            </option>
-          ))}
-        </select>
+        {initialVehicleId ? (
+          // Vorbelegt über die neue Fahrzeug-wählen-Seite (Fahrzeug-reservieren-Brief.md §3) - als
+          // reine Anzeige mit "Ändern" statt eines leeren Selects, das Fahrzeug wurde bereits bewusst
+          // gewählt. Ein verstecktes Feld übernimmt weiterhin den Wert für react-hook-form/den Submit.
+          <div className="flex items-center justify-between rounded border border-neutral-300 px-3 py-2">
+            <span className="text-sm text-[#1c1c1e]">
+              {vehicles.find((v) => v.id === initialVehicleId)?.taktischeBezeichnung ?? initialVehicleId}
+            </span>
+            <Link href="/meine-feuerwehr/reservieren" className="text-sm font-medium text-brand hover:underline">
+              Ändern
+            </Link>
+            <input type="hidden" {...register('vehicleId')} />
+          </div>
+        ) : (
+          <select {...register('vehicleId')} className="rounded border border-neutral-300 px-3 py-2">
+            {vehicles.map((vehicle) => (
+              <option key={vehicle.id} value={vehicle.id}>
+                {vehicle.taktischeBezeichnung} ({vehicle.kennzeichen})
+              </option>
+            ))}
+          </select>
+        )}
         {errors.vehicleId && <p className="text-sm text-red-700">{errors.vehicleId.message}</p>}
       </div>
 

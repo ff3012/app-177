@@ -15,6 +15,7 @@ import { getVisibleNews } from '@/lib/news/audience';
 import { cancelVehicleBooking } from './actions';
 import { ActionRow } from './action-row';
 import { VehicleReportReminderCard } from '@/components/home/vehicle-report-reminder-card';
+import { VehicleBookingIcon } from '@/components/calendar/vehicle-booking-icon';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
   aktiv: 'Aktiv',
@@ -305,7 +306,7 @@ export default async function MeineFeuerwehrPage() {
   const vehicleIds = vehicles.map((vehicle) => vehicle.id);
   const todaysBookings = vehicleIds.length
     ? await prisma.vehicleBooking.findMany({
-        where: { vehicleId: { in: vehicleIds }, startsAt: { lt: endOfToday }, endsAt: { gt: now } },
+        where: { vehicleId: { in: vehicleIds }, status: { not: 'ABGELEHNT' }, startsAt: { lt: endOfToday }, endsAt: { gt: now } },
         select: { vehicleId: true },
       })
     : [];
@@ -353,7 +354,6 @@ export default async function MeineFeuerwehrPage() {
   const untersuchungStatus = getExpiryStatus(me.atemschutzGueltigBis);
   const finnentestStatus = getExpiryStatus(getFinnentestExpiryDate(me.atemschutzFinnentestAm));
   const greetingDate = now.toLocaleDateString('de-AT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const vehicleStatusLabel = vehicles.length === 0 ? 'Kein Fahrzeug hinterlegt' : `${vehiclesFreeToday} von ${vehicles.length} heute frei`;
   const droneStatusLabel = droneRuleMet ? '90 Tage erfüllt' : `${droneFlightCount} von ${NINETY_DAY_REQUIRED_FLIGHTS} Flügen`;
 
   return (
@@ -385,6 +385,27 @@ export default async function MeineFeuerwehrPage() {
         <h1 className="text-[27px] font-bold leading-tight text-[#1c1c1e]">Servus, {me.firstName}</h1>
         <p className="mt-1 text-[15px] text-[#6c6c70]">{greetingDate}</p>
       </div>
+
+      {/* Primäre Aktion der Seite (Fahrzeug-reservieren-Brief.md §1) - ersetzt die vormalige
+          Fuhrpark-Karte mit Select+Button weiter unten und die kleinere Schnellzugriff-Kachel;
+          verlinkt auf die neue Fahrzeug-wählen-Seite statt direkt auf das Formular. */}
+      {vehicles.length > 0 && (
+        <Link
+          href="/meine-feuerwehr/reservieren"
+          className="flex min-h-[72px] items-center gap-3 rounded-xl border-2 border-brand bg-white p-4 shadow-sm"
+        >
+          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-[11px] bg-brand/10 text-brand">
+            <VehicleBookingIcon className="h-6 w-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[18px] font-semibold text-[#1c1c1e]">Fahrzeug reservieren</span>
+            <span className={`block text-[13px] ${vehiclesFreeToday > 0 ? 'text-[#1b7a52]' : 'text-[#8e8e93]'}`}>
+              {vehiclesFreeToday > 0 ? `${vehiclesFreeToday} von ${vehicles.length} heute frei` : 'heute alle belegt'}
+            </span>
+          </span>
+          <span className="flex-none text-[22px] leading-none text-[#c9c9ce]">›</span>
+        </Link>
+      )}
 
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
@@ -448,18 +469,14 @@ export default async function MeineFeuerwehrPage() {
         </div>
       )}
 
-      <div className={droneMember ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
-        <Link href="/meine-feuerwehr/buchen" className="flex min-h-[74px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
-          <span className="text-[15px] font-semibold text-[#1c1c1e]">Fahrzeug Reservierungen</span>
-          <span className="text-[13px] text-[#6c6c70]">{vehicleStatusLabel}</span>
+      {/* Fahrzeug Reservierungen ist jetzt die volle Kachel oben unter der Begrüßung - hier bleibt
+          (falls Drohnengruppen-Mitglied) nur noch "Flug registrieren" als einzelne Kachel übrig. */}
+      {droneMember && (
+        <Link href="/drohnen/neu" className="flex min-h-[74px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
+          <span className="text-[15px] font-semibold text-[#1c1c1e]">Flug registrieren</span>
+          <span className={`text-[13px] ${droneRuleMet ? 'text-[#1b7a52]' : 'text-[#6c6c70]'}`}>{droneStatusLabel}</span>
         </Link>
-        {droneMember && (
-          <Link href="/drohnen/neu" className="flex min-h-[74px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
-            <span className="text-[15px] font-semibold text-[#1c1c1e]">Flug registrieren</span>
-            <span className={`text-[13px] ${droneRuleMet ? 'text-[#1b7a52]' : 'text-[#6c6c70]'}`}>{droneStatusLabel}</span>
-          </Link>
-        )}
-      </div>
+      )}
 
       {recentPhotoUploads.length > 0 && (
         <RecentPhotoUploadsBlock
@@ -544,26 +561,6 @@ export default async function MeineFeuerwehrPage() {
         )}
       </div>
       )}
-
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Fuhrpark</h2>
-        {vehicles.length === 0 ? (
-          <p className="text-sm text-neutral-500">Für deine Feuerwehr sind noch keine Fahrzeuge hinterlegt.</p>
-        ) : (
-          <form action="/meine-feuerwehr/buchen" method="get" className="flex flex-wrap items-center gap-3">
-            <select name="vehicleId" className="rounded border border-neutral-300 px-3 py-2 text-sm">
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.taktischeBezeichnung} ({vehicle.kennzeichen})
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark">
-              Reservieren
-            </button>
-          </form>
-        )}
-      </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-neutral-900">Meine Reservierungen</h2>

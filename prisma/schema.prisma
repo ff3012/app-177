@@ -759,6 +759,11 @@ model Vehicle {
   marke                String
   typ                  String
   isActive             Boolean  @default(true)
+  // Anzeige-Reihenfolge auf der Fahrzeug-Auswahlseite (meine-feuerwehr/reservieren) - dasselbe Muster
+  // wie Drone.sortOrder, gesetzt bei Anlage (createVehicle) als laufender Zähler je Feuerwehr, keine
+  // eigene Reihenfolge-UI. Default 0 für bereits bestehende Fahrzeuge, die dann rein über den
+  // sekundären alphabetischen orderBy-Fallback sortiert erscheinen.
+  sortOrder            Int      @default(0)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

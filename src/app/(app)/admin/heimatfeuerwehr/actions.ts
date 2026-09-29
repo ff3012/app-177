@@ -39,7 +39,11 @@ export async function createVehicle(
     return { fieldErrors: { kennzeichen: ['Ein Fahrzeug mit diesem Kennzeichen existiert bereits.'] } };
   }
 
-  await prisma.vehicle.create({ data: { ...data, organizationId } });
+  // sortOrder = Anlage-Reihenfolge innerhalb der Feuerwehr, exakt dasselbe Muster wie Drone.sortOrder
+  // (admin/drohnen/actions.ts) - keine eigene Reihenfolge-UI, treibt aber die Fahrzeug-Auswahlseite
+  // (meine-feuerwehr/reservieren), die sonst rein alphabetisch sortieren würde.
+  const count = await prisma.vehicle.count({ where: { organizationId } });
+  await prisma.vehicle.create({ data: { ...data, organizationId, sortOrder: count } });
   revalidatePath('/admin/heimatfeuerwehr');
   return {};
 }
