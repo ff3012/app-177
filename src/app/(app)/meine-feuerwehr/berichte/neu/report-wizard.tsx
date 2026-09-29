@@ -663,7 +663,7 @@ export function ReportWizard({
               onBlur={() => setRemarkTouched(true)}
               rows={4}
               className={`w-full rounded-lg border px-3 py-2 text-sm ${
-                remarkTouched && remark.trim().length === 0 ? 'border-red-500' : 'border-neutral-300'
+                remarkTouched && remark.trim().length === 0 ? 'border-red-500 bg-red-50' : 'border-neutral-300'
               }`}
             />
             {remarkTouched && remark.trim().length === 0 && (
