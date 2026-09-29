@@ -15,7 +15,6 @@ import { getVisibleNews } from '@/lib/news/audience';
 import { cancelVehicleBooking } from './actions';
 import { ActionRow } from './action-row';
 import { VehicleReportReminderCard } from '@/components/home/vehicle-report-reminder-card';
-import { VehicleBookingIcon } from '@/components/calendar/vehicle-booking-icon';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
   aktiv: 'Aktiv',
@@ -386,30 +385,38 @@ export default async function MeineFeuerwehrPage() {
         <p className="mt-1 text-[15px] text-[#6c6c70]">{greetingDate}</p>
       </div>
 
-      {/* Primäre Aktion der Seite (Fahrzeug-reservieren-Brief.md §1) - ersetzt die vormalige
-          Fuhrpark-Karte mit Select+Button weiter unten und die kleinere Schnellzugriff-Kachel;
-          verlinkt auf die neue Fahrzeug-wählen-Seite statt direkt auf das Formular. */}
-      {vehicles.length > 0 && (
-        <Link
-          href="/meine-feuerwehr/reservieren"
-          className="flex min-h-[72px] items-center gap-3 rounded-xl border-2 border-brand bg-white p-4 shadow-sm"
-        >
-          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-[11px] bg-brand/10 text-brand">
-            <VehicleBookingIcon className="h-6 w-6" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[18px] font-semibold text-[#1c1c1e]">Fahrzeug reservieren</span>
-            <span className={`block text-[13px] ${vehiclesFreeToday > 0 ? 'text-[#1b7a52]' : 'text-[#8e8e93]'}`}>
-              {vehiclesFreeToday > 0 ? `${vehiclesFreeToday} von ${vehicles.length} heute frei` : 'heute alle belegt'}
-            </span>
-          </span>
-          <span className="flex-none text-[22px] leading-none text-[#c9c9ce]">›</span>
-        </Link>
-      )}
-
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
-      <ActionRow showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)} />
+      {/* Ein gemeinsames 2x2-Aktionsraster statt zweier separat gestapelter Grids - Reihe 1 Fahrzeug
+          reservieren/Flug registrieren, Reihe 2 Neuer Bericht/Foto Upload (auf ausdrücklichen Wunsch
+          so angeordnet). Fehlt eine Kachel (kein Fahrzeug hinterlegt, kein Drohnengruppen-Mitglied),
+          bleibt ihre Zelle ein unsichtbarer Platzhalter statt komplett zu entfallen, damit die
+          Zeilenpaarung der übrigen Kacheln nicht verrutscht - dasselbe Muster wie MobileTabBar's leere
+          `aria-hidden`-Zelle. */}
+      <div className="grid grid-cols-2 gap-2.5">
+        {vehicles.length > 0 ? (
+          <Link
+            href="/meine-feuerwehr/reservieren"
+            className="flex min-h-[96px] flex-col justify-center gap-1 rounded-xl border-2 border-brand bg-white p-4 shadow-sm"
+          >
+            <span className="text-[15px] font-semibold text-[#1c1c1e]">Fahrzeug reservieren</span>
+            <span className={`text-[13px] ${vehiclesFreeToday > 0 ? 'text-[#1b7a52]' : 'text-[#8e8e93]'}`}>
+              {vehiclesFreeToday > 0 ? `${vehiclesFreeToday} von ${vehicles.length} heute frei` : 'heute alle belegt'}
+            </span>
+          </Link>
+        ) : (
+          <div aria-hidden="true" />
+        )}
+        {droneMember ? (
+          <Link href="/drohnen/neu" className="flex min-h-[96px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
+            <span className="text-[15px] font-semibold text-[#1c1c1e]">Flug registrieren</span>
+            <span className={`text-[13px] ${droneRuleMet ? 'text-[#1b7a52]' : 'text-[#6c6c70]'}`}>{droneStatusLabel}</span>
+          </Link>
+        ) : (
+          <div aria-hidden="true" />
+        )}
+        <ActionRow showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)} />
+      </div>
 
       {openVehicleReportReminders.length > 0 && (
         <div className="flex flex-col gap-2.5">
@@ -437,44 +444,6 @@ export default async function MeineFeuerwehrPage() {
       {canManagePhotoUploadsFor(user, user.homeOrganizationId) && (
         <Link href="/foto-uploads" className="-mt-2 self-end text-sm font-medium text-neutral-600 hover:underline">
           Alle Foto Uploads
-        </Link>
-      )}
-
-      {myRecentReports.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Meine Berichte</span>
-            <Link href="/meine-feuerwehr/berichte" className="text-sm font-medium text-brand">
-              Alle
-            </Link>
-          </div>
-          <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-            {/* Kein Entwurf-Konzept mehr - jeder Bericht hier ist bereits abgegeben, verlinkt also
-                immer auf die Bestätigungsseite/den PDF-Zugang. */}
-            {myRecentReports.map((report, index) => (
-              <Link
-                key={report.id}
-                href={`/meine-feuerwehr/berichte/${report.id}/abgeschlossen`}
-                className={`flex items-center justify-between gap-3 px-4 py-3 ${index === myRecentReports.length - 1 ? '' : 'border-b border-[#f0f0f2]'}`}
-              >
-                <span className="text-[14px] text-[#1c1c1e]">
-                  Nr. {report.number}/{report.year} · {report.startAt.toLocaleDateString('de-AT')}
-                </span>
-                <span className="flex-none rounded-full bg-[#eaf6f0] px-2.5 py-1 text-[12px] font-semibold text-[#1b7a52]">
-                  Abgegeben
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Fahrzeug Reservierungen ist jetzt die volle Kachel oben unter der Begrüßung - hier bleibt
-          (falls Drohnengruppen-Mitglied) nur noch "Flug registrieren" als einzelne Kachel übrig. */}
-      {droneMember && (
-        <Link href="/drohnen/neu" className="flex min-h-[74px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm">
-          <span className="text-[15px] font-semibold text-[#1c1c1e]">Flug registrieren</span>
-          <span className={`text-[13px] ${droneRuleMet ? 'text-[#1b7a52]' : 'text-[#6c6c70]'}`}>{droneStatusLabel}</span>
         </Link>
       )}
 
@@ -593,6 +562,37 @@ export default async function MeineFeuerwehrPage() {
           </ul>
         )}
       </div>
+
+      {/* Auf ausdrücklichen Wunsch ganz ans Seitenende verschoben (vorher direkt unter der
+          Aktionsreihe). */}
+      {myRecentReports.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Meine Berichte</span>
+            <Link href="/meine-feuerwehr/berichte" className="text-sm font-medium text-brand">
+              Alle
+            </Link>
+          </div>
+          <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+            {/* Kein Entwurf-Konzept mehr - jeder Bericht hier ist bereits abgegeben, verlinkt also
+                immer auf die Bestätigungsseite/den PDF-Zugang. */}
+            {myRecentReports.map((report, index) => (
+              <Link
+                key={report.id}
+                href={`/meine-feuerwehr/berichte/${report.id}/abgeschlossen`}
+                className={`flex items-center justify-between gap-3 px-4 py-3 ${index === myRecentReports.length - 1 ? '' : 'border-b border-[#f0f0f2]'}`}
+              >
+                <span className="text-[14px] text-[#1c1c1e]">
+                  Nr. {report.number}/{report.year} · {report.startAt.toLocaleDateString('de-AT')}
+                </span>
+                <span className="flex-none rounded-full bg-[#eaf6f0] px-2.5 py-1 text-[12px] font-semibold text-[#1b7a52]">
+                  Abgegeben
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
