@@ -387,6 +387,30 @@ export default async function MeineFeuerwehrPage() {
 
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
+      {/* Auf ausdrücklichen Wunsch über die 4 Aktionskacheln geschoben (vorher direkt darunter). */}
+      {openVehicleReportReminders.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Zu erledigen</span>
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-bold text-white">
+              {openVehicleReportReminders.length}
+            </span>
+          </div>
+          {openVehicleReportReminders.map((booking) => (
+            <VehicleReportReminderCard
+              key={booking.id}
+              reminder={{
+                bookingId: booking.id,
+                vehicleId: booking.vehicleId,
+                vehicleLabel: `${booking.vehicle.taktischeBezeichnung} (${booking.vehicle.kennzeichen})`,
+                startsAt: booking.startsAt.toISOString(),
+                endsAt: booking.endsAt.toISOString(),
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Ein gemeinsames 2x2-Aktionsraster statt zweier separat gestapelter Grids - Reihe 1 Fahrzeug
           reservieren/Flug registrieren, Reihe 2 Neuer Bericht/Foto Upload (auf ausdrücklichen Wunsch
           so angeordnet). Fehlt eine Kachel (kein Fahrzeug hinterlegt, kein Drohnengruppen-Mitglied),
@@ -417,29 +441,6 @@ export default async function MeineFeuerwehrPage() {
         )}
         <ActionRow showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)} />
       </div>
-
-      {openVehicleReportReminders.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Zu erledigen</span>
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-bold text-white">
-              {openVehicleReportReminders.length}
-            </span>
-          </div>
-          {openVehicleReportReminders.map((booking) => (
-            <VehicleReportReminderCard
-              key={booking.id}
-              reminder={{
-                bookingId: booking.id,
-                vehicleId: booking.vehicleId,
-                vehicleLabel: `${booking.vehicle.taktischeBezeichnung} (${booking.vehicle.kennzeichen})`,
-                startsAt: booking.startsAt.toISOString(),
-                endsAt: booking.endsAt.toISOString(),
-              }}
-            />
-          ))}
-        </div>
-      )}
 
       {canManagePhotoUploadsFor(user, user.homeOrganizationId) && (
         <Link href="/foto-uploads" className="-mt-2 self-end text-sm font-medium text-neutral-600 hover:underline">
