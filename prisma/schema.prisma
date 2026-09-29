@@ -300,11 +300,14 @@ model User {
   secondaryDienstgradId   String?
   secondaryDienstgrad     Dienstgrad?   @relation("SecondaryDienstgrad", fields: [secondaryDienstgradId], references: [id])
 
-  createdPhotoUploads PhotoUpload[]
-  uploadedPhotos      Photo[]
-  filledReports       Report[]       @relation("ReportFilledBy")
-  createdReports      Report[]       @relation("ReportCreatedBy")
-  reportMemberships   ReportMember[]
+  createdPhotoUploads        PhotoUpload[]
+  uploadedPhotos             Photo[]
+  filledReports              Report[]       @relation("ReportFilledBy")
+  createdReports             Report[]       @relation("ReportCreatedBy")
+  reportMemberships          ReportMember[]
+  uebungsleiterReports       Report[]       @relation("ReportUebungsleiter")
+  uebungsueberwachungReports Report[]       @relation("ReportUebungsueberwachung")
+  uebungsbeobachterReports   Report[]       @relation("ReportUebungsbeobachter")
 
   // Bezirksweites, von jeder Organisation unabhängiges Admin-Recht (siehe permissions.ts) - ersetzt
   // die bisherige globale Wirkung von isSiteAdmin, die mit mehreren Abschnitten nicht mehr korrekt
@@ -873,6 +876,32 @@ model Report {
 
   remark String
 
+  // Übungsbericht-spezifisch (nur bei type === EXERCISE gesetzt/im Assistenten sichtbar) - wortgetreu
+  // aus der offiziellen Übungsbericht-Papiervorlage (siehe report-constants.ts's UEBUNGS_ARTEN-
+  // Kommentar). Alle nullable, da ACTIVITY/INCIDENT-Berichte sie nie verwenden - kein separates Modell,
+  // da es sich um schlichte Zusatzfelder auf demselben Report handelt, keine eigene Entität.
+  uebungsleiterId       String?
+  uebungsleiter         User?   @relation("ReportUebungsleiter", fields: [uebungsleiterId], references: [id], onDelete: SetNull)
+  uebungsueberwachungId String?
+  uebungsueberwachung   User?   @relation("ReportUebungsueberwachung", fields: [uebungsueberwachungId], references: [id], onDelete: SetNull)
+  uebungsbeobachterId   String?
+  uebungsbeobachter     User?   @relation("ReportUebungsbeobachter", fields: [uebungsbeobachterId], references: [id], onDelete: SetNull)
+
+  uebungsortStrasse String?
+  uebungsortNr      String?
+  uebungsortPlz     String?
+  uebungsortOrt     String?
+
+  uebungsziel             String?
+  uebungslage             String?
+  uebungsdarstellung      String?
+  fuerUebungVerstaendigen String?
+  uebungserkenntnis       String?
+  uebungszielsetzung      String?
+  vorschlaege             String?
+
+  weitereFeuerwehren String?
+
   emailSentAt DateTime?
   emailError  String?
 
@@ -917,7 +946,7 @@ model ReportMember {
   // unschädlich zu Report.members' eigenem Cascade - ein ReportVehicle wird nie unabhängig vom
   // ganzen Bericht gelöscht, dieser zweite Cascade-Pfad greift also faktisch nie einzeln.
   reportVehicleId String?
-  reportVehicle    ReportVehicle? @relation(fields: [reportVehicleId], references: [id], onDelete: Cascade)
+  reportVehicle   ReportVehicle? @relation(fields: [reportVehicleId], references: [id], onDelete: Cascade)
 
   @@unique([reportId, userId])
 }

@@ -1,8 +1,15 @@
 export interface ActivityKindOption {
   code: string;
   label: string;
-  group?: 'FEUERWEHRJUGEND';
+  group?: 'FEUERWEHRJUGEND' | 'AUSBILDUNGSPRUEFUNG';
 }
+
+// Anzeige-Titel je Gruppe, für ActivityKindPicker's generische Gruppen-Sektion (ersetzt die vormals
+// hartkodierte "Feuerwehrjugend"-Sonderbehandlung).
+export const ACTIVITY_KIND_GROUP_LABEL: Record<string, string> = {
+  FEUERWEHRJUGEND: 'Feuerwehrjugend',
+  AUSBILDUNGSPRUEFUNG: 'Ausbildungsprüfungen',
+};
 
 // Wortgetreu aus der offiziellen NÖ-Landesfeuerwehrverband-Papiervorlage extrahiert (siehe Design-Spec
 // docs/superpowers/specs/2026-09-28-taetigkeitsbericht-design.md §1 Punkt 7 und §4) - 39 fixe Codes.
@@ -51,6 +58,57 @@ export const ACTIVITY_KINDS: ActivityKindOption[] = [
   { code: 'WASSERDIENST', label: 'Wasserdienst' },
 ];
 
+// Wortgetreu aus der offiziellen Übungsbericht-Papiervorlage extrahiert (Feuerwehr Wolfsgraben,
+// Übungsbericht_045_20260603.docx) - 25 Übungsart-Codes plus 8 Ausbildungsprüfungen-Codes, die am
+// Formular als eigene Gruppe darunter stehen. Genau wie Tätigkeitsart bewusst Einzelauswahl (siehe
+// activity-kind-picker.tsx) - das Papierformular zeigt zwar Kontrollkästchen ohne "nur eine wählbar"-
+// Hinweis, aber auf ausdrücklichen Wunsch konsistent mit Tätigkeitsart gehalten.
+export const UEBUNGS_ARTEN: ActivityKindOption[] = [
+  { code: 'UE_ATEMSCHUTZUEBUNG', label: 'Atemschutzübung' },
+  { code: 'UE_BEGEHUNG', label: 'Begehung' },
+  { code: 'UE_BEWERBSUEBUNG', label: 'Bewerbsübung' },
+  { code: 'UE_BRANDDIENSTUEBUNG', label: 'Branddienstübung' },
+  { code: 'UE_CHARGENSCHULUNG', label: 'Chargenschulung' },
+  { code: 'UE_FLUGDIENSTUEBUNG', label: 'Flugdienstübung' },
+  { code: 'UE_FMD_SCHULUNG', label: 'FMD-Schulung' },
+  { code: 'UE_FUNKUEBUNG', label: 'Funkübung' },
+  { code: 'UE_GESAMTUEBUNG', label: 'Gesamtübung' },
+  { code: 'UE_GRUPPENUEBUNG', label: 'Gruppenübung' },
+  { code: 'UE_HOEHENRETTUNGSGRUPPENUEBUNG', label: 'Höhenrettungsgruppenübung' },
+  { code: 'UE_KHD_UEBUNG', label: 'KHD-Übung' },
+  { code: 'UE_KRAFTFAHRUEBUNG', label: 'Kraftfahrübung' },
+  { code: 'UE_SCHADSTOFFUEBUNG', label: 'Schadstoffübung' },
+  { code: 'UE_SCHULUNG', label: 'Schulung' },
+  { code: 'UE_SPRENGDIENSTUEBUNG', label: 'Sprengdienstübung' },
+  { code: 'UE_STRAHLENSCHUTZUEBUNG', label: 'Strahlenschutzübung' },
+  { code: 'UE_TAUCHDIENSTUEBUNG', label: 'Tauchdienstübung' },
+  { code: 'UE_TECHNISCHE_UEBUNG', label: 'Technische Übung' },
+  { code: 'UE_TUNNELUEBUNG', label: 'Tunnelübung' },
+  { code: 'UE_WALDBRANDUEBUNG', label: 'Waldbrandübung' },
+  { code: 'UE_WASSERDIENSTUEBUNG', label: 'Wasserdienstübung' },
+  { code: 'UE_ZUGSUEBUNG', label: 'Zugsübung' },
+  { code: 'UE_ZUGSUEBUNG_1_ZUG', label: 'Zugsübung 1. Zug' },
+  { code: 'UE_ZUGSUEBUNG_2_ZUG', label: 'Zugsübung 2. Zug' },
+  { code: 'AP_VORBEREITUNG_ATEMSCHUTZ', label: 'Vorbereitung AP Atemschutz', group: 'AUSBILDUNGSPRUEFUNG' },
+  { code: 'AP_VORBEREITUNG_FEUERWEHRBOOT', label: 'Vorbereitung AP Feuerwehrboot', group: 'AUSBILDUNGSPRUEFUNG' },
+  { code: 'AP_VORBEREITUNG_LOESCHEINSATZ', label: 'Vorbereitung AP Löscheinsatz', group: 'AUSBILDUNGSPRUEFUNG' },
+  {
+    code: 'AP_VORBEREITUNG_TECHNISCHER_EINSATZ',
+    label: 'Vorbereitung AP Technischer Einsatz',
+    group: 'AUSBILDUNGSPRUEFUNG',
+  },
+  { code: 'AP_PRUEFUNG_ATEMSCHUTZ', label: 'Prüfung AP Atemschutz', group: 'AUSBILDUNGSPRUEFUNG' },
+  { code: 'AP_PRUEFUNG_FEUERWEHRBOOT', label: 'Prüfung AP Feuerwehrboot', group: 'AUSBILDUNGSPRUEFUNG' },
+  { code: 'AP_PRUEFUNG_LOESCHEINSATZ', label: 'Prüfung AP Löscheinsatz', group: 'AUSBILDUNGSPRUEFUNG' },
+  { code: 'AP_PRUEFUNG_TECHNISCHER_EINSATZ', label: 'Prüfung AP Technischer Einsatz', group: 'AUSBILDUNGSPRUEFUNG' },
+];
+
+/** Welche Codeliste für die Tätigkeits-/Übungsart-Auswahl gilt, je nach Report.type - die einzige
+ * Stelle, die diese Zuordnung trifft (ActivityKindPicker/Wizard/PDF/E-Mail lesen alle darüber). */
+export function getKindOptionsForType(type: string): ActivityKindOption[] {
+  return type === 'EXERCISE' ? UEBUNGS_ARTEN : ACTIVITY_KINDS;
+}
+
 export interface QuantityOption {
   code: string;
   label: string;
@@ -93,6 +151,6 @@ export const REPORT_TYPE_LABEL: Record<string, string> = {
   INCIDENT: 'Einsatzbericht',
 };
 
-// Nur ACTIVITY ist aktiv - die anderen beiden erscheinen im Berichtsart-Sheet (Task 3) ausgegraut mit
+// ACTIVITY und EXERCISE sind aktiv - INCIDENT erscheint im Berichtsart-Sheet weiterhin ausgegraut mit
 // "Bald verfügbar", reine UI-Sperre (das Datenmodell unterstützt alle drei Typen bereits).
-export const ACTIVE_REPORT_TYPES: readonly string[] = ['ACTIVITY'];
+export const ACTIVE_REPORT_TYPES: readonly string[] = ['ACTIVITY', 'EXERCISE'];

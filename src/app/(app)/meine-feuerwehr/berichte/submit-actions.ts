@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canCreateReportFor } from '@/lib/auth/permissions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
-import { ACTIVITY_KINDS, MATERIALS, EQUIPMENT } from '@/lib/heimatfeuerwehr/report-constants';
+import { MATERIALS, EQUIPMENT, getKindOptionsForType } from '@/lib/heimatfeuerwehr/report-constants';
 import { getNextReportNumber } from '@/lib/heimatfeuerwehr/report-sequence';
 import { generateReportPdf, reportPdfFileName, reportPdfStorageKey, type ReportForPdf } from '@/lib/heimatfeuerwehr/report-pdf';
 import { putReportPdf } from '@/lib/storage/report-pdf-s3';
@@ -25,6 +25,23 @@ export interface SubmitReportInput {
   // Fahrzeug" - z. B. zu Fuß/privat angereist, weiterhin möglich auch wenn Fahrzeuge verwendet wurden).
   members: { userId: string; funktion: ReportMemberFunktion; vehicleId: string | null }[];
   quantities: { kind: 'MATERIAL' | 'EQUIPMENT'; code: string; value: number }[];
+  // Übungsbericht-spezifisch (type === EXERCISE) - bei ACTIVITY/INCIDENT immer null, siehe
+  // Report-Modell-Kommentar in schema.prisma.
+  uebungsleiterId: string | null;
+  uebungsueberwachungId: string | null;
+  uebungsbeobachterId: string | null;
+  uebungsortStrasse: string | null;
+  uebungsortNr: string | null;
+  uebungsortPlz: string | null;
+  uebungsortOrt: string | null;
+  weitereFeuerwehren: string | null;
+  uebungsziel: string | null;
+  uebungslage: string | null;
+  uebungsdarstellung: string | null;
+  fuerUebungVerstaendigen: string | null;
+  uebungserkenntnis: string | null;
+  uebungszielsetzung: string | null;
+  vorschlaege: string | null;
 }
 
 const FUNKTIONEN: ReportMemberFunktion[] = ['KOMMANDANT', 'FAHRER', 'MANNSCHAFT'];
@@ -48,14 +65,16 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     return { error: '"Eigene Tätigkeit" muss angegeben werden.' };
   }
   const activityOther = input.activityOther?.trim() || null;
+  const kindOptions = getKindOptionsForType(input.type);
+  const kindLabel = input.type === 'EXERCISE' ? 'Übungsart' : 'Tätigkeitsart';
   if (input.activityKinds.length === 0 && !activityOther) {
-    return { error: 'Mindestens eine Tätigkeitsart oder "Sonstige" muss angegeben werden.' };
+    return { error: `Mindestens eine ${kindLabel} oder "Sonstige" muss angegeben werden.` };
   }
   if (input.activityKinds.length > 1) {
-    return { error: 'Es kann nur eine Tätigkeitsart ausgewählt werden.' };
+    return { error: `Es kann nur eine ${kindLabel} ausgewählt werden.` };
   }
-  if (input.activityKinds.length === 1 && !ACTIVITY_KINDS.some((option) => option.code === input.activityKinds[0])) {
-    return { error: 'Unbekannte Tätigkeitsart.' };
+  if (input.activityKinds.length === 1 && !kindOptions.some((option) => option.code === input.activityKinds[0])) {
+    return { error: `Unbekannte ${kindLabel}.` };
   }
   const remark = input.remark.trim();
   if (!remark) {
@@ -113,6 +132,23 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     return { error: 'Mindestens ein eingesetztes Mitglied gehört nicht zu dieser Feuerwehr.' };
   }
 
+  // Übungsleiter/-überwachung/-beobachter sind optionale Mitglied-Referenzen (nicht Teil der
+  // eingesetzten Mitglieder-Liste oben) - dieselbe Org+aktiv-Prüfung wie filledBy/Mitglieder, nur je
+  // Feld einzeln, da nicht jedes gesetzt sein muss.
+  const uebungsRoleIds = [input.uebungsleiterId, input.uebungsueberwachungId, input.uebungsbeobachterId].filter(
+    (id): id is string => id !== null,
+  );
+  const validUebungsRoleUsers = uebungsRoleIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: uebungsRoleIds }, homeOrganizationId: fireDepartmentId, ...NOT_DEACTIVATED_WHERE },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    : [];
+  if (validUebungsRoleUsers.length !== new Set(uebungsRoleIds).size) {
+    return { error: 'Übungsleiter/-überwachung/-beobachter muss zu dieser Feuerwehr gehören.' };
+  }
+  const uebungsRoleUsersById = new Map(validUebungsRoleUsers.map((u) => [u.id, u]));
+
   for (const quantity of input.quantities) {
     const options = quantity.kind === 'MATERIAL' ? MATERIALS : EQUIPMENT;
     if (!options.some((option) => option.code === quantity.code)) {
@@ -147,6 +183,21 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
           number: nextNumber,
           year,
           submittedAt: now,
+          uebungsleiterId: input.uebungsleiterId,
+          uebungsueberwachungId: input.uebungsueberwachungId,
+          uebungsbeobachterId: input.uebungsbeobachterId,
+          uebungsortStrasse: input.uebungsortStrasse,
+          uebungsortNr: input.uebungsortNr,
+          uebungsortPlz: input.uebungsortPlz,
+          uebungsortOrt: input.uebungsortOrt,
+          weitereFeuerwehren: input.weitereFeuerwehren,
+          uebungsziel: input.uebungsziel,
+          uebungslage: input.uebungslage,
+          uebungsdarstellung: input.uebungsdarstellung,
+          fuerUebungVerstaendigen: input.fuerUebungVerstaendigen,
+          uebungserkenntnis: input.uebungserkenntnis,
+          uebungszielsetzung: input.uebungszielsetzung,
+          vorschlaege: input.vorschlaege,
           materials: { createMany: { data: usedQuantities.map((q) => ({ kind: q.kind, code: q.code, value: q.value })) } },
         },
         select: { id: true, number: true },
@@ -200,6 +251,11 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     const v = vehiclesById.get(vehicleId)!;
     return `${v.taktischeBezeichnung} (${v.kennzeichen})`;
   }
+  function nameFor(userId: string | null): string | null {
+    if (!userId) return null;
+    const u = uebungsRoleUsersById.get(userId);
+    return u ? `${u.firstName} ${u.lastName}` : null;
+  }
   const pdfData: ReportForPdf = {
     number,
     year,
@@ -226,6 +282,21 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     }),
     materials: usedQuantities.filter((q) => q.kind === 'MATERIAL').map((q) => ({ code: q.code, value: q.value })),
     equipment: usedQuantities.filter((q) => q.kind === 'EQUIPMENT').map((q) => ({ code: q.code, value: q.value })),
+    uebungsleiterName: nameFor(input.uebungsleiterId),
+    uebungsueberwachungName: nameFor(input.uebungsueberwachungId),
+    uebungsbeobachterName: nameFor(input.uebungsbeobachterId),
+    uebungsortStrasse: input.uebungsortStrasse,
+    uebungsortNr: input.uebungsortNr,
+    uebungsortPlz: input.uebungsortPlz,
+    uebungsortOrt: input.uebungsortOrt,
+    weitereFeuerwehren: input.weitereFeuerwehren,
+    uebungsziel: input.uebungsziel,
+    uebungslage: input.uebungslage,
+    uebungsdarstellung: input.uebungsdarstellung,
+    fuerUebungVerstaendigen: input.fuerUebungVerstaendigen,
+    uebungserkenntnis: input.uebungserkenntnis,
+    uebungszielsetzung: input.uebungszielsetzung,
+    vorschlaege: input.vorschlaege,
   };
 
   const pdfFileName = reportPdfFileName(pdfData.number, now);

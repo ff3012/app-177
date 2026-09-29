@@ -1,6 +1,6 @@
 import { sendEmail } from '@/lib/email/mailjet';
 import { escapeHtml } from '@/lib/email/escape-html';
-import { ACTIVITY_KINDS, MATERIALS, EQUIPMENT, FUNKTION_LABEL, REPORT_TYPE_LABEL } from './report-constants';
+import { MATERIALS, EQUIPMENT, FUNKTION_LABEL, REPORT_TYPE_LABEL, getKindOptionsForType } from './report-constants';
 import type { ReportForPdf } from './report-pdf';
 
 export interface ReportSubmittedEmailContext extends ReportForPdf {
@@ -15,10 +15,11 @@ export interface ReportSubmittedEmailResult {
   failed: number;
 }
 
-/** "Tätigkeitsart"-Zeile: Codes -> lesbare Bezeichnungen (dieselbe Quelle wie Formular und PDF), plus
- * "Sonstige" IMMER zusätzlich, wenn vorhanden - nicht nur, wenn kein Code gewählt wurde. */
-export function formatActivityKindText(activityKinds: string[], activityOther: string | null): string {
-  const kindLabels = activityKinds.map((code) => ACTIVITY_KINDS.find((k) => k.code === code)?.label ?? code);
+/** "Tätigkeitsart"/"Übungsart"-Zeile: Codes -> lesbare Bezeichnungen (dieselbe Quelle wie Formular und
+ * PDF, je nach Report.type - siehe getKindOptionsForType), plus "Sonstige" IMMER zusätzlich, wenn
+ * vorhanden - nicht nur, wenn kein Code gewählt wurde. */
+export function formatActivityKindText(activityKinds: string[], activityOther: string | null, type: string): string {
+  const kindLabels = activityKinds.map((code) => getKindOptionsForType(type).find((k) => k.code === code)?.label ?? code);
   const otherTrimmed = activityOther?.trim();
   return (
     [...kindLabels, otherTrimmed ? `Sonstige: ${otherTrimmed}` : null]
@@ -42,6 +43,17 @@ export async function sendReportSubmittedEmail(
 ): Promise<ReportSubmittedEmailResult> {
   if (context.fireDepartmentEmails.length === 0) return { attempted: 0, failed: 0 };
 
+  const isExercise = context.type === 'EXERCISE';
+  const kindLabel = isExercise ? 'Übungsart' : 'Tätigkeitsart';
+  const uebungsort = [
+    [context.uebungsortStrasse, context.uebungsortNr].filter(Boolean).join(' '),
+    [context.uebungsortPlz, context.uebungsortOrt].filter(Boolean).join(' '),
+  ]
+    .filter((part) => part.trim().length > 0)
+    .join(', ');
+  const einsatzdauerStunden = ((context.endAt.getTime() - context.startAt.getTime()) / (1000 * 60 * 60)).toFixed(1).replace(/\.0$/, '');
+  const totalKm = context.vehicles.reduce((sum, v) => sum + v.km, 0);
+
   const subjectVehiclePart = context.vehicles.length > 0 ? ` · ${context.vehicles.map((v) => v.label).join(', ')}` : '';
   const subject = `${REPORT_TYPE_LABEL[context.type]} Nr. ${String(context.number).padStart(3, '0')} · ${context.startAt.toLocaleDateString('de-AT')}${subjectVehiclePart} · ${context.filledByName}`;
 
@@ -52,13 +64,40 @@ export async function sendReportSubmittedEmail(
   const tableRows: [string, string][] = [
     ['Ausgefüllt von', context.filledByName],
     ['Zeitraum', `${context.startAt.toLocaleString('de-AT')} – ${context.endAt.toLocaleString('de-AT')}`],
-    ['Eigene Tätigkeit', context.ownActivity ? 'Ja' : 'Nein'],
-    ['Tätigkeitsart', formatActivityKindText(context.activityKinds, context.activityOther)],
+    [isExercise ? 'Eigener Einsatzbereich' : 'Eigene Tätigkeit', context.ownActivity ? 'Ja' : 'Nein'],
+    ...(isExercise
+      ? ([
+          ['Übungsleiter', context.uebungsleiterName ?? '-'],
+          ['Übungsüberwachung', context.uebungsueberwachungName ?? '-'],
+          ['Übungsbeobachter', context.uebungsbeobachterName ?? '-'],
+          ['Übungsort', uebungsort || '-'],
+        ] as [string, string][])
+      : []),
+    [kindLabel, formatActivityKindText(context.activityKinds, context.activityOther, context.type)],
+    ...(isExercise
+      ? ([
+          ['Übungsziel', context.uebungsziel],
+          ['Übungslage', context.uebungslage],
+          ['Übungsdarstellung', context.uebungsdarstellung],
+          ['Für Übung verständigen', context.fuerUebungVerstaendigen],
+          ['Übungserkenntnis', context.uebungserkenntnis],
+          ['Übungszielsetzung', context.uebungszielsetzung],
+          ['Vorschläge', context.vorschlaege],
+        ] as [string, string | null][]).filter((row): row is [string, string] => Boolean(row[1] && row[1].trim().length > 0))
+      : []),
+    ['Bemerkung', context.remark],
     [
       'Fahrzeuge',
       context.vehicles.length > 0 ? context.vehicles.map((v) => `${v.label} (${v.km} km)`).join(', ') : 'Keine',
     ],
-    ['Bemerkung', context.remark],
+    ...(isExercise
+      ? ([
+          ['Weitere Feuerwehren', context.weitereFeuerwehren ?? '-'],
+          ['Mannschaftsstärke', String(context.members.length)],
+          ['Einsatzdauer', `${einsatzdauerStunden} Std.`],
+          ['Gefahrene Kilometer', `${totalKm} km`],
+        ] as [string, string][])
+      : []),
   ];
   // Nur tatsächlich verwendetes Verbrauchsmaterial/Geräte (Wert > 0), gleiche Filterung wie im PDF
   // (report-pdf.tsx) - "Keines"/"Keine" als Fallback-Zeile, wenn nichts verwendet wurde.

@@ -1,26 +1,35 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ACTIVITY_KINDS, type ActivityKindOption } from '@/lib/heimatfeuerwehr/report-constants';
+import { ACTIVITY_KIND_GROUP_LABEL, type ActivityKindOption } from '@/lib/heimatfeuerwehr/report-constants';
 
 /**
- * Vollbild-Auswahl der Tätigkeitsart: Suchfeld, "Zuletzt verwendet" (max. 3), darunter alle 39 Codes
- * alphabetisch als Radio-Zeilen. Bewusst EINZELauswahl (echte HTML-Radios, gemeinsamer `name`) - ein
- * Bericht hat immer genau eine Tätigkeitsart ODER "Sonstige", nie mehrere gleichzeitig. "Sonstige" ist
+ * Vollbild-Auswahl der Tätigkeits-/Übungsart: Suchfeld, "Zuletzt verwendet" (max. 3), darunter alle
+ * Codes alphabetisch als Radio-Zeilen. Bewusst EINZELauswahl (echte HTML-Radios, gemeinsamer `name`) -
+ * ein Bericht hat immer genau einen Code ODER "Sonstige", nie mehrere gleichzeitig. "Sonstige" ist
  * deshalb Teil derselben Radio-Gruppe (eigene Zeile mit Freitextfeld darunter) - das Auswählen eines
- * Codes löscht automatisch eine zuvor gewählte "Sonstige" und umgekehrt. Feuerwehrjugend ist eine reine
- * Gruppenüberschrift über ihren 7 Unterpunkten (kein eigener Radio-Eintrag) - daher schließt `filtered`
- * diese 7 Codes aus, solange nicht gesucht wird, damit sie nicht doppelt erscheinen (einmal in der
- * eigenen Sektion, einmal in der alphabetischen Liste); bei aktiver Suche bleiben sie in `filtered`
+ * Codes löscht automatisch eine zuvor gewählte "Sonstige" und umgekehrt. `options` bestimmt die
+ * Codeliste (ACTIVITY_KINDS für Tätigkeitsbericht, UEBUNGS_ARTEN für Übungsbericht, siehe
+ * getKindOptionsForType) - generisch statt fix auf ACTIVITY_KINDS verdrahtet, seit Übungsart dieselbe
+ * Komponente mit einer eigenen Zusatzgruppe ("Ausbildungsprüfungen" statt "Feuerwehrjugend")
+ * wiederverwendet. Eine `group`-markierte Teilmenge ist eine reine Gruppenüberschrift-Sektion (kein
+ * eigener Radio-Eintrag in der alphabetischen Hauptliste) - `filtered` schließt sie aus, solange nicht
+ * gesucht wird, damit sie nicht doppelt erscheinen; bei aktiver Suche bleiben sie in `filtered`
  * enthalten, damit z.B. "Lager" weiterhin "selbst veranstaltete Lager" findet.
  */
 export function ActivityKindPicker({
+  title,
+  listLabel,
+  options,
   selected,
   activityOther,
   recentActivityKinds,
   onDone,
   onClose,
 }: {
+  title: string;
+  listLabel: string;
+  options: ActivityKindOption[];
   selected: string[];
   activityOther: string;
   recentActivityKinds: string[];
@@ -32,23 +41,28 @@ export function ActivityKindPicker({
   const [localOther, setLocalOther] = useState(activityOther);
   const [otherChecked, setOtherChecked] = useState(activityOther.length > 0);
 
-  const sortedAlphabetical = useMemo(
-    () => [...ACTIVITY_KINDS].sort((a, b) => a.label.localeCompare(b.label, 'de')),
-    [],
-  );
+  const sortedAlphabetical = useMemo(() => [...options].sort((a, b) => a.label.localeCompare(b.label, 'de')), [options]);
   const filtered = useMemo(
     () =>
       sortedAlphabetical.filter(
-        (option) =>
-          option.label.toLowerCase().includes(search.trim().toLowerCase()) &&
-          (search.trim() !== '' || option.group !== 'FEUERWEHRJUGEND'),
+        (option) => option.label.toLowerCase().includes(search.trim().toLowerCase()) && (search.trim() !== '' || !option.group),
       ),
     [sortedAlphabetical, search],
   );
   const recentOptions = useMemo(
-    () => recentActivityKinds.map((code) => ACTIVITY_KINDS.find((option) => option.code === code)).filter((o): o is ActivityKindOption => Boolean(o)),
-    [recentActivityKinds],
+    () => recentActivityKinds.map((code) => options.find((option) => option.code === code)).filter((o): o is ActivityKindOption => Boolean(o)),
+    [recentActivityKinds, options],
   );
+  const groupedOptions = useMemo(() => {
+    const groups = new Map<string, ActivityKindOption[]>();
+    for (const option of options) {
+      if (!option.group) continue;
+      const list = groups.get(option.group) ?? [];
+      list.push(option);
+      groups.set(option.group, list);
+    }
+    return [...groups.entries()];
+  }, [options]);
 
   function selectCode(code: string) {
     setSelectedCode(code);
@@ -80,7 +94,7 @@ export function ActivityKindPicker({
         <button type="button" onClick={onClose} className="text-sm font-medium text-neutral-600">
           Abbrechen
         </button>
-        <h2 className="text-[15px] font-semibold text-[#1c1c1e]">Tätigkeitsart</h2>
+        <h2 className="text-[15px] font-semibold text-[#1c1c1e]">{title}</h2>
         <span className="w-[52px]" />
       </div>
 
@@ -121,16 +135,19 @@ export function ActivityKindPicker({
           />
         )}
 
-        <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Alle Tätigkeitsarten</h3>
+        <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{listLabel}</h3>
         {filtered.map(renderRow)}
 
-        {search.trim() === '' && (
-          <div className="mt-3">
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">Feuerwehrjugend</h3>
-            <p className="mb-1 px-1 text-xs text-neutral-400">7 Unterpunkte ›</p>
-            {ACTIVITY_KINDS.filter((option) => option.group === 'FEUERWEHRJUGEND').map(renderRow)}
-          </div>
-        )}
+        {search.trim() === '' &&
+          groupedOptions.map(([group, groupOptions]) => (
+            <div key={group} className="mt-3">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                {ACTIVITY_KIND_GROUP_LABEL[group] ?? group}
+              </h3>
+              <p className="mb-1 px-1 text-xs text-neutral-400">{groupOptions.length} Unterpunkte ›</p>
+              {groupOptions.map(renderRow)}
+            </div>
+          ))}
       </div>
 
       <div className="pb-safe-tabbar fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white p-4">

@@ -6,12 +6,14 @@ import { ACTIVE_REPORT_TYPES } from '@/lib/heimatfeuerwehr/report-constants';
 import type { ReportType } from '@prisma/client';
 import { ReportWizard } from './report-wizard';
 
-// Zeigt "Zuletzt verwendet" (die 3 zuletzt vom Benutzer gewählten Tätigkeitsarten) - über alle
-// bereits abgegebenen eigenen Berichte hinweg, neueste zuerst, ohne Duplikate. Kein Entwurf-Konzept
-// mehr, also immer aus tatsächlich abgegebenen Berichten (jeder existierende Report ist abgegeben).
-async function getRecentActivityKinds(userId: string): Promise<string[]> {
+// Zeigt "Zuletzt verwendet" (die 3 zuletzt vom Benutzer gewählten Tätigkeits-/Übungsarten) - über alle
+// bereits abgegebenen eigenen Berichte DESSELBEN Typs hinweg (ein Übungsbericht soll keine
+// Tätigkeitsart-Codes vorschlagen und umgekehrt - beide Listen sind komplett unterschiedliche
+// Codesätze, siehe getKindOptionsForType), neueste zuerst, ohne Duplikate. Kein Entwurf-Konzept mehr,
+// also immer aus tatsächlich abgegebenen Berichten (jeder existierende Report ist abgegeben).
+async function getRecentActivityKinds(userId: string, type: ReportType): Promise<string[]> {
   const recent = await prisma.report.findMany({
-    where: { filledById: userId },
+    where: { filledById: userId, type },
     orderBy: { submittedAt: 'desc' },
     take: 10,
     select: { activityKinds: true },
@@ -54,7 +56,7 @@ export default async function NeuerBerichtPage({
       orderBy: { taktischeBezeichnung: 'asc' },
       select: { id: true, taktischeBezeichnung: true, kennzeichen: true },
     }),
-    getRecentActivityKinds(user.id),
+    getRecentActivityKinds(user.id, type),
   ]);
 
   // Vorbefüllung aus einer "Zu erledigen"-Erinnerung (vehicle-report-reminder-card.tsx): vehicleId nur

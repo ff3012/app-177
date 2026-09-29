@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import { MemberSearchSelect, type ReportMemberOption } from '@/components/heimatfeuerwehr/member-search-select';
 import { MemberMultiSelect } from '@/components/heimatfeuerwehr/member-multi-select';
 import {
-  ACTIVITY_KINDS,
   MATERIALS,
   EQUIPMENT,
   LOESCHER_CODES,
   FUNKTION_LABEL,
+  getKindOptionsForType,
 } from '@/lib/heimatfeuerwehr/report-constants';
 import { ActivityKindPicker } from './activity-kind-picker';
 import { submitReport, type SubmitReportInput } from '../submit-actions';
@@ -31,7 +31,7 @@ function combine(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
-function WizardHeader({ step, onBack }: { step: 1 | 2 | 3; onBack: () => void }) {
+function WizardHeader({ step, totalSteps, onBack }: { step: number; totalSteps: number; onBack: () => void }) {
   return (
     <div className="mb-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -44,10 +44,12 @@ function WizardHeader({ step, onBack }: { step: 1 | 2 | 3; onBack: () => void })
             ‹ Zurück
           </button>
         )}
-        <span className="text-xs font-medium text-neutral-500">Schritt {step} von 3</span>
+        <span className="text-xs font-medium text-neutral-500">
+          Schritt {step} von {totalSteps}
+        </span>
       </div>
       <div className="flex gap-1.5">
-        {[1, 2, 3].map((n) => (
+        {Array.from({ length: totalSteps }, (_, i) => i + 1).map((n) => (
           <div key={n} className={`h-1.5 flex-1 rounded-full ${n <= step ? 'bg-brand' : 'bg-neutral-200'}`} />
         ))}
       </div>
@@ -130,7 +132,14 @@ export function ReportWizard({
   prefillEndAt?: string | null;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const isExercise = type === 'EXERCISE';
+  // Zusätzlicher Übungsdetails-Schritt nur für Übungsberichte, direkt nach den Grunddaten - Fahrzeuge/
+  // Mitglieder und der Abschluss-Schritt rücken dadurch bei einem Übungsbericht je eine Position nach
+  // hinten, sonst identisch zum Tätigkeitsbericht-Ablauf.
+  const totalSteps = isExercise ? 4 : 3;
+  const stepFahrzeuge = isExercise ? 3 : 2;
+  const stepAbschluss = isExercise ? 4 : 3;
+  const [step, setStep] = useState(1);
 
   const now = useState(() => new Date())[0];
   const oneHourLater = useState(() => new Date(now.getTime() + 60 * 60 * 1000))[0];
@@ -148,7 +157,25 @@ export function ReportWizard({
   const [activityOther, setActivityOther] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Schritt 2
+  // Übungsdetails (nur Übungsbericht) - wortgetreu aus der offiziellen Papiervorlage
+  // (Übungsbericht_045_20260603.docx), siehe Report-Modell-Kommentar in schema.prisma.
+  const [uebungsleiterId, setUebungsleiterId] = useState('');
+  const [uebungsueberwachungId, setUebungsueberwachungId] = useState('');
+  const [uebungsbeobachterId, setUebungsbeobachterId] = useState('');
+  const [uebungsortStrasse, setUebungsortStrasse] = useState('');
+  const [uebungsortNr, setUebungsortNr] = useState('');
+  const [uebungsortPlz, setUebungsortPlz] = useState('');
+  const [uebungsortOrt, setUebungsortOrt] = useState('');
+  const [weitereFeuerwehren, setWeitereFeuerwehren] = useState('');
+  const [uebungsziel, setUebungsziel] = useState('');
+  const [uebungslage, setUebungslage] = useState('');
+  const [uebungsdarstellung, setUebungsdarstellung] = useState('');
+  const [fuerUebungVerstaendigen, setFuerUebungVerstaendigen] = useState('');
+  const [uebungserkenntnis, setUebungserkenntnis] = useState('');
+  const [uebungszielsetzung, setUebungszielsetzung] = useState('');
+  const [vorschlaege, setVorschlaege] = useState('');
+
+  // Fahrzeuge/Mitglieder
   const [vehicleEntries, setVehicleEntries] = useState<ReportVehicleEntry[]>(
     prefillVehicleId ? [{ vehicleId: prefillVehicleId, km: '' }] : [],
   );
@@ -156,7 +183,7 @@ export function ReportWizard({
     { userId: initialFilledById, funktion: 'MANNSCHAFT', vehicleId: null },
   ]);
 
-  // Schritt 3
+  // Abschluss
   const [quantityValues, setQuantityValues] = useState<Record<string, number>>({});
   const [visibleQuantities, setVisibleQuantities] = useState<Set<string>>(new Set());
   const [showLoescher, setShowLoescher] = useState(false);
@@ -167,15 +194,15 @@ export function ReportWizard({
 
   const canContinueStep1 = ownActivity !== null && (activityKinds.length > 0 || activityOther.trim().length > 0);
 
-  function goToStep2() {
+  function goToStep1Next() {
     if (!canContinueStep1) return;
-    setStep(2);
+    setStep((current) => current + 1);
   }
-  function goToStep3() {
-    setStep(3);
+  function goToNextStep() {
+    setStep((current) => Math.min(current + 1, totalSteps));
   }
   function goBack() {
-    setStep((current) => (current === 3 ? 2 : 1));
+    setStep((current) => Math.max(current - 1, 1));
   }
 
   function addVehicle(vehicleId: string) {
@@ -235,6 +262,21 @@ export function ReportWizard({
       remark: remark.trim(),
       members: reportMembers,
       quantities,
+      uebungsleiterId: uebungsleiterId || null,
+      uebungsueberwachungId: uebungsueberwachungId || null,
+      uebungsbeobachterId: uebungsbeobachterId || null,
+      uebungsortStrasse: uebungsortStrasse.trim() || null,
+      uebungsortNr: uebungsortNr.trim() || null,
+      uebungsortPlz: uebungsortPlz.trim() || null,
+      uebungsortOrt: uebungsortOrt.trim() || null,
+      weitereFeuerwehren: weitereFeuerwehren.trim() || null,
+      uebungsziel: uebungsziel.trim() || null,
+      uebungslage: uebungslage.trim() || null,
+      uebungsdarstellung: uebungsdarstellung.trim() || null,
+      fuerUebungVerstaendigen: fuerUebungVerstaendigen.trim() || null,
+      uebungserkenntnis: uebungserkenntnis.trim() || null,
+      uebungszielsetzung: uebungszielsetzung.trim() || null,
+      vorschlaege: vorschlaege.trim() || null,
     };
 
     try {
@@ -290,9 +332,13 @@ export function ReportWizard({
 
   const canSubmit = remark.trim().length > 0;
 
+  const kindOptions = getKindOptionsForType(type);
+  const kindTitle = isExercise ? 'Übungsart' : 'Tätigkeitsart';
+  const kindListLabel = isExercise ? 'Alle Übungsarten' : 'Alle Tätigkeitsarten';
+
   return (
     <div className="flex flex-col gap-5 pb-48">
-      <WizardHeader step={step} onBack={goBack} />
+      <WizardHeader step={step} totalSteps={totalSteps} onBack={goBack} />
 
       {step === 1 && (
         <>
@@ -312,7 +358,9 @@ export function ReportWizard({
           </div>
 
           <div className="rounded-xl bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Eigene Tätigkeit</label>
+            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">
+              {isExercise ? 'Eigener Einsatzbereich' : 'Eigene Tätigkeit'}
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -332,11 +380,11 @@ export function ReportWizard({
           </div>
 
           <div className="rounded-xl bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Tätigkeitsart</label>
+            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">{kindTitle}</label>
             <div className="flex flex-wrap items-center gap-2">
               {activityKinds.map((code) => (
                 <span key={code} className="rounded-full bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
-                  {ACTIVITY_KINDS.find((k) => k.code === code)?.label ?? code}
+                  {kindOptions.find((k) => k.code === code)?.label ?? code}
                 </span>
               ))}
               {activityOther && <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-medium text-brand">Sonstige: {activityOther}</span>}
@@ -346,7 +394,7 @@ export function ReportWizard({
                 </button>
               ) : (
                 <button type="button" onClick={() => setPickerOpen(true)} className="rounded-full border border-dashed border-brand px-3 py-1 text-xs font-medium text-brand">
-                  + Tätigkeitsart wählen
+                  + {kindTitle} wählen
                 </button>
               )}
             </div>
@@ -354,6 +402,9 @@ export function ReportWizard({
 
           {pickerOpen && (
             <ActivityKindPicker
+              title={kindTitle}
+              listLabel={kindListLabel}
+              options={kindOptions}
               selected={activityKinds}
               activityOther={activityOther}
               recentActivityKinds={recentActivityKinds}
@@ -369,7 +420,7 @@ export function ReportWizard({
           <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
             <button
               type="button"
-              onClick={goToStep2}
+              onClick={goToStep1Next}
               disabled={!canContinueStep1}
               className={`flex h-[52px] w-full items-center justify-center rounded-lg text-[15px] font-semibold text-white ${
                 canContinueStep1 ? 'bg-brand' : 'pointer-events-none bg-neutral-300'
@@ -381,7 +432,78 @@ export function ReportWizard({
         </>
       )}
 
-      {step === 2 && (
+      {isExercise && step === 2 && (
+        <>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Übungsleiter</label>
+            <MemberSearchSelect members={members} value={uebungsleiterId} onChange={setUebungsleiterId} placeholder="Mitglied wählen" />
+          </div>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Übungsüberwachung</label>
+            <MemberSearchSelect members={members} value={uebungsueberwachungId} onChange={setUebungsueberwachungId} placeholder="Mitglied wählen" />
+          </div>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Übungsbeobachter</label>
+            <MemberSearchSelect members={members} value={uebungsbeobachterId} onChange={setUebungsbeobachterId} placeholder="Mitglied wählen" />
+          </div>
+
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Übungsort</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                placeholder="Straße"
+                value={uebungsortStrasse}
+                onChange={(e) => setUebungsortStrasse(e.target.value)}
+                className="col-span-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="Nr./km"
+                value={uebungsortNr}
+                onChange={(e) => setUebungsortNr(e.target.value)}
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="PLZ"
+                value={uebungsortPlz}
+                onChange={(e) => setUebungsortPlz(e.target.value)}
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="Ort"
+                value={uebungsortOrt}
+                onChange={(e) => setUebungsortOrt(e.target.value)}
+                className="col-span-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Weitere Feuerwehren</label>
+            <input
+              type="text"
+              value={weitereFeuerwehren}
+              onChange={(e) => setWeitereFeuerwehren(e.target.value)}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
+            >
+              Weiter
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === stepFahrzeuge && (
         <>
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Fahrzeuge</label>
@@ -469,7 +591,7 @@ export function ReportWizard({
           <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
             <button
               type="button"
-              onClick={goToStep3}
+              onClick={goToNextStep}
               className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
             >
               Weiter
@@ -478,7 +600,7 @@ export function ReportWizard({
         </>
       )}
 
-      {step === 3 && (
+      {step === stepAbschluss && (
         <>
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Verbrauchsmaterial</label>
@@ -496,6 +618,32 @@ export function ReportWizard({
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Eingesetzte Geräte</label>
             <div className="flex flex-col gap-1">{EQUIPMENT.map((e) => renderQuantityRow('EQUIPMENT', e))}</div>
           </div>
+
+          {isExercise && (
+            <>
+              {(
+                [
+                  ['Übungsziel', uebungsziel, setUebungsziel],
+                  ['Übungslage', uebungslage, setUebungslage],
+                  ['Übungsdarstellung', uebungsdarstellung, setUebungsdarstellung],
+                  ['Für Übung verständigen', fuerUebungVerstaendigen, setFuerUebungVerstaendigen],
+                  ['Übungserkenntnis', uebungserkenntnis, setUebungserkenntnis],
+                  ['Übungszielsetzung', uebungszielsetzung, setUebungszielsetzung],
+                  ['Vorschläge', vorschlaege, setVorschlaege],
+                ] as const
+              ).map(([label, value, setValue]) => (
+                <div key={label} className="rounded-xl bg-white p-4 shadow-sm">
+                  <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">{label}</label>
+                  <textarea
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+            </>
+          )}
 
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Bemerkung</label>

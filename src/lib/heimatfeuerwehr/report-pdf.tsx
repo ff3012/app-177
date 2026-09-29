@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
-import { ACTIVITY_KINDS, MATERIALS, EQUIPMENT, FUNKTION_LABEL, REPORT_TYPE_LABEL } from './report-constants';
+import { MATERIALS, EQUIPMENT, FUNKTION_LABEL, REPORT_TYPE_LABEL, getKindOptionsForType } from './report-constants';
 
 export interface ReportForPdf {
   number: number;
@@ -21,6 +21,23 @@ export interface ReportForPdf {
   members: { name: string; stbNr: string | null; funktion: string; vehicleLabel: string | null }[];
   materials: { code: string; value: number }[];
   equipment: { code: string; value: number }[];
+  // Übungsbericht-spezifisch (type === EXERCISE) - bei ACTIVITY/INCIDENT immer null, siehe
+  // Report-Modell-Kommentar in schema.prisma. Namen statt IDs, da hier bereits aufgelöst nötig ist.
+  uebungsleiterName: string | null;
+  uebungsueberwachungName: string | null;
+  uebungsbeobachterName: string | null;
+  uebungsortStrasse: string | null;
+  uebungsortNr: string | null;
+  uebungsortPlz: string | null;
+  uebungsortOrt: string | null;
+  weitereFeuerwehren: string | null;
+  uebungsziel: string | null;
+  uebungslage: string | null;
+  uebungsdarstellung: string | null;
+  fuerUebungVerstaendigen: string | null;
+  uebungserkenntnis: string | null;
+  uebungszielsetzung: string | null;
+  vorschlaege: string | null;
 }
 
 const styles = StyleSheet.create({
@@ -60,16 +77,34 @@ function formatDateTime(date: Date): string {
   return `${date.toLocaleDateString('de-AT')} ${date.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+function formatUebungsort(report: ReportForPdf): string {
+  const parts = [
+    [report.uebungsortStrasse, report.uebungsortNr].filter(Boolean).join(' '),
+    [report.uebungsortPlz, report.uebungsortOrt].filter(Boolean).join(' '),
+  ].filter((part) => part.trim().length > 0);
+  return parts.length > 0 ? parts.join(', ') : '-';
+}
+
+function formatDauer(startAt: Date, endAt: Date): string {
+  const hours = (endAt.getTime() - startAt.getTime()) / (1000 * 60 * 60);
+  return `${hours.toFixed(1).replace(/\.0$/, '')} Std.`;
+}
+
 function ReportDocument({ report }: { report: ReportForPdf }) {
+  const isExercise = report.type === 'EXERCISE';
+  const kindOptions = getKindOptionsForType(report.type);
+  const kindLabel = isExercise ? 'Übungsart' : 'Tätigkeitsart';
   // Einzelauswahl: activityKinds enthält höchstens einen Code (siehe activity-kind-picker.tsx) -
-  // Label direkt auflösen statt aller 39 Optionen mit Checkboxen (vorheriges Verhalten, auf
-  // ausdrücklichen Wunsch geändert: nur die tatsächlich gewählte Tätigkeitsart im Ausdruck zeigen).
+  // Label direkt auflösen statt aller Optionen mit Checkboxen (vorheriges Verhalten, auf
+  // ausdrücklichen Wunsch geändert: nur die tatsächlich gewählte Tätigkeits-/Übungsart im Ausdruck
+  // zeigen).
   const selectedKindLabel =
     report.activityKinds.length > 0
-      ? (ACTIVITY_KINDS.find((option) => option.code === report.activityKinds[0])?.label ?? report.activityKinds[0])
+      ? (kindOptions.find((option) => option.code === report.activityKinds[0])?.label ?? report.activityKinds[0])
       : report.activityOther
         ? `Sonstige: ${report.activityOther}`
         : '-';
+  const totalKm = report.vehicles.reduce((sum, v) => sum + v.km, 0);
   // Nur tatsächlich verwendetes Material/Geräte zeigen (Wert > 0), nicht mehr alle 9/5 Zeilen inkl.
   // Nullwerten - ebenfalls auf ausdrücklichen Wunsch geändert.
   const usedMaterials = MATERIALS.filter((option) => (report.materials.find((m) => m.code === option.code)?.value ?? 0) > 0);
@@ -94,7 +129,7 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
           </View>
           <View style={styles.spacerLine} />
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-            <Text>Eigene Tätigkeit: </Text>
+            <Text>{isExercise ? 'Eigener Einsatzbereich: ' : 'Eigene Tätigkeit: '}</Text>
             <View style={[styles.checkbox, report.ownActivity ? styles.checkboxChecked : {}]} />
             <Text style={{ marginRight: 8 }}> Ja</Text>
             <View style={[styles.checkbox, !report.ownActivity ? styles.checkboxChecked : {}]} />
@@ -102,10 +137,42 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
           </View>
         </View>
 
+        {isExercise && (
+          <View style={styles.section}>
+            <Text>Übungsleiter: {report.uebungsleiterName ?? '-'}</Text>
+            <Text>Übungsüberwachung: {report.uebungsueberwachungName ?? '-'}</Text>
+            <Text>Übungsbeobachter: {report.uebungsbeobachterName ?? '-'}</Text>
+            <Text>Übungsort: {formatUebungsort(report)}</Text>
+          </View>
+        )}
+
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tätigkeitsart</Text>
+          <Text style={styles.sectionTitle}>{kindLabel}</Text>
           <Text>{selectedKindLabel}</Text>
         </View>
+
+        {isExercise && (
+          <>
+            {(
+              [
+                ['Übungsziel', report.uebungsziel],
+                ['Übungslage', report.uebungslage],
+                ['Übungsdarstellung', report.uebungsdarstellung],
+                ['Für Übung verständigen', report.fuerUebungVerstaendigen],
+                ['Übungserkenntnis', report.uebungserkenntnis],
+                ['Übungszielsetzung', report.uebungszielsetzung],
+                ['Vorschläge', report.vorschlaege],
+              ] as const
+            )
+              .filter(([, value]) => value && value.trim().length > 0)
+              .map(([label, value]) => (
+                <View key={label} style={styles.section}>
+                  <Text style={styles.sectionTitle}>{label}</Text>
+                  <Text>{value}</Text>
+                </View>
+              ))}
+          </>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Bemerkung</Text>
@@ -118,6 +185,12 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
             Fahrzeuge:{' '}
             {report.vehicles.length > 0 ? report.vehicles.map((v) => `${v.label} (${v.km} km)`).join(', ') : 'Keine'}
           </Text>
+          {isExercise && (
+            <Text>
+              Weitere Feuerwehren: {report.weitereFeuerwehren ?? '-'} · Mannschaftsstärke: {report.members.length} ·
+              Einsatzdauer: {formatDauer(report.startAt, report.endAt)} · Gefahrene Kilometer: {totalKm} km
+            </Text>
+          )}
         </View>
 
         <View style={styles.section}>
