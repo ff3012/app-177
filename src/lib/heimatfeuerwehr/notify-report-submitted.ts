@@ -42,7 +42,7 @@ export async function sendReportSubmittedEmail(
 ): Promise<ReportSubmittedEmailResult> {
   if (context.fireDepartmentEmails.length === 0) return { attempted: 0, failed: 0 };
 
-  const subjectVehiclePart = context.vehicleLabel ? ` · ${context.vehicleLabel}` : '';
+  const subjectVehiclePart = context.vehicles.length > 0 ? ` · ${context.vehicles.map((v) => v.label).join(', ')}` : '';
   const subject = `${REPORT_TYPE_LABEL[context.type]} Nr. ${String(context.number).padStart(3, '0')} · ${context.startAt.toLocaleDateString('de-AT')}${subjectVehiclePart} · ${context.filledByName}`;
 
   // Mitglieder inkl. Standesbuchnummer als eigene Tabelle (statt einer kommagetrennten Namensliste im
@@ -54,7 +54,10 @@ export async function sendReportSubmittedEmail(
     ['Zeitraum', `${context.startAt.toLocaleString('de-AT')} – ${context.endAt.toLocaleString('de-AT')}`],
     ['Eigene Tätigkeit', context.ownActivity ? 'Ja' : 'Nein'],
     ['Tätigkeitsart', formatActivityKindText(context.activityKinds, context.activityOther)],
-    ...(context.vehicleLabel ? [['Fahrzeug', `${context.vehicleLabel} (${context.vehicleKm ?? '-'} km)`] as [string, string]] : []),
+    [
+      'Fahrzeuge',
+      context.vehicles.length > 0 ? context.vehicles.map((v) => `${v.label} (${v.km} km)`).join(', ') : 'Keine',
+    ],
     ['Bemerkung', context.remark],
   ];
   // Nur tatsächlich verwendetes Verbrauchsmaterial/Geräte (Wert > 0), gleiche Filterung wie im PDF
@@ -68,7 +71,10 @@ export async function sendReportSubmittedEmail(
     'Mitglieder:',
     context.members.length
       ? context.members
-          .map((m) => `- ${m.name} (${m.stbNr ?? '-'}) - ${FUNKTION_LABEL[m.funktion] ?? m.funktion}`)
+          .map(
+            (m) =>
+              `- ${m.name} (${m.stbNr ?? '-'}) - ${FUNKTION_LABEL[m.funktion] ?? m.funktion}${m.vehicleLabel ? ` - ${m.vehicleLabel}` : ''}`,
+          )
           .join('\n')
       : '-',
     '',
@@ -88,10 +94,10 @@ export async function sendReportSubmittedEmail(
     ? context.members
         .map(
           (m) =>
-            `<tr><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.stbNr ?? '-')}</td><td>${escapeHtml(FUNKTION_LABEL[m.funktion] ?? m.funktion)}</td></tr>`,
+            `<tr><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.stbNr ?? '-')}</td><td>${escapeHtml(FUNKTION_LABEL[m.funktion] ?? m.funktion)}</td><td>${escapeHtml(m.vehicleLabel ?? '-')}</td></tr>`,
         )
         .join('')
-    : '<tr><td colspan="3">-</td></tr>';
+    : '<tr><td colspan="4">-</td></tr>';
   const quantityTableHtml = (label: string, options: { code: string; label: string }[], values: { code: string; value: number }[], emptyLabel: string) => {
     const rows = options.length
       ? options
@@ -104,7 +110,7 @@ export async function sendReportSubmittedEmail(
     .map(([label, value]) => `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(value).replace(/\n/g, '<br>')}</td></tr>`)
     .join(
       '',
-    )}</table><p><strong>Mitglieder</strong></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse"><tr><th align="left">Name</th><th align="left">Stb.-Nr.</th><th align="left">Funktion</th></tr>${membersHtmlRows}</table>${quantityTableHtml('Verbrauchsmaterial', usedMaterials, context.materials, 'Keines')}${quantityTableHtml('Eingesetzte Geräte', usedEquipment, context.equipment, 'Keine')}`;
+    )}</table><p><strong>Mitglieder</strong></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse"><tr><th align="left">Name</th><th align="left">Stb.-Nr.</th><th align="left">Funktion</th><th align="left">Fahrzeug</th></tr>${membersHtmlRows}</table>${quantityTableHtml('Verbrauchsmaterial', usedMaterials, context.materials, 'Keines')}${quantityTableHtml('Eingesetzte Geräte', usedEquipment, context.equipment, 'Keine')}`;
 
   let failed = 0;
   for (const recipient of context.fireDepartmentEmails) {

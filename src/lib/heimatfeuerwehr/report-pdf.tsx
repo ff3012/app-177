@@ -16,10 +16,9 @@ export interface ReportForPdf {
   ownActivity: boolean;
   activityKinds: string[];
   activityOther: string | null;
-  vehicleLabel: string | null;
-  vehicleKm: number | null;
+  vehicles: { label: string; km: number }[];
   remark: string;
-  members: { name: string; stbNr: string | null; funktion: string }[];
+  members: { name: string; stbNr: string | null; funktion: string; vehicleLabel: string | null }[];
   materials: { code: string; value: number }[];
   equipment: { code: string; value: number }[];
 }
@@ -46,6 +45,7 @@ const styles = StyleSheet.create({
   memberNameCell: { flex: 2, paddingHorizontal: 2 },
   memberStbCell: { flex: 1, paddingHorizontal: 2 },
   memberFunktionCell: { flex: 1, paddingHorizontal: 2 },
+  memberVehicleCell: { flex: 1, paddingHorizontal: 2 },
   footer: { marginTop: 14, flexDirection: 'row', justifyContent: 'space-between' },
 });
 
@@ -115,8 +115,8 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
 
         <View style={styles.section}>
           <Text>
-            Fahrzeug: {report.vehicleLabel ?? 'Kein Fahrzeug'}
-            {report.vehicleKm !== null ? ` · ${report.vehicleKm} km` : ''}
+            Fahrzeuge:{' '}
+            {report.vehicles.length > 0 ? report.vehicles.map((v) => `${v.label} (${v.km} km)`).join(', ') : 'Keine'}
           </Text>
         </View>
 
@@ -127,12 +127,14 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
               <Text style={[styles.memberNameCell, styles.memberHeaderCell]}>Name</Text>
               <Text style={[styles.memberStbCell, styles.memberHeaderCell]}>Stb.-Nr.</Text>
               <Text style={[styles.memberFunktionCell, styles.memberHeaderCell]}>Funktion</Text>
+              <Text style={[styles.memberVehicleCell, styles.memberHeaderCell]}>Fahrzeug</Text>
             </View>
             {report.members.map((member, index) => (
               <View key={index} style={styles.tableRow}>
                 <Text style={styles.memberNameCell}>{member.name}</Text>
                 <Text style={styles.memberStbCell}>{member.stbNr ?? '-'}</Text>
                 <Text style={styles.memberFunktionCell}>{FUNKTION_LABEL[member.funktion] ?? member.funktion}</Text>
+                <Text style={styles.memberVehicleCell}>{member.vehicleLabel ?? '-'}</Text>
               </View>
             ))}
             {report.members.length === 0 && (

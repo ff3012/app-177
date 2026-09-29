@@ -104,16 +104,17 @@ export async function deleteVehicle(vehicleId: string): Promise<DeleteVehicleSta
 
   const [bookingCount, reportCount] = await Promise.all([
     prisma.vehicleBooking.count({ where: { vehicleId } }),
-    prisma.report.count({ where: { vehicleId } }),
+    prisma.reportVehicle.count({ where: { vehicleId } }),
   ]);
   if (bookingCount > 0) {
     return {
       error: `Dieses Fahrzeug hat ${bookingCount} Buchung${bookingCount === 1 ? '' : 'en'} und kann nicht gelöscht werden - stattdessen deaktivieren.`,
     };
   }
-  // Report.vehicle ist eine optionale Relation (Prisma-Default onDelete: SetNull) - ein Löschen würde bei
-  // abgegebenen, unveränderlichen Berichten stillschweigend den Fahrzeugbezug entfernen. Daher genauso
-  // proaktiv blockieren wie bei Buchungen (Entwürfe mitgezählt - auch dort ginge die Auswahl verloren).
+  // ReportVehicle->Vehicle ist onDelete: RESTRICT (siehe schema.prisma) - ein Löschen würde ohnehin mit
+  // einem FK-Fehler abbrechen, bevor es einen bereits abgegebenen, unveränderlichen Bericht beschädigen
+  // könnte. Trotzdem proaktiv geprüft, genau wie bei Buchungen, damit die Meldung freundlich bleibt statt
+  // eines rohen Datenbankfehlers.
   if (reportCount > 0) {
     return {
       error: `Dieses Fahrzeug ist in ${reportCount} Bericht${reportCount === 1 ? '' : 'en'} eingetragen und kann nicht gelöscht werden - stattdessen deaktivieren.`,

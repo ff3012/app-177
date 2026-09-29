@@ -759,9 +759,9 @@ model Vehicle {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id])
-  bookings     VehicleBooking[]
-  reports      Report[]
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  bookings       VehicleBooking[]
+  reportVehicles ReportVehicle[]
 
   @@index([organizationId])
 }
@@ -871,10 +871,6 @@ model Report {
   activityKinds String[]
   activityOther String?
 
-  vehicleId String?
-  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
-  vehicleKm Int?
-
   remark String
 
   emailSentAt DateTime?
@@ -886,8 +882,27 @@ model Report {
 
   members   ReportMember[]
   materials ReportQuantity[]
+  vehicles  ReportVehicle[]
 
   @@unique([fireDepartmentId, year, number])
+}
+
+// Ein von diesem Bericht verwendetes Fahrzeug samt gefahrener Kilometer - mehrere pro Bericht möglich
+// (vorher war Report.vehicleId/vehicleKm ein einzelnes nullable Skalarpaar, das genau ein Fahrzeug pro
+// Bericht erlaubte). ReportMember.reportVehicleId ordnet ein eingesetztes Mitglied optional genau
+// einem dieser Fahrzeuge zu (null = "ohne Fahrzeug", z. B. zu Fuß/privat angereist) - auf
+// ausdrücklichen Wunsch weiterhin möglich, auch wenn der Bericht Fahrzeuge verwendet.
+model ReportVehicle {
+  id        String  @id @default(cuid())
+  reportId  String
+  report    Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  km        Int
+
+  members ReportMember[]
+
+  @@unique([reportId, vehicleId])
 }
 
 model ReportMember {
@@ -897,6 +912,12 @@ model ReportMember {
   userId   String
   user     User                 @relation(fields: [userId], references: [id])
   funktion ReportMemberFunktion
+
+  // null = "ohne Fahrzeug" (siehe ReportVehicle-Kommentar oben). onDelete: Cascade ist hier
+  // unschädlich zu Report.members' eigenem Cascade - ein ReportVehicle wird nie unabhängig vom
+  // ganzen Bericht gelöscht, dieser zweite Cascade-Pfad greift also faktisch nie einzeln.
+  reportVehicleId String?
+  reportVehicle    ReportVehicle? @relation(fields: [reportVehicleId], references: [id], onDelete: Cascade)
 
   @@unique([reportId, userId])
 }

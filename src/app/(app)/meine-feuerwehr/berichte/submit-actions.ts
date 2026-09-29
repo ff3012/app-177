@@ -19,10 +19,11 @@ export interface SubmitReportInput {
   ownActivity: boolean;
   activityKinds: string[];
   activityOther: string | null;
-  vehicleId: string | null;
-  vehicleKm: number | null;
+  vehicles: { vehicleId: string; km: number }[];
   remark: string;
-  members: { userId: string; funktion: ReportMemberFunktion }[];
+  // member.vehicleId muss eine der oben in `vehicles` gewählten vehicleId sein, oder null ("ohne
+  // Fahrzeug" - z. B. zu Fuß/privat angereist, weiterhin möglich auch wenn Fahrzeuge verwendet wurden).
+  members: { userId: string; funktion: ReportMemberFunktion; vehicleId: string | null }[];
   quantities: { kind: 'MATERIAL' | 'EQUIPMENT'; code: string; value: number }[];
 }
 
@@ -66,19 +67,23 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     return { error: 'Das Ende muss nach dem Beginn liegen.' };
   }
 
-  let vehicle: { taktischeBezeichnung: string; kennzeichen: string } | null = null;
-  if (input.vehicleId !== null) {
-    if (input.vehicleKm === null) {
-      return { error: 'Bitte die gefahrenen Kilometer angeben.' };
-    }
-    vehicle = await prisma.vehicle.findFirst({
-      where: { id: input.vehicleId, organizationId: fireDepartmentId, isActive: true },
-      select: { taktischeBezeichnung: true, kennzeichen: true },
-    });
-    if (!vehicle) {
-      return { error: 'Das ausgewählte Fahrzeug gehört nicht zu dieser Feuerwehr.' };
-    }
+  const inputVehicleIds = input.vehicles.map((v) => v.vehicleId);
+  if (new Set(inputVehicleIds).size !== inputVehicleIds.length) {
+    return { error: 'Ein Fahrzeug ist mehrfach eingetragen.' };
   }
+  const validVehicles = inputVehicleIds.length
+    ? await prisma.vehicle.findMany({
+        where: { id: { in: inputVehicleIds }, organizationId: fireDepartmentId, isActive: true },
+        select: { id: true, taktischeBezeichnung: true, kennzeichen: true },
+      })
+    : [];
+  if (validVehicles.length !== inputVehicleIds.length) {
+    return { error: 'Mindestens ein ausgewähltes Fahrzeug gehört nicht zu dieser Feuerwehr.' };
+  }
+  if (input.vehicles.some((v) => !(v.km >= 0))) {
+    return { error: 'Bitte die gefahrenen Kilometer angeben.' };
+  }
+  const vehiclesById = new Map(validVehicles.map((v) => [v.id, v]));
 
   const filledBy = await prisma.user.findFirst({
     where: { id: input.filledById, homeOrganizationId: fireDepartmentId, ...NOT_DEACTIVATED_WHERE },
@@ -94,6 +99,9 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
   }
   if (input.members.some((m) => !FUNKTIONEN.includes(m.funktion))) {
     return { error: 'Unbekannte Funktion.' };
+  }
+  if (input.members.some((m) => m.vehicleId !== null && !inputVehicleIds.includes(m.vehicleId))) {
+    return { error: 'Ein Mitglied ist einem nicht ausgewählten Fahrzeug zugeordnet.' };
   }
   const validMembers = memberIds.length
     ? await prisma.user.findMany({
@@ -135,17 +143,38 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
           ownActivity: input.ownActivity,
           activityKinds: input.activityKinds,
           activityOther,
-          vehicleId: input.vehicleId,
-          vehicleKm: input.vehicleId !== null ? input.vehicleKm : null,
           remark,
           number: nextNumber,
           year,
           submittedAt: now,
-          members: { createMany: { data: input.members.map((m) => ({ userId: m.userId, funktion: m.funktion })) } },
           materials: { createMany: { data: usedQuantities.map((q) => ({ kind: q.kind, code: q.code, value: q.value })) } },
         },
         select: { id: true, number: true },
       });
+
+      // ReportVehicle-Zeilen einzeln anlegen (nicht createMany), da wir die generierte id jeder Zeile
+      // brauchen, um die zugehörigen ReportMember-Zeilen darauf zeigen zu lassen (reportVehicleId) -
+      // createMany gibt in Postgres keine erzeugten Zeilen/IDs zurück.
+      const reportVehicleIdByVehicleId = new Map<string, string>();
+      for (const v of input.vehicles) {
+        const reportVehicle = await tx.reportVehicle.create({
+          data: { reportId: report.id, vehicleId: v.vehicleId, km: v.km },
+          select: { id: true },
+        });
+        reportVehicleIdByVehicleId.set(v.vehicleId, reportVehicle.id);
+      }
+
+      if (input.members.length > 0) {
+        await tx.reportMember.createMany({
+          data: input.members.map((m) => ({
+            reportId: report.id,
+            userId: m.userId,
+            funktion: m.funktion,
+            reportVehicleId: m.vehicleId ? reportVehicleIdByVehicleId.get(m.vehicleId)! : null,
+          })),
+        });
+      }
+
       return report;
     });
     reportId = created.id;
@@ -167,6 +196,10 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
       : null;
 
   const membersById = new Map(validMembers.map((m) => [m.id, m]));
+  function vehicleLabelFor(vehicleId: string): string {
+    const v = vehiclesById.get(vehicleId)!;
+    return `${v.taktischeBezeichnung} (${v.kennzeichen})`;
+  }
   const pdfData: ReportForPdf = {
     number,
     year,
@@ -180,12 +213,16 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     ownActivity: input.ownActivity,
     activityKinds: input.activityKinds,
     activityOther,
-    vehicleLabel: vehicle ? `${vehicle.taktischeBezeichnung} (${vehicle.kennzeichen})` : null,
-    vehicleKm: input.vehicleId !== null ? input.vehicleKm : null,
+    vehicles: input.vehicles.map((v) => ({ label: vehicleLabelFor(v.vehicleId), km: v.km })),
     remark,
     members: input.members.map((m) => {
       const member = membersById.get(m.userId)!;
-      return { name: `${member.firstName} ${member.lastName}`, stbNr: member.stbNr, funktion: m.funktion };
+      return {
+        name: `${member.firstName} ${member.lastName}`,
+        stbNr: member.stbNr,
+        funktion: m.funktion,
+        vehicleLabel: m.vehicleId ? vehicleLabelFor(m.vehicleId) : null,
+      };
     }),
     materials: usedQuantities.filter((q) => q.kind === 'MATERIAL').map((q) => ({ code: q.code, value: q.value })),
     equipment: usedQuantities.filter((q) => q.kind === 'EQUIPMENT').map((q) => ({ code: q.code, value: q.value })),

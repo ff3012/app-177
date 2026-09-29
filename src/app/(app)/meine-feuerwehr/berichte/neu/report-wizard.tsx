@@ -58,6 +58,47 @@ function WizardHeader({ step, onBack }: { step: 1 | 2 | 3; onBack: () => void })
 interface ReportMemberEntry {
   userId: string;
   funktion: (typeof FUNKTIONEN)[number];
+  /** null = "ohne Fahrzeug" (z. B. zu Fuß/privat angereist) - sonst die vehicleId eines der unten in
+   * `vehicleEntries` ausgewählten Fahrzeuge. */
+  vehicleId: string | null;
+}
+
+interface ReportVehicleEntry {
+  vehicleId: string;
+  km: string;
+}
+
+function MemberRow({
+  entry,
+  members,
+  onFunktionChange,
+  onRemove,
+}: {
+  entry: ReportMemberEntry;
+  members: ReportMemberOption[];
+  onFunktionChange: (userId: string, funktion: (typeof FUNKTIONEN)[number]) => void;
+  onRemove: (userId: string) => void;
+}) {
+  const member = members.find((m) => m.id === entry.userId);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex-1 text-sm text-[#1c1c1e]">{member ? `${member.lastName} ${member.firstName}` : entry.userId}</span>
+      <select
+        value={entry.funktion}
+        onChange={(e) => onFunktionChange(entry.userId, e.target.value as (typeof FUNKTIONEN)[number])}
+        className="rounded-lg border border-neutral-300 px-2 py-1 text-sm"
+      >
+        {FUNKTIONEN.map((f) => (
+          <option key={f} value={f}>
+            {FUNKTION_LABEL[f]}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={() => onRemove(entry.userId)} className="text-red-700">
+        ×
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -108,10 +149,11 @@ export function ReportWizard({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Schritt 2
-  const [vehicleId, setVehicleId] = useState(prefillVehicleId ?? '');
-  const [vehicleKm, setVehicleKm] = useState('');
+  const [vehicleEntries, setVehicleEntries] = useState<ReportVehicleEntry[]>(
+    prefillVehicleId ? [{ vehicleId: prefillVehicleId, km: '' }] : [],
+  );
   const [reportMembers, setReportMembers] = useState<ReportMemberEntry[]>([
-    { userId: initialFilledById, funktion: 'MANNSCHAFT' },
+    { userId: initialFilledById, funktion: 'MANNSCHAFT', vehicleId: null },
   ]);
 
   // Schritt 3
@@ -136,9 +178,22 @@ export function ReportWizard({
     setStep((current) => (current === 3 ? 2 : 1));
   }
 
-  function addMember(ids: string[]) {
-    const newId = ids[ids.length - 1];
-    setReportMembers((current) => [...current, { userId: newId, funktion: 'MANNSCHAFT' }]);
+  function addVehicle(vehicleId: string) {
+    setVehicleEntries((current) => [...current, { vehicleId, km: '' }]);
+  }
+  function removeVehicle(vehicleId: string) {
+    setVehicleEntries((current) => current.filter((v) => v.vehicleId !== vehicleId));
+    // Mitglieder dieses Fahrzeugs wandern zurück in "Ohne Fahrzeug", statt zu verschwinden - das
+    // Entfernen eines Fahrzeugs ist eine Korrektur der Auswahl, keine Aussage "diese Mitglieder waren
+    // nicht dabei".
+    setReportMembers((current) => current.map((m) => (m.vehicleId === vehicleId ? { ...m, vehicleId: null } : m)));
+  }
+  function setVehicleKm(vehicleId: string, km: string) {
+    setVehicleEntries((current) => current.map((v) => (v.vehicleId === vehicleId ? { ...v, km } : v)));
+  }
+
+  function addMembers(vehicleId: string | null, ids: string[]) {
+    setReportMembers((current) => [...current, ...ids.map((userId) => ({ userId, funktion: 'MANNSCHAFT' as const, vehicleId }))]);
   }
   function removeMember(userId: string) {
     setReportMembers((current) => current.filter((m) => m.userId !== userId));
@@ -173,8 +228,10 @@ export function ReportWizard({
       ownActivity: ownActivity!,
       activityKinds,
       activityOther: activityOther.trim() || null,
-      vehicleId: vehicleId || null,
-      vehicleKm: vehicleId ? (vehicleKm.trim() !== '' && !Number.isNaN(Number(vehicleKm)) ? Math.round(Number(vehicleKm)) : null) : null,
+      vehicles: vehicleEntries.map((v) => ({
+        vehicleId: v.vehicleId,
+        km: v.km.trim() !== '' && !Number.isNaN(Number(v.km)) ? Math.round(Number(v.km)) : 0,
+      })),
       remark: remark.trim(),
       members: reportMembers,
       quantities,
@@ -327,66 +384,83 @@ export function ReportWizard({
       {step === 2 && (
         <>
           <div className="rounded-xl bg-white p-4 shadow-sm">
-            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Fahrzeug</label>
-            <select
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="">Kein Fahrzeug</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.taktischeBezeichnung} ({vehicle.kennzeichen})
-                </option>
-              ))}
-            </select>
-            {vehicleId && (
-              <div className="mt-2">
-                <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">km</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={vehicleKm}
-                  onChange={(e) => setVehicleKm(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Eingesetzte Mitglieder</label>
-            <div className="flex flex-col gap-2">
-              {reportMembers.map((entry) => {
-                const member = members.find((m) => m.id === entry.userId);
+            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Fahrzeuge</label>
+            <div className="flex flex-col gap-3">
+              {vehicleEntries.map((entry) => {
+                const vehicle = vehicles.find((v) => v.id === entry.vehicleId);
+                const vehicleMembers = reportMembers.filter((m) => m.vehicleId === entry.vehicleId);
                 return (
-                  <div key={entry.userId} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm text-[#1c1c1e]">
-                      {member ? `${member.lastName} ${member.firstName}` : entry.userId}
-                    </span>
-                    <select
-                      value={entry.funktion}
-                      onChange={(e) => setMemberFunktion(entry.userId, e.target.value as (typeof FUNKTIONEN)[number])}
-                      className="rounded-lg border border-neutral-300 px-2 py-1 text-sm"
-                    >
-                      {FUNKTIONEN.map((f) => (
-                        <option key={f} value={f}>
-                          {FUNKTION_LABEL[f]}
-                        </option>
+                  <div key={entry.vehicleId} className="rounded-lg border border-neutral-200 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-[#1c1c1e]">
+                        {vehicle ? `${vehicle.taktischeBezeichnung} (${vehicle.kennzeichen})` : entry.vehicleId}
+                      </span>
+                      <button type="button" onClick={() => removeVehicle(entry.vehicleId)} className="text-red-700">
+                        ×
+                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">km</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={entry.km}
+                        onChange={(e) => setVehicleKm(entry.vehicleId, e.target.value)}
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {vehicleMembers.map((memberEntry) => (
+                        <MemberRow key={memberEntry.userId} entry={memberEntry} members={members} onFunktionChange={setMemberFunktion} onRemove={removeMember} />
                       ))}
-                    </select>
-                    <button type="button" onClick={() => removeMember(entry.userId)} className="text-red-700">
-                      ×
-                    </button>
+                    </div>
+                    <div className="mt-2">
+                      <MemberMultiSelect
+                        members={members}
+                        excludeIds={reportMembers.map((m) => m.userId)}
+                        onAdd={(ids) => addMembers(entry.vehicleId, ids)}
+                        placeholder="Mitglied hinzufügen"
+                      />
+                    </div>
                   </div>
                 );
               })}
             </div>
+            <div className="mt-3">
+              <select
+                key={vehicleEntries.length}
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) addVehicle(e.target.value);
+                }}
+                className="w-full rounded-lg border border-dashed border-brand px-3 py-2 text-sm font-medium text-brand"
+              >
+                <option value="">+ Fahrzeug hinzufügen</option>
+                {vehicles
+                  .filter((v) => !vehicleEntries.some((entry) => entry.vehicleId === v.id))
+                  .map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      {vehicle.taktischeBezeichnung} ({vehicle.kennzeichen})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Ohne Fahrzeug</label>
+            <div className="flex flex-col gap-2">
+              {reportMembers
+                .filter((entry) => entry.vehicleId === null)
+                .map((entry) => (
+                  <MemberRow key={entry.userId} entry={entry} members={members} onFunktionChange={setMemberFunktion} onRemove={removeMember} />
+                ))}
+            </div>
             <div className="mt-2">
               <MemberMultiSelect
-                members={members.filter((m) => !reportMembers.some((entry) => entry.userId === m.id))}
-                value={reportMembers.map((entry) => entry.userId)}
-                onChange={addMember}
+                members={members}
+                excludeIds={reportMembers.map((entry) => entry.userId)}
+                onAdd={(ids) => addMembers(null, ids)}
                 placeholder="Mitglied hinzufügen"
               />
             </div>

@@ -13,38 +13,55 @@ function memberName(member: ReportMemberOption): string {
 
 /**
  * Mehrfachauswahl-Mitgliedersuche für "+ Mitglied hinzufügen" (Bericht-Brief.md §5 Schritt 2) - gleiches
- * Popover+Command-Muster wie MemberSearchSelect, aber value/onChange als string[] statt string. Zeigt
- * bereits ausgewählte Mitglieder als abhakbare Zeilen (kein Entfernen hier - das übernimmt die
- * Mitgliederliste in Schritt 2 selbst, diese Komponente fügt nur hinzu).
+ * Popover+Command-Muster wie MemberSearchSelect. Anders als eine reine "Klick fügt hinzu und schließt"-
+ * Auswahl (das ursprüngliche Verhalten, das für mehrere Mitglieder mühsam war - Popover mehrfach neu
+ * öffnen) bleibt das Popover beim Anhaken offen: jede Zeile ist eine abhakbare Checkbox, "Fertig"
+ * bestätigt die ganze Auswahl auf einmal. `excludeIds` sind Mitglieder, die in KEINER der (ggf.
+ * mehreren, z. B. pro Fahrzeug) Instanzen dieser Komponente mehr auswählbar sein sollen - i. d. R. alle
+ * bereits irgendwo im Bericht eingetragenen Mitglieder, nicht nur die dieser einen Instanz/Gruppe.
+ * `onAdd` bekommt ausschließlich die NEU ausgewählten IDs dieser Session (nicht den gemergten
+ * Gesamtwert) - der Aufrufer entscheidet, welcher Gruppe/welchem Fahrzeug sie zugeordnet werden.
  */
 export function MemberMultiSelect({
   members,
-  value,
-  onChange,
+  excludeIds,
+  onAdd,
   placeholder,
 }: {
   members: ReportMemberOption[];
-  value: string[];
-  onChange: (ids: string[]) => void;
+  excludeIds: string[];
+  onAdd: (ids: string[]) => void;
   placeholder: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [pending, setPending] = useState<string[]>([]);
 
-  const available = useMemo(() => members.filter((member) => !value.includes(member.id)), [members, value]);
+  const available = useMemo(() => members.filter((member) => !excludeIds.includes(member.id)), [members, excludeIds]);
   const filtered = useMemo(
     () => available.filter((member) => memberName(member).toLowerCase().includes(search.trim().toLowerCase())),
     [available, search],
   );
 
-  function add(id: string) {
-    onChange([...value, id]);
+  function toggle(id: string) {
+    setPending((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  }
+  function commit() {
+    if (pending.length > 0) onAdd(pending);
+    setPending([]);
     setSearch('');
     setOpen(false);
   }
+  function handleOpenChange(next: boolean) {
+    if (!next) {
+      setPending([]);
+      setSearch('');
+    }
+    setOpen(next);
+  }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -53,7 +70,7 @@ export function MemberMultiSelect({
           + {placeholder}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[260px] p-0">
+      <PopoverContent align="start" className="w-[280px] p-0">
         <Command shouldFilter={false}>
           <CommandInput placeholder="Mitglied suchen …" value={search} onValueChange={setSearch} />
           <CommandList>
@@ -61,14 +78,34 @@ export function MemberMultiSelect({
               <div className="py-4 text-center text-sm text-neutral-400">Keine Treffer.</div>
             )}
             <CommandGroup>
-              {filtered.map((member) => (
-                <CommandItem key={member.id} value={member.id} onSelect={() => add(member.id)}>
-                  {memberName(member)}
-                </CommandItem>
-              ))}
+              {filtered.map((member) => {
+                const checked = pending.includes(member.id);
+                return (
+                  <CommandItem key={member.id} value={member.id} onSelect={() => toggle(member.id)}>
+                    <span
+                      className={`mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] leading-none ${
+                        checked ? 'border-brand bg-brand text-white' : 'border-neutral-300'
+                      }`}
+                    >
+                      {checked ? '✓' : ''}
+                    </span>
+                    {memberName(member)}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>
+        <div className="flex items-center justify-between border-t border-neutral-100 p-2">
+          <span className="text-xs text-neutral-400">{pending.length} ausgewählt</span>
+          <button
+            type="button"
+            onClick={commit}
+            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white"
+          >
+            Fertig
+          </button>
+        </div>
       </PopoverContent>
     </Popover>
   );
