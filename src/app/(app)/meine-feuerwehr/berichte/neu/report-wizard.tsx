@@ -188,6 +188,10 @@ export function ReportWizard({
   const [visibleQuantities, setVisibleQuantities] = useState<Set<string>>(new Set());
   const [showLoescher, setShowLoescher] = useState(false);
   const [remark, setRemark] = useState('');
+  // Erst nach Verlassen des Felds ODER einem gescheiterten Abgabeversuch markiert - nicht schon beim
+  // ersten Laden der Seite, das würde ein leeres Pflichtfeld zeigen, bevor der Nutzer überhaupt die
+  // Chance hatte, es auszufüllen.
+  const [remarkTouched, setRemarkTouched] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +241,10 @@ export function ReportWizard({
   }
 
   async function handleSubmit() {
+    if (remark.trim().length === 0) {
+      setRemarkTouched(true);
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -646,13 +654,21 @@ export function ReportWizard({
           )}
 
           <div className="rounded-xl bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Bemerkung</label>
+            <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">
+              Bemerkung <span className="text-red-600">*</span>
+            </label>
             <textarea
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
+              onBlur={() => setRemarkTouched(true)}
               rows={4}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                remarkTouched && remark.trim().length === 0 ? 'border-red-500' : 'border-neutral-300'
+              }`}
             />
+            {remarkTouched && remark.trim().length === 0 && (
+              <p className="mt-1 text-xs text-red-600">Bemerkung ist erforderlich.</p>
+            )}
           </div>
 
           {error && <p className="text-sm text-red-700">{error}</p>}
@@ -660,7 +676,7 @@ export function ReportWizard({
           <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
             <button
               type="button"
-              disabled={!canSubmit || submitting}
+              disabled={submitting}
               onClick={handleSubmit}
               className={`flex h-[52px] w-full items-center justify-center rounded-lg text-[15px] font-semibold text-white ${
                 canSubmit && !submitting ? 'bg-brand' : 'bg-neutral-300'
