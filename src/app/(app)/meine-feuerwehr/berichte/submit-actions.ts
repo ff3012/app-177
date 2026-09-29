@@ -159,8 +159,12 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
   // oben - ein Fehler hier darf die bereits abgegebene Nummer nie zurückrollen.
   const fireDepartment = await prisma.organization.findUniqueOrThrow({
     where: { id: fireDepartmentId },
-    select: { name: true, reportRecipients: true },
+    select: { name: true, reportRecipients: true, wappenImageData: true, wappenImageMimeType: true },
   });
+  const wappenDataUri =
+    fireDepartment.wappenImageData && fireDepartment.wappenImageMimeType
+      ? `data:${fireDepartment.wappenImageMimeType};base64,${Buffer.from(fireDepartment.wappenImageData).toString('base64')}`
+      : null;
 
   const membersById = new Map(validMembers.map((m) => [m.id, m]));
   const pdfData: ReportForPdf = {
@@ -168,6 +172,7 @@ export async function submitReport(input: SubmitReportInput): Promise<{ error?: 
     year,
     type: input.type,
     fireDepartmentName: fireDepartment.name,
+    wappenDataUri,
     filledByName: `${filledBy.firstName} ${filledBy.lastName}`,
     filledByStbNr: filledBy.stbNr,
     startAt,

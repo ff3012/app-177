@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import { ACTIVITY_KINDS, MATERIALS, EQUIPMENT, FUNKTION_LABEL, REPORT_TYPE_LABEL } from './report-constants';
 
 export interface ReportForPdf {
@@ -6,6 +6,9 @@ export interface ReportForPdf {
   year: number;
   type: 'ACTIVITY' | 'EXERCISE' | 'INCIDENT';
   fireDepartmentName: string;
+  /** data: URI (image/png;base64,...) aus Organization.wappenImageData/wappenImageMimeType, oder null
+   * wenn die Feuerwehr kein Wappen hinterlegt hat - dann bleibt die Kopfzeile dort einfach frei. */
+  wappenDataUri: string | null;
   filledByName: string;
   filledByStbNr: string | null;
   startAt: Date;
@@ -22,12 +25,16 @@ export interface ReportForPdf {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 28, fontSize: 9, fontFamily: 'Helvetica' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  title: { fontSize: 14, fontWeight: 700 },
+  page: { padding: 28, fontSize: 10, fontFamily: 'Helvetica' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  wappen: { width: 32, height: 32, marginRight: 8, objectFit: 'contain' },
+  title: { fontSize: 15, fontWeight: 700 },
   section: { marginBottom: 8 },
-  sectionTitle: { fontSize: 10, fontWeight: 700, marginBottom: 3 },
+  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 3 },
   row: { flexDirection: 'row' },
+  spacerLine: { height: 10 },
+  divider: { borderBottomWidth: 0.5, borderColor: '#999', marginTop: 4 },
   checkbox: { width: 9, height: 9, borderWidth: 1, borderColor: '#000', marginRight: 4 },
   checkboxChecked: { backgroundColor: '#000' },
   table: { borderTopWidth: 1, borderColor: '#000' },
@@ -71,7 +78,10 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{REPORT_TYPE_LABEL[report.type].toUpperCase()}</Text>
+          <View style={styles.headerLeft}>
+            {report.wappenDataUri && <Image src={report.wappenDataUri} style={styles.wappen} />}
+            <Text style={styles.title}>{REPORT_TYPE_LABEL[report.type].toUpperCase()}</Text>
+          </View>
           <Text>
             {formatFireDepartmentName(report.fireDepartmentName)} · App-17 | {String(report.number).padStart(3, '0')}/{report.year}
           </Text>
@@ -82,6 +92,7 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
             <Text>Von: {formatDateTime(report.startAt)}</Text>
             <Text style={{ marginLeft: 16 }}>Bis: {formatDateTime(report.endAt)}</Text>
           </View>
+          <View style={styles.spacerLine} />
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
             <Text>Eigene Tätigkeit: </Text>
             <View style={[styles.checkbox, report.ownActivity ? styles.checkboxChecked : {}]} />
@@ -99,6 +110,7 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Bemerkung</Text>
           <Text>{report.remark}</Text>
+          {report.remark.trim().length > 0 && <View style={styles.divider} />}
         </View>
 
         <View style={styles.section}>
@@ -175,7 +187,6 @@ function ReportDocument({ report }: { report: ReportForPdf }) {
           <Text>
             Ausgefüllt: {report.filledByName} ({report.filledByStbNr ?? '-'}) · {formatDateTime(new Date())}
           </Text>
-          <Text>Kommandant / Stellvertreter: ______________________</Text>
         </View>
       </Page>
     </Document>
