@@ -20,7 +20,7 @@ export function ActionRow({ showPhotoUpload }: { showPhotoUpload: boolean }) {
       <button
         type="button"
         onClick={() => setSheetOpen(true)}
-        className="flex min-h-[96px] flex-col items-center justify-center gap-1 rounded-xl border-2 border-brand bg-white text-[15px] font-semibold text-brand shadow-sm"
+        className="flex min-h-[96px] flex-col items-center justify-center gap-1 rounded-xl bg-white text-[15px] font-semibold text-[#1c1c1e] shadow-sm"
       >
         Neuer Bericht
       </button>

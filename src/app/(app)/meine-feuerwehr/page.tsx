@@ -397,7 +397,7 @@ export default async function MeineFeuerwehrPage() {
         {vehicles.length > 0 ? (
           <Link
             href="/meine-feuerwehr/reservieren"
-            className="flex min-h-[96px] flex-col justify-center gap-1 rounded-xl border-2 border-brand bg-white p-4 shadow-sm"
+            className="flex min-h-[96px] flex-col justify-center gap-1 rounded-xl bg-white p-4 shadow-sm"
           >
             <span className="text-[15px] font-semibold text-[#1c1c1e]">Fahrzeug reservieren</span>
             <span className={`text-[13px] ${vehiclesFreeToday > 0 ? 'text-[#1b7a52]' : 'text-[#8e8e93]'}`}>
