@@ -74,11 +74,21 @@ export function ActivityKindPicker({
     setOtherChecked(true);
   }
 
-  function renderRow(option: ActivityKindOption) {
+  // `name` ist bewusst je Sektion EIGENSTÄNDIG (nicht ein einziges gemeinsames "activityKind" für die
+  // ganze Seite, wie ursprünglich) - derselbe Code taucht oft doppelt auf (einmal unter "Zuletzt
+  // verwendet", einmal in der Hauptliste/Gruppe). Zwei <input type="radio"> mit demselben `name` UND
+  // gleichzeitig identischem Wert lösen bei einem Klick auf die eine Instanz einen nativen
+  // Browser-Sync auf die andere aus, der mit Reacts eigener kontrollierter checked-Prop kollidierte -
+  // beobachteter Bug: die "Zuletzt verwendet"-Zeile ließ sich nicht anklicken, obwohl der Radio in der
+  // Hauptliste für denselben Code korrekt reagierte. Auswahl-Exklusivität kommt ohnehin allein aus
+  // `selectedCode` (React State), nie aus nativer name-Gruppierung - pro Sektion einen eigenen `name`
+  // zu vergeben behält nur den (rein kosmetischen) Pfeiltasten-Nav-Vorteil innerhalb einer Sektion,
+  // ohne das sektionsübergreifende Duplikat-Problem.
+  function renderRow(option: ActivityKindOption, sectionName: string) {
     const checked = selectedCode === option.code;
     return (
       <label key={option.code} className="flex min-h-[44px] items-center gap-3 border-b border-neutral-100 px-1 py-2">
-        <input type="radio" name="activityKind" checked={checked} onChange={() => selectCode(option.code)} className="h-5 w-5 accent-brand" />
+        <input type="radio" name={sectionName} checked={checked} onChange={() => selectCode(option.code)} className="h-5 w-5 accent-brand" />
         <span className="text-sm text-[#1c1c1e]">{option.label}</span>
       </label>
     );
@@ -117,12 +127,12 @@ export function ActivityKindPicker({
         {recentOptions.length > 0 && search.trim() === '' && (
           <div className="mb-3">
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">Zuletzt verwendet</h3>
-            {recentOptions.map(renderRow)}
+            {recentOptions.map((option) => renderRow(option, 'activityKind-recent'))}
           </div>
         )}
 
         <label className="flex min-h-[44px] items-center gap-3 border-b border-neutral-100 px-1 py-2">
-          <input type="radio" name="activityKind" checked={otherChecked} onChange={selectOther} className="h-5 w-5 accent-brand" />
+          <input type="radio" name="activityKind-other" checked={otherChecked} onChange={selectOther} className="h-5 w-5 accent-brand" />
           <span className="text-sm text-[#1c1c1e]">Sonstige</span>
         </label>
         {otherChecked && (
@@ -136,7 +146,7 @@ export function ActivityKindPicker({
         )}
 
         <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{listLabel}</h3>
-        {filtered.map(renderRow)}
+        {filtered.map((option) => renderRow(option, 'activityKind-all'))}
 
         {search.trim() === '' &&
           groupedOptions.map(([group, groupOptions]) => (
@@ -145,7 +155,7 @@ export function ActivityKindPicker({
                 {ACTIVITY_KIND_GROUP_LABEL[group] ?? group}
               </h3>
               <p className="mb-1 px-1 text-xs text-neutral-400">{groupOptions.length} Unterpunkte ›</p>
-              {groupOptions.map(renderRow)}
+              {groupOptions.map((option) => renderRow(option, `activityKind-group-${group}`))}
             </div>
           ))}
       </div>
