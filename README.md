@@ -17,10 +17,14 @@ kein App-Store-Build nötig.
   Listenansicht (Listenansicht ist Standard), .ics-Export/Abo für Outlook/Google/Apple Kalender,
   optionaler read-only Import aus einem externen .ics-Feed und optionales Rückschreiben eigener
   Termine in einen Google Kalender.
-- **Meine Feuerwehr** – Startbildschirm nach dem Login: eigener Atemschutz-Status, Fuhrpark der
-  eigenen Feuerwehr mit Fahrzeug-Reservierungen (optional mit Freigabe-Workflow per E-Mail), und
-  eine "Zu erledigen"-Liste (offene Termin-Rückmeldungen, ablaufende Atemschutz-Fristen, 90-Tage-
-  Regel für Drohnengruppen-Mitglieder).
+- **Meine Feuerwehr** – Startbildschirm nach dem Login: eigener Atemschutz-Status, Fahrzeug-
+  Reservierungen (optional mit Freigabe-Workflow per E-Mail) über eine eigene Auswahlseite mit
+  Status je Fahrzeug für heute (frei/ab-bis belegt/belegt/außer Dienst) und "Zuletzt verwendet"-
+  Schnellzugriff, Tätigkeits-/Übungsbericht (mehrstufiger Assistent, mehrere Fahrzeuge pro Bericht
+  mit Mitglieder-Zuordnung je Fahrzeug, PDF- und E-Mail-Versand, Übungsbericht nach der offiziellen
+  NÖ-Landesfeuerwehrverband-Papiervorlage), und eine "Zu erledigen"-Liste (offene Termin-
+  Rückmeldungen, ablaufende Atemschutz-Fristen, 90-Tage-Regel für Drohnengruppen-Mitglieder,
+  Erinnerung an einen ausstehenden Bericht nach einer Fahrzeug-Reservierung).
 - **Drohnengruppe** – Flugbuch je Drohnengruppe (Datum/Uhrzeit, Pilot, Ort, Drohne, Zweck), nur
   sichtbar für Mitglieder der jeweiligen Gruppe. Zeigt jedem Mitglied den eigenen Status zur
   90-Tage/3-Flüge-Regel, Admins zusätzlich einen Gruppenüberblick mit Qualifikations-Filter

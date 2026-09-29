@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 
-> **Module-specific deep-dive documentation has moved to nested CLAUDE.md files** (loaded automatically when Claude works in that directory): Kalender → `src/components/calendar/CLAUDE.md`, Drohnengruppe → `src/components/drone/CLAUDE.md`, Verwaltung/admin → `src/app/(app)/admin/CLAUDE.md`, Email → `src/lib/email/CLAUDE.md`, News → `src/lib/push/CLAUDE.md`, Meine Feuerwehr/Fahrzeug-Reservierungen/Startbildschirm/Funktionsschalter → `src/app/(app)/meine-feuerwehr/CLAUDE.md`, Dashboard Feuerwehrhaus → `src/app/dashboard/CLAUDE.md`. This root file keeps only universal, cross-cutting content.
+> **Module-specific deep-dive documentation has moved to nested CLAUDE.md files** (loaded automatically when Claude works in that directory): Kalender → `src/components/calendar/CLAUDE.md`, Drohnengruppe → `src/components/drone/CLAUDE.md`, Verwaltung/admin → `src/app/(app)/admin/CLAUDE.md`, Email → `src/lib/email/CLAUDE.md`, News → `src/lib/push/CLAUDE.md`, Meine Feuerwehr/Fahrzeug-Reservierungen/Tätigkeitsbericht-Übungsbericht/Startbildschirm/Funktionsschalter → `src/app/(app)/meine-feuerwehr/CLAUDE.md`, Dashboard Feuerwehrhaus → `src/app/dashboard/CLAUDE.md`. This root file keeps only universal, cross-cutting content.
 
 ## What this is
 

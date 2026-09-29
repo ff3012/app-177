@@ -719,3 +719,183 @@ it instead of showing an empty/unused section to its members. Full design ration
   checkout instead of this worktree — it was killed and restarted from the correct worktree directory before
   any of the above checks were meaningful.
 
+### Tätigkeitsbericht / Übungsbericht ("Berichte")
+
+Das dritte "Neuer Bericht"/"Meine Berichte"-Modul unter Meine Feuerwehr. Grundlage:
+`docs/superpowers/specs/2026-09-28-taetigkeitsbericht-design.md` — `Report`/`ReportMember`/
+`ReportQuantity`/`ReportSequence` (fortlaufende Nummer je Feuerwehr/Jahr), ein 3(-4)-Schritt-Assistent
+(`berichte/neu/report-wizard.tsx`, reiner Client-State bis zur Abgabe), PDF-Erzeugung
+(`lib/heimatfeuerwehr/report-pdf.tsx`, `@react-pdf/renderer`) + S3-Upload + Best-effort-E-Mail an
+`Organization.reportRecipients`. **Kein Entwurf-Konzept**: eine `Report`-Zeile entsteht erst und
+ausschließlich bei "Bericht abgeben" (`submitReport`, `berichte/submit-actions.ts`), mit
+`number`/`year`/`submittedAt` bereits gesetzt — ein ursprünglich vorhandener `DRAFT`-Status samt
+Cron-getriggerter Auto-Anlage bei Reservierungsende wurde auf ausdrücklichen Wunsch vollständig
+entfernt (`ReportStatus`-Enum gelöscht, alle betroffenen Spalten auf `NOT NULL` gezogen).
+
+**PDF-Feinschliff** (`report-pdf.tsx`): das Feuerwehr-Wappen (`Organization.wappenImageData`/
+`wappenImageMimeType`, dieselben Spalten wie der Startbildschirm-Tab-Bar-Wappen, siehe
+"Startbildschirm & mobile Navigation" oben) erscheint jetzt links neben dem Titel in der Kopfzeile —
+bleibt einfach frei, wenn keines hinterlegt ist. Alle Schriftgrößen um 1pt erhöht (bessere
+Lesbarkeit auf ausdrücklichen Wunsch). Zwischen "Von/Bis" und "Eigene Tätigkeit"/"Eigener
+Einsatzbereich" steht jetzt eine Leerzeile; unter "Bemerkung" ein dünner Trennstrich. Die frühere
+Unterschriftszeile "Kommandant / Stellvertreter: ______" ist ersatzlos entfernt.
+
+**Bericht-E-Mail** (`lib/heimatfeuerwehr/notify-report-submitted.ts`) wurde in mehreren Runden an das
+PDF angeglichen: die Mitgliederliste ist jetzt eine eigene Tabelle (Name, Stb.-Nr., Funktion, seit dem
+Mehrfahrzeug-Feature unten auch Fahrzeug) statt einer kommagetrennten Namensliste im
+Hauptzeilenblock, "Bemerkung" steht in diesem Hauptblock bewusst als letzte Zeile VOR der
+Mitgliedertabelle, und Verbrauchsmaterial/Eingesetzte Geräte folgen als zwei weitere eigene Tabellen
+danach (nur tatsächlich verwendete Positionen, "Keines"/"Keine" als Fallback — exakt dieselbe
+Filterung wie im PDF).
+
+**Mehrere Fahrzeuge pro Bericht + Mitglieder-Zuordnung je Fahrzeug**: `Report.vehicleId`/`vehicleKm`
+(ein einzelnes nullable Skalarpaar) wich einem neuen `ReportVehicle`-Modell (`reportId`, `vehicleId`,
+`km`, `@@unique([reportId, vehicleId])`) — beliebig viele Fahrzeuge pro Bericht, jedes mit eigenen
+Kilometern. `ReportMember.reportVehicleId` (nullable, `onDelete: Cascade`) ordnet ein eingesetztes
+Mitglied optional genau einem dieser Fahrzeuge zu; `null` bedeutet "Ohne Fahrzeug" (z. B. zu
+Fuß/privat angereist) — auf ausdrücklichen Wunsch weiterhin möglich, auch wenn der Bericht Fahrzeuge
+verwendet, nicht nur wenn er gar keine hat. Migration `20260929104200_report_mehrere_fahrzeuge`
+backfillt bestehende Berichte deterministisch (`'rv_' || Report.id` als neue `ReportVehicle`-ID, da
+ein Bericht im alten Modell nie mehr als ein Fahrzeug hatte) und ordnet alle bereits eingesetzten
+Mitglieder dieser einen Zeile zu. Im Assistenten (Schritt "Fahrzeuge/Mitglieder", unverändert dieselbe
+Position im Ablauf) fügt "+ Fahrzeug hinzufügen" beliebig viele Fahrzeuge hinzu, jedes mit eigener
+km-Eingabe und eigener, direkt darunter gerenderter Mitgliederliste + eigenem "+ Mitglied
+hinzufügen"; eine feste, immer sichtbare "Ohne Fahrzeug"-Karte fängt alle nicht zugeordneten
+Mitglieder auf. Entfernt man ein Fahrzeug wieder, wandern seine Mitglieder zurück in "Ohne Fahrzeug"
+statt zu verschwinden. `submitReport` legt die `ReportVehicle`-Zeilen einzeln an (nicht `createMany`,
+da die generierten IDs für die zugehörigen `ReportMember`-Zeilen gebraucht werden) und validiert
+serverseitig, dass kein Fahrzeug doppelt eingetragen ist und kein Mitglied einem nicht ausgewählten
+Fahrzeug zugeordnet wurde.
+
+`MemberMultiSelect` (`components/heimatfeuerwehr/member-multi-select.tsx`) wurde dabei grundlegend
+umgebaut: vorher schloss das Popover nach jeder einzelnen Auswahl (mühsam bei mehreren Mitgliedern),
+jetzt bleibt es beim Anhaken offen (Checkboxen, "Fertig"-Button bestätigt die ganze Auswahl auf
+einmal). Die Props heißen jetzt `excludeIds`/`onAdd` (nicht mehr `value`/`onChange`) — `onAdd` liefert
+ausschließlich die neu ausgewählten IDs dieser Session, nicht den gemergten Gesamtwert, damit der
+Aufrufer entscheiden kann, welcher Fahrzeug-Gruppe (oder "Ohne Fahrzeug") sie zugeordnet werden.
+
+**Fix: "Alle" bei "Meine Berichte" führte zu 404** — `/meine-feuerwehr/berichte` existierte nie als
+eigene Seite (nur `neu/`, `[reportId]/abgeschlossen/`, `[reportId]/pdf/`). Neue
+`berichte/page.tsx` zeigt alle eigenen (Ersteller oder Ausfüller), bereits abgegebenen Berichte ohne
+die `take: 3`-Begrenzung der Startseiten-Vorschau, gleiche Kartenoptik.
+
+**Übungsbericht** — bisher nur als ausgegraute "Bald verfügbar"-Option im Berichtsart-Sheet, jetzt
+vollständig nach der echten offiziellen NÖ-Papiervorlage (Feuerwehr Wolfsgraben,
+`Übungsbericht_045_20260603.docx`, per `docx`-Skill ausgelesen) umgesetzt und in
+`ACTIVE_REPORT_TYPES` freigeschaltet:
+
+- **Übungsart** ist eine eigene, wortgetreu aus der Vorlage übernommene Codeliste
+  (`UEBUNGS_ARTEN` in `report-constants.ts`, 25 Übungsart- + 8 Ausbildungsprüfungen-Codes, letztere
+  als eigene `group`-Sektion wie zuvor schon Feuerwehrjugend bei Tätigkeitsart) — bewusst
+  **Einzelauswahl** wie Tätigkeitsart, obwohl das Papierformular unmarkierte Kontrollkästchen ohne
+  "nur eine wählbar"-Hinweis zeigt (auf ausdrücklichen Wunsch so entschieden). `getKindOptionsForType(type)`
+  ist die einzige Stelle, die zwischen `ACTIVITY_KINDS` und `UEBUNGS_ARTEN` unterscheidet — Wizard,
+  PDF und E-Mail lesen alle darüber, nie mehr direkt `ACTIVITY_KINDS`.
+- `ActivityKindPicker` wurde dafür generalisiert: `options`/`title`/`listLabel` sind jetzt Props
+  statt fix auf `ACTIVITY_KINDS`/"Tätigkeitsart" verdrahtet; eine `group`-markierte Teilmenge rendert
+  generisch als eigene Sektion (`ACTIVITY_KIND_GROUP_LABEL`-Mapping) statt einer hartkodierten
+  "Feuerwehrjugend"-Sonderbehandlung.
+- Ein neuer Assistent-Schritt "Übungsdetails" (nur bei `type === 'EXERCISE'`, direkt nach den
+  Grunddaten, Fahrzeuge/Mitglieder und Abschluss rücken dadurch je eine Position nach hinten) fragt
+  Übungsleiter/Übungsüberwachung/Übungsbeobachter (je ein `MemberSearchSelect`, optional/leer
+  lassbar), Übungsort (Straße/Nr.-km/PLZ/Ort) und Weitere Feuerwehren ab.
+- Im Abschluss-Schritt kommen (nur bei Übungsbericht) 7 Freitextfelder vor Bemerkung dazu:
+  Übungsziel, Übungslage, Übungsdarstellung, "Für Übung verständigen" (eigenes Feld auf der
+  Papiervorlage, nicht Teil von Übungsdarstellung — per XML-Kontext der Vorlage verifiziert, nicht
+  geraten), Übungserkenntnis, Übungszielsetzung, Vorschläge.
+- Mannschaftsstärke, Einsatzdauer und Gefahrene Kilometer werden **automatisch berechnet**
+  (Mitgliederzahl, Zeitdifferenz, Summe der Fahrzeug-Kilometer) statt manuell eingegeben.
+- Alle neuen `Report`-Spalten (`uebungsleiterId`/`uebungsueberwachungId`/`uebungsbeobachterId`,
+  `uebungsortStrasse`/`-Nr`/`-Plz`/`-Ort`, die 7 Freitextfelder, `weitereFeuerwehren`) sind nullable —
+  bei ACTIVITY/INCIDENT-Berichten immer `null`, kein separates Modell nötig. PDF und E-Mail zeigen sie
+  nur, wenn `report.type === 'EXERCISE'`.
+- Die Mitglieder-/Fahrzeug-Zuordnung selbst (Schritt "Fahrzeuge/Mitglieder") ist für Übungsbericht
+  **unverändert dieselbe** Mehrfachauswahl wie oben beim Tätigkeitsbericht — kein eigener Übungs-
+  spezifischer Mechanismus, auf ausdrücklichen Wunsch bewusst wiederverwendet statt die auf der
+  Papiervorlage sichtbare starre Mitglieder-×-Fahrzeuge-Matrix (jede Zeile ein Mitglied, jede Spalte
+  ein Fahrzeug, für genau diese eine Feuerwehr fest im Word-Dokument eincodiert) nachzubauen.
+
+**Fix: "Zuletzt verwendet"-Radio in der Tätigkeits-/Übungsart-Auswahl nicht anklickbar** — alle Radios
+teilten sich ein einziges `name="activityKind"`, obwohl derselbe Code oft doppelt vorkam (einmal
+unter "Zuletzt verwendet", einmal in der Hauptliste/Gruppe). Zwei `<input type="radio">` mit
+gleichem `name` UND gleichem Wert lösen bei Klick auf die eine Instanz einen nativen
+Browser-Gruppen-Sync auf die andere aus, der mit Reacts kontrollierter `checked`-Prop kollidierte.
+Jede Sektion (Zuletzt verwendet/Sonstige/Hauptliste/je Gruppe) bekommt jetzt einen eigenen `name` —
+die Auswahl-Exklusivität kommt ohnehin ausschließlich aus dem React-State (`selectedCode`), nie aus
+nativer `name`-Gruppierung.
+
+**Bemerkung ist verpflichtend und wird sichtbar markiert**: rotes "*" neben dem Label, roter Rahmen +
+leicht rötlicher Hintergrund (`bg-red-50`) + Hinweistext "Bemerkung ist erforderlich.", sobald das
+Feld leer ist — unabhängig vom Interaktionsverlauf (eine erste Fassung markierte nur nach
+Verlassen des Felds/einem Abgabeversuch, das ließ ein noch nie berührtes leeres Feld fälschlich
+unmarkiert erscheinen, wenn der Nutzer bereits andere Felder ausgefüllt hatte und erst später bei
+Bemerkung ankam). Der "Bericht abgeben"-Button ist dafür nicht mehr hart deaktiviert (nur noch
+während des Absendens) — die serverseitige Pflichtprüfung (`submitReport`) bestand bereits vorher
+unverändert.
+
+### Fahrzeug reservieren (neuer Einstieg, Fahrzeug-Statuskacheln)
+
+Ersetzt den bisherigen, wenig lesbaren Einstieg (ein `<select>` mit Kennzeichen + "Reservieren"-
+Button auf der Startseite) durch einen klaren Button + eine eigene Auswahlseite.
+
+- Die alte Fuhrpark-Karte mit Select+Button auf `/meine-feuerwehr` ist ersatzlos entfernt. Neue Seite
+  `/meine-feuerwehr/reservieren` ("Fahrzeug wählen"): zweispaltiges Raster (`grid-cols-2`, `gap-2.5`),
+  ein Button pro Fahrzeug mit **nur** Bezeichnung + heutigem Status (kein Kennzeichen/Typ/Marke).
+- Status "für heute" (`lib/heimatfeuerwehr/vehicle-today-status.ts`, `computeVehicleTodayStatus` —
+  eine reine, standalone verifizierte Funktion): "Heute frei" (grün) / "ab HH:MM belegt" bzw.
+  "bis HH:MM belegt" (amber, je nachdem ob das Fahrzeug jetzt gerade frei oder belegt ist) /
+  "heute belegt" (rot, wenn der belegte Block bis mindestens Tagesende reicht) / "außer Dienst"
+  (grau, Kachel nicht antippbar). Mehrere lückenlos aneinanderschließende oder überlappende Buchungen
+  zählen dabei als EIN durchgehender belegter Block (verhindert eine fälschlich gemeldete freie Lücke
+  zwischen zwei Rücken-an-Rücken-Buchungen) — mit 7 Fällen standalone getestet, u. a. genau dieses
+  Zusammenführungsverhalten. Eine Abfrage für alle aktiven Fahrzeuge auf einmal, kein N+1.
+  Außer-Dienst-Fahrzeuge (`isActive: false`) werden bewusst mit abgefragt statt herausgefiltert, damit
+  sie sichtbar (aber nicht antippbar) bleiben, statt einfach zu fehlen.
+- `Vehicle.sortOrder` (additive Migration `20260929130000_vehicle_sort_order`, `@default(0)`) steuert
+  die Reihenfolge — dasselbe Muster wie `Drone.sortOrder`, gesetzt als laufender Zähler bei Anlage
+  (`createVehicle`), keine eigene Umsortier-UI. Fehlende historische Werte (Default 0) fallen auf den
+  sekundären alphabetischen `orderBy`-Fallback zurück.
+- **"Zuletzt verwendet"** (Follow-up-Wunsch): bis zu 3 vom Benutzer selbst zuletzt reservierte, noch
+  aktive Fahrzeuge erscheinen zusätzlich in einer eigenen Sektion oben (neueste zuerst, keine
+  Duplikate) — dieselbe Kachel steht unverändert auch weiter unten in "Alle Fahrzeuge", exakt das
+  bereits etablierte Duplikat-Verhalten von `ActivityKindPicker`s eigenem "Zuletzt verwendet" bei
+  Tätigkeits-/Übungsart, nur über `VehicleBooking`-Historie statt `Report.activityKinds`. Ein
+  inzwischen außer Dienst gestelltes oder gelöschtes Fahrzeug fällt automatisch aus der Liste heraus.
+- Tap auf eine Kachel führt zum bestehenden Reservierungsformular (`/meine-feuerwehr/buchen?
+  vehicleId=...`) mit vorbelegtem Fahrzeug — dort zeigt `booking-form.tsx` das Fahrzeug jetzt als
+  reine Anzeige mit "Ändern"-Link (zurück zur Auswahlseite) statt eines leeren `<select>`, sobald
+  `initialVehicleId` gesetzt ist; ein `<input type="hidden">` übernimmt weiterhin den Wert für
+  react-hook-form/den Submit. Der eigentliche Reservierungsprozess (Datum, Zeitraum, Überschneidungs-
+  prüfung, Speichern) ist dabei komplett unverändert.
+- Die Startseiten-Kachel "Fahrzeug reservieren" (Statuszeile "`N` von `M` heute frei" bzw. "heute
+  alle belegt") verlinkt jetzt auf die neue Auswahlseite statt direkt auf das Formular. Die
+  zugrunde liegende "heute belegt"-Zählung (`todaysBookings`-Query auf `/meine-feuerwehr`) wurde dabei
+  um `status: { not: 'ABGELEHNT' }` ergänzt, damit ihre Zahl exakt mit der Anzahl grüner Kacheln auf
+  der Auswahlseite übereinstimmt (vorher zählten dort auch abgelehnte Reservierungen fälschlich als
+  belegt mit).
+
+**Startbildschirm-Aktionsraster vereinheitlicht** (Follow-up-Wünsche auf dieselbe Startseite): die
+vier Schnellzugriffe standen vorher in zwei separat gestapelten Grids (Fahrzeug reservieren/Flug
+registrieren; darunter, durch andere Sektionen getrennt, Neuer Bericht/Foto Upload) und zwei davon
+trugen einen roten Rahmen, zwei nicht — ein unbeabsichtigtes Schachbrettmuster, geerbt aus zwei
+unabhängigen, älteren Briefs, die je ihre eigene Kachel als "primäre Aktion" auszeichneten, ohne zu
+wissen, dass beide später nebeneinander in einem gemeinsamen Raster mit zwei unmarkierten Kacheln
+landen würden. Jetzt: **ein** gemeinsames 2×2-Raster (`Fahrzeug reservieren | Flug registrieren` /
+`Neuer Bericht | Foto Upload`), alle vier einheitlich als schlichte weiße Kacheln (keine der vier ist
+tatsächlich wichtiger als die anderen). Fehlt eine Kachel (kein Fahrzeug hinterlegt, kein
+Drohnengruppen-Mitglied, keine Foto-Upload-Berechtigung), bleibt ihre Zelle ein unsichtbarer
+`aria-hidden`-Platzhalter statt komplett zu entfallen, damit die Zeilenpaarung der übrigen Kacheln
+nicht verrutscht — dasselbe Muster wie `MobileTabBar`s leere Zelle für die zentrierte Wappen-Kachel
+(siehe "Mobile tab bar rebuilt from scratch" oben). `ActionRow` (`action-row.tsx`) rendert dafür kein
+eigenes Grid mehr — "Neuer Bericht"/"Foto Upload" sind stattdessen zwei von vier Kindern des
+gemeinsamen Rasters, das `page.tsx` selbst aufspannt.
+
+Die "Zu erledigen"-Sektion (Fahrzeug-Bericht-Erinnerung, `openVehicleReportReminders`) stand vorher
+direkt UNTER dem Aktionsraster, jetzt DARÜBER (zwischen "Als Nächstes" und den vier Kacheln) — auf
+ausdrücklichen Wunsch. "Meine Berichte" wanderte in derselben Runde vom Platz direkt unter dem
+Aktionsraster ans Seitenende, nach "Meine Reservierungen".
+
+Alle Änderungen dieses Abschnitts live gegen echte Fixture-Daten geprüft (mehrere Fahrzeuge/Status,
+Drohnengruppen-Mitgliedschaft, ein abgegebener Bericht, eine Buchungshistorie mit Wiederholung für
+"Zuletzt verwendet") statt nur typgeprüft.
+
