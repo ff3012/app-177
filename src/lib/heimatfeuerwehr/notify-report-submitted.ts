@@ -45,21 +45,38 @@ export async function sendReportSubmittedEmail(
   const subjectVehiclePart = context.vehicleLabel ? ` · ${context.vehicleLabel}` : '';
   const subject = `${REPORT_TYPE_LABEL[context.type]} Nr. ${String(context.number).padStart(3, '0')} · ${context.startAt.toLocaleDateString('de-AT')}${subjectVehiclePart} · ${context.filledByName}`;
 
+  // Mitglieder inkl. Standesbuchnummer als eigene Tabelle (statt einer kommagetrennten Namensliste im
+  // Hauptbereich) - auf ausdrücklichen Wunsch, analog zur "Eingesetzte Mitglieder"-Tabelle im PDF. Steht
+  // deshalb als eigener Block NACH der Hauptzeilen-Tabelle, die mit Bemerkung endet ("Bemerkung ÜBER
+  // Mitglieder").
   const tableRows: [string, string][] = [
     ['Ausgefüllt von', context.filledByName],
     ['Zeitraum', `${context.startAt.toLocaleString('de-AT')} – ${context.endAt.toLocaleString('de-AT')}`],
     ['Eigene Tätigkeit', context.ownActivity ? 'Ja' : 'Nein'],
     ['Tätigkeitsart', formatActivityKindText(context.activityKinds, context.activityOther)],
     ...(context.vehicleLabel ? [['Fahrzeug', `${context.vehicleLabel} (${context.vehicleKm ?? '-'} km)`] as [string, string]] : []),
-    ['Mitglieder', context.members.map((m) => m.name).join(', ') || '-'],
     ['Bemerkung', context.remark],
   ];
-  const textPart = tableRows.map(([label, value]) => `${label}: ${value}`).join('\n');
+  const textPart = [
+    ...tableRows.map(([label, value]) => `${label}: ${value}`),
+    '',
+    'Mitglieder:',
+    context.members.length
+      ? context.members.map((m) => `- ${m.name} (${m.stbNr ?? '-'})`).join('\n')
+      : '-',
+  ].join('\n');
   // Jeder Wert wird escaped (src/lib/email/CLAUDE.md) - Bemerkung, "Sonstige"-Freitext, Namen und
   // Fahrzeugbezeichnung sind benutzerkontrolliert. Die Labels sind feste Literale, escapen schadet aber nicht.
+  const membersHtmlRows = context.members.length
+    ? context.members
+        .map((m) => `<tr><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.stbNr ?? '-')}</td></tr>`)
+        .join('')
+    : '<tr><td colspan="2">-</td></tr>';
   const htmlPart = `<table>${tableRows
     .map(([label, value]) => `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(value).replace(/\n/g, '<br>')}</td></tr>`)
-    .join('')}</table>`;
+    .join(
+      '',
+    )}</table><p><strong>Mitglieder</strong></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse"><tr><th align="left">Name</th><th align="left">Stb.-Nr.</th></tr>${membersHtmlRows}</table>`;
 
   let failed = 0;
   for (const recipient of context.fireDepartmentEmails) {
