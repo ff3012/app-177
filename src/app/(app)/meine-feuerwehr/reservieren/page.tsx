@@ -3,6 +3,12 @@ import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { computeVehicleTodayStatus, type VehicleTodayStatus } from '@/lib/heimatfeuerwehr/vehicle-today-status';
 
+interface VehicleForTile {
+  id: string;
+  taktischeBezeichnung: string;
+  isActive: boolean;
+}
+
 function formatTime(date: Date): string {
   return date.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 }
@@ -21,6 +27,21 @@ function statusDisplay(status: VehicleTodayStatus): { color: string; textColor: 
   }
 }
 
+/** Zieht bis zu `limit` zuletzt vom Benutzer selbst reservierte, noch aktive Fahrzeuge - neueste
+ * zuerst, ohne Duplikate. Exakt dasselbe "Zuletzt verwendet"-Muster wie ActivityKindPicker/
+ * getRecentActivityKinds (neu/page.tsx), nur über VehicleBooking statt Report.activityKinds. Ein
+ * inzwischen außer Dienst gestelltes oder gelöschtes Fahrzeug fällt automatisch heraus (gefiltert
+ * gegen die bereits geladene, aktive Fahrzeugliste), statt als toter Schnellzugriff stehen zu bleiben. */
+function getRecentVehicleIds(bookings: { vehicleId: string }[], activeVehicleIds: Set<string>, limit: number): string[] {
+  const seen = new Set<string>();
+  for (const booking of bookings) {
+    if (!activeVehicleIds.has(booking.vehicleId)) continue;
+    seen.add(booking.vehicleId);
+    if (seen.size >= limit) break;
+  }
+  return [...seen];
+}
+
 /**
  * "Fahrzeug wählen" (Fahrzeug-reservieren-Brief.md §2) - Zweispalten-Raster, ein Button pro Fahrzeug
  * mit nur Bezeichnung + heutigem Status, kein Kennzeichen/Typ/Marke. Tap führt zum bestehenden
@@ -30,6 +51,12 @@ function statusDisplay(status: VehicleTodayStatus): { color: string; textColor: 
  * Außer-Dienst-Fahrzeuge (isActive: false) werden bewusst mit abgefragt und angezeigt (nicht aus der
  * Query gefiltert) - §5's Abnahmekriterium "Außer-Dienst-Fahrzeuge sind sichtbar, aber nicht
  * antippbar" verlangt das explizit, auch wenn §2's Fließtext knapper von "Status aktiv" spricht.
+ *
+ * "Zuletzt verwendet" (Follow-up-Wunsch): die bis zu 3 zuletzt vom Benutzer selbst reservierten
+ * Fahrzeuge erscheinen zusätzlich in einer eigenen Sektion oben - ein häufig genutztes Fahrzeug
+ * taucht damit automatisch als Schnellzugriff auf, sobald es auch das zuletzt verwendete ist.
+ * Erscheint bewusst ZUSÄTZLICH, nicht als Ersatz - dieselbe Kachel steht danach unverändert auch
+ * weiter unten in "Alle Fahrzeuge" (identisch zum Duplikat-Verhalten von ActivityKindPicker).
  */
 export default async function FahrzeugWaehlenPage() {
   const user = await requireUser();
@@ -37,11 +64,19 @@ export default async function FahrzeugWaehlenPage() {
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
 
-  const vehicles = await prisma.vehicle.findMany({
-    where: { organizationId: user.homeOrganizationId },
-    orderBy: [{ sortOrder: 'asc' }, { taktischeBezeichnung: 'asc' }],
-    select: { id: true, taktischeBezeichnung: true, isActive: true },
-  });
+  const [vehicles, recentBookings] = await Promise.all([
+    prisma.vehicle.findMany({
+      where: { organizationId: user.homeOrganizationId },
+      orderBy: [{ sortOrder: 'asc' }, { taktischeBezeichnung: 'asc' }],
+      select: { id: true, taktischeBezeichnung: true, isActive: true },
+    }),
+    prisma.vehicleBooking.findMany({
+      where: { userId: user.id, status: { not: 'ABGELEHNT' } },
+      orderBy: { startsAt: 'desc' },
+      take: 20,
+      select: { vehicleId: true },
+    }),
+  ]);
 
   // Eine Abfrage für alle aktiven Fahrzeuge auf einmal, kein N+1 (§4).
   const activeVehicleIds = vehicles.filter((v) => v.isActive).map((v) => v.id);
@@ -63,8 +98,54 @@ export default async function FahrzeugWaehlenPage() {
     bookingsByVehicle.set(booking.vehicleId, list);
   }
 
+  const recentVehicleIds = getRecentVehicleIds(recentBookings, new Set(activeVehicleIds), 3);
+  const vehiclesById = new Map(vehicles.map((v) => [v.id, v]));
+  const recentVehicles = recentVehicleIds.map((id) => vehiclesById.get(id)!).filter(Boolean);
+
   const weekday = now.toLocaleDateString('de-AT', { weekday: 'long' });
   const dateLabel = now.toLocaleDateString('de-AT', { day: 'numeric', month: 'long' });
+
+  function renderTile(vehicle: VehicleForTile) {
+    if (!vehicle.isActive) {
+      return (
+        <div
+          key={vehicle.id}
+          aria-disabled="true"
+          className="flex min-h-[104px] flex-col overflow-hidden rounded-2xl bg-white opacity-60 shadow-sm"
+        >
+          <div className="h-1 bg-neutral-300" />
+          <div className="flex flex-1 flex-col justify-between p-4">
+            <span className="break-words text-2xl font-bold leading-tight text-[#1c1c1e]">
+              {vehicle.taktischeBezeichnung}
+            </span>
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-neutral-400">
+              <span className="h-2 w-2 rounded-full bg-neutral-400" />
+              außer Dienst
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    const status = computeVehicleTodayStatus(bookingsByVehicle.get(vehicle.id) ?? [], now, endOfToday);
+    const { color, textColor, label } = statusDisplay(status);
+    return (
+      <Link
+        key={vehicle.id}
+        href={`/meine-feuerwehr/buchen?vehicleId=${vehicle.id}`}
+        className="flex min-h-[104px] flex-col overflow-hidden rounded-2xl bg-white shadow-sm"
+      >
+        <div className="h-1" style={{ backgroundColor: color }} />
+        <div className="flex flex-1 flex-col justify-between p-4">
+          <span className="break-words text-2xl font-bold leading-tight text-[#1c1c1e]">{vehicle.taktischeBezeichnung}</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: textColor }}>
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+            {label}
+          </span>
+        </div>
+      </Link>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,51 +163,20 @@ export default async function FahrzeugWaehlenPage() {
         <p className="text-sm text-neutral-500">Für deine Feuerwehr sind noch keine Fahrzeuge hinterlegt.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2.5">
-            {vehicles.map((vehicle) => {
-              if (!vehicle.isActive) {
-                return (
-                  <div
-                    key={vehicle.id}
-                    aria-disabled="true"
-                    className="flex min-h-[104px] flex-col overflow-hidden rounded-2xl bg-white opacity-60 shadow-sm"
-                  >
-                    <div className="h-1 bg-neutral-300" />
-                    <div className="flex flex-1 flex-col justify-between p-4">
-                      <span className="break-words text-2xl font-bold leading-tight text-[#1c1c1e]">
-                        {vehicle.taktischeBezeichnung}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-sm font-semibold text-neutral-400">
-                        <span className="h-2 w-2 rounded-full bg-neutral-400" />
-                        außer Dienst
-                      </span>
-                    </div>
-                  </div>
-                );
-              }
+          {recentVehicles.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Zuletzt verwendet</h2>
+              <div className="grid grid-cols-2 gap-2.5">{recentVehicles.map(renderTile)}</div>
+            </div>
+          )}
 
-              const status = computeVehicleTodayStatus(bookingsByVehicle.get(vehicle.id) ?? [], now, endOfToday);
-              const { color, textColor, label } = statusDisplay(status);
-              return (
-                <Link
-                  key={vehicle.id}
-                  href={`/meine-feuerwehr/buchen?vehicleId=${vehicle.id}`}
-                  className="flex min-h-[104px] flex-col overflow-hidden rounded-2xl bg-white shadow-sm"
-                >
-                  <div className="h-1" style={{ backgroundColor: color }} />
-                  <div className="flex flex-1 flex-col justify-between p-4">
-                    <span className="break-words text-2xl font-bold leading-tight text-[#1c1c1e]">
-                      {vehicle.taktischeBezeichnung}
-                    </span>
-                    <span className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: textColor }}>
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                      {label}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="flex flex-col gap-2">
+            {recentVehicles.length > 0 && (
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Alle Fahrzeuge</h2>
+            )}
+            <div className="grid grid-cols-2 gap-2.5">{vehicles.map(renderTile)}</div>
           </div>
+
           <p className="text-xs text-neutral-500">
             Der Status gilt für heute. Freie Zeiten für andere Tage wählst du im nächsten Schritt.
           </p>
