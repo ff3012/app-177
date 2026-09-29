@@ -188,10 +188,6 @@ export function ReportWizard({
   const [visibleQuantities, setVisibleQuantities] = useState<Set<string>>(new Set());
   const [showLoescher, setShowLoescher] = useState(false);
   const [remark, setRemark] = useState('');
-  // Erst nach Verlassen des Felds ODER einem gescheiterten Abgabeversuch markiert - nicht schon beim
-  // ersten Laden der Seite, das würde ein leeres Pflichtfeld zeigen, bevor der Nutzer überhaupt die
-  // Chance hatte, es auszufüllen.
-  const [remarkTouched, setRemarkTouched] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -241,10 +237,7 @@ export function ReportWizard({
   }
 
   async function handleSubmit() {
-    if (remark.trim().length === 0) {
-      setRemarkTouched(true);
-      return;
-    }
+    if (remark.trim().length === 0) return;
     setSubmitting(true);
     setError(null);
 
@@ -660,15 +653,12 @@ export function ReportWizard({
             <textarea
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
-              onBlur={() => setRemarkTouched(true)}
               rows={4}
               className={`w-full rounded-lg border px-3 py-2 text-sm ${
-                remarkTouched && remark.trim().length === 0 ? 'border-red-500 bg-red-50' : 'border-neutral-300'
+                remark.trim().length === 0 ? 'border-red-500 bg-red-50' : 'border-neutral-300'
               }`}
             />
-            {remarkTouched && remark.trim().length === 0 && (
-              <p className="mt-1 text-xs text-red-600">Bemerkung ist erforderlich.</p>
-            )}
+            {remark.trim().length === 0 && <p className="mt-1 text-xs text-red-600">Bemerkung ist erforderlich.</p>}
           </div>
 
           {error && <p className="text-sm text-red-700">{error}</p>}
