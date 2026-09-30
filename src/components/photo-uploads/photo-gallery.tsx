@@ -33,6 +33,14 @@ export function PhotoGallery({ photoUploadId, photos, currentUserId, isFeuerwehr
 
   return (
     <div className="flex flex-col gap-3">
+      {photos.length > 0 && (
+        <a
+          href={`/api/photo-uploads/${photoUploadId}/download-all`}
+          className="self-start rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-900"
+        >
+          Alle Fotos herunterladen ({photos.length})
+        </a>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         {photos.map((photo) => (
           <button
