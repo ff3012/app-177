@@ -24,6 +24,18 @@ export interface AusbildungsstandVerteilung {
   nurBos2: number;
 }
 
+/** Ein Mitglied der Gruppe samt aller fünf Ausbildungsdaten (ISO "YYYY-MM-DD", null = nicht absolviert) -
+ * für die Ausbildungs-Tabelle, die im Gegensatz zu `pilots` ALLE Mitglieder zeigt, nicht nur BOS1+. */
+export interface MemberAusbildung {
+  id: string;
+  name: string;
+  a1a3LizenzAm: string | null;
+  a2LizenzAm: string | null;
+  stuetzpunktausbildungAm: string | null;
+  bos1AusbildungAm: string | null;
+  bos2AusbildungAm: string | null;
+}
+
 export interface GruppenEinsatzbereitschaft {
   droneGroupId: string;
   droneGroupName: string;
@@ -31,6 +43,7 @@ export interface GruppenEinsatzbereitschaft {
   a2Count: number;
   ausbildungsstand: AusbildungsstandVerteilung;
   pilots: PilotEinsatzbereitschaft[];
+  members: MemberAusbildung[];
 }
 
 /**
@@ -120,5 +133,14 @@ export async function getGruppenEinsatzbereitschaft(droneGroupId: string): Promi
     a2Count: memberships.filter((m) => m.a2LizenzAm !== null).length,
     ausbildungsstand,
     pilots,
+    members: memberships.map((m) => ({
+      id: m.user.id,
+      name: `${m.user.lastName} ${m.user.firstName}`,
+      a1a3LizenzAm: m.a1a3LizenzAm?.toISOString().slice(0, 10) ?? null,
+      a2LizenzAm: m.a2LizenzAm?.toISOString().slice(0, 10) ?? null,
+      stuetzpunktausbildungAm: m.stuetzpunktausbildungAm?.toISOString().slice(0, 10) ?? null,
+      bos1AusbildungAm: m.bos1AusbildungAm?.toISOString().slice(0, 10) ?? null,
+      bos2AusbildungAm: m.bos2AusbildungAm?.toISOString().slice(0, 10) ?? null,
+    })),
   };
 }

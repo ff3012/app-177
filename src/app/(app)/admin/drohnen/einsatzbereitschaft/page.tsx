@@ -12,6 +12,7 @@ import {
 import { NINETY_DAY_REQUIRED_FLIGHTS } from '@/lib/drone/ninety-day-rule';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AusbildungTable } from './ausbildung-table';
 
 const STATUS_LABEL: Record<EinsatzbereitschaftStatus, string> = {
   GRUEN: 'Einsatzbereit',
@@ -169,6 +170,18 @@ function DetailSection({ data, canLinkToUser }: { data: GruppenEinsatzbereitscha
               </Table>
             </div>
           </>
+        )}
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Ausbildung · {data.droneGroupName}</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Alle Mitglieder der Gruppe mit dem Datum der jeweils absolvierten Ausbildung ("–" = noch nicht absolviert).
+        </p>
+        {data.members.length === 0 ? (
+          <p className="text-sm text-ink-muted">Diese Gruppe hat noch keine Mitglieder.</p>
+        ) : (
+          <AusbildungTable members={data.members} canLinkToUser={canLinkToUser} />
         )}
       </div>
     </div>
