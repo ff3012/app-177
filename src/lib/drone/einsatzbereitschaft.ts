@@ -8,6 +8,7 @@ export type EinsatzbereitschaftStatus = 'GRUEN' | 'GELB' | 'ROT';
 export interface PilotEinsatzbereitschaft {
   id: string;
   name: string;
+  feuerwehr: string;
   flightCount: number;
   status: EinsatzbereitschaftStatus;
 }
@@ -29,6 +30,7 @@ export interface AusbildungsstandVerteilung {
 export interface MemberAusbildung {
   id: string;
   name: string;
+  feuerwehr: string;
   a1a3LizenzAm: string | null;
   a2LizenzAm: string | null;
   stuetzpunktausbildungAm: string | null;
@@ -80,7 +82,14 @@ export async function getGruppenEinsatzbereitschaft(droneGroupId: string): Promi
         stuetzpunktausbildungAm: true,
         bos1AusbildungAm: true,
         bos2AusbildungAm: true,
-        user: { select: { id: true, firstName: true, lastName: true } },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            homeOrganization: { select: { name: true, shortName: true } },
+          },
+        },
       },
     }),
     prisma.droneFlight.groupBy({
@@ -99,6 +108,7 @@ export async function getGruppenEinsatzbereitschaft(droneGroupId: string): Promi
       return {
         id: m.user.id,
         name: `${m.user.lastName} ${m.user.firstName}`,
+        feuerwehr: m.user.homeOrganization.shortName ?? m.user.homeOrganization.name,
         flightCount,
         status: classifyFlightCount(flightCount),
       };
@@ -136,6 +146,7 @@ export async function getGruppenEinsatzbereitschaft(droneGroupId: string): Promi
     members: memberships.map((m) => ({
       id: m.user.id,
       name: `${m.user.lastName} ${m.user.firstName}`,
+      feuerwehr: m.user.homeOrganization.shortName ?? m.user.homeOrganization.name,
       a1a3LizenzAm: m.a1a3LizenzAm?.toISOString().slice(0, 10) ?? null,
       a2LizenzAm: m.a2LizenzAm?.toISOString().slice(0, 10) ?? null,
       stuetzpunktausbildungAm: m.stuetzpunktausbildungAm?.toISOString().slice(0, 10) ?? null,

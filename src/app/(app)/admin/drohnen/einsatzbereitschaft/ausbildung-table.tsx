@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import type { MemberAusbildung } from '@/lib/drone/einsatzbereitschaft';
+import { MobileSortControl, SortableHead, compareText, compareValues, useSort } from './sortable';
 
 type StufeKey = 'a1a3LizenzAm' | 'a2LizenzAm' | 'stuetzpunktausbildungAm' | 'bos1AusbildungAm' | 'bos2AusbildungAm';
 
@@ -45,9 +46,26 @@ function MemberName({ member, canLinkToUser }: { member: MemberAusbildung; canLi
   );
 }
 
+type SortKey = 'name' | 'feuerwehr' | StufeKey;
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'feuerwehr', label: 'Feuerwehr' },
+  ...STUFEN.map((s) => ({ key: s.key as SortKey, label: s.label })),
+];
+
 export function AusbildungTable({ members, canLinkToUser }: { members: MemberAusbildung[]; canLinkToUser: boolean }) {
   const [filter, setFilter] = useState('ALLE');
-  const filtered = useMemo(() => members.filter((m) => matchesFilter(m, filter)), [members, filter]);
+  const sort = useSort<SortKey>('name');
+  const filtered = useMemo(() => {
+    const matching = members.filter((m) => matchesFilter(m, filter));
+    return matching.sort((a, b) => {
+      if (sort.key === 'name') return compareValues(a.name, b.name, sort.dir, compareText);
+      if (sort.key === 'feuerwehr') return compareValues(a.feuerwehr, b.feuerwehr, sort.dir, compareText);
+      // ISO-Datum "YYYY-MM-DD" sortiert als Text chronologisch; fehlende Stufen bleiben am Ende.
+      return compareValues(a[sort.key], b[sort.key], sort.dir, compareText);
+    });
+  }, [members, filter, sort.key, sort.dir]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -69,6 +87,14 @@ export function AusbildungTable({ members, canLinkToUser }: { members: MemberAus
         </span>
       </div>
 
+      <MobileSortControl
+        options={SORT_OPTIONS}
+        sortKey={sort.key}
+        dir={sort.dir}
+        onKeyChange={sort.setKey}
+        onToggleDir={sort.toggleDir}
+      />
+
       {filtered.length === 0 ? (
         <p className="text-sm text-ink-muted">Kein Mitglied entspricht dem Filter.</p>
       ) : (
@@ -78,6 +104,7 @@ export function AusbildungTable({ members, canLinkToUser }: { members: MemberAus
               <div key={member.id} className="flex flex-col gap-1.5 py-2.5">
                 <span className="text-sm font-medium text-ink">
                   <MemberName member={member} canLinkToUser={canLinkToUser} />
+                  <span className="ml-2 text-xs font-normal text-ink-faint">{member.feuerwehr}</span>
                 </span>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
                   {STUFEN.map((s) => (
@@ -97,14 +124,21 @@ export function AusbildungTable({ members, canLinkToUser }: { members: MemberAus
             <Table>
               <TableHeader>
                 <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
+                  <SortableHead label="Name" active={sort.key === 'name'} dir={sort.dir} onClick={() => sort.toggle('name')} />
+                  <SortableHead
+                    label="Feuerwehr"
+                    active={sort.key === 'feuerwehr'}
+                    dir={sort.dir}
+                    onClick={() => sort.toggle('feuerwehr')}
+                  />
                   {STUFEN.map((s) => (
-                    <TableHead
+                    <SortableHead
                       key={s.key}
-                      className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted"
-                    >
-                      {s.label}
-                    </TableHead>
+                      label={s.label}
+                      active={sort.key === s.key}
+                      dir={sort.dir}
+                      onClick={() => sort.toggle(s.key)}
+                    />
                   ))}
                 </TableRow>
               </TableHeader>
@@ -114,6 +148,7 @@ export function AusbildungTable({ members, canLinkToUser }: { members: MemberAus
                     <TableCell className="text-ink">
                       <MemberName member={member} canLinkToUser={canLinkToUser} />
                     </TableCell>
+                    <TableCell className="text-ink-muted">{member.feuerwehr}</TableCell>
                     {STUFEN.map((s) => (
                       <TableCell key={s.key} className={member[s.key] ? 'font-mono text-ink' : 'text-ink-faint'}>
                         {member[s.key] ? formatDate(member[s.key]!) : '–'}

@@ -7,24 +7,10 @@ import {
   getGruppenEinsatzbereitschaft,
   type EinsatzbereitschaftStatus,
   type GruppenEinsatzbereitschaft,
-  type PilotEinsatzbereitschaft,
 } from '@/lib/drone/einsatzbereitschaft';
 import { NINETY_DAY_REQUIRED_FLIGHTS } from '@/lib/drone/ninety-day-rule';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AusbildungTable } from './ausbildung-table';
-
-const STATUS_LABEL: Record<EinsatzbereitschaftStatus, string> = {
-  GRUEN: 'Einsatzbereit',
-  GELB: 'Bald fällig',
-  ROT: 'Nicht einsatzbereit',
-};
-
-const STATUS_CLASS: Record<EinsatzbereitschaftStatus, string> = {
-  GRUEN: 'border-transparent bg-success-subtle text-success-text',
-  GELB: 'border-transparent bg-warning-subtle text-warning-text',
-  ROT: 'border-transparent bg-danger-subtle text-danger',
-};
+import { PilotsTable } from './pilots-table';
 
 const STATUS_COUNT_CLASS: Record<EinsatzbereitschaftStatus, string> = {
   GRUEN: 'text-success-text',
@@ -55,15 +41,6 @@ function GroupTile({ data, selected }: { data: GruppenEinsatzbereitschaft; selec
         {' · '}
         <span className={STATUS_COUNT_CLASS.ROT}>{countByStatus(data, 'ROT')}</span>
       </span>
-    </Link>
-  );
-}
-
-function PilotName({ pilot, canLinkToUser }: { pilot: PilotEinsatzbereitschaft; canLinkToUser: boolean }) {
-  if (!canLinkToUser) return <>{pilot.name}</>;
-  return (
-    <Link href={`/admin/benutzer?edit=${pilot.id}`} className="hover:underline">
-      {pilot.name}
     </Link>
   );
 }
@@ -122,54 +99,7 @@ function DetailSection({ data, canLinkToUser }: { data: GruppenEinsatzbereitscha
         {data.pilots.length === 0 ? (
           <p className="text-sm text-ink-muted">Kein Mitglied dieser Gruppe hat bisher eine BOS1-Ausbildung.</p>
         ) : (
-          <>
-            <div className="flex flex-col divide-y divide-line border-t border-line sm:hidden">
-              {data.pilots.map((pilot) => (
-                <div key={pilot.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="flex flex-col">
-                    <span className="text-sm text-ink">
-                      <PilotName pilot={pilot} canLinkToUser={canLinkToUser} />
-                    </span>
-                    <span className="text-xs text-ink-faint">{pilot.flightCount} Flüge (90 Tage)</span>
-                  </div>
-                  <Badge variant="outline" className={STATUS_CLASS[pilot.status]}>
-                    {STATUS_LABEL[pilot.status]}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-
-            <div className="hidden sm:block">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b-2 border-line-strong hover:bg-transparent">
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">Name</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                      Flüge (90 Tage)
-                    </TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-[.08em] text-ink-muted">
-                      Status
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.pilots.map((pilot) => (
-                    <TableRow key={pilot.id} className="border-line">
-                      <TableCell className="text-ink">
-                        <PilotName pilot={pilot} canLinkToUser={canLinkToUser} />
-                      </TableCell>
-                      <TableCell className="font-mono text-ink-muted">{pilot.flightCount}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={STATUS_CLASS[pilot.status]}>
-                          {STATUS_LABEL[pilot.status]}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </>
+          <PilotsTable pilots={data.pilots} canLinkToUser={canLinkToUser} />
         )}
       </div>
 
