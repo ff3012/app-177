@@ -7,6 +7,7 @@ import { generateAppQrCodeDataUri, APP_URL } from '@/lib/dashboard/qr-code';
 import { ClockDisplay } from './clock-display';
 import { HeightFittedList } from '@/components/dashboard/height-fitted-list';
 import { FitText } from '@/components/dashboard/fit-text';
+import { MONTH_SHORT } from '@/lib/format';
 import type { CachedFacebookPost } from '@/lib/facebook/fetch-posts';
 
 export const dynamic = 'force-dynamic';
@@ -162,6 +163,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ toke
                       </div>
                       <div className="dash-section-label mt-1 font-semibold uppercase tracking-[0.09em] text-[#6c6c70]">
                         {WEEKDAY_SHORT[event.startsAt.getDay()]}
+                      </div>
+                      <div className="dash-section-label font-semibold uppercase tracking-[0.09em] text-[#1c1c1e]">
+                        {MONTH_SHORT[event.startsAt.getMonth()]}
                       </div>
                     </div>
                     <div className="min-w-0 flex-1">

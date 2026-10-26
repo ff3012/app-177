@@ -7,6 +7,7 @@ import { AddToCalendarLink } from './add-to-calendar-link';
 import { RsvpBadge } from './rsvp-badge';
 import { VehicleBookingIcon } from './vehicle-booking-icon';
 import { LAYER_COLORS } from '@/lib/calendar/layer-colors';
+import { MONTH_SHORT } from '@/lib/format';
 import { setRsvp } from '@/app/(app)/kalender/[eventId]/rsvp-actions';
 
 const DOUBLE_CLICK_WINDOW_MS = 220;
@@ -194,6 +195,9 @@ function EventCard({
           <span className="text-lg font-bold leading-none text-neutral-900">{start.getDate()}</span>
           <span className="text-[10px] uppercase tracking-wide text-neutral-400">
             {start.toLocaleDateString('de-AT', { weekday: 'short' })}
+          </span>
+          <span className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-neutral-500">
+            {MONTH_SHORT[start.getMonth()]}
           </span>
         </div>
       </div>

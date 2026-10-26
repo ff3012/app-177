@@ -91,3 +91,7 @@ export function isOlderThanMonths(date: Date | null, months: number): boolean {
   cutoff.setMonth(cutoff.getMonth() - months);
   return date < cutoff;
 }
+
+/** Dreibuchstabige Monatskürzel für die Datumsblöcke in Kalender-Listenkarte und Dashboard Feuerwehrhaus
+ * (Index = Date#getMonth()). */
+export const MONTH_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'] as const;
