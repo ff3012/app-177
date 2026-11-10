@@ -180,19 +180,9 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
   return (
     <div className="fixed inset-0 z-[60] flex h-[100dvh] flex-col bg-[#f6f6f7]">
       <header className="shrink-0 bg-ink pt-[max(10px,env(safe-area-inset-top,0px))] text-white">
-        <div className="mx-auto flex w-full max-w-[560px] items-center justify-between px-4 pb-2">
-          <button type="button" onClick={handleClose} className="flex min-h-11 touch-manipulation items-center gap-1 text-[15px] font-semibold">
-            <span aria-hidden>‹</span> Schließen
-          </button>
-          <span className="text-[15px] font-semibold">Checkliste Drohnenflug</span>
-          {readOnly ? (
-            <span className="w-[88px]" />
-          ) : (
-            <button type="button" onClick={handleSaveNow} className="min-h-11 touch-manipulation rounded-full border border-white/40 px-3.5 text-[13px] font-semibold">
-              Speichern
-            </button>
-          )}
-        </div>
+        <p className="mx-auto w-full max-w-[560px] px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-[.12em] text-white/70">
+          Checkliste Drohnenflug
+        </p>
         <div className="mx-auto w-full max-w-[560px] px-4 pb-3">
           <h1 className="text-[23px] font-bold leading-tight">{STEP_TITLES[step]}</h1>
           <p className="text-[13px] text-white/75">
@@ -233,7 +223,7 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
               type="button"
               onClick={() => goToStep(step - 1)}
               disabled={step === 0 || submitting}
-              className="min-h-12 rounded-lg border border-line-strong bg-surface text-[15px] font-semibold text-ink disabled:opacity-40"
+              className="min-h-12 touch-manipulation rounded-lg border border-line-strong bg-surface text-[15px] font-semibold text-ink disabled:opacity-40"
             >
               Zurück
             </button>
@@ -256,6 +246,28 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
                 className={`col-span-2 min-h-12 rounded-lg text-[15px] font-bold text-white ${gate ? 'bg-neutral-400' : 'bg-ink'}`}
               >
                 Weiter · {STEP_TITLES[step + 1]}
+              </button>
+            )}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={submitting}
+              className="min-h-11 touch-manipulation rounded-lg border border-line-strong bg-surface text-[14px] font-semibold text-ink disabled:opacity-40"
+            >
+              Schließen
+            </button>
+            {readOnly ? (
+              <span />
+            ) : (
+              <button
+                type="button"
+                onClick={handleSaveNow}
+                disabled={submitting}
+                className="min-h-11 touch-manipulation rounded-lg border border-line-strong bg-surface text-[14px] font-semibold text-ink disabled:opacity-40"
+              >
+                Speichern
               </button>
             )}
           </div>
