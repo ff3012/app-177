@@ -304,7 +304,11 @@ export function MemberPicker({
             <button
               key={m.id}
               type="button"
-              onClick={() => onToggle(m.id)}
+              onClick={() => {
+                onToggle(m.id);
+                // Suchtext leeren: sonst bleibt z. B. "pa" stehen und meldet "Kein Mitglied gefunden", obwohl der Treffer gerade gewählt wurde.
+                setQuery('');
+              }}
               className="min-h-11 touch-manipulation rounded-full border border-line-strong bg-surface px-3.5 text-sm font-semibold text-ink"
             >
               {m.name}
