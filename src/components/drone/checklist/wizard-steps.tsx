@@ -19,12 +19,13 @@ import {
 } from '@/lib/drone/checklist/labels';
 import {
   MAX_FLIGHT_HEIGHT,
+  checkSummary,
   missingForSubmit,
   openOperationCount,
   openPreflightCount,
   type MissingItem,
 } from '@/lib/drone/checklist/rules';
-import { Card, CheckRow, Chips, Choice, Field, InfoBox, NowButton, NumberInput, Select, TextArea, TextInput } from './wizard-fields';
+import { Card, CheckRow, Choice, Field, InfoBox, MemberPicker, NowButton, NumberInput, Select, TextArea, TextInput, TimeWithNow } from './wizard-fields';
 
 export interface PersonOption {
   id: string;
@@ -185,7 +186,6 @@ export function StepGrundlage({ data, update }: StepProps) {
 /** Schritt 3 · Team */
 export function StepTeam({ data, update, members, drones }: StepProps) {
   const options = memberOptions(members);
-  const helferOptions = options.filter((o) => o.value !== data.pilot);
   return (
     <>
       <Card title="Piloten">
@@ -205,7 +205,7 @@ export function StepTeam({ data, update, members, drones }: StepProps) {
         </Field>
       </Card>
       <Card title="Helfer / Luftraumbeobachter" hint="Mitglieder der Gruppe antippen.">
-        <Chips options={helferOptions} selected={data.helfer ?? []} onToggle={(id) => update({ helfer: toggleIn(data.helfer, id) })} />
+        <MemberPicker members={members} selected={data.helfer ?? []} excludeIds={data.pilot ? [data.pilot] : []} onToggle={(id) => update({ helfer: toggleIn(data.helfer, id) })} />
         <Field label="Weitere Personen (Externe)">
           <TextArea rows={2} value={data.helferText} onChange={(helferText) => update({ helferText })} />
         </Field>
@@ -231,10 +231,12 @@ export function StepVorbereitung({ data, update }: StepProps) {
     <>
       <Card title="Auftrag und Planung">
         <Field label="Auftrag erteilt am" nr="1">
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-            <TextInput type="date" value={data.auftragAm} onChange={(auftragAm) => update({ auftragAm })} />
-            <TextInput type="time" value={data.auftragUm} onChange={(auftragUm) => update({ auftragUm })} />
-            <NowButton onClick={() => update({ auftragAm: nowDate(), auftragUm: nowTime() })} />
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
+              <TextInput type="date" value={data.auftragAm} onChange={(auftragAm) => update({ auftragAm })} />
+              <TextInput type="time" value={data.auftragUm} onChange={(auftragUm) => update({ auftragUm })} />
+            </div>
+            <NowButton full label="Jetzt übernehmen" onClick={() => update({ auftragAm: nowDate(), auftragUm: nowTime() })} />
           </div>
         </Field>
         <Field label="Kommunikation / Funk" nr="2">
@@ -452,18 +454,12 @@ export function StepFluege({ data, update }: StepProps) {
               <TextInput inputMode="numeric" value={flug.uNach} onChange={(uNach) => setFlug(index, { uNach })} />
             </Field>
           </div>
-          <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-            <Field label="Start">
-              <TextInput type="time" value={flug.start} onChange={(start) => setFlug(index, { start })} />
-            </Field>
-            <NowButton onClick={() => setFlug(index, { start: nowTime() })} />
-          </div>
-          <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-            <Field label="Landung">
-              <TextInput type="time" value={flug.landung} onChange={(landung) => setFlug(index, { landung })} />
-            </Field>
-            <NowButton onClick={() => setFlug(index, { landung: nowTime() })} />
-          </div>
+          <Field label="Start">
+            <TimeWithNow value={flug.start} onChange={(start) => setFlug(index, { start })} />
+          </Field>
+          <Field label="Landung">
+            <TimeWithNow value={flug.landung} onChange={(landung) => setFlug(index, { landung })} />
+          </Field>
           <CheckRow label="Zwischenflugkontrolle durchgeführt" checked={flug.zw === true} onToggle={() => setFlug(index, { zw: !flug.zw })} />
           {fluege.length > 1 && (
             <button type="button" onClick={() => update({ fluege: fluege.filter((_, i) => i !== index) })} className="min-h-11 self-start text-sm font-semibold text-red-700">
@@ -542,6 +538,11 @@ export function StepEinsatzende({ data, update }: StepProps) {
   );
 }
 
+function summaryText(group: { open: number; total: number; commented: boolean }): string {
+  if (group.open === 0) return `alle ${group.total} erledigt`;
+  return `${group.open} von ${group.total} offen${group.commented ? ' (mit Kommentar)' : ''}`;
+}
+
 /** Schritt 9 · Abschluss */
 export function StepAbschluss({
   data,
@@ -555,6 +556,7 @@ export function StepAbschluss({
   const pilotName = members.find((m) => m.id === data.pilot)?.name ?? '-';
   const droneNames = (data.drohnen ?? []).map((id) => drones.find((d) => d.id === id)?.name).filter(Boolean).join(', ') || '-';
   const buffers = data.hoehe && data.hoehe > 0 ? calcBuffers(data.hoehe) : null;
+  const summary = checkSummary(data);
   return (
     <>
       <Card title="Zusammenfassung">
@@ -579,6 +581,10 @@ export function StepAbschluss({
           <dd className="text-ink">{pilotName}</dd>
           <dt className="text-ink-muted">Flüge erfasst</dt>
           <dd className="text-ink">{data.fluege?.length ?? 0}</dd>
+          <dt className="text-ink-muted">Vorflug Nr. 15–16</dt>
+          <dd className="text-ink">{summaryText(summary.preflight)}</dd>
+          <dt className="text-ink-muted">Betrieb Nr. 17</dt>
+          <dd className="text-ink">{summaryText(summary.operation)}</dd>
         </dl>
       </Card>
 

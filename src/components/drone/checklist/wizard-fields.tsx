@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { viennaDateParts } from '@/lib/drone/checklist/columns';
+import { filterMembers } from '@/lib/drone/checklist/members-search';
 
 /** Bausteine des Checklisten-Wizards: mobile zuerst, Trefferflächen mindestens 44 px. */
 
@@ -43,15 +45,33 @@ export function TextInput({
   type?: 'text' | 'date' | 'time' | 'tel';
   inputMode?: 'text' | 'numeric' | 'decimal' | 'tel';
 }) {
-  return (
+  // Datum/Uhrzeit: iOS zeigt ein leeres Feld ohne jeden Hinweis und zentriert den Wert - deshalb ohne native
+  // Darstellung, linksbündig und mit eigenem Platzhalter.
+  const isPicker = type === 'date' || type === 'time';
+  const input = (
     <input
       type={type}
       inputMode={inputMode}
       value={value ?? ''}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className={inputClass}
+      // Technische Felder: keine Kontakt-Vorschläge und keine Autokorrektur der Tastatur.
+      autoComplete="off"
+      autoCorrect="off"
+      enterKeyHint={isPicker ? undefined : 'next'}
+      className={`${inputClass}${isPicker ? ' block appearance-none text-left [&::-webkit-date-and-time-value]:text-left' : ''}`}
     />
+  );
+  if (!isPicker) return input;
+  return (
+    <div className="relative min-w-0">
+      {input}
+      {!value && (
+        <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 hidden -translate-y-1/2 text-[16px] text-ink-faint [@supports(-webkit-touch-callout:none)]:block">
+          {type === 'date' ? 'TT.MM.JJJJ' : '--:--'}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -168,9 +188,13 @@ export function CheckRow({ nr, label, checked, onToggle, hint }: { nr?: string; 
   );
 }
 
-export function NowButton({ onClick, label = 'Jetzt' }: { onClick: () => void; label?: string }) {
+export function NowButton({ onClick, label = 'Jetzt', full = false }: { onClick: () => void; label?: string; full?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="min-h-11 shrink-0 rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold text-ink">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-11 touch-manipulation rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold text-ink ${full ? 'w-full' : 'shrink-0'}`}
+    >
       {label}
     </button>
   );
@@ -202,6 +226,93 @@ export function Chips({ options, selected, onToggle }: { options: { value: strin
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Uhrzeit mit "Jetzt"-Knopf in einer Zeile (flex statt grid: das native Zeitfeld hat auf iOS eine Mindestbreite,
+ * die ein Grid-Rahmen nicht zuverlässig kürzt). */
+export function TimeWithNow({ value, onChange }: { value: string | undefined; onChange: (value: string) => void }) {
+  return (
+    <div className="flex items-stretch gap-2">
+      <div className="min-w-0 flex-1">
+        <TextInput type="time" value={value} onChange={onChange} />
+      </div>
+      <NowButton onClick={() => onChange(nowTime())} />
+    </div>
+  );
+}
+
+function nowTime(): string {
+  return viennaDateParts(new Date()).zeit;
+}
+
+/** Mitgliederauswahl für lange Listen: Gewählte stehen oben, der Rest erscheint erst bei der Suche oder auf Wunsch. */
+export function MemberPicker({
+  members,
+  selected,
+  excludeIds = [],
+  onToggle,
+}: {
+  members: { id: string; name: string }[];
+  selected: string[];
+  excludeIds?: string[];
+  onToggle: (id: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  const chosen = members.filter((m) => selected.includes(m.id));
+  const matches = filterMembers(members, query, [...selected, ...excludeIds]);
+  const searching = query.trim().length > 0;
+  const visible = searching || showAll ? matches : [];
+  const available = filterMembers(members, '', [...selected, ...excludeIds]).length;
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {chosen.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-ink-muted">Ausgewählt · {chosen.length}</span>
+          <div className="flex flex-wrap gap-2">
+            {chosen.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onToggle(m.id)}
+                aria-label={`${m.name} entfernen`}
+                className="min-h-11 touch-manipulation rounded-full border border-ink bg-ink px-3.5 text-sm font-semibold text-white"
+              >
+                {m.name} <span aria-hidden>×</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <TextInput value={query} onChange={setQuery} placeholder="Mitglied suchen …" />
+      {!searching && !showAll && available > 0 && (
+        <button type="button" onClick={() => setShowAll(true)} className="min-h-11 self-start text-sm font-semibold text-brand">
+          Alle anzeigen ({available})
+        </button>
+      )}
+      {!searching && showAll && (
+        <button type="button" onClick={() => setShowAll(false)} className="min-h-11 self-start text-sm font-semibold text-brand">
+          Liste ausblenden
+        </button>
+      )}
+      {visible.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {visible.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onToggle(m.id)}
+              className="min-h-11 touch-manipulation rounded-full border border-line-strong bg-surface px-3.5 text-sm font-semibold text-ink"
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {searching && matches.length === 0 && <p className="text-sm text-ink-muted">Kein Mitglied gefunden.</p>}
     </div>
   );
 }

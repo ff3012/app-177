@@ -39,3 +39,18 @@ export function missingForSubmit(d: ChecklistData): MissingItem[] {
   if (!d.bestaetigt) missing.push({ text: 'Bestätigung des Piloten', step: 8 });
   return missing;
 }
+
+export interface CheckGroupSummary {
+  open: number;
+  total: number;
+  /** Ein (nicht leerer) Kommentar zu den offenen Punkten liegt vor. */
+  commented: boolean;
+}
+
+/** Zähler für die Zusammenfassung im letzten Schritt. */
+export function checkSummary(d: ChecklistData): { preflight: CheckGroupSummary; operation: CheckGroupSummary } {
+  return {
+    preflight: { open: openPreflightCount(d), total: PREFLIGHT_CHECK_KEYS.length, commented: !!d.kommentar15?.trim() },
+    operation: { open: openOperationCount(d), total: OPERATION_CHECK_KEYS.length, commented: !!d.kommentar17?.trim() },
+  };
+}

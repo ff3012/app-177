@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { ChecklistData } from '@/lib/drone/checklist/data';
 import { CONNECTION_ERROR, createAutosaver } from '@/lib/drone/checklist/autosave';
-import { STEP_SUBTITLES, STEP_TITLES, TOTAL_STEPS } from '@/lib/drone/checklist/labels';
+import { STEP_TITLES, TOTAL_STEPS } from '@/lib/drone/checklist/labels';
 import { missingForSubmit, stepGate } from '@/lib/drone/checklist/rules';
+import { isTextEntry } from '@/lib/drone/checklist/viewport';
 import { saveChecklistAction, submitChecklistAction } from '@/app/(app)/drohnen/checkliste/actions';
 import {
   StepAbschluss,
@@ -55,6 +56,49 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
   const stepRef = useRef(step);
   const lastErrorRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Sichtbare Fläche (ohne Tastatur): der Wizard liegt als Vollbild über der App und wird von iOS sonst nach
+  // oben geschoben - Kopf weg, Fuß hinter der Tastatur.
+  const [viewBox, setViewBox] = useState<{ height: number; top: number } | null>(null);
+  // Ein Feld mit Tastatur/Auswahlrad hat Fokus: Fuß und Fortschritt weichen dem Inhalt.
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewBox({ height: vv.height, top: vv.offsetTop });
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    let blurTimer: ReturnType<typeof setTimeout> | undefined;
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !isTextEntry(target.tagName, (target as HTMLInputElement).type)) return;
+      clearTimeout(blurTimer);
+      setEditing(true);
+      // Nach dem Einblenden der Tastatur das Feld in die Mitte des freien Bereichs holen.
+      setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350);
+    };
+    const onFocusOut = () => {
+      blurTimer = setTimeout(() => setEditing(false), 150);
+    };
+    root.addEventListener('focusin', onFocusIn);
+    root.addEventListener('focusout', onFocusOut);
+    return () => {
+      clearTimeout(blurTimer);
+      root.removeEventListener('focusin', onFocusIn);
+      root.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
 
   // Autosave 2 s nach der letzten Änderung; wirft nie, Fehler landen in saveError.
   const saverRef = useRef<ReturnType<typeof createAutosaver> | null>(null);
@@ -117,13 +161,6 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
     router.refresh();
   }
 
-  async function handleSaveNow() {
-    saver.markDirty();
-    const ok = await saver.flush();
-    if (ok) toast.success(`Zwischengespeichert um ${timeLabel(new Date())}`);
-    else toast.error(lastErrorRef.current ?? 'Speichern fehlgeschlagen.');
-  }
-
   function handleNext() {
     const gate = stepGate(step, dataRef.current);
     if (gate) {
@@ -178,31 +215,51 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
   const footerNoteIsError = !readOnly && (!!gate || !!saveError);
 
   return (
-    <div className="fixed inset-0 z-[60] flex h-[100dvh] flex-col bg-[#f6f6f7]">
+    <div
+      ref={rootRef}
+      className="fixed inset-x-0 z-[60] flex flex-col bg-[#f6f6f7]"
+      style={{ height: viewBox ? viewBox.height : '100dvh', top: viewBox ? viewBox.top : 0 }}
+    >
       <header className="shrink-0 bg-ink pt-[max(10px,env(safe-area-inset-top,0px))] text-white">
-        <p className="mx-auto w-full max-w-[560px] px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-[.12em] text-white/70">
-          Checkliste Drohnenflug
-        </p>
-        <div className="mx-auto w-full max-w-[560px] px-4 pb-3">
-          <h1 className="text-[23px] font-bold leading-tight">{STEP_TITLES[step]}</h1>
-          <p className="text-[13px] text-white/75">
-            Schritt {step + 1} von {TOTAL_STEPS} · {STEP_SUBTITLES[step]}
-          </p>
-          <div className="mt-2.5 flex gap-1" role="progressbar" aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step + 1}>
-            {STEP_TITLES.map((title, index) => (
-              <button
-                key={title}
-                type="button"
-                aria-label={`Zu Schritt ${index + 1}: ${title}`}
-                onClick={() => index <= step && goToStep(index)}
-                className={`h-1.5 flex-1 rounded-full ${index < step ? 'bg-[#1f8a5b]' : index === step ? 'bg-white' : 'bg-white/25'}`}
-              />
-            ))}
-          </div>
+        <div className="mx-auto w-full max-w-[560px] px-4 pb-3 pt-2">
+          {!editing && (
+            <p className="text-[12px] font-semibold uppercase tracking-[.12em] text-white/70">
+              Checkliste Drohnenflug · Schritt {step + 1} von {TOTAL_STEPS}
+            </p>
+          )}
+          <h1 className="text-[22px] font-bold leading-tight">
+            {STEP_TITLES[step]}
+            {editing && (
+              <span className="ml-2 text-[13px] font-normal text-white/70">
+                {step + 1}/{TOTAL_STEPS}
+              </span>
+            )}
+          </h1>
+          {!editing && (
+            <div className="mt-2.5 flex gap-1" role="progressbar" aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step + 1}>
+              {STEP_TITLES.map((title, index) => (
+                <button
+                  key={title}
+                  type="button"
+                  aria-label={`Zu Schritt ${index + 1}: ${title}`}
+                  onClick={() => index <= step && goToStep(index)}
+                  className={`h-1.5 flex-1 rounded-full ${index < step ? 'bg-[#1f8a5b]' : index === step ? 'bg-white' : 'bg-white/25'}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto overscroll-contain"
+        onClick={(event) => {
+          // Tipp auf eine freie Fläche schließt die Tastatur (Zahlenblock und Uhrzeitrad haben kein "Fertig").
+          const target = event.target as HTMLElement;
+          if (editing && !target.closest('input,textarea,select,button,label')) (document.activeElement as HTMLElement | null)?.blur();
+        }}
+      >
         <fieldset disabled={readOnly || submitting} className="mx-auto flex w-full max-w-[560px] flex-col gap-3.5 px-4 py-4">
           {step === 0 && <StepEinsatzdaten {...stepProps} />}
           {step === 1 && <StepGrundlage {...stepProps} />}
@@ -216,64 +273,53 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
         </fieldset>
       </div>
 
-      <footer className="shrink-0 border-t border-line bg-surface pb-[max(12px,env(safe-area-inset-bottom,0px))] pt-2.5">
-        <div className="mx-auto w-full max-w-[560px] px-4">
-          <div className="grid grid-cols-3 gap-2.5">
-            <button
-              type="button"
-              onClick={() => goToStep(step - 1)}
-              disabled={step === 0 || submitting}
-              className="min-h-12 touch-manipulation rounded-lg border border-line-strong bg-surface text-[15px] font-semibold text-ink disabled:opacity-40"
-            >
-              Zurück
-            </button>
-            {isLast ? (
+      {!editing && (
+        <footer className="shrink-0 border-t border-line bg-surface pb-[max(10px,env(safe-area-inset-bottom,0px))] pt-2.5">
+          <div className="mx-auto w-full max-w-[560px] px-4">
+            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={handleSubmit}
-                disabled={readOnly || submitting}
-                aria-disabled={missing.length > 0}
-                className={`col-span-2 min-h-12 rounded-lg text-[15px] font-bold text-white disabled:opacity-60 ${missing.length > 0 ? 'bg-neutral-400' : 'bg-[#d42a23]'}`}
-              >
-                {submitting ? 'Wird abgesendet …' : 'Checkliste absenden'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleNext}
+                onClick={handleClose}
                 disabled={submitting}
-                aria-disabled={!!gate}
-                className={`col-span-2 min-h-12 rounded-lg text-[15px] font-bold text-white ${gate ? 'bg-neutral-400' : 'bg-ink'}`}
+                className="min-h-12 w-[88px] shrink-0 touch-manipulation rounded-lg border border-line-strong bg-surface text-[13px] font-semibold text-ink disabled:opacity-40"
               >
-                Weiter · {STEP_TITLES[step + 1]}
+                Schließen
               </button>
-            )}
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={submitting}
-              className="min-h-11 touch-manipulation rounded-lg border border-line-strong bg-surface text-[14px] font-semibold text-ink disabled:opacity-40"
-            >
-              Schließen
-            </button>
-            {readOnly ? (
-              <span />
-            ) : (
               <button
                 type="button"
-                onClick={handleSaveNow}
-                disabled={submitting}
-                className="min-h-11 touch-manipulation rounded-lg border border-line-strong bg-surface text-[14px] font-semibold text-ink disabled:opacity-40"
+                onClick={() => goToStep(step - 1)}
+                disabled={step === 0 || submitting}
+                className="min-h-12 w-[76px] shrink-0 touch-manipulation rounded-lg border border-line-strong bg-surface text-[15px] font-semibold text-ink disabled:opacity-40"
               >
-                Speichern
+                Zurück
               </button>
-            )}
+              {isLast ? (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={readOnly || submitting}
+                  aria-disabled={missing.length > 0}
+                  className={`min-h-12 flex-1 touch-manipulation rounded-lg text-[15px] font-bold text-white disabled:opacity-60 ${missing.length > 0 ? 'bg-neutral-400' : 'bg-[#d42a23]'}`}
+                >
+                  {submitting ? 'Wird abgesendet …' : 'Checkliste absenden'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={submitting}
+                  aria-disabled={!!gate}
+                  className={`min-h-12 flex-1 touch-manipulation rounded-lg px-2 leading-tight text-white ${gate ? 'bg-neutral-400' : 'bg-ink'}`}
+                >
+                  <span className="block text-[15px] font-bold">Weiter</span>
+                  <span className="block truncate text-[11px] font-normal text-white/80">{STEP_TITLES[step + 1]}</span>
+                </button>
+              )}
+            </div>
+            <p className={`mt-1.5 text-center text-xs ${footerNoteIsError ? 'font-semibold text-red-700' : 'text-ink-muted'}`}>{footerNote}</p>
           </div>
-          <p className={`mt-1.5 text-center text-xs ${footerNoteIsError ? 'font-semibold text-red-700' : 'text-ink-muted'}`}>{footerNote}</p>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }
