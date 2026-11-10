@@ -53,6 +53,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_PHOTOS_BUCKET: ${S3_PHOTOS_BUCKET}
       S3_REPORTS_BUCKET: ${S3_REPORTS_BUCKET}
+      # Dev/Staging: Checkliste-Mails nur ins Log schreiben, solange nichts anderes gesetzt ist.
+      MAIL_MODE: ${MAIL_MODE:-log}
     container_name: app177-dev-app
     networks:
       - default

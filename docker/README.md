@@ -210,6 +210,16 @@ CRON_TZ=Europe/Vienna
 0 8 * * * /opt/app-177/docker/atemschutz-warnung-email.sh >> /var/log/ffapp-atemschutz-warnung.log 2>&1
 ```
 
+## Checkliste Drohnenflug: Testbetrieb der E-Mails (`MAIL_MODE`)
+
+Die abgegebene Checkliste wird per E-Mail (mit PDF) an die "Drohnenflug-Benachrichtigung" der Gruppe
+gesendet. `MAIL_MODE=live` sendet wirklich, `MAIL_MODE=log` schreibt Empfänger, Betreff, Text und
+Anhangsgröße nur ins Container-Log (`docker compose logs app`) und die Admin-Liste zeigt "Testbetrieb:
+nicht versendet". Ohne Angabe gilt auf Produktion `live`, im Staging-Stack `log`. Die Variable steht in
+`.env`, `.env.example` und in beiden Compose-Dateien (`environment:`-Block der `app`-Services). Das
+Checklisten-PDF wird im selben Bucket wie die Berichte (`S3_REPORTS_BUCKET`) unter dem Präfix
+`checklisten/` archiviert - der 14-Tage-Bericht-Cron löscht diese Objekte nicht.
+
 ## Tätigkeitsbericht-Aufbewahrung (14 Tage, täglich)
 
 `docker/report-retention.sh` ruft `/api/cron/report-retention` auf, das jeden Tätigkeitsbericht

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
-import { assertPermission, canManageDroneGroupFor } from '@/lib/auth/permissions';
+import { assertPermission, canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
 
 async function requireDroneGroupAccess(droneGroupId: string) {
   const user = await requireUser();
@@ -150,6 +150,16 @@ export async function setFlightNotificationEmails(
 
   revalidatePath('/admin/drohnen');
   return { success: true };
+}
+
+/** Funktionsschalter "Checkliste Drohnenflug" je Drohnengruppe (Testversion) - nur Bezirksadmin. Ausschalten
+ * versteckt nur: alle gespeicherten Checklisten bleiben unverändert erhalten. */
+export async function setChecklistFeature(droneGroupId: string, enabled: boolean): Promise<void> {
+  const user = await requireUser();
+  assertPermission(isBezirksAdmin(user));
+  await prisma.droneGroup.update({ where: { id: droneGroupId }, data: { featureChecklist: enabled } });
+  revalidatePath('/admin/drohnen');
+  revalidatePath('/drohnen');
 }
 
 const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
-import { canImportDroneAusbildung } from '@/lib/auth/permissions';
+import { canImportDroneAusbildung, isBezirksAdmin } from '@/lib/auth/permissions';
+import { checklistCounts } from '@/lib/drone/checklist/queries';
 import { prisma } from '@/lib/db/prisma';
 import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
@@ -18,7 +19,7 @@ import { RenameDroneForm } from './rename-drone-form';
 import { DeleteDroneButton } from './delete-drone-button';
 import { UploadDocumentForm } from './upload-document-form';
 import { DroneGroupEmailForm } from './drone-group-email-form';
-import { createDrone, toggleDroneActive, regenerateQuickRegisterLink, uploadDroneDocument, deleteDroneDocument } from './actions';
+import { createDrone, toggleDroneActive, regenerateQuickRegisterLink, uploadDroneDocument, deleteDroneDocument, setChecklistFeature } from './actions';
 
 function formatBytes(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -50,7 +51,7 @@ export default async function DrohnenVerwaltungPage({
 
   const selectedGroup = (group && allowedGroups.find((g) => g.id === group)) || allowedGroups[0];
 
-  const [drones, documents, flightNotificationPickerMembers] = await Promise.all([
+  const [drones, documents, flightNotificationPickerMembers, counts] = await Promise.all([
     prisma.drone.findMany({ where: { droneGroupId: selectedGroup.id }, orderBy: { sortOrder: 'asc' } }),
     prisma.droneDocument.findMany({
       where: { droneGroupId: selectedGroup.id },
@@ -74,7 +75,9 @@ export default async function DrohnenVerwaltungPage({
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       select: { id: true, firstName: true, lastName: true, email: true },
     }),
+    selectedGroup.featureChecklist ? checklistCounts(selectedGroup.id) : Promise.resolve(null),
   ]);
+  const boundToggleChecklist = setChecklistFeature.bind(null, selectedGroup.id, !selectedGroup.featureChecklist);
   const quickRegisterLink = selectedGroup.qrToken ? `${baseUrl()}/drohnen-schnell/${selectedGroup.qrToken}` : null;
 
   const boundRegenerateLink = regenerateQuickRegisterLink.bind(null, selectedGroup.id);
@@ -209,10 +212,49 @@ export default async function DrohnenVerwaltungPage({
         </form>
       </div>
 
+      {(selectedGroup.featureChecklist || isBezirksAdmin(user)) && (
+        <div className="rounded-lg bg-surface p-4 shadow-card">
+          <h2 className="mb-1 text-[15px] font-semibold text-ink">Checklisten Drohnenflug</h2>
+          {counts ? (
+            <>
+              <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-amber-50 p-2">
+                  <div className="text-xl font-bold text-amber-900">{counts.drafts}</div>
+                  <div className="text-xs text-amber-900">Entwürfe</div>
+                </div>
+                <div className="rounded-md bg-green-50 p-2">
+                  <div className="text-xl font-bold text-green-900">{counts.submitted}</div>
+                  <div className="text-xs text-green-900">Abgeschlossen</div>
+                </div>
+                <div className="rounded-md bg-surface-sunken p-2">
+                  <div className="text-xl font-bold text-ink-muted">{counts.discarded}</div>
+                  <div className="text-xs text-ink-muted">Verworfen</div>
+                </div>
+              </div>
+              <Link
+                href={`/admin/drohnen/checklisten?group=${selectedGroup.id}`}
+                className="inline-block rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+              >
+                Alle anzeigen
+              </Link>
+            </>
+          ) : (
+            <p className="text-sm text-ink-muted">Die Checkliste ist für diese Gruppe nicht aktiviert.</p>
+          )}
+          {isBezirksAdmin(user) && (
+            <form action={boundToggleChecklist} className="mt-3">
+              <button type="submit" className="text-sm text-brand hover:underline">
+                {selectedGroup.featureChecklist ? 'Checkliste für diese Gruppe deaktivieren' : 'Checkliste für diese Gruppe aktivieren'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
       <div className="rounded-lg bg-surface p-4 shadow-card">
-        <h2 className="mb-1 text-[15px] font-semibold text-ink">Benachrichtigung</h2>
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Drohnenflug-Benachrichtigung</h2>
         <p className="mb-3 text-sm text-ink-muted">
-          Empfängeradressen für die Benachrichtigung bei jedem neu registrierten Flug dieser Gruppe.
+          Empfänger der Flugmeldungen{selectedGroup.featureChecklist ? ' und aller abgegebenen Checklisten (PDF)' : ''} dieser Gruppe.
         </p>
         {/* key erzwingt einen Remount bei Gruppenwechsel (GroupSelect navigiert per router.push
             client-seitig, ohne diese Komponente sonst neu zu mounten) - sonst behält ihr

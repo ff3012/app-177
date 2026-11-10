@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { canManageFlight, canRegisterFlight, canViewDroneModule } from '@/lib/auth/permissions';
+import { canCreateChecklist, canManageFlight, canRegisterFlight, canViewDroneModule } from '@/lib/auth/permissions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import {
   NINETY_DAY_REQUIRED_FLIGHTS,
@@ -18,6 +18,8 @@ import { MeinStatusCard } from '@/components/drone/mein-status-card';
 import { GroupStatusList, type GroupStatusPilot } from '@/components/drone/group-status-list';
 import { FlightRow, FlightCard, type FlightRowData } from '@/components/drone/flight-row';
 import { FlightSidebar } from '@/components/drone/flight-sidebar';
+import { ChecklistCard } from '@/components/drone/checklist/checklist-card';
+import { listGroupDrafts } from '@/lib/drone/checklist/queries';
 
 const PURPOSE_LABEL: Record<string, string> = { UEBUNG: 'Übung', EINSATZ: 'Einsatz' };
 const PAGE_SIZE = 50;
@@ -74,8 +76,10 @@ export default async function DrohnenPage({
     ? (params.gruppe && allowedGroups.find((g) => g.id === params.gruppe)) || allowedGroups[0]
     : await prisma.droneGroup.findUniqueOrThrow({
         where: { id: user.droneGroupId! },
-        select: { id: true, name: true },
+        select: { id: true, name: true, organizationId: true, featureChecklist: true },
       });
+  const checklistEnabled = selectedGroup.featureChecklist;
+  const checklistDrafts = checklistEnabled ? await listGroupDrafts(user, selectedGroup.id) : [];
 
   // Muss VOR filterWhere/where laufen und AUSSERHALB der späteren Promise.all - matchingMemberIds
   // fließt in dieselbe Flug-Query ein, die weiter unten aus `where` gebaut wird, kann also nicht
@@ -275,6 +279,10 @@ export default async function DrohnenPage({
             </Link>
           ))}
         </div>
+      )}
+
+      {checklistEnabled && (
+        <ChecklistCard droneGroupId={selectedGroup.id} drafts={checklistDrafts} canStart={canCreateChecklist(user, selectedGroup)} />
       )}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">

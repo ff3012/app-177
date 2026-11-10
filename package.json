@@ -15,7 +15,10 @@
     "cap:sync:prod": "cross-env CAPACITOR_TARGET=prod npx cap sync",
     "cap:sync:dev": "cross-env CAPACITOR_TARGET=dev npx cap sync",
     "cap:open:ios": "npx cap open ios",
-    "cap:open:android": "npx cap open android"
+    "cap:open:android": "npx cap open android",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:db": "vitest run -c vitest.db.config.ts"
   },
   "prisma": {
     "seed": "node node_modules/tsx/dist/cli.mjs prisma/seed.ts"
@@ -83,6 +86,7 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^5.1.0"
   }
 }

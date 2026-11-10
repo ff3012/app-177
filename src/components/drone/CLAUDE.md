@@ -371,3 +371,55 @@ Mitglieder. Volles Design: `docs/superpowers/specs/2026-09-17-drohnen-ausbildung
   — kein eigener `AdminSidebarNav`/`AdminMobileTabs`-Eintrag, gleiches Muster wie die
   Einsatzbereitschaft-Verlinkung oben.
 
+
+### Checkliste Drohnenflug (Testversion, Funktionsschalter je Drohnengruppe)
+
+Neun-Schritt-Wizard für die BOS-Checkliste vor dem Flug (Brief: `Checkliste-Drohnenflug-Brief.md`, Inhalt:
+BOS-Formular v9). Hinter `DroneGroup.featureChecklist` (Default `false`; die Migration setzt ihn nur für
+"AFKDO Purkersdorf" auf `true` - das Backfill steht bewusst in der Migration, weil der Container nur
+`migrate deploy` und nie den Seed ausführt). Ohne Schalter antwortet jede Route/Aktion wie "nicht vorhanden"
+(404), die Karte auf `/drohnen` und die Auswahl im Flugformular fehlen. Bezirksadmin kann den Schalter je Gruppe
+auf `/admin/drohnen` umlegen (`setChecklistFeature`); Ausschalten versteckt nur, es löscht nichts.
+
+- **Schichten** (alles unter `src/lib/drone/checklist/`, getestet mit vitest: `npm test` = reine Logik,
+  `npm run test:db` = Integrationstests gegen die LOKALE Dev-Datenbank, räumen ihre Fixtures selbst auf, nie
+  gegen Dev/Prod-Server): `data.ts` (zod-Schema, alle Felder optional), `rules.ts` (`stepGate`,
+  `missingForSubmit`, `MAX_FLIGHT_HEIGHT`), `buffers.ts` (CV/GRB/Abstand, nie gespeichert), `columns.ts`
+  (Wiener Zeit explizit über `Intl`, weil Tests/lokale Entwicklung nicht mit `TZ=Europe/Vienna` laufen),
+  `service.ts` (anlegen/speichern/verwerfen/abschließen, prüft ALLES serverseitig; Pilot/Drohnen-Ids vom Client
+  werden neu validiert; abschließen per atomarem `updateMany ... where status:'DRAFT'`, Doppelklick sicher),
+  `queries.ts` (Entwurfsliste, Auswahl für "Flug registrieren", Zähler, Admin-Liste, `getChecklistView`),
+  `pdf.tsx`/`delivery.ts`/`mail.ts` (PDF, Zustellung, Mailtexte/`MAIL_MODE`). Die Server Actions in
+  `app/(app)/drohnen/checkliste/actions.ts` sind bewusst dünn.
+- **Rechte** (`permissions.ts`, Abschnitt "Checkliste Drohnenflug"): ENTWÜRFE sieht jedes Mitglied der Gruppe;
+  ABGEGEBENE (und verworfene) nur Ersteller, wer sie abgeschlossen hat, und Admins der Gruppe. Bearbeiten und
+  Abschließen eines Entwurfs: Ersteller, Gruppen-Admin und **jeder BOS1-Pilot der Gruppe**
+  (`bos1AusbildungAm` gesetzt). Verwerfen nur Ersteller/Admin. Bestätigung des Piloten (ersetzt die
+  Unterschrift): gewählter Pilot, Admin oder BOS1-Pilot; das PDF vermerkt "bestätigt durch X für Pilot Y", wenn es
+  ein anderer war. Abschließen legt KEINEN Flug an.
+- **Verwerfen löscht nie** (`status DISCARDED`), die Zeile bleibt in `/admin/drohnen/checklisten`.
+- **PDF + E-Mail laufen nach dem Commit** (`after()` in `submitChecklistAction`) und können das Abschließen nie
+  zurückrollen; das Ergebnis steht in `mailedTo`/`mailedAt`/`mailError`. Das PDF wird bei jedem Download aus den
+  gespeicherten Daten neu erzeugt (kein S3 nötig) und zusätzlich best-effort unter
+  `checklisten/{gruppe}/{id}.pdf` im `S3_REPORTS_BUCKET` archiviert (`pdfKey`) - der 14-Tage-Cron für Berichte
+  löscht nur Schlüssel, die er aus `Report`-Zeilen berechnet, und trifft dieses Präfix nicht.
+- **`MAIL_MODE`** (`live`|`log`, ohne Angabe `live`): `log` schreibt Empfänger/Betreff/Text/Anhangsgröße nur
+  ins Log; die Admin-Liste zeigt dann "Testbetrieb (MAIL_MODE=log): nicht versendet". Die Variable steht in
+  `.env.example` und in BEIDEN Compose-Dateien (siehe die Warnung im Root-CLAUDE.md zu `environment:`).
+  Empfänger sind die `DroneGroup.flightNotificationEmails` (in der UI "Drohnenflug-Benachrichtigung"), eine Mail je
+  Adresse; "Erneut senden" nutzt immer die AKTUELLEN Adressen.
+- **Flug registrieren** (`/drohnen/neu?checkliste=<id>`): Karte "Aus Checkliste übernehmen" mit den letzten 4
+  nicht verworfenen, für den Benutzer sichtbaren Checklisten (`listChecklistsForFlight`);
+  `checklistToFlightDefaults` belegt Datum (auf 15 Minuten abgerundet, weil `DateTime15MinInput` nur diese
+  anbietet), Zweck (Einsatz→EINSATZ, Training→UEBUNG), Pilot, Ort (Fluggebiet, sonst Gemeinde) und Drohne vor.
+  `createFlight` prüft die vom Client kommende `checklistId` mit `resolveLinkableChecklist` neu und setzt
+  `DroneFlight.checklistId`. Fehlt das Feld im Formular (Schalter aus), bleibt die Verknüpfung unverändert.
+- **Wizard** (`components/drone/checklist/`): Vollbild (`fixed inset-0 z-[60]`, liegt über Kopfzeile und Tab-Bar),
+  Schritt in `?schritt=`, Autosave 2 s nach der letzten Änderung und bei jedem Schrittwechsel, "Schließen"
+  speichert immer zuerst. Die Beschriftungen der Kontrollpunkte (`labels.ts`) sind nach dem BOS-Formular
+  formuliert, aber NICHT Wort für Wort aus dem Original übernommen - vor Livegang mit der Drohnengruppe
+  abgleichen. Der Browser-Test in der Entwicklungsumgebung hydratisiert React nicht (siehe Hinweise weiter
+  oben); der Wizard wurde deshalb nur serverseitig gerendert geprüft und muss einmal auf einem echten iPhone
+  durchgeklickt werden.
+- **Testdaten**: `ALLOW_SEED_CHECKLIST=1 npx tsx prisma/seed-checklist.ts` (nur Test, bricht bei
+  `NODE_ENV=production` ab; Testchecklisten tragen das Gebiet-Präfix "[Testdaten]").

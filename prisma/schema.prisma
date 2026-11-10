@@ -302,12 +302,15 @@ model User {
 
   createdPhotoUploads        PhotoUpload[]
   uploadedPhotos             Photo[]
-  filledReports              Report[]       @relation("ReportFilledBy")
-  createdReports             Report[]       @relation("ReportCreatedBy")
+  filledReports              Report[]         @relation("ReportFilledBy")
+  createdReports             Report[]         @relation("ReportCreatedBy")
   reportMemberships          ReportMember[]
-  uebungsleiterReports       Report[]       @relation("ReportUebungsleiter")
-  uebungsueberwachungReports Report[]       @relation("ReportUebungsueberwachung")
-  uebungsbeobachterReports   Report[]       @relation("ReportUebungsbeobachter")
+  uebungsleiterReports       Report[]         @relation("ReportUebungsleiter")
+  uebungsueberwachungReports Report[]         @relation("ReportUebungsueberwachung")
+  uebungsbeobachterReports   Report[]         @relation("ReportUebungsbeobachter")
+  createdDroneChecklists     DroneChecklist[] @relation("ChecklistCreatedBy")
+  pilotDroneChecklists       DroneChecklist[] @relation("ChecklistPilot")
+  submittedDroneChecklists   DroneChecklist[] @relation("ChecklistSubmittedBy")
 
   // Bezirksweites, von jeder Organisation unabhängiges Admin-Recht (siehe permissions.ts) - ersetzt
   // die bisherige globale Wirkung von isSiteAdmin, die mit mehreren Abschnitten nicht mehr korrekt
@@ -511,11 +514,16 @@ model DroneGroup {
   // Benachrichtigung bei neuen Drohnenflügen dieser Gruppe.
   flightNotificationEmails String[] @default([])
 
+  // Funktionsschalter "Checkliste Drohnenflug" (Testversion): je Drohnengruppe, Standard aus. Die Migration
+  // 20261110090000_drone_checklist schaltet ihn nur für "AFKDO Purkersdorf" ein.
+  featureChecklist Boolean @default(false)
+
   memberships DrohnengruppeMembership[]
   documents   DroneDocument[]
   drones      Drone[]
   events      Event[]
   newsPosts   NewsPost[]
+  checklists  DroneChecklist[]
 
   @@index([organizationId])
 }
@@ -614,7 +622,8 @@ model Drone {
   droneGroupId String
   droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
 
-  flights DroneFlight[]
+  flights    DroneFlight[]
+  checklists DroneChecklistDrone[]
 
   // Task 9 Review-Fix: war zuvor global @unique - zwei verschiedene Drohnengruppen konnten dadurch
   // nicht beide eine Drohne "Drohne 1" nennen (fast garantiert zu kollidieren, da das der naheliegende
@@ -644,16 +653,80 @@ model DroneFlight {
   purpose        FlightPurpose
   notes          String?
   registeredById String
+  // Optionale Verknüpfung zur Checkliste, aus der der Flug registriert wurde (mehrere Flüge je Checkliste).
+  checklistId    String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  drone        Drone @relation(fields: [droneId], references: [id])
-  pilotUser    User  @relation("FlightPilot", fields: [pilotUserId], references: [id])
-  registeredBy User  @relation("FlightRegisteredBy", fields: [registeredById], references: [id])
+  checklist    DroneChecklist? @relation(fields: [checklistId], references: [id])
+  drone        Drone           @relation(fields: [droneId], references: [id])
+  pilotUser    User            @relation("FlightPilot", fields: [pilotUserId], references: [id])
+  registeredBy User            @relation("FlightRegisteredBy", fields: [registeredById], references: [id])
 
   @@index([startsAt])
   @@index([droneId])
   @@index([pilotUserId])
+  @@index([checklistId])
+}
+
+enum ChecklistStatus {
+  DRAFT
+  SUBMITTED
+  DISCARDED
+}
+
+// Checkliste Drohnenflug (BOS-Formular v9). Der vollständige Formularstand liegt in "data" (Json, Schema:
+// src/lib/drone/checklist/data.ts); Pilot, Drohnen, Status, Datum, Zweck und Gebiet stehen zusätzlich als
+// Spalten für Listen, Filter und Rechte. Nie hart löschen: Verwerfen = status DISCARDED. Absenden legt
+// KEINEN Flug an, Flüge entstehen nur über "Flug registrieren" (DroneFlight.checklistId).
+model DroneChecklist {
+  id           String     @id @default(cuid())
+  droneGroupId String
+  droneGroup   DroneGroup @relation(fields: [droneGroupId], references: [id])
+
+  createdById   String
+  createdBy     User    @relation("ChecklistCreatedBy", fields: [createdById], references: [id])
+  pilotId       String?
+  pilot         User?   @relation("ChecklistPilot", fields: [pilotId], references: [id], onDelete: SetNull)
+  // Wer die Checkliste abgeschlossen hat (Ausfüller) - kann ein BOS1-Pilot sein, der einen fremden Entwurf
+  // vollendet hat, und darf sie danach sehen/als PDF laden wie der Ersteller.
+  submittedById String?
+  submittedBy   User?   @relation("ChecklistSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+
+  status      ChecklistStatus @default(DRAFT)
+  // Zuletzt geöffneter Schritt, 0-8.
+  step        Int             @default(0)
+  flightAt    DateTime
+  // "EINSATZ" | "TRAINING" - aus data.art abgeleitet, für Listen.
+  purpose     String?
+  area        String?
+  data        Json
+  confirmedAt DateTime?
+  submittedAt DateTime?
+  discardedAt DateTime?
+
+  pdfKey    String?
+  mailedTo  String?
+  mailedAt  DateTime?
+  mailError String?
+
+  drones  DroneChecklistDrone[]
+  flights DroneFlight[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([droneGroupId, status])
+  @@index([createdById, status])
+}
+
+model DroneChecklistDrone {
+  checklistId String
+  droneId     String
+  checklist   DroneChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  drone       Drone          @relation(fields: [droneId], references: [id])
+
+  @@id([checklistId, droneId])
 }
 
 // Unterlagen (PDFs) für Mitglieder der Drohnengruppe. Der PDF-Inhalt liegt direkt in der DB

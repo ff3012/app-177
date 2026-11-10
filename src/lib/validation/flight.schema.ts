@@ -7,6 +7,8 @@ export const flightSchema = z.object({
   droneId: z.string().min(1, 'Drohne ist erforderlich.'),
   purpose: z.enum(['UEBUNG', 'EINSATZ']),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
+  // Nur gesetzt, wenn das Formular die Checklisten-Auswahl anbietet (Funktionsschalter der Gruppe an).
+  checklistId: z.string().optional(),
 });
 
 export type FlightInput = z.infer<typeof flightSchema>;
@@ -19,5 +21,6 @@ export function parseFlightFormData(formData: FormData) {
     droneId: String(formData.get('droneId') ?? ''),
     purpose: String(formData.get('purpose') ?? ''),
     notes: String(formData.get('notes') ?? ''),
+    checklistId: formData.has('checklistId') ? String(formData.get('checklistId') ?? '') : undefined,
   };
 }

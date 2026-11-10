@@ -6,11 +6,13 @@ import { getAllowedDroneGroups } from '@/lib/drone/flightbook-groups';
 import { listDrohnengruppeMembers } from '@/lib/drone/members';
 import { FlightForm } from '@/components/drone/flight-form';
 import { createFlight } from '../actions';
+import { listChecklistsForFlight } from '@/lib/drone/checklist/queries';
+import type { FlightChecklistChoice } from '@/components/drone/checklist/flight-checklist-picker';
 
 export default async function NeuerFlugPage({
   searchParams,
 }: {
-  searchParams: Promise<{ gruppe?: string }>;
+  searchParams: Promise<{ gruppe?: string; checkliste?: string }>;
 }) {
   const user = await requireUser();
 
@@ -30,7 +32,7 @@ export default async function NeuerFlugPage({
     ? (params.gruppe && allowedGroups.find((g) => g.id === params.gruppe)) || allowedGroups[0]
     : await prisma.droneGroup.findUniqueOrThrow({
         where: { id: user.droneGroupId! },
-        select: { id: true, name: true },
+        select: { id: true, name: true, organizationId: true, featureChecklist: true },
       });
 
   const droneGroupId = selectedGroup.id;
@@ -45,6 +47,20 @@ export default async function NeuerFlugPage({
   if (pilots.length === 0) {
     return <p className="text-neutral-700">Es sind noch keine Mitglieder der Drohnengruppe hinterlegt.</p>;
   }
+
+  // "Aus Checkliste übernehmen": nur bei aktivem Funktionsschalter der Gruppe und nur Checklisten, die der
+  // Benutzer sehen darf (die letzten 4, nie verworfene).
+  const checklistOptions = await listChecklistsForFlight(user, selectedGroup);
+  const checklistChoices: FlightChecklistChoice[] | undefined = selectedGroup.featureChecklist
+    ? checklistOptions.map((o) => ({
+        id: o.id,
+        title: o.title,
+        status: o.status === 'SUBMITTED' ? 'SUBMITTED' : 'DRAFT',
+        meta: `${o.flightAt.toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Vienna' })} · ${o.pilotName} · ${o.linkedFlights} ${o.linkedFlights === 1 ? 'Flug' : 'Flüge'} verknüpft`,
+        defaults: o.defaults,
+      }))
+    : undefined;
+  const initialChecklistId = checklistChoices?.some((c) => c.id === params.checkliste) ? params.checkliste : undefined;
 
   const boundCreateFlight = createFlight.bind(null, droneGroupId);
   // Der Admin selbst ist nicht zwangsläufig Mitglied der gerade gewählten Gruppe (z. B. ein reiner
@@ -75,6 +91,8 @@ export default async function NeuerFlugPage({
         action={boundCreateFlight}
         submitLabel="Flug speichern"
         defaultValues={isSelfEligiblePilot ? { pilotUserId: user.id } : undefined}
+        checklistChoices={checklistChoices}
+        initialChecklistId={initialChecklistId}
       />
     </div>
   );

@@ -460,6 +460,76 @@ export class ForbiddenError extends Error {
   }
 }
 
+// --- Checkliste Drohnenflug ---------------------------------------------------------------------
+// Entwürfe sieht jedes Mitglied der Drohnengruppe. Abgeschlossene (und verworfene) Checklisten sehen nur
+// der Ersteller, wer sie abgeschlossen hat (submittedById) und die Admins der Gruppe
+// (canManageDroneGroupFor: Admin Drohnengruppe, Bezirks-Drohnenadmin, Bezirksadmin, Abschnittsadmin des
+// Ankers). Einen Entwurf bearbeiten und abschließen darf zusätzlich jeder BOS1-Pilot DIESER Gruppe
+// (Parameter isBos1Pilot: DrohnengruppeMembership.bos1AusbildungAm gesetzt, vom Aufrufer ermittelt).
+// Verwerfen bleibt Ersteller und Admins vorbehalten.
+
+export type ChecklistStatus = 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
+interface ChecklistAccessSubject {
+  createdById: string;
+  submittedById?: string | null;
+  status: ChecklistStatus;
+}
+type DroneGroupRef = { id: string; organizationId: string };
+
+function isOwnChecklist(user: SessionUser, checklist: ChecklistAccessSubject): boolean {
+  return checklist.createdById === user.id || checklist.submittedById === user.id;
+}
+
+/** Darf eine Checkliste für diese Gruppe anlegen - dieselbe Regel wie beim Flug registrieren. */
+export function canCreateChecklist(user: SessionUser, droneGroup: DroneGroupRef): boolean {
+  return canRegisterFlightFor(user, droneGroup);
+}
+
+export function canViewChecklist(user: SessionUser, checklist: ChecklistAccessSubject, droneGroup: DroneGroupRef): boolean {
+  if (isOwnChecklist(user, checklist) || canManageDroneGroupFor(user, droneGroup)) return true;
+  return checklist.status === 'DRAFT' && user.droneGroupId === droneGroup.id;
+}
+
+/** Bearbeiten und Abschließen: nur Entwürfe - Ersteller, Admins und BOS1-Piloten der Gruppe. */
+export function canEditChecklist(
+  user: SessionUser,
+  checklist: ChecklistAccessSubject,
+  droneGroup: DroneGroupRef,
+  isBos1Pilot = false,
+): boolean {
+  if (checklist.status !== 'DRAFT') return false;
+  if (checklist.createdById === user.id || canManageDroneGroupFor(user, droneGroup)) return true;
+  return isBos1Pilot && user.droneGroupId === droneGroup.id;
+}
+
+export function canDiscardChecklist(user: SessionUser, checklist: ChecklistAccessSubject, droneGroup: DroneGroupRef): boolean {
+  if (checklist.status !== 'DRAFT') return false;
+  return checklist.createdById === user.id || canManageDroneGroupFor(user, droneGroup);
+}
+
+/** Die Bestätigung des Piloten (ersetzt die Unterschrift) setzen darf der gewählte Pilot, ein Admin der
+ * Gruppe oder ein BOS1-Pilot der Gruppe. */
+export function canConfirmChecklist(
+  user: SessionUser,
+  droneGroup: DroneGroupRef,
+  pilotId: string | null,
+  isBos1Pilot: boolean,
+): boolean {
+  if (pilotId !== null && user.id === pilotId) return true;
+  if (canManageDroneGroupFor(user, droneGroup)) return true;
+  return isBos1Pilot && user.droneGroupId === droneGroup.id;
+}
+
+export function canDownloadChecklistPdf(user: SessionUser, checklist: ChecklistAccessSubject, droneGroup: DroneGroupRef): boolean {
+  if (checklist.status !== 'SUBMITTED') return false;
+  return isOwnChecklist(user, checklist) || canManageDroneGroupFor(user, droneGroup);
+}
+
+/** Erneut senden, Benachrichtigungsadresse ändern, Liste der Gruppe. */
+export function canManageChecklists(user: SessionUser, droneGroup: DroneGroupRef): boolean {
+  return canManageDroneGroupFor(user, droneGroup);
+}
+
 export function assertPermission(condition: boolean, message?: string): void {
   if (!condition) {
     throw new ForbiddenError(message);

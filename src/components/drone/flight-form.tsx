@@ -8,6 +8,10 @@ import { flightSchema, type FlightInput } from '@/lib/validation/flight.schema';
 import { DateTime15MinInput } from '@/components/ui/datetime-15min-input';
 import { getRememberedValues, rememberValue } from '@/lib/remembered-values';
 import type { FlightFormState } from '@/app/(app)/drohnen/actions';
+import { FlightChecklistPicker, type FlightChecklistChoice } from '@/components/drone/checklist/flight-checklist-picker';
+
+// Aus einer Checkliste übernommene Felder werden hellgrün hinterlegt.
+const ADOPTED = 'rounded-lg border border-[#9fd4b9] bg-[#f3faf6] p-2';
 
 // Merkt bis zu 8 zuletzt verwendete, unterschiedliche Flugorte - eigener, vom Kalender-
 // Termin-Formular getrennter Verlauf (siehe docs/superpowers/specs/2026-08-28-
@@ -31,12 +35,17 @@ interface FlightFormProps {
   defaultValues?: Partial<FlightInput>;
   action: (prevState: FlightFormState, formData: FormData) => Promise<FlightFormState>;
   submitLabel: string;
+  /** Nur gesetzt, wenn die Gruppe die Checkliste nutzt (Funktionsschalter an). */
+  checklistChoices?: FlightChecklistChoice[];
+  initialChecklistId?: string;
 }
 
-export function FlightForm({ drones, pilots, defaultValues, action, submitLabel }: FlightFormProps) {
+export function FlightForm({ drones, pilots, defaultValues, action, submitLabel, checklistChoices, initialChecklistId }: FlightFormProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
   const [locations, setLocations] = useState<string[]>([]);
+  const [checklistId, setChecklistId] = useState(initialChecklistId ?? '');
+  const [adopted, setAdopted] = useState<string[]>([]);
 
   useEffect(() => {
     setLocations(getRememberedValues(DRONE_FLIGHT_LOCATION_KEY));
@@ -61,6 +70,44 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
     },
   });
 
+  // Beim Öffnen mit ?checkliste=... einmalig vorbelegen.
+  useEffect(() => {
+    const initial = checklistChoices?.find((c) => c.id === initialChecklistId);
+    if (initial) applyChecklist(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function applyChecklist(choice: FlightChecklistChoice | null) {
+    if (!choice) {
+      // "Ohne Checkliste" löst nur die Verknüpfung, die Feldwerte bleiben.
+      setChecklistId('');
+      setAdopted([]);
+      return;
+    }
+    setChecklistId(choice.id);
+    const d = choice.defaults;
+    const taken: string[] = ['startsAt'];
+    const opts = { shouldValidate: true, shouldDirty: true };
+    setValue('startsAt', d.startsAt, opts);
+    if (d.purpose) {
+      setValue('purpose', d.purpose, opts);
+      taken.push('purpose');
+    }
+    if (d.pilotUserId && pilots.some((p) => p.id === d.pilotUserId)) {
+      setValue('pilotUserId', d.pilotUserId, opts);
+      taken.push('pilotUserId');
+    }
+    if (d.location) {
+      setValue('location', d.location, opts);
+      taken.push('location');
+    }
+    if (d.droneId && drones.some((x) => x.id === d.droneId)) {
+      setValue('droneId', d.droneId, opts);
+      taken.push('droneId');
+    }
+    setAdopted(taken);
+  }
+
   function onSubmit(values: FlightInput) {
     const formData = new FormData();
     formData.set('startsAt', values.startsAt);
@@ -69,6 +116,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
     formData.set('droneId', values.droneId);
     formData.set('purpose', values.purpose);
     formData.set('notes', values.notes ?? '');
+    if (checklistChoices) formData.set('checklistId', checklistId);
 
     startTransition(async () => {
       const result = await action({}, formData);
@@ -79,7 +127,9 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex max-w-lg flex-col gap-4">
-      <div className="flex flex-col gap-1">
+      {checklistChoices && <FlightChecklistPicker choices={checklistChoices} selectedId={checklistId} onSelect={applyChecklist} />}
+      {adopted.length > 0 && <p className="text-[13px] text-[#1f6b4a]">Übernommen aus der Checkliste. Alles bleibt änderbar.</p>}
+      <div className={`flex flex-col gap-1 ${adopted.includes('startsAt') ? ADOPTED : ''}`}>
         <label className="text-sm font-medium text-neutral-700">Datum/Uhrzeit</label>
         <Controller
           control={control}
@@ -89,7 +139,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
         {errors.startsAt && <p className="text-sm text-red-700">{errors.startsAt.message}</p>}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className={`flex flex-col gap-1 ${adopted.includes('pilotUserId') ? ADOPTED : ''}`}>
         <label className="text-sm font-medium text-neutral-700">Name Pilot</label>
         <select {...register('pilotUserId')} className="rounded border border-neutral-300 px-3 py-2">
           {pilots.map((pilot) => (
@@ -101,7 +151,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
         {errors.pilotUserId && <p className="text-sm text-red-700">{errors.pilotUserId.message}</p>}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className={`flex flex-col gap-1 ${adopted.includes('location') ? ADOPTED : ''}`}>
         <label className="text-sm font-medium text-neutral-700">Ort</label>
         <input
           {...register('location')}
@@ -134,7 +184,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
         {errors.location && <p className="text-sm text-red-700">{errors.location.message}</p>}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className={`flex flex-col gap-1 ${adopted.includes('droneId') ? ADOPTED : ''}`}>
         <label className="text-sm font-medium text-neutral-700">Drohne</label>
         <select {...register('droneId')} className="rounded border border-neutral-300 px-3 py-2">
           {drones.map((drone) => (
@@ -146,7 +196,7 @@ export function FlightForm({ drones, pilots, defaultValues, action, submitLabel 
         {errors.droneId && <p className="text-sm text-red-700">{errors.droneId.message}</p>}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className={`flex flex-col gap-1 ${adopted.includes('purpose') ? ADOPTED : ''}`}>
         <label className="text-sm font-medium text-neutral-700">Zweck</label>
         <select {...register('purpose')} className="rounded border border-neutral-300 px-3 py-2">
           <option value="UEBUNG">Übung</option>

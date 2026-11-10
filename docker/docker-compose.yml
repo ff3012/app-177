@@ -33,6 +33,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_PHOTOS_BUCKET: ${S3_PHOTOS_BUCKET}
       S3_REPORTS_BUCKET: ${S3_REPORTS_BUCKET}
+      MAIL_MODE: ${MAIL_MODE:-live}
     depends_on:
       postgres:
         condition: service_healthy

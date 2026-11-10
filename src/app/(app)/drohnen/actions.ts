@@ -8,6 +8,7 @@ import { assertPermission, canManageFlight, canRegisterFlightFor } from '@/lib/a
 import { flightSchema, parseFlightFormData } from '@/lib/validation/flight.schema';
 import { notifyDroneFlightCreated } from '@/lib/drone/notify-flight-created';
 import { isEligiblePilot, isActiveDrone } from '@/lib/drone/members';
+import { resolveLinkableChecklist } from '@/lib/drone/checklist/queries';
 
 export interface FlightFormState {
   error?: string;
@@ -39,6 +40,13 @@ export async function createFlight(
     return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
+  // Checkliste verknüpfen: nur wenn mitgeschickt (Funktionsschalter an) und für diesen Benutzer sichtbar -
+  // die Id kommt vom Client und wird deshalb serverseitig neu geprüft.
+  const checklistId = data.checklistId || null;
+  if (checklistId && !(await resolveLinkableChecklist(user, droneGroupId, checklistId))) {
+    return { fieldErrors: { checklistId: ['Die gewählte Checkliste ist nicht verfügbar.'] } };
+  }
+
   const flight = await prisma.droneFlight.create({
     data: {
       startsAt: new Date(data.startsAt),
@@ -48,6 +56,7 @@ export async function createFlight(
       purpose: data.purpose,
       notes: data.notes || null,
       registeredById: user.id,
+      checklistId,
     },
     include: { drone: true, pilotUser: true, registeredBy: true },
   });
@@ -99,6 +108,12 @@ export async function updateFlight(
     return { fieldErrors: { droneId: ['Ausgewählte Drohne ist nicht aktiv.'] } };
   }
 
+  // Das Feld fehlt im Formular, wenn die Gruppe keine Checkliste nutzt - dann bleibt die Verknüpfung unverändert.
+  const checklistId = data.checklistId === undefined ? undefined : data.checklistId || null;
+  if (checklistId && !(await resolveLinkableChecklist(user, droneGroupId, checklistId))) {
+    return { fieldErrors: { checklistId: ['Die gewählte Checkliste ist nicht verfügbar.'] } };
+  }
+
   await prisma.droneFlight.update({
     where: { id: flightId },
     data: {
@@ -108,6 +123,7 @@ export async function updateFlight(
       droneId: data.droneId,
       purpose: data.purpose,
       notes: data.notes || null,
+      ...(checklistId !== undefined ? { checklistId } : {}),
     },
   });
 
