@@ -428,7 +428,7 @@ auf `/admin/drohnen` umlegen (`setChecklistFeature`); Ausschalten versteckt nur,
   hydratisiert React nicht; der Wizard wurde deshalb nur serverseitig gerendert geprüft und muss auf einem echten iPhone
   durchgeklickt werden.
 - **Flug starten / beenden (Schritt 7)**: der Fußknopf in "Flüge & Akkus" heißt zuerst "Flug starten" (setzt `data.flugStatus='laeuft'`,
-  `flugGestartetAm`, trägt die Startzeit in den ersten Flug ohne Start ein, speichert SOFORT), dann "Flug beenden" (Landezeit in den
+  `flugGestartetAm`, trägt die Startzeit in den ersten Flug ohne Start ein - legt nie einen weiteren Flug an, außer es gibt noch gar keinen -, speichert SOFORT), dann "Flug beenden" (Landezeit in den
   letzten Flug mit Start ohne Landung, `flugStatus='beendet'`, weiter zu Schritt 8). Erst nach "beendet" erscheint wieder "Weiter".
   Der Zustand liegt im JSON `data` (keine Migration, `ChecklistStatus` bleibt DRAFT); reine Logik in `flight-phase.ts`
   (`flightPhase/startFlight/endFlight`). Solange der Flug läuft, sind Zurück und die Fortschrittsbalken gesperrt, Schließen geht

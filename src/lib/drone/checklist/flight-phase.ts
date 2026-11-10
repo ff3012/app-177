@@ -10,13 +10,15 @@ export function flightPhase(d: ChecklistData): FlightPhase {
   return d.flugStatus === 'laeuft' ? 'laeuft' : d.flugStatus === 'beendet' ? 'beendet' : 'bereit';
 }
 
-/** "Flug starten": Status auf "laeuft", die Startzeit kommt in den ersten Flug ohne Start (sonst ein neuer Flug). */
+/** "Flug starten": Status auf "laeuft", die Startzeit kommt in den ersten Flug ohne Start (gibt es noch keinen Flug, wird einer angelegt;
+ * haben alle schon eine Startzeit, bleiben die Flüge unverändert). */
 export function startFlight(d: ChecklistData, now: Date): Pick<ChecklistData, 'flugStatus' | 'flugGestartetAm' | 'fluege'> {
   const zeit = viennaDateParts(now).zeit;
   const fluege: Flug[] = [...(d.fluege ?? [])];
   const index = fluege.findIndex((f) => !f.start);
-  if (index >= 0) fluege[index] = { ...fluege[index], start: zeit };
-  else fluege.push({ start: zeit });
+  if (fluege.length === 0) fluege.push({ start: zeit });
+  else if (index >= 0) fluege[index] = { ...fluege[index], start: zeit };
+  // Sonst haben schon alle Flüge eine Startzeit: keinen weiteren Flug anlegen (dafür gibt es "+ Weiterer Flug").
   return { flugStatus: 'laeuft', flugGestartetAm: now.toISOString(), fluege };
 }
 

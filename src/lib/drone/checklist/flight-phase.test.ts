@@ -37,9 +37,12 @@ describe('startFlight', () => {
     expect(patch.fluege).toEqual([{ akku: 'A1', start: '09:00', landung: '09:15' }, { akku: 'A2', start: '14:05' }]);
   });
 
-  it('hängt einen neuen Flug an, wenn alle bereits eine Startzeit haben', () => {
-    const patch = startFlight({ fluege: [{ start: '09:00', landung: '09:15' }] }, NOW);
-    expect(patch.fluege).toEqual([{ start: '09:00', landung: '09:15' }, { start: '14:05' }]);
+  it('legt keinen weiteren Flug an, wenn alle vorhandenen Flüge schon eine Startzeit haben', () => {
+    const fluege = [{ akku: '1', start: '09:00', landung: '09:15' }];
+    const patch = startFlight({ fluege }, NOW);
+    expect(patch.fluege).toEqual(fluege);
+    expect(patch.flugStatus).toBe('laeuft');
+    expect(patch.flugGestartetAm).toBe(NOW.toISOString());
   });
 });
 
