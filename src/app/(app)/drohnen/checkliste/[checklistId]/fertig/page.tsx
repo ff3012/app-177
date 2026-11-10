@@ -22,6 +22,8 @@ export default async function ChecklisteFertigPage({ params }: { params: Promise
   // Versand läuft nach dem Abgeben im Hintergrund - bis dahin steht weder mailedAt noch mailError.
   const mailState = checklist.mailedAt
     ? { tone: 'text-ink', text: `Per E-Mail gesendet an ${checklist.mailedTo ?? '-'} · Anhang ${checklistPdfFileName(checklist.flightAt, checklist.area)}` }
+    : checklist.mailError?.startsWith('Testbetrieb')
+      ? { tone: 'text-ink-muted', text: 'Testbetrieb: Die E-Mail wurde nicht versendet (MAIL_MODE=log), nur ins Server-Log geschrieben.' }
     : checklist.mailError
       ? { tone: 'text-red-700', text: `Versand nicht erfolgt: ${checklist.mailError}. Die Drohnenverwaltung kann die Mail erneut senden.` }
       : { tone: 'text-ink-muted', text: 'Versand ausstehend – die Mail wird gerade erstellt.' };
