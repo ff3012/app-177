@@ -414,12 +414,18 @@ auf `/admin/drohnen` umlegen (`setChecklistFeature`); Ausschalten versteckt nur,
   anbietet), Zweck (Einsatz→EINSATZ, Training→UEBUNG), Pilot, Ort (Fluggebiet, sonst Gemeinde) und Drohne vor.
   `createFlight` prüft die vom Client kommende `checklistId` mit `resolveLinkableChecklist` neu und setzt
   `DroneFlight.checklistId`. Fehlt das Feld im Formular (Schalter aus), bleibt die Verknüpfung unverändert.
-- **Wizard** (`components/drone/checklist/`): Vollbild (`fixed inset-0 z-[60]`, liegt über Kopfzeile und Tab-Bar),
-  Schritt in `?schritt=`, Autosave 2 s nach der letzten Änderung und bei jedem Schrittwechsel, "Schließen"
-  speichert immer zuerst. Die Beschriftungen der Kontrollpunkte (`labels.ts`) sind nach dem BOS-Formular
-  formuliert, aber NICHT Wort für Wort aus dem Original übernommen - vor Livegang mit der Drohnengruppe
-  abgleichen. Der Browser-Test in der Entwicklungsumgebung hydratisiert React nicht (siehe Hinweise weiter
-  oben); der Wizard wurde deshalb nur serverseitig gerendert geprüft und muss einmal auf einem echten iPhone
+- **Wizard** (`components/drone/checklist/`): ersetzt die App-Oberfläche und scrollt als NORMALE Seite - kein Vollbild-
+  Overlay mehr. Ein `<style>` in `checkliste/[checklistId]/page.tsx` blendet alles mit `data-app-chrome` (Kopfzeile,
+  Fußzeile, Tab-Bar in `(app)/layout.tsx`/`mobile-tab-bar.tsx`) aus und nimmt `<main>` das Padding; das Element
+  verschwindet mit der Seite. Kopf und Fuß sind `sticky`. **Grund (Videoanalyse iPhone 17 Pro, 2026-11-10):** ein
+  `fixed inset-0`-Overlay, das per `visualViewport` an die Tastatur angepasst wird, ruckelt beim Schließen der Tastatur
+  (Kopf springt aus dem Bild, Tab-Bar scheint durch) - iOS verschiebt Fixed-Elemente während der Animation. Bei normalem
+  Seitenfluss scrollt iOS selbst zum Feld, der Fuß liegt hinter der Tastatur, nichts springt. Nicht wieder auf
+  `fixed`/`visualViewport` umbauen. Schritt in `?schritt=`, Autosave 2 s nach der letzten Änderung (`autosave.ts`, wirft
+  nie) und bei jedem Schrittwechsel, Schließen speichert immer zuerst; ein Tipp auf freie Fläche schließt die Tastatur.
+  Die Beschriftungen der Kontrollpunkte (`labels.ts`) sind nach dem BOS-Formular formuliert, aber NICHT Wort für Wort aus
+  dem Original übernommen - vor Livegang mit der Drohnengruppe abgleichen. Der Browser-Test in der Entwicklungsumgebung
+  hydratisiert React nicht; der Wizard wurde deshalb nur serverseitig gerendert geprüft und muss auf einem echten iPhone
   durchgeklickt werden.
 - **Testdaten**: `ALLOW_SEED_CHECKLIST=1 npx tsx prisma/seed-checklist.ts` (nur Test, bricht bei
   `NODE_ENV=production` ab; Testchecklisten tragen das Gebiet-Präfix "[Testdaten]").

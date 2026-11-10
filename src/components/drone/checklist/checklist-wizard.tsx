@@ -55,51 +55,6 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
   const dataRef = useRef(data);
   const stepRef = useRef(step);
   const lastErrorRef = useRef<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  // Sichtbare Fläche (ohne Tastatur): der Wizard liegt als Vollbild über der App und wird von iOS sonst nach
-  // oben geschoben - Kopf weg, Fuß hinter der Tastatur.
-  const [viewBox, setViewBox] = useState<{ height: number; top: number } | null>(null);
-  // Ein Feld mit Tastatur/Auswahlrad hat Fokus: Fuß und Fortschritt weichen dem Inhalt.
-  const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => setViewBox({ height: vv.height, top: vv.offsetTop });
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-    };
-  }, []);
-
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    let blurTimer: ReturnType<typeof setTimeout> | undefined;
-    const onFocusIn = (event: FocusEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target || !isTextEntry(target.tagName, (target as HTMLInputElement).type)) return;
-      clearTimeout(blurTimer);
-      setEditing(true);
-      // Nach dem Einblenden der Tastatur das Feld in die Mitte des freien Bereichs holen.
-      setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350);
-    };
-    const onFocusOut = () => {
-      blurTimer = setTimeout(() => setEditing(false), 150);
-    };
-    root.addEventListener('focusin', onFocusIn);
-    root.addEventListener('focusout', onFocusOut);
-    return () => {
-      clearTimeout(blurTimer);
-      root.removeEventListener('focusin', onFocusIn);
-      root.removeEventListener('focusout', onFocusOut);
-    };
-  }, []);
-
   // Autosave 2 s nach der letzten Änderung; wirft nie, Fehler landen in saveError.
   const saverRef = useRef<ReturnType<typeof createAutosaver> | null>(null);
   if (!saverRef.current) {
@@ -142,7 +97,7 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
         void saver.flush();
       }
       window.history.replaceState(null, '', `?schritt=${clamped}`);
-      scrollRef.current?.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
     },
     [saver, readOnly],
   );
@@ -216,50 +171,37 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
 
   return (
     <div
-      ref={rootRef}
-      className="fixed inset-x-0 z-[60] flex flex-col bg-[#f6f6f7]"
-      style={{ height: viewBox ? viewBox.height : '100dvh', top: viewBox ? viewBox.top : 0 }}
+      className="flex min-h-[100dvh] flex-col bg-[#f6f6f7]"
+      onClick={(event) => {
+        // Tipp auf eine freie Fläche schließt die Tastatur (Zahlenblock und Uhrzeitrad haben kein "Fertig").
+        const active = document.activeElement as HTMLElement | null;
+        const target = event.target as HTMLElement;
+        if (active && isTextEntry(active.tagName, (active as HTMLInputElement).type) && !target.closest('input,textarea,select,button,label')) {
+          active.blur();
+        }
+      }}
     >
-      <header className="shrink-0 bg-ink pt-[max(10px,env(safe-area-inset-top,0px))] text-white">
+      <header className="sticky top-0 z-20 shrink-0 bg-ink pt-[max(10px,env(safe-area-inset-top,0px))] text-white">
         <div className="mx-auto w-full max-w-[560px] px-4 pb-3 pt-2">
-          {!editing && (
-            <p className="text-[12px] font-semibold uppercase tracking-[.12em] text-white/70">
-              Checkliste Drohnenflug · Schritt {step + 1} von {TOTAL_STEPS}
-            </p>
-          )}
-          <h1 className="text-[22px] font-bold leading-tight">
-            {STEP_TITLES[step]}
-            {editing && (
-              <span className="ml-2 text-[13px] font-normal text-white/70">
-                {step + 1}/{TOTAL_STEPS}
-              </span>
-            )}
-          </h1>
-          {!editing && (
-            <div className="mt-2.5 flex gap-1" role="progressbar" aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step + 1}>
-              {STEP_TITLES.map((title, index) => (
-                <button
-                  key={title}
-                  type="button"
-                  aria-label={`Zu Schritt ${index + 1}: ${title}`}
-                  onClick={() => index <= step && goToStep(index)}
-                  className={`h-1.5 flex-1 rounded-full ${index < step ? 'bg-[#1f8a5b]' : index === step ? 'bg-white' : 'bg-white/25'}`}
-                />
-              ))}
-            </div>
-          )}
+          <p className="text-[12px] font-semibold uppercase tracking-[.12em] text-white/70">
+            Checkliste Drohnenflug · Schritt {step + 1} von {TOTAL_STEPS}
+          </p>
+          <h1 className="text-[22px] font-bold leading-tight">{STEP_TITLES[step]}</h1>
+          <div className="mt-2.5 flex gap-1" role="progressbar" aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step + 1}>
+            {STEP_TITLES.map((title, index) => (
+              <button
+                key={title}
+                type="button"
+                aria-label={`Zu Schritt ${index + 1}: ${title}`}
+                onClick={() => index <= step && goToStep(index)}
+                className={`h-1.5 flex-1 rounded-full ${index < step ? 'bg-[#1f8a5b]' : index === step ? 'bg-white' : 'bg-white/25'}`}
+              />
+            ))}
+          </div>
         </div>
       </header>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain"
-        onClick={(event) => {
-          // Tipp auf eine freie Fläche schließt die Tastatur (Zahlenblock und Uhrzeitrad haben kein "Fertig").
-          const target = event.target as HTMLElement;
-          if (editing && !target.closest('input,textarea,select,button,label')) (document.activeElement as HTMLElement | null)?.blur();
-        }}
-      >
+      <div className="flex-1">
         <fieldset disabled={readOnly || submitting} className="mx-auto flex w-full max-w-[560px] flex-col gap-3.5 px-4 py-4">
           {step === 0 && <StepEinsatzdaten {...stepProps} />}
           {step === 1 && <StepGrundlage {...stepProps} />}
@@ -273,8 +215,8 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
         </fieldset>
       </div>
 
-      {!editing && (
-        <footer className="shrink-0 border-t border-line bg-surface pb-[max(10px,env(safe-area-inset-bottom,0px))] pt-2.5">
+      {(
+        <footer className="sticky bottom-0 z-20 shrink-0 border-t border-line bg-surface pb-[max(10px,env(safe-area-inset-bottom,0px))] pt-2.5">
           <div className="mx-auto w-full max-w-[560px] px-4">
             <div className="flex gap-2">
               <button

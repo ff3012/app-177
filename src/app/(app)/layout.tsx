@@ -70,7 +70,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Initialen-Avatar) sind über sm:hidden ausgeblendet; Desktop-Elemente (Nav, Wortmarke,
             zweites Wappen rechts, Abmelden) über hidden sm:* wiederhergestellt - exakt der bisherige
             Desktop-Zustand, nur nicht mehr über flex-col/sm:flex-row erzwungen. */}
-        <header className={`pt-safe text-white ${isDevStage ? 'bg-[#c2410c]' : 'bg-[#1c1c1e]'}`}>
+        <header data-app-chrome className={`pt-safe text-white ${isDevStage ? 'bg-[#c2410c]' : 'bg-[#1c1c1e]'}`}>
           <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-5 sm:h-auto sm:px-4 sm:py-3">
             <div className="flex min-w-0 items-center gap-2 sm:gap-6">
               {/* Startbildschirm-Brief.md §2: Wappen sitzt nur noch in der Tab-Bar (Wappen-Home-Tab),
@@ -124,7 +124,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         <MainContainer>{children}</MainContainer>
-        <div className="hidden sm:block">
+        <div data-app-chrome className="hidden sm:block">
           <Footer />
         </div>
         <MobileTabBar user={user} wappenSrc={wappenSrc} />

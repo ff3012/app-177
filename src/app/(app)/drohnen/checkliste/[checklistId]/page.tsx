@@ -41,7 +41,12 @@ export default async function ChecklistePage({
   const initialStep = Number.isInteger(requestedStep) ? requestedStep : view.checklist.step;
 
   return (
-    <ChecklistWizard
+    <>
+      {/* Der Wizard ersetzt die App-Oberfläche (Kopfzeile, Tab-Bar, Fußzeile) und scrollt als normale Seite -
+          so scrollt iOS bei geöffneter Tastatur selbst zum Feld, statt ein Vollbild-Overlay zu verschieben.
+          Das Style-Element verschwindet mit der Seite, die Regeln gelten also nur hier. */}
+      <style>{'[data-app-chrome]{display:none!important}main{padding:0!important;max-width:none!important}'}</style>
+      <ChecklistWizard
       checklistId={checklistId}
       initialData={view.checklist.data}
       initialStep={initialStep}
@@ -51,5 +56,6 @@ export default async function ChecklistePage({
       canConfirmAny={view.canConfirmAny}
       readOnly={!view.canEdit}
     />
+    </>
   );
 }

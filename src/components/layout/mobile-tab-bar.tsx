@@ -46,6 +46,7 @@ export function MobileTabBar({ user, wappenSrc }: { user: SessionUser; wappenSrc
 
   return (
     <nav
+      data-app-chrome
       // h-[98px] (was 86px): +12px matches .pb-safe-tabbar's new guaranteed max(0.75rem, ...) floor
       // in globals.css, so the icon/label row keeps the same rendered height it always had - the
       // extra space is added purely below the labels, as breathing room above Android's system nav
