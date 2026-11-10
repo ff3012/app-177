@@ -28,6 +28,8 @@ export interface ChecklistPdfData {
   teamleiterName: string | null;
   abschnittsleiterName: string | null;
   helferNames: string[];
+  /** Namen der neuen Piloten je Pilotenwechsel (gleiche Reihenfolge wie data.pilotWechsel), null = unbekannt. */
+  wechselPilotNames?: (string | null)[];
   droneNames: string[];
   submittedAt: Date | null;
   /** Wer die Bestätigung gesetzt hat; forPilot = ein anderer als der gewählte Pilot (Admin). */
@@ -242,6 +244,24 @@ function ChecklistDocument({ c }: { c: ChecklistPdfData }) {
               <Text style={styles.cell}>{f.zw ? 'Ja' : 'Nein'}</Text>
             </View>
           ))}
+          {(d.pilotWechsel ?? []).map((w, index) => {
+            const wChecks = w.checks ?? {};
+            return (
+              <View key={index} style={{ marginTop: 6 }}>
+                <Text style={{ fontWeight: 700, marginBottom: 2 }}>Pilotenwechsel {index + 1} - Kontrollen Nr. 15-17 mit neuem Piloten</Text>
+                <Field label="Neuer Pilot" value={dash(c.wechselPilotNames?.[index])} />
+                <Field label="Zeitpunkt" value={dash(w.zeit)} />
+                {PREFLIGHT_ITEMS.map((item) => (
+                  <CheckRow key={item.key} item={item} checked={wChecks[item.key] === true} />
+                ))}
+                <CommentBox text={w.kommentar15} />
+                {OPERATION_ITEMS.map((item) => (
+                  <CheckRow key={item.key} item={item} checked={wChecks[item.key] === true} />
+                ))}
+                <CommentBox text={w.kommentar17} />
+              </View>
+            );
+          })}
           <View style={{ marginTop: 4 }}>
             <Field label="Information an EL" value={dash(d.infoEL)} />
             <Field label="Besondere Ereignisse" value={dash(d.ereignisse)} />

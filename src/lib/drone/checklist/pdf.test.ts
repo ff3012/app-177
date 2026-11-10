@@ -39,6 +39,15 @@ describe('generateChecklistPdf', () => {
     expect(pdf.length).toBeGreaterThan(2000);
   }, 30000);
 
+  it('erzeugt ein PDF mit Pilotenwechseln (vollständig und unvollständig)', async () => {
+    const pdf = await generateChecklistPdf({
+      ...base,
+      wechselPilotNames: ['Anna Huber', null],
+      data: { ...base.data, pilotWechsel: [{ zeit: '11:30', pilot: 'u2', checks: { p_gesund: true, b_start: true }, kommentar15: 'Akku', kommentar17: 'Gimbal' }, {}] },
+    });
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  }, 30000);
+
   it('kommt auch mit einer fast leeren Checkliste zurecht', async () => {
     const pdf = await generateChecklistPdf({ ...base, data: {}, teamleiterName: null, helferNames: [], droneNames: [], confirmedBy: null });
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');

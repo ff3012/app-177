@@ -127,6 +127,12 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
 
   /** "Flug beenden": Landezeit eintragen und weiter zu Schritt 8 (Einsatzende). */
   function handleEndFlight() {
+    // Unvollständiger Pilotenwechsel (Tab "Piloten Wechsel") sperrt das Beenden.
+    const blocked = stepGate(FLIGHT_STEP, dataRef.current);
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
     update(endFlight(dataRef.current, new Date()));
     goToStep(FLIGHT_STEP + 1);
   }
@@ -274,7 +280,8 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
                   type="button"
                   onClick={inFlight ? handleEndFlight : handleStartFlight}
                   disabled={readOnly || submitting}
-                  className={`min-h-12 flex-1 touch-manipulation rounded-lg px-2 text-[15px] font-bold text-white disabled:opacity-60 ${inFlight ? 'bg-[#d42a23]' : 'bg-[#1f8a5b]'}`}
+                  aria-disabled={inFlight && !!gate}
+                  className={`min-h-12 flex-1 touch-manipulation rounded-lg px-2 text-[15px] font-bold text-white disabled:opacity-60 ${inFlight ? (gate ? 'bg-neutral-400' : 'bg-[#d42a23]') : 'bg-[#1f8a5b]'}`}
                 >
                   {inFlight ? 'Flug beenden' : 'Flug starten'}
                 </button>

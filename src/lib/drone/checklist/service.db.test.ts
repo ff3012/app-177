@@ -202,6 +202,16 @@ describe('saveChecklistDraft', () => {
     expect(result).toMatchObject({ ok: false, code: 'INVALID' });
   });
 
+  it('prüft auch die Piloten eines Pilotenwechsels (nur Mitglieder der Gruppe, Wechsel bleibt gespeichert)', async () => {
+    const id = await newDraft();
+    const bad = await saveChecklistDraft(users.filler, { id, step: 6, data: { pilotWechsel: [{ pilot: users.foreign.id }] } });
+    expect(bad).toMatchObject({ ok: false, code: 'INVALID' });
+    const ok = await saveChecklistDraft(users.filler, { id, step: 6, data: { pilotWechsel: [{ pilot: users.bos1.id, zeit: '11:30', kommentar15: 'x' }] } });
+    expect(ok).toMatchObject({ ok: true });
+    const row = await prisma.droneChecklist.findUniqueOrThrow({ where: { id } });
+    expect((row.data as ChecklistData).pilotWechsel?.[0]).toMatchObject({ pilot: users.bos1.id, zeit: '11:30', kommentar15: 'x' });
+  });
+
   it('lehnt ungültige Formulardaten ab', async () => {
     const id = await newDraft();
     const bad = { hoehe: '60' } as unknown as ChecklistData;

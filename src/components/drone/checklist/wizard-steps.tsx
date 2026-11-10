@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { calcBuffers, formatMeters } from '@/lib/drone/checklist/buffers';
 import { viennaDateParts } from '@/lib/drone/checklist/columns';
-import type { ChecklistData } from '@/lib/drone/checklist/data';
+import type { ChecklistData, PilotWechsel } from '@/lib/drone/checklist/data';
 import {
   ABMELDUNG_LABELS,
   ABSPERRUNG_LABEL,
@@ -434,8 +435,112 @@ export function StepBetrieb({ data, update }: StepProps) {
   );
 }
 
-/** Schritt 7 · Flüge & Akkus */
-export function StepFluege({ data, update }: StepProps) {
+/** Schritt 7 · Flüge & Akkus - mit dem zweiten Tab "Piloten Wechsel" (Kontrollen Nr. 15-17 mit neuem Piloten). */
+export function StepFluege(props: StepProps) {
+  const [tab, setTab] = useState<'fluege' | 'wechsel'>('fluege');
+  const count = props.data.pilotWechsel?.length ?? 0;
+  const tabs = [
+    { key: 'fluege' as const, label: 'Flüge' },
+    { key: 'wechsel' as const, label: count > 0 ? `Piloten Wechsel (${count})` : 'Piloten Wechsel' },
+  ];
+  return (
+    <>
+      <div role="tablist" className="grid grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={`min-h-11 touch-manipulation rounded-lg px-2 text-[15px] font-semibold ${tab === t.key ? 'bg-surface text-ink shadow-card' : 'text-ink-muted'}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'fluege' ? <FluegeTab {...props} /> : <PilotWechselTab {...props} />}
+    </>
+  );
+}
+
+/** Tab "Piloten Wechsel": jeder Wechsel wiederholt die Vorflug- (Nr. 15-16) und Betriebskontrolle (Nr. 17) mit dem neuen Piloten. */
+function PilotWechselTab({ data, update, members }: StepProps) {
+  const wechsel = data.pilotWechsel ?? [];
+  const nameOf = (id: string | undefined) => members.find((m) => m.id === id)?.name;
+  const setWechsel = (index: number, patch: Partial<PilotWechsel>) =>
+    update({ pilotWechsel: wechsel.map((w, i) => (i === index ? { ...w, ...patch } : w)) });
+  return (
+    <>
+      <InfoBox tone="amber">Bei einem Pilotenwechsel müssen die Kontrollen Nr. 15–17 mit dem neuen Piloten nochmals durchgeführt werden.</InfoBox>
+      {wechsel.map((w, index) => {
+        const previous = index === 0 ? data.pilot : wechsel[index - 1].pilot;
+        const checks = w.checks ?? {};
+        const toggle = (key: string) => setWechsel(index, { checks: { ...checks, [key]: !checks[key] } });
+        const openPre = openPreflightCount(w);
+        const openOp = openOperationCount(w);
+        return (
+          <div key={index} className="flex flex-col gap-3.5">
+            <Card title={`Pilotenwechsel ${index + 1}`} hint={previous ? `Bisheriger Pilot: ${nameOf(previous) ?? '-'}` : undefined}>
+              <Field label="Neuer Pilot *">
+                <Select
+                  value={w.pilot}
+                  onChange={(pilot) => setWechsel(index, { pilot })}
+                  options={memberOptions(members.filter((m) => m.id !== previous))}
+                />
+              </Field>
+              <Field label="Zeitpunkt des Wechsels">
+                <TimeWithNow value={w.zeit} onChange={(zeit) => setWechsel(index, { zeit })} />
+              </Field>
+            </Card>
+            <Card title="Vorflugkontrolle Nr. 15–16" hint="Mit dem neuen Piloten nochmals durchführen.">
+              {PREFLIGHT_ITEMS.map((item) => (
+                <CheckRow key={item.key} nr={item.nr} label={item.label} checked={checks[item.key] === true} onToggle={() => toggle(item.key)} />
+              ))}
+              <GateBox
+                open={openPre}
+                total={PREFLIGHT_ITEMS.length}
+                hasComment={!!w.kommentar15?.trim()}
+                comment={w.kommentar15}
+                onComment={(kommentar15) => setWechsel(index, { kommentar15 })}
+                label="Kommentar zu den offenen Punkten"
+              />
+            </Card>
+            <Card title="Betriebskontrolle Nr. 17" hint="Mit dem neuen Piloten nochmals durchführen.">
+              {OPERATION_ITEMS.map((item) => (
+                <CheckRow key={item.key} nr={item.nr} label={item.label} checked={checks[item.key] === true} onToggle={() => toggle(item.key)} />
+              ))}
+              <GateBox
+                open={openOp}
+                total={OPERATION_ITEMS.length}
+                hasComment={!!w.kommentar17?.trim()}
+                comment={w.kommentar17}
+                onComment={(kommentar17) => setWechsel(index, { kommentar17 })}
+                label="Kommentar zu den offenen Punkten"
+              />
+            </Card>
+            <button
+              type="button"
+              onClick={() => update({ pilotWechsel: wechsel.filter((_, i) => i !== index) })}
+              className="min-h-11 self-start text-sm font-semibold text-red-700"
+            >
+              Diesen Pilotenwechsel entfernen
+            </button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={() => update({ pilotWechsel: [...wechsel, { zeit: nowTime() }] })}
+        className="min-h-11 rounded-lg border border-dashed border-line-strong bg-surface px-4 text-[15px] font-semibold text-ink"
+      >
+        + Pilotenwechsel erfassen
+      </button>
+    </>
+  );
+}
+
+function FluegeTab({ data, update }: StepProps) {
   const fluege = data.fluege && data.fluege.length > 0 ? data.fluege : [{}];
   const setFlug = (index: number, patch: Partial<(typeof fluege)[number]>) =>
     update({ fluege: fluege.map((f, i) => (i === index ? { ...f, ...patch } : f)) });

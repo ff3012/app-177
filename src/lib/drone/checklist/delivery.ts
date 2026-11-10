@@ -29,7 +29,7 @@ export async function loadChecklistPdfData(id: string): Promise<ChecklistPdfData
 
   const parsed = checklistDataSchema.safeParse(checklist.data);
   const data: ChecklistData = parsed.success ? parsed.data : {};
-  const userIds = [...new Set([data.pilot, data.teamleiter, data.abschnittsleiter, ...(data.helfer ?? [])].filter((v): v is string => !!v))];
+  const userIds = [...new Set([data.pilot, data.teamleiter, data.abschnittsleiter, ...(data.helfer ?? []), ...(data.pilotWechsel ?? []).map((w) => w.pilot)].filter((v): v is string => !!v))];
   const users = userIds.length
     ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })
     : [];
@@ -49,6 +49,7 @@ export async function loadChecklistPdfData(id: string): Promise<ChecklistPdfData
     pilotName: nameOf(data.pilot),
     teamleiterName: nameOf(data.teamleiter),
     abschnittsleiterName: nameOf(data.abschnittsleiter),
+    wechselPilotNames: (data.pilotWechsel ?? []).map((w) => nameOf(w.pilot)),
     helferNames: (data.helfer ?? []).map((helperId) => nameOf(helperId)).filter((n): n is string => !!n),
     droneNames: checklist.drones.map((row) => row.drone.name).sort(),
     submittedAt: checklist.submittedAt,

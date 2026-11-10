@@ -24,6 +24,17 @@ const flugSchema = z.object({
   zw: z.boolean().optional(),
 });
 
+/** Pilotenwechsel während des Einsatzes: die Kontrollen Nr. 15-17 werden mit dem neuen Piloten nochmals durchgeführt. */
+export const pilotWechselSchema = z.object({
+  zeit: text.optional(),
+  /** Neuer Pilot (User-Id). */
+  pilot: text.optional(),
+  checks: z.record(z.string(), z.boolean()).optional(),
+  kommentar15: text.optional(),
+  kommentar17: text.optional(),
+});
+export type PilotWechsel = z.infer<typeof pilotWechselSchema>;
+
 /** Formularstand (Spalte `data`). Für Entwürfe ist jedes Feld optional - die Pflichtprüfung
  * beim Absenden ist eine eigene Funktion (missingForSubmit). Unbekannte Schlüssel werden entfernt. */
 export const checklistDataSchema = z.object({
@@ -92,6 +103,7 @@ export const checklistDataSchema = z.object({
   flugGestartetAm: text.optional(),
   flugBeendetAm: text.optional(),
   fluege: z.array(flugSchema).optional(),
+  pilotWechsel: z.array(pilotWechselSchema).optional(),
   infoEL: text.optional(),
   ereignisse: text.optional(),
 

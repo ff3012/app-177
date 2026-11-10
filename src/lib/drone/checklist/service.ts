@@ -58,6 +58,11 @@ async function invalidReference(droneGroupId: string, data: ChecklistData): Prom
   if (data.pilot && !(await isEligiblePilot(data.pilot, droneGroupId))) {
     return 'Der gewählte Pilot ist kein Mitglied dieser Drohnengruppe.';
   }
+  for (const wechsel of data.pilotWechsel ?? []) {
+    if (wechsel.pilot && !(await isEligiblePilot(wechsel.pilot, droneGroupId))) {
+      return 'Ein Pilot des Pilotenwechsels ist kein Mitglied dieser Drohnengruppe.';
+    }
+  }
   const droneIds = [...new Set(data.drohnen ?? [])];
   const valid = await Promise.all(droneIds.map((droneId) => isActiveDrone(droneId, droneGroupId)));
   if (valid.some((ok) => !ok)) return 'Eine gewählte Drohne gehört nicht zu dieser Gruppe oder ist deaktiviert.';

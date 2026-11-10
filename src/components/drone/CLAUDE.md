@@ -434,5 +434,12 @@ auf `/admin/drohnen` umlegen (`setChecklistFeature`); Ausschalten versteckt nur,
   (`flightPhase/startFlight/endFlight`). Solange der Flug läuft, sind Zurück und die Fortschrittsbalken gesperrt, Schließen geht
   weiterhin. Die Übersicht (`ChecklistCard`, Admin-Liste) zeigt "Im Flug" (`inFlight` aus `listGroupDrafts/listChecklistsAdmin`), laufende
   Flüge stehen oben, der Knopf heißt "Zum Flug". Ältere Entwürfe ohne `flugStatus` gelten als "bereit" und müssen Start/Ende einmal drücken.
+- **Pilotenwechsel (Schritt 7, Tab "Piloten Wechsel")**: Schritt 7 hat zwei Tabs (Flüge | Piloten Wechsel, lokaler State). Jeder Wechsel
+  (`data.pilotWechsel[]`: `zeit`, `pilot` = neuer Pilot, eigene `checks`, `kommentar15`, `kommentar17`) wiederholt die Vorflug- (Nr. 15-16)
+  und Betriebskontrolle (Nr. 17) mit dem neuen Piloten. Regel `pilotWechselProblem` (`rules.ts`): Pilot gewählt, verschieden vom
+  bisherigen (Vorgänger-Wechsel bzw. `data.pilot`), offene Punkte nur mit Kommentar. Sie sperrt "Flug beenden"/"Weiter" in Schritt 7
+  (`stepGate(6)`) und das Absenden (`missingForSubmit`, Schritt 7). `data.pilot` (Hauptpilot, Bestätigung, Spalte `pilotId`) bleibt
+  unverändert. Der Service prüft die Piloten der Wechsel wie den Hauptpiloten (`isEligiblePilot`); das PDF zeigt jeden Wechsel im Abschnitt 7
+  (`wechselPilotNames` aus `delivery.ts`).
 - **Testdaten**: `ALLOW_SEED_CHECKLIST=1 npx tsx prisma/seed-checklist.ts` (nur Test, bricht bei
   `NODE_ENV=production` ab; Testchecklisten tragen das Gebiet-Präfix "[Testdaten]").

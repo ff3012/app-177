@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OPERATION_CHECK_KEYS, PREFLIGHT_CHECK_KEYS, type ChecklistData } from './data';
-import { MAX_FLIGHT_HEIGHT, missingForSubmit, openOperationCount, openPreflightCount, stepGate } from './rules';
+import { MAX_FLIGHT_HEIGHT, missingForSubmit, openOperationCount, openPreflightCount, pilotWechselProblem, stepGate } from './rules';
 
 const allChecked = (keys: readonly string[]) => Object.fromEntries(keys.map((k) => [k, true]));
 
@@ -117,5 +117,45 @@ describe('missingForSubmit', () => {
   it('lässt offene Punkte mit Kommentar zu', () => {
     const data: ChecklistData = { ...completeData(), checks: {}, kommentar15: 'x', kommentar17: 'y' };
     expect(missingForSubmit(data)).toEqual([]);
+  });
+});
+
+describe('Pilotenwechsel (Kontrollen Nr. 15-17 mit neuem Piloten)', () => {
+  const allChecks = Object.fromEntries([...PREFLIGHT_CHECK_KEYS, ...OPERATION_CHECK_KEYS].map((k) => [k, true]));
+  const done = { zeit: '14:30', pilot: 'neu', checks: allChecks };
+
+  it('hat ohne Wechsel kein Problem', () => {
+    expect(pilotWechselProblem({ pilot: 'alt' })).toBeNull();
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [] })).toBeNull();
+  });
+
+  it('verlangt einen neuen Piloten', () => {
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [{ checks: allChecks }] })).toBe('Pilotenwechsel 1: neuen Piloten wählen');
+  });
+
+  it('verlangt einen anderen Piloten als den bisherigen (auch nach einem früheren Wechsel)', () => {
+    expect(pilotWechselProblem({ pilot: 'neu', pilotWechsel: [done] })).toBe('Pilotenwechsel 1: neuer Pilot ist gleich dem bisherigen');
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [done, { ...done, pilot: 'neu' }] })).toBe(
+      'Pilotenwechsel 2: neuer Pilot ist gleich dem bisherigen',
+    );
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [done, { ...done, pilot: 'alt' }] })).toBeNull();
+  });
+
+  it('verlangt die Kontrollen Nr. 15-16 und Nr. 17 oder je einen Kommentar', () => {
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [{ pilot: 'neu' }] })).toBe(
+      'Pilotenwechsel 1: Alle Punkte Nr. 15–16 abhaken oder Kommentar eintragen',
+    );
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [{ pilot: 'neu', checks: { ...allChecks, b_land: false } }] })).toBe(
+      'Pilotenwechsel 1: Alle Punkte Nr. 17 abhaken oder Kommentar eintragen',
+    );
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [{ pilot: 'neu', kommentar15: 'x', kommentar17: 'y' }] })).toBeNull();
+    expect(pilotWechselProblem({ pilot: 'alt', pilotWechsel: [done] })).toBeNull();
+  });
+
+  it('sperrt Schritt 7 (Flug beenden/Weiter) und das Absenden, solange ein Wechsel unvollständig ist', () => {
+    const data = { ...completeData(), pilotWechsel: [{ pilot: 'neu' }] };
+    expect(stepGate(6, data)).toBe('Pilotenwechsel 1: Alle Punkte Nr. 15–16 abhaken oder Kommentar eintragen');
+    expect(missingForSubmit(data)).toContainEqual({ text: 'Pilotenwechsel 1: Alle Punkte Nr. 15–16 abhaken oder Kommentar eintragen', step: 6 });
+    expect(stepGate(6, { ...completeData(), pilotWechsel: [{ ...done, pilot: 'neu' }] })).toBeNull();
   });
 });
