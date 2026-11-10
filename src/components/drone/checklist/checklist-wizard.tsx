@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { ChecklistData } from '@/lib/drone/checklist/data';
+import { CONNECTION_ERROR, createAutosaver } from '@/lib/drone/checklist/autosave';
 import { STEP_SUBTITLES, STEP_TITLES, TOTAL_STEPS } from '@/lib/drone/checklist/labels';
 import { missingForSubmit, stepGate } from '@/lib/drone/checklist/rules';
 import { saveChecklistAction, submitChecklistAction } from '@/app/(app)/drohnen/checkliste/actions';
@@ -52,50 +53,28 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
 
   const dataRef = useRef(data);
   const stepRef = useRef(step);
-  const dirtyRef = useRef(false);
-  const savingRef = useRef<Promise<boolean> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastErrorRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const persist = useCallback(async (): Promise<boolean> => {
-    if (readOnly) return true;
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    // Läuft bereits ein Speichern, danach noch einmal speichern (letzter Stand gewinnt).
-    if (savingRef.current) await savingRef.current;
-    if (!dirtyRef.current) return true;
-    dirtyRef.current = false;
-    const run = (async () => {
-      const result = await saveChecklistAction(checklistId, stepRef.current, dataRef.current);
-      if (result.ok) {
-        setSavedAt(new Date(result.savedAt));
+  // Autosave 2 s nach der letzten Änderung; wirft nie, Fehler landen in saveError.
+  const saverRef = useRef<ReturnType<typeof createAutosaver> | null>(null);
+  if (!saverRef.current) {
+    saverRef.current = createAutosaver({
+      save: () => saveChecklistAction(checklistId, stepRef.current, dataRef.current),
+      onSaved: (at) => {
+        lastErrorRef.current = null;
+        setSavedAt(at);
         setSaveError(null);
-        return true;
-      }
-      dirtyRef.current = true;
-      setSaveError(result.error);
-      return false;
-    })();
-    savingRef.current = run;
-    const ok = await run;
-    savingRef.current = null;
-    return ok;
-  }, [checklistId, readOnly]);
-
-  const markDirty = useCallback(() => {
-    dirtyRef.current = true;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => void persist(), AUTOSAVE_MS);
-  }, [persist]);
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
+      },
+      onError: (message) => {
+        lastErrorRef.current = message;
+        setSaveError(message);
+      },
+      delayMs: AUTOSAVE_MS,
+    });
+  }
+  const saver = saverRef.current;
+  useEffect(() => () => saver.dispose(), [saver]);
 
   const update = useCallback(
     (patch: Partial<ChecklistData>) => {
@@ -103,9 +82,9 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
       const next = { ...dataRef.current, ...patch };
       dataRef.current = next;
       setData(next);
-      markDirty();
+      saver.markDirty();
     },
-    [markDirty, readOnly],
+    [saver, readOnly],
   );
 
   const goToStep = useCallback(
@@ -113,20 +92,23 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
       const clamped = Math.min(Math.max(next, 0), TOTAL_STEPS - 1);
       stepRef.current = clamped;
       setStep(clamped);
-      dirtyRef.current = true;
-      void persist();
+      if (!readOnly) {
+        // Der geöffnete Schritt wird mitgespeichert, damit "Fortsetzen" dort weitermacht.
+        saver.markDirty();
+        void saver.flush();
+      }
       window.history.replaceState(null, '', `?schritt=${clamped}`);
       scrollRef.current?.scrollTo({ top: 0 });
     },
-    [persist],
+    [saver, readOnly],
   );
 
   async function handleClose() {
     if (!readOnly) {
-      dirtyRef.current = true;
-      const ok = await persist();
+      saver.markDirty();
+      const ok = await saver.flush();
       if (!ok) {
-        toast.error('Speichern fehlgeschlagen. Bitte erneut versuchen.');
+        toast.error(lastErrorRef.current ?? 'Speichern fehlgeschlagen. Bitte erneut versuchen.');
         return;
       }
       toast.success('Als Entwurf gespeichert · später fortsetzen');
@@ -136,10 +118,10 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
   }
 
   async function handleSaveNow() {
-    dirtyRef.current = true;
-    const ok = await persist();
+    saver.markDirty();
+    const ok = await saver.flush();
     if (ok) toast.success(`Zwischengespeichert um ${timeLabel(new Date())}`);
-    else toast.error('Speichern fehlgeschlagen.');
+    else toast.error(lastErrorRef.current ?? 'Speichern fehlgeschlagen.');
   }
 
   function handleNext() {
@@ -158,15 +140,23 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
       return;
     }
     setSubmitting(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const result = await submitChecklistAction(checklistId, dataRef.current);
-    if (result.ok) {
-      dirtyRef.current = false;
-      router.push(`/drohnen/checkliste/${checklistId}/fertig`);
-      return;
+    saver.dispose();
+    try {
+      const result = await submitChecklistAction(checklistId, dataRef.current);
+      if (result.ok) {
+        router.push(`/drohnen/checkliste/${checklistId}/fertig`);
+        return;
+      }
+      setSubmitting(false);
+      saver.markDirty();
+      toast.error(result.missing?.length ? `Es fehlen noch Angaben: ${result.missing[0].text}` : result.error);
+    } catch (error) {
+      // Z. B. ohne Netz oder nach einem Deploy mit veralteter Server-Action-ID - nie in "Wird abgesendet" hängen bleiben.
+      console.error('Checkliste: Absenden fehlgeschlagen', error);
+      setSubmitting(false);
+      saver.markDirty();
+      toast.error(CONNECTION_ERROR);
     }
-    setSubmitting(false);
-    toast.error(result.missing?.length ? `Es fehlen noch Angaben: ${result.missing[0].text}` : result.error);
   }
 
   // Der gewählte Pilot kann sich in Schritt 3 noch ändern - die Bestätigungsberechtigung folgt ihm.
@@ -191,14 +181,14 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
     <div className="fixed inset-0 z-[60] flex h-[100dvh] flex-col bg-[#f6f6f7]">
       <header className="shrink-0 bg-ink pt-[max(10px,env(safe-area-inset-top,0px))] text-white">
         <div className="mx-auto flex w-full max-w-[560px] items-center justify-between px-4 pb-2">
-          <button type="button" onClick={handleClose} className="flex min-h-11 items-center gap-1 text-[15px] font-semibold">
+          <button type="button" onClick={handleClose} className="flex min-h-11 touch-manipulation items-center gap-1 text-[15px] font-semibold">
             <span aria-hidden>‹</span> Schließen
           </button>
           <span className="text-[15px] font-semibold">Checkliste Drohnenflug</span>
           {readOnly ? (
             <span className="w-[88px]" />
           ) : (
-            <button type="button" onClick={handleSaveNow} className="min-h-9 rounded-full border border-white/40 px-3.5 text-[13px] font-semibold">
+            <button type="button" onClick={handleSaveNow} className="min-h-11 touch-manipulation rounded-full border border-white/40 px-3.5 text-[13px] font-semibold">
               Speichern
             </button>
           )}

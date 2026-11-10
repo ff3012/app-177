@@ -16,7 +16,7 @@ export function Card({ title, hint, children }: { title?: string; hint?: string;
 
 export function Field({ label, nr, children, hint }: { label: string; nr?: string; children: ReactNode; hint?: string }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className="flex min-w-0 flex-col gap-1.5">
       <span className="flex items-center gap-2 text-[13px] font-semibold text-ink">
         {nr && <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-[11px] text-ink-muted">{nr}</span>}
         {label}
@@ -28,7 +28,7 @@ export function Field({ label, nr, children, hint }: { label: string; nr?: strin
 }
 
 const inputClass =
-  'min-h-11 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-[16px] text-ink placeholder:text-ink-faint focus:border-ink focus:outline-none disabled:opacity-60';
+  'min-h-11 w-full min-w-0 max-w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-[16px] text-ink placeholder:text-ink-faint focus:border-ink focus:outline-none disabled:opacity-60';
 
 export function TextInput({
   value,
