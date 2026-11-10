@@ -81,7 +81,7 @@ let counter = 0;
 async function checklist(
   by: keyof typeof users,
   status: 'DRAFT' | 'SUBMITTED' | 'DISCARDED',
-  extra: { area?: string; purpose?: string; groupId?: string; updatedAt?: Date } = {},
+  extra: { area?: string; purpose?: string; groupId?: string; updatedAt?: Date; flugStatus?: 'laeuft' | 'beendet' } = {},
 ) {
   counter += 1;
   const row = await prisma.droneChecklist.create({
@@ -96,7 +96,7 @@ async function checklist(
       step: 3,
       submittedAt: status === 'SUBMITTED' ? new Date() : null,
       submittedById: status === 'SUBMITTED' ? users[by].id : null,
-      data: { pilot: users[by].id } as Prisma.InputJsonValue,
+      data: { pilot: users[by].id, ...(extra.flugStatus ? { flugStatus: extra.flugStatus } : {}) } as Prisma.InputJsonValue,
     },
   });
   if (extra.updatedAt) {
@@ -128,6 +128,20 @@ describe('listGroupDrafts', () => {
     expect(ids.indexOf(mine)).toBeLessThan(ids.indexOf(theirs));
     expect(list.find((i) => i.id === mine)).toMatchObject({ isOwn: true, step: 3 });
     expect(list.find((i) => i.id === theirs)).toMatchObject({ isOwn: false });
+  });
+
+  it('markiert Entwürfe mit laufendem Flug als "Im Flug" und stellt sie nach oben', async () => {
+    const own = await checklist('owner', 'DRAFT', { updatedAt: new Date('2026-04-01') });
+    const flying = await checklist('plain', 'DRAFT', { updatedAt: new Date('2026-02-01'), flugStatus: 'laeuft' });
+    const landed = await checklist('plain', 'DRAFT', { flugStatus: 'beendet' });
+    const list = await listGroupDrafts(users.owner, group.id);
+    expect(list.find((i) => i.id === flying)?.inFlight).toBe(true);
+    expect(list.find((i) => i.id === landed)?.inFlight).toBe(false);
+    expect(list.find((i) => i.id === own)?.inFlight).toBe(false);
+    expect(list.findIndex((i) => i.id === flying)).toBeLessThan(list.findIndex((i) => i.id === own));
+    const admin = await listChecklistsAdmin(group.id, { status: 'DRAFT', page: 1, pageSize: 100 });
+    expect(admin.items.find((i) => i.id === flying)?.inFlight).toBe(true);
+    expect(admin.items.find((i) => i.id === landed)?.inFlight).toBe(false);
   });
 
   it('liefert Mitgliedern einer anderen Gruppe nichts', async () => {

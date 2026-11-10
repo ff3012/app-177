@@ -427,5 +427,12 @@ auf `/admin/drohnen` umlegen (`setChecklistFeature`); Ausschalten versteckt nur,
   dem Original übernommen - vor Livegang mit der Drohnengruppe abgleichen. Der Browser-Test in der Entwicklungsumgebung
   hydratisiert React nicht; der Wizard wurde deshalb nur serverseitig gerendert geprüft und muss auf einem echten iPhone
   durchgeklickt werden.
+- **Flug starten / beenden (Schritt 7)**: der Fußknopf in "Flüge & Akkus" heißt zuerst "Flug starten" (setzt `data.flugStatus='laeuft'`,
+  `flugGestartetAm`, trägt die Startzeit in den ersten Flug ohne Start ein, speichert SOFORT), dann "Flug beenden" (Landezeit in den
+  letzten Flug mit Start ohne Landung, `flugStatus='beendet'`, weiter zu Schritt 8). Erst nach "beendet" erscheint wieder "Weiter".
+  Der Zustand liegt im JSON `data` (keine Migration, `ChecklistStatus` bleibt DRAFT); reine Logik in `flight-phase.ts`
+  (`flightPhase/startFlight/endFlight`). Solange der Flug läuft, sind Zurück und die Fortschrittsbalken gesperrt, Schließen geht
+  weiterhin. Die Übersicht (`ChecklistCard`, Admin-Liste) zeigt "Im Flug" (`inFlight` aus `listGroupDrafts/listChecklistsAdmin`), laufende
+  Flüge stehen oben, der Knopf heißt "Zum Flug". Ältere Entwürfe ohne `flugStatus` gelten als "bereit" und müssen Start/Ende einmal drücken.
 - **Testdaten**: `ALLOW_SEED_CHECKLIST=1 npx tsx prisma/seed-checklist.ts` (nur Test, bricht bei
   `NODE_ENV=production` ab; Testchecklisten tragen das Gebiet-Präfix "[Testdaten]").

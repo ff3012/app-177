@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { ChecklistData } from '@/lib/drone/checklist/data';
 import { CONNECTION_ERROR, createAutosaver } from '@/lib/drone/checklist/autosave';
 import { STEP_TITLES, TOTAL_STEPS } from '@/lib/drone/checklist/labels';
+import { endFlight, flightPhase, startFlight } from '@/lib/drone/checklist/flight-phase';
 import { missingForSubmit, stepGate } from '@/lib/drone/checklist/rules';
 import { isTextEntry } from '@/lib/drone/checklist/viewport';
 import { saveChecklistAction, submitChecklistAction } from '@/app/(app)/drohnen/checkliste/actions';
@@ -24,6 +25,8 @@ import {
 } from './wizard-steps';
 
 const AUTOSAVE_MS = 2000;
+/** Schritt 7 "Flüge & Akkus" (0-basiert). */
+const FLIGHT_STEP = 6;
 
 function timeLabel(date: Date): string {
   return date.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' });
@@ -116,6 +119,18 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
     router.refresh();
   }
 
+  /** "Flug starten": Status "Im Flug" sofort speichern, damit die Übersicht ihn zeigt. */
+  function handleStartFlight() {
+    update(startFlight(dataRef.current, new Date()));
+    void saver.flush();
+  }
+
+  /** "Flug beenden": Landezeit eintragen und weiter zu Schritt 8 (Einsatzende). */
+  function handleEndFlight() {
+    update(endFlight(dataRef.current, new Date()));
+    goToStep(FLIGHT_STEP + 1);
+  }
+
   function handleNext() {
     const gate = stepGate(step, dataRef.current);
     if (gate) {
@@ -156,6 +171,10 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
   const gate = stepGate(step, data);
   const missing = missingForSubmit(data);
   const isLast = step === TOTAL_STEPS - 1;
+  const phase = flightPhase(data);
+  // Nur im Schritt "Flüge & Akkus": erst Flug starten, dann beenden - erst danach geht es mit Schritt 8 weiter.
+  const flightMode = step === FLIGHT_STEP && phase !== 'beendet' ? phase : null;
+  const inFlight = flightMode === 'laeuft';
   const stepProps = { data, update, members, drones };
 
   const footerNote = readOnly
@@ -164,7 +183,11 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
       ? gate
       : saveError
         ? `Speichern fehlgeschlagen: ${saveError}`
-        : savedAt
+        : flightMode === 'bereit'
+          ? 'Mit "Flug starten" wird der Flug als "Im Flug" markiert und die Startzeit eingetragen.'
+          : flightMode === 'laeuft'
+            ? 'Flug läuft – nach der Landung "Flug beenden" tippen.'
+            : savedAt
           ? `Entwurf gespeichert um ${timeLabel(savedAt)}`
           : 'Änderungen werden automatisch gespeichert.';
   const footerNoteIsError = !readOnly && (!!gate || !!saveError);
@@ -185,6 +208,7 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
         <div className="mx-auto w-full max-w-[560px] px-4 pb-3 pt-2">
           <p className="text-[12px] font-semibold uppercase tracking-[.12em] text-white/70">
             Checkliste Drohnenflug · Schritt {step + 1} von {TOTAL_STEPS}
+            {inFlight && <span className="ml-2 rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold tracking-wide text-white">IM FLUG</span>}
           </p>
           <h1 className="text-[22px] font-bold leading-tight">{STEP_TITLES[step]}</h1>
           <div className="mt-2.5 flex gap-1" role="progressbar" aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step + 1}>
@@ -193,7 +217,7 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
                 key={title}
                 type="button"
                 aria-label={`Zu Schritt ${index + 1}: ${title}`}
-                onClick={() => index <= step && goToStep(index)}
+                onClick={() => index <= step && !inFlight && goToStep(index)}
                 className={`h-1.5 flex-1 rounded-full ${index < step ? 'bg-[#1f8a5b]' : index === step ? 'bg-white' : 'bg-white/25'}`}
               />
             ))}
@@ -230,7 +254,7 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
               <button
                 type="button"
                 onClick={() => goToStep(step - 1)}
-                disabled={step === 0 || submitting}
+                disabled={step === 0 || submitting || inFlight}
                 className="min-h-12 w-[76px] shrink-0 touch-manipulation rounded-lg border border-line-strong bg-surface text-[15px] font-semibold text-ink disabled:opacity-40"
               >
                 Zurück
@@ -244,6 +268,15 @@ export function ChecklistWizard({ checklistId, initialData, initialStep, members
                   className={`min-h-12 flex-1 touch-manipulation rounded-lg text-[15px] font-bold text-white disabled:opacity-60 ${missing.length > 0 ? 'bg-neutral-400' : 'bg-[#d42a23]'}`}
                 >
                   {submitting ? 'Wird abgesendet …' : 'Checkliste absenden'}
+                </button>
+              ) : flightMode ? (
+                <button
+                  type="button"
+                  onClick={inFlight ? handleEndFlight : handleStartFlight}
+                  disabled={readOnly || submitting}
+                  className={`min-h-12 flex-1 touch-manipulation rounded-lg px-2 text-[15px] font-bold text-white disabled:opacity-60 ${inFlight ? 'bg-[#d42a23]' : 'bg-[#1f8a5b]'}`}
+                >
+                  {inFlight ? 'Flug beenden' : 'Flug starten'}
                 </button>
               ) : (
                 <button

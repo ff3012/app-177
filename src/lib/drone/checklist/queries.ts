@@ -9,6 +9,7 @@ import {
 } from '@/lib/auth/permissions';
 import { checklistDataSchema, type ChecklistData } from './data';
 import { isBos1PilotOf } from './service';
+import { flightPhase } from './flight-phase';
 import { selectChecklistsForFlight } from './flight-selection';
 import { checklistToFlightDefaults, type FlightDefaults } from './flight-defaults';
 
@@ -36,6 +37,8 @@ export interface DraftListItem {
   updatedAt: Date;
   isOwn: boolean;
   creatorName: string;
+  /** Flug läuft gerade (Schritt 7, "Flug starten" gedrückt, "Flug beenden" noch nicht). */
+  inFlight: boolean;
 }
 
 /** Alle Entwürfe der Gruppe, die der Benutzer sehen darf (jedes Mitglied sieht alle) - eigene zuerst, dann
@@ -57,8 +60,10 @@ export async function listGroupDrafts(user: SessionUser, droneGroupId: string): 
       updatedAt: row.updatedAt,
       isOwn: row.createdById === user.id,
       creatorName: fullName(row.createdBy),
+      inFlight: flightPhase(parseData(row.data)) === 'laeuft',
     }))
-    .sort((a, b) => Number(b.isOwn) - Number(a.isOwn));
+    // Im Flug zuerst, dann eigene vor fremden (stabil: sonst neueste zuerst).
+    .sort((a, b) => Number(b.inFlight) - Number(a.inFlight) || Number(b.isOwn) - Number(a.isOwn));
 }
 
 export interface FlightChecklistOption {
@@ -131,6 +136,7 @@ export interface AdminChecklistItem {
   mailError: string | null;
   linkedFlights: number;
   createdById: string;
+  inFlight: boolean;
 }
 
 export async function listChecklistsAdmin(
@@ -169,6 +175,7 @@ export async function listChecklistsAdmin(
       mailError: row.mailError,
       linkedFlights: row._count.flights,
       createdById: row.createdById,
+      inFlight: row.status === 'DRAFT' && flightPhase(parseData(row.data)) === 'laeuft',
     })),
   };
 }

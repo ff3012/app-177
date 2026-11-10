@@ -38,7 +38,12 @@ export function ChecklistCard({ droneGroupId, drafts, canStart }: { droneGroupId
             {drafts.map((draft) => (
               <li key={draft.id} className="flex items-center gap-2 rounded-md border border-line px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[15px] font-semibold text-ink">{draft.title}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-semibold text-ink">{draft.title}</span>
+                    {draft.inFlight && (
+                      <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Im Flug</span>
+                    )}
+                  </div>
                   <div className="truncate text-xs text-ink-muted">
                     Schritt {draft.step + 1} von {TOTAL_STEPS} · gespeichert {savedAt(draft.updatedAt)}
                     {!draft.isOwn && ` · ${draft.creatorName}`}
@@ -48,7 +53,7 @@ export function ChecklistCard({ droneGroupId, drafts, canStart }: { droneGroupId
                   href={`/drohnen/checkliste/${draft.id}?schritt=${draft.step}`}
                   className="flex min-h-11 items-center rounded-md bg-ink px-3 text-sm font-semibold text-white hover:opacity-90"
                 >
-                  Fortsetzen
+                  {draft.inFlight ? 'Zum Flug' : 'Fortsetzen'}
                 </Link>
                 {draft.isOwn && <DiscardDraftButton checklistId={draft.id} title={draft.title} />}
               </li>

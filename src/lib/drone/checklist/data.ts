@@ -87,7 +87,10 @@ export const checklistDataSchema = z.object({
   kommentar15: text.optional(),
   kommentar17: text.optional(),
 
-  // Schritt 7 · Flüge & Akkus
+  // Schritt 7 · Flüge & Akkus. flugStatus: fehlt = Flug noch nicht gestartet, "laeuft" = Im Flug, "beendet".
+  flugStatus: z.enum(['laeuft', 'beendet']).optional(),
+  flugGestartetAm: text.optional(),
+  flugBeendetAm: text.optional(),
   fluege: z.array(flugSchema).optional(),
   infoEL: text.optional(),
   ereignisse: text.optional(),

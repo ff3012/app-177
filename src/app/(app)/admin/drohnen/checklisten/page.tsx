@@ -100,7 +100,11 @@ export default async function ChecklistenVerwaltungPage({
               <li key={item.id} className="flex flex-col gap-2 rounded-lg bg-surface p-4 shadow-card sm:flex-row sm:items-center">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${BADGE[item.status].className}`}>{BADGE[item.status].label}</span>
+                    {item.inFlight ? (
+                      <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">Im Flug</span>
+                    ) : (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${BADGE[item.status].className}`}>{BADGE[item.status].label}</span>
+                    )}
                     <span className="font-mono text-xs text-ink-muted">{fmtDate(item.flightAt)}</span>
                   </div>
                   <div className="truncate text-[15px] font-semibold text-ink">{item.title}</div>
