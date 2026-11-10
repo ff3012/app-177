@@ -23,6 +23,8 @@ const base: ChecklistPdfData = {
     hindernis: 25,
     checks: { p_gesund: true, p_fs: true, b_start: true },
     kommentar15: 'Akku der Fernsteuerung nur 18 %',
+    stellenAuswahl: ['acg', 'hsost'],
+    stellen: 'Polizei',
     fluege: [{ akku: 'A1', uVor: '100', uNach: '60', start: '10:05', landung: '10:20', zw: true }],
     abm: { el: '2026-06-15T09:30:00.000Z', lst: null },
     anmerkungen: 'Alles ohne Besonderheiten <b>fett</b> & "Anführungszeichen"',

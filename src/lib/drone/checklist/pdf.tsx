@@ -14,6 +14,7 @@ import {
   PREFLIGHT_ITEMS,
   STEP_TITLES,
   grundlageText,
+  stellenText,
   type CheckItem,
 } from './labels';
 
@@ -187,7 +188,7 @@ function ChecklistDocument({ c }: { c: ChecklistPdfData }) {
           <Field nr="5" label="Risikobewertung durchgeführt" value={yesNo(d.risiko)} />
           <Field nr="" label="Ergänzung" value={dash(d.risikoErg)} />
           <Field nr="6" label="TETRA (ISSI)" value={[d.tetra1, d.tetra2, d.tetra3].filter(Boolean).join(' · ') || '-'} />
-          <Field nr="7" label="Zuständige Stellen" value={dash(d.stellen)} />
+          <Field nr="7" label="Zuständige Stellen" value={stellenText(d)} />
           <Field nr="8" label="Kontrollzone" value={`${yesNo(d.kontrollzone)}${d.kontrollFreigabe ? ` · Freigabe: ${d.kontrollFreigabe}` : ''}`} />
           <Field nr="9" label="Militärisches Sperrgebiet" value={`${yesNo(d.militaer)}${d.militaerFreigabe ? ` · Freigabe: ${d.militaerFreigabe}` : ''}`} />
           <Field

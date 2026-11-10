@@ -14,6 +14,7 @@ import {
   OPERATION_ITEMS,
   POSTFLIGHT_ITEMS,
   PREFLIGHT_ITEMS,
+  STELLEN_OPTIONS,
   grundlageText,
 } from '@/lib/drone/checklist/labels';
 import {
@@ -264,8 +265,25 @@ export function StepVorbereitung({ data, update }: StepProps) {
             <TextInput inputMode="numeric" value={data.tetra3} placeholder="3" onChange={(tetra3) => update({ tetra3 })} />
           </div>
         </Field>
-        <Field label="Zuständige Stellen verständigt" nr="7">
-          <TextInput value={data.stellen} onChange={(stellen) => update({ stellen })} />
+        <div role="group" aria-labelledby="stellen-label" className="flex flex-col gap-1.5">
+          <span id="stellen-label" className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+            <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-[11px] text-ink-muted">7</span>
+            Zuständige Stellen verständigt
+          </span>
+          <span className="flex flex-col gap-2">
+            {STELLEN_OPTIONS.map((option) => (
+              <CheckRow
+                key={option.value}
+                label={option.label}
+                checked={data.stellenAuswahl?.includes(option.value) ?? false}
+                onToggle={() => update({ stellenAuswahl: toggleIn(data.stellenAuswahl, option.value) as typeof data.stellenAuswahl })}
+              />
+            ))}
+          </span>
+          <span className="text-xs text-ink-muted">Mehrfachauswahl möglich.</span>
+        </div>
+        <Field label="Weitere Stellen">
+          <TextInput value={data.stellen} placeholder="z. B. Polizei, Bergrettung" onChange={(stellen) => update({ stellen })} />
         </Field>
       </Card>
 

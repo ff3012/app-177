@@ -70,6 +70,21 @@ export const N18_LABEL = { ok: 'Drohne in Ordnung', wartung: 'Wartung erforderli
 export const N19_LABEL = { ok: 'Akkus in Ordnung', tausch: 'Akkutausch erforderlich' } as const;
 export const N20_LABEL = { frei: 'Frei von Verschmutzung', gereinigt: 'Gereinigt', wartung: 'Wartung erforderlich' } as const;
 
+/** Nr. 7 Zuständige Stellen (Reihenfolge = Anzeigereihenfolge). */
+export const STELLEN_OPTIONS = [
+  { value: 'acg', label: 'AustroControl DroneSpace' },
+  { value: 'oeamtc', label: 'ÖAMTC' },
+  { value: 'hsost', label: 'Funk HS-OST' },
+] as const;
+
+/** Auswahl und Freitext "Weitere" als ein Satz für PDF und Mail, "-" wenn nichts gewählt wurde. */
+export function stellenText(d: Pick<ChecklistData, 'stellenAuswahl' | 'stellen'>): string {
+  const chosen = STELLEN_OPTIONS.filter((o) => d.stellenAuswahl?.includes(o.value)).map((o) => o.label);
+  const other = d.stellen?.trim();
+  const parts = other ? [...chosen, `Weitere: ${other}`] : chosen;
+  return parts.length > 0 ? parts.join(', ') : '-';
+}
+
 export const ABSPERRUNG_LABEL = { keine: 'Keine', '5': '5 m', '10': '10 m', '30': '30 m' } as const;
 
 export const ABMELDUNG_LABELS = {

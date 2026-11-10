@@ -63,6 +63,9 @@ export const checklistDataSchema = z.object({
   tetra1: text.optional(),
   tetra2: text.optional(),
   tetra3: text.optional(),
+  // Nr. 7 Zuständige Stellen: feste Auswahl (Mehrfachauswahl) + Freitext "Weitere". `stellen` ist der Freitext
+  // und war früher das einzige Feld - ältere Entwürfe bleiben dadurch unverändert gültig.
+  stellenAuswahl: z.array(z.enum(['acg', 'oeamtc', 'hsost'])).optional(),
   stellen: text.optional(),
   kontrollzone: neinJa.optional(),
   kontrollFreigabe: text.optional(),
