@@ -156,6 +156,15 @@ Workaround dafür ist ein separater, täglich laufender Docker-Container, der zu
 Bucket-Versioning voraussetzt — für die paar kleinen Backup-Dateien hier unverhältnismäßig viel
 zusätzliche Infrastruktur, daher die einfachere Inline-Löschung im ohnehin schon vorhandenen Skript.
 
+**So funktioniert die Aufbewahrung in `backup.sh` (Stand 2026-11-11):** zuerst die lokale `find -mtime +30`-Zeile, danach (nur
+mit gesetztem `S3_BACKUP_BUCKET`) die S3-Funktion `s3_retention`: `aws s3 ls` listet den Bucket, das Alter wird aus dem Dateinamen
+(`db-JJJJ-MM-TT_HHMM.sql.gz`, `config-JJJJ-MM-TT_HHMM.tar.gz`) gelesen, älter als 30 Tage wird mit `aws s3 rm` gelöscht, fremde Dateien im Bucket
+bleiben unberührt. Ein Fehler dort bricht das Skript nicht ab, sondern schreibt nur "WARNUNG" ins Log. **Bewusst kein `aws s3api`:** der frühere
+`s3api list-objects-v2 --query`-Aufruf stürzte mit aws-cli 2.31 unter dem System-Python 3.14 mit "badly formed help string" ab und beendete
+das Skript (`set -e`) vor jeder Aufbewahrung - monatelang unbemerkt, weil die Status-Seite ihre Zeitstempel schon vor dem Abbruch bekommt.
+Kontrolle nach dem Lauf um 03:00: `tail -n 15 /var/log/ffapp-backup.log` - weder "badly formed help string" noch "WARNUNG" dürfen erscheinen.
+Das Skript **nie** mit `bash -x` debuggen: es exportiert alle `.env`-Werte, der Trace gibt sämtliche Zugangsdaten aus.
+
 ## News-Modul: terminierte Push-Nachrichten versenden
 
 Sofort-Versand passiert direkt in der Server Action beim Erstellen einer News. Für **terminierte**
@@ -374,6 +383,12 @@ crontab -e
 CRON_TZ=Europe/Vienna
 0 4 * * * /opt/app-177/docker/photo-cleanup.sh >> /var/log/ffapp-photo-cleanup.log 2>&1
 ```
+
+**Gemeinsamer Bucket Prod/Dev:** der Dev-Stack nutzt denselben `app-177-pictures`-Bucket. Der Job löscht nur Objekte, die zu einer Zeile
+der Datenbank seines **eigenen** Stacks gehören - Objekte aus Dev-Uploads (oder ohne Datenbankzeile) bleiben auf Prod liegen und müssen bei Bedarf
+von Hand entfernt werden (`aws s3 rm s3://app-177-pictures/photo-uploads/<id>/ --recursive`, vorher mit `--dryrun`). Der Job meldet seinen Lauf
+nicht auf der Status-Seite; ob er läuft, zeigt nur `tail /var/log/ffapp-photo-cleanup.log` (erwartet: `{"ok":true,...}`). Eine Cron-Zeile für den
+Dev-Stack ist laut Abschnitt "Zweiter Stack" bewusst nicht vorgesehen; ist sie eingetragen, scheitert sie mit `502`, solange der Dev-Stack aus ist.
 
 ## Docker-Aufräumung (alte Images/Build-Cache)
 

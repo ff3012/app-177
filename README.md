@@ -5,18 +5,19 @@ Betriebsfeuerwehren, 4 Drohnengruppen. Installierbar als PWA (Icon am Homescreen
 kein App-Store-Build nötig.
 
 > Die App wurde ursprünglich für einen einzelnen Abschnitt gebaut (Abschnitt Purkersdorf,
-> 9 Feuerwehren, ~200 Benutzer) und danach auf den gesamten Bezirk erweitert. Branding (Logo,
-> Login-Seite, PWA-Manifest, Absenderadresse) ist an einigen Stellen noch Purkersdorf-spezifisch –
-> ein bekannter, bewusst aufgeschobener Nachzieher, kein Zeichen dafür, dass die App noch
-> single-Abschnitt wäre. Details zur Bezirk/Abschnitt/Feuerwehr-Hierarchie und dem
-> Berechtigungsmodell stehen in [CLAUDE.md](CLAUDE.md).
+> 9 Feuerwehren, ~200 Benutzer) und danach auf den gesamten Bezirk erweitert. Das Branding (Logo,
+> Login-Seite, PWA-Manifest, E-Mail-Texte) ist seit August 2026 auf "BFKDO St. Pölten" umgestellt;
+> in der Datenbank gespeicherte Organisationsnamen (z. B. "AFKDO Purkersdorf") sind bewusst
+> unverändert. Details zur Bezirk/Abschnitt/Feuerwehr-Hierarchie und dem Berechtigungsmodell stehen
+> in [CLAUDE.md](CLAUDE.md).
 
 ## Module
 
 - **Kalender** – eigener Kalender pro Feuerwehr + Abschnitt-weiter Kalender, Kalender- oder
   Listenansicht (Listenansicht ist Standard), .ics-Export/Abo für Outlook/Google/Apple Kalender,
   optionaler read-only Import aus einem externen .ics-Feed und optionales Rückschreiben eigener
-  Termine in einen Google Kalender.
+  Termine in einen Google Kalender. Termine können bezirksweit sein oder einer Sondergruppe zugeordnet
+  werden (jedes Mitglied kann einzelne Sondergruppen für sich ausblenden).
 - **Meine Feuerwehr** – Startbildschirm nach dem Login: eigener Atemschutz-Status, Fahrzeug-
   Reservierungen (optional mit Freigabe-Workflow per E-Mail) über eine eigene Auswahlseite mit
   Status je Fahrzeug für heute (frei/ab-bis belegt/belegt/außer Dienst) und "Zuletzt verwendet"-
@@ -31,6 +32,13 @@ kein App-Store-Build nötig.
   (Ausbildungsstufen). Ein QR-Code-Link (nur von Drohnengruppen-Admins in der Verwaltung erzeugbar)
   erlaubt das Registrieren eines Flugs ohne Login. Optional: E-Mail-Benachrichtigung bei neuen
   Flügen.
+  **Checkliste Drohnenflug** (Testversion, je Drohnengruppe über einen Funktionsschalter aktivierbar):
+  neun Schritte nach dem BOS-Formular vor, während und nach dem Flug mit laufendem
+  Zwischenspeichern; in Schritt 7 "Flug starten"/"Flug beenden" (laufende Flüge erscheinen in der
+  Übersicht als "Im Flug") und der Tab "Piloten Wechsel" (die Kontrollen Nr. 15–17 werden mit dem
+  neuen Piloten wiederholt). Am Ende entsteht ein PDF, das per E-Mail an die Benachrichtigungs-
+  adressen der Gruppe geht; beim Registrieren eines Flugs lässt sich eine der letzten Checklisten
+  übernehmen.
 - **News** – Nachrichten an eine Feuerwehr oder eine Drohnengruppe, sofort, terminiert oder als
   Entwurf; Senden bleibt Admin-Rechten vorbehalten (Feuerwehr-Admin/Drohnengruppen-Admin/
   Bezirksadmin je nach Empfängerkreis), **Lesen ist für jedes Mitglied offen** – auf Mobile wie am
@@ -40,11 +48,17 @@ kein App-Store-Build nötig.
   iPhone/iPad ist Push nur nutzbar, wenn die App zuvor über "Zum Home-Bildschirm" installiert wurde
   (iOS-Einschränkung, keine App-Beschränkung) – die Nachrichten selbst bleiben aber auch ohne Push
   über `/news` lesbar.
+- **Foto-Upload** – kurzlebige Foto-Sammlung je Feuerwehr (z. B. Einsatzfotos): die Fotos gehen direkt
+  aus dem Browser in einen S3-Bucket (Exoscale), mit Vorschaubildern, Einzel- und Gesamt-Download
+  und optionaler E-Mail-Benachrichtigung. Jeder Foto-Upload wird nach 96 Stunden automatisch gelöscht.
+- **Registrierung** (`/registrieren`) – öffentliche Selbstregistrierung neuer Mitglieder; ein Admin der
+  Feuerwehr wird per E-Mail benachrichtigt, prüft die Angaben und schaltet das Konto frei.
 - **Verwaltung** – je nach Rolle (Bezirksadmin/Abschnittsadmin/Feuerwehr-Admin/Admin Drohnengruppe)
   ein Teil von: Benutzerverwaltung (Suche, sortierbare Spalten, Excel-Export/Import mit allen
   Benutzerfeldern, Passwort-Reset-E-Mail, Willkommen-E-Mail optional abschaltbar), Heimatfeuerwehr
   (Fuhrpark, Atemschutz, Fahrzeug-Reservierungen, Kalender-Import/Google-Rückschreiben,
-  Dashboard-Feuerwehrhaus-Token), Drohnengruppe (Drohnen-Liste, QR-Link, Einsatzbereitschaft-Ampel),
+  Dashboard-Feuerwehrhaus-Token), Drohnengruppe (Drohnen-Liste, QR-Link, Einsatzbereitschaft-Ampel, Ausbildungsstufen-Import,
+  Checklisten-Übersicht mit PDF und erneutem Versand),
   E-Mail (Mailjet-Test, Benachrichtigungsadressen), Status (Server/Datenbank/Mailjet/Backup-Check).
 - **Dashboard Feuerwehrhaus** – ein öffentlicher, token-authentifizierter Kiosk-Bildschirm für einen
   PC im Feuerwehrhaus: kommende Termine, ausgeborgte Fahrzeuge, die WASTL-Niederösterreich-
@@ -54,14 +68,18 @@ kein App-Store-Build nötig.
   Passwort-Reset-E-Mail – bewusst ohne Login abrufbar, da genau die Nutzer, die sie am meisten
   brauchen (z. B. für "Passwort vergessen"), sich sonst noch nicht anmelden können.
 - **Feedback** – jeder Benutzer kann über das Profilmenü eine Sterne-Bewertung + Freitext senden.
+- **Native Hüllen (Capacitor)** – `capacitor.config.ts` und `android/` verpacken die gehostete Web-App in
+  eine native App (WebView auf die Live-Domain); Push läuft dort über Firebase Cloud Messaging.
 
 ## Tech-Stack
 
 Next.js (App Router, TypeScript) · PostgreSQL + Prisma · Auth.js v5 (Passwort oder E-Mail-Token) ·
-Tailwind CSS · Mailjet (Transaktions-E-Mails) · Web Push/VAPID (News-Modul) · exceljs
-(Excel-Export/Import) · ical-generator/node-ical (Kalender .ics Export/Import) ·
-google-auth-library (Google-Kalender-Rückschreiben) · qrcode/sharp (Dashboard Feuerwehrhaus) ·
-@aws-sdk/client-s3 (Backup-Status-Check gegen Exoscale SOS)
+Tailwind CSS + shadcn/ui (Radix) in der Verwaltung · Mailjet (Transaktions-E-Mails) · Web Push/VAPID und
+Firebase Cloud Messaging (News-Modul) · exceljs (Excel-Export/Import) · ical-generator/node-ical
+(Kalender .ics Export/Import) · google-auth-library (Google-Kalender-Rückschreiben) ·
+qrcode/sharp (Dashboard Feuerwehrhaus, Foto-Vorschauen) · @react-pdf/renderer (Berichts- und
+Checklisten-PDFs) · @aws-sdk/client-s3 (Exoscale SOS: Foto-Uploads, Berichts-/Checklisten-PDFs,
+Backup-Status-Check) · Capacitor (native Hülle) · vitest (Tests)
 
 ## Lokale Entwicklung
 
@@ -88,11 +106,25 @@ Login unter [http://localhost:3000](http://localhost:3000) mit den in `.env` kon
 > `netstat -ano | findstr :3000`) – die `CommandLine` muss auf das eigene Worktree-Verzeichnis
 > zeigen, sonst `npm run dev` im richtigen Verzeichnis neu starten.
 
+## Tests
+
+```bash
+npm test          # Unit-Tests (vitest, ohne Datenbank)
+npm run test:db   # Integrationstests gegen die LOKALE Dev-Datenbank (räumen ihre Testdaten selbst auf)
+npx tsc --noEmit  # Typprüfung
+```
+
+Die Datenbank-Tests nutzen die `DATABASE_URL` aus `.env` und haben keinen eingebauten Schutz: nur mit der lokalen
+Entwicklungsdatenbank ausführen, nie mit einer Dev- oder Produktions-URL. ESLint ist
+nicht eingerichtet (`npm run lint` startet nur die Next.js-Einrichtung); Typprüfung und `npm run build`
+ersetzen es.
+
 ## Deployment
 
 Siehe [docker/README.md](docker/README.md) für das Produktions-Setup (Hetzner Ubuntu Server, Docker
-Compose, Caddy, Backups inkl. Off-Box-Kopie nach Exoscale SOS, VAPID-Schlüssel, Cronjobs für
-terminierte News/Kalender-Import/Atemschutz-Warnung/System-Check/Facebook-Feed).
+Compose, Caddy, Backups inkl. Off-Box-Kopie nach Exoscale SOS mit 30 Tagen Aufbewahrung, VAPID-Schlüssel,
+Cronjobs für terminierte News/Kalender-Import/Atemschutz-Warnung/System-Check/Facebook-Feed/
+Foto-Aufräumung/Berichts-Aufbewahrung).
 
 ## Bezirk 17 St. Pölten
 

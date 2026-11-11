@@ -17,11 +17,16 @@ further down in this file was written while that flat, single-Abschnitt world st
 `Organization`, `Event` visibility, or Drohnengruppen data**; the hierarchy and its scoping rules override
 any older passage here that contradicts them.
 
-Three modules: **Kalender** (per-org + Abschnitt-wide event calendar with .ics export, calendar-grid or
+Core modules: **Kalender** (per-org + Abschnitt-wide event calendar with .ics export, calendar-grid or
 list view), **Drohnengruppe** (drone flight log, including a QR-code quick-registration flow — see below),
-and **News** (Web Push notifications to a Feuerwehr or a Drohnengruppe, sent immediately or scheduled — see
-below). Installable as a PWA (manifest + minimal service worker) so it can be added to an iOS/Android home
-screen without an app-store build. All UI copy and commit-adjacent docs are German; code identifiers are a
+**News** (Web Push notifications to a Feuerwehr or a Drohnengruppe, sent immediately or scheduled — see
+below), plus **Meine Feuerwehr** (Atemschutz, Fahrzeug-Reservierungen, Tätigkeits-/Übungsbericht), **Foto-Uploads**
+(short-lived photo collections per Feuerwehr, S3, auto-deleted after 96 h), **Verwaltung**, **Dashboard
+Feuerwehrhaus**, public self-registration (`/registrieren`, an admin approves) and the Drohnengruppe's
+**Checkliste Drohnenflug** (nine-step BOS checklist wizard, test version behind a per-group feature switch;
+documented in `src/components/drone/CLAUDE.md`). Installable as a PWA (manifest + minimal service worker) so it can be added to an iOS/Android home
+screen without an app-store build; a Capacitor native shell (`capacitor.config.ts`, `android/`, Android push via FCM)
+also wraps the live web app. All UI copy and commit-adjacent docs are German; code identifiers are a
 German/English mix (keep matching the existing convention in a given file).
 
 As of the 2026-08-20 Bezirk-17 rebrand (same effort as that day's prod/dev domain migrations), every
@@ -42,7 +47,11 @@ wasn't requested.
 ```bash
 npm run dev            # local dev server
 npm run build           # production build
-npm run lint             # next lint
+npm run lint             # NOT usable: no ESLint config exists, `next lint` only starts its interactive setup
+
+npm test                # vitest unit tests (no database)
+npm run test:db         # vitest integration tests against the LOCAL dev Postgres only (fixtures clean up after themselves)
+npx tsc --noEmit        # typecheck (use together with `npm run build` instead of lint)
 
 npm run db:migrate      # prisma migrate dev (local) — generates a new migration from schema.prisma changes
 npm run db:deploy       # prisma migrate deploy — applies committed migrations (used in prod, see entrypoint.sh)
@@ -50,7 +59,12 @@ npm run db:seed         # tsx prisma/seed.ts — 7 Abschnitte + 124 Feuerwehren,
 npm run db:studio       # prisma studio
 ```
 
-There is no test suite in this repo.
+Tests: vitest (`vitest.config.ts` = unit tests, excludes `*.db.test.ts`; `vitest.db.config.ts` = DB tests, runs files
+sequentially against whatever `DATABASE_URL` in `.env` points to — there is NO guard, so only run it with the local dev database, never a
+dev/prod URL). Both configs set
+`oxc.jsx.runtime: 'automatic'` (vite 8 uses oxc, the old `esbuild` option is ignored). Coverage today is the Checkliste
+Drohnenflug (`src/lib/drone/checklist/*`, `src/lib/auth/permissions.checklist.test.ts`) and a few validation helpers; most older
+modules have no automated tests, so for those the verification remains `tsc` + `npm run build` + manual checks.
 
 Local Postgres for dev: `docker compose -f docker-compose.dev.yml up -d` (exposes `localhost:5432`), then copy
 `.env.example` to `.env` before the commands above.
@@ -93,12 +107,26 @@ resolves it using the *executing process's* local timezone. Without the pinned `
 production bug, caught only after the News module's scheduled-send feature made the mistiming obvious. Don't
 remove or "simplify" the `TZ` env var or the `tzdata` install.
 
+**Host cron scripts (`docker/*.sh`: backup, send-scheduled-news, system-check-email, atemschutz-warnung-email, facebook-fetch,
+kalender-ics-sync, photo-cleanup, report-retention)** run from the host crontab outside Docker and read `.env` line by line
+(never `source` it). Three lessons, all from real incidents:
+- **No `aws s3api` in `backup.sh`.** Its S3 retention used `aws s3api list-objects-v2 --query`; with aws-cli 2.31 on the host's system
+  Python 3.14 that command crashes ("badly formed help string") and `set -e` aborted the script right after the upload — for months
+  neither the S3 nor the local 30-day retention ran (backups themselves were fine, and the Status page stayed green because its
+  timestamps are written before the abort). Fixed 2026-11-11: only `aws s3 ls`/`aws s3 rm` (same code path as the working `cp`), age
+  taken from the file name, the local `find` runs first, and an S3 retention failure only warns. Check with
+  `tail /var/log/ffapp-backup.log` after the 03:00 run.
+- **Never debug these scripts with `bash -x`/`set -x`.** They export every `.env` secret, the trace prints them all (happened
+  2026-11-10, forced a credential rotation).
+- **DEV shares the PROD photo bucket** (`S3_PHOTOS_BUCKET`). `photo-cleanup` only deletes objects that belong to a row in its own
+  stack's database, so objects from DEV uploads are never removed by PROD; by documentation DEV has no cron jobs.
+
 ## Architecture
 
 **Stack**: Next.js App Router (TypeScript) · PostgreSQL via Prisma · Auth.js v5 (beta) with the Credentials
 provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms · `exceljs` for XLSX export ·
 `ical-generator` for .ics · Mailjet REST API directly via `fetch` (no SDK) for transactional email ·
-`@aws-sdk/client-s3` for the System Check's live S3/Exoscale connectivity probe (one of two SDK dependencies
+`@aws-sdk/client-s3` (+ `s3-request-presigner`) for the System Check's live S3/Exoscale probe and for the Foto-Upload, Bericht-PDF and Checklisten-PDF storage (one of two SDK dependencies
 in the codebase, see "System Check" below for why) · `firebase-admin` (the other one — the FCM Admin SDK,
 used specifically for native Android push, see `src/lib/push/fcm-client.ts` and
 `docs/superpowers/specs/2026-08-27-android-native-push-fcm-design.md`; it's there because it was the
@@ -111,7 +139,9 @@ searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md unde
 "Externer ICS-Kalenderimport" below - `ical-generator`, listed above, is output-only and unrelated) ·
 `google-auth-library` for the Google-Calendar-Rückschreiben write side (see "Google-Kalender-
 Rückschreiben" below) - only the lean auth/JWT-signing package, not the full `googleapis` client,
-same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/client-s3` above.
+same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/client-s3` above. `@react-pdf/renderer` renders the
+Tätigkeits-/Übungsbericht and Checkliste PDFs server-side (Helvetica, no custom fonts); `vitest` is the test runner (see Commands);
+`@capacitor/*` + `capacitor.config.ts` wrap the live web app in native Android/iOS shells.
 
 ### Route groups
 
