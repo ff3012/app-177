@@ -36,6 +36,39 @@ docker compose -f docker/docker-compose.yml exec -T postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
   "INSERT INTO \"AppSettings\" (id, \"lastBackupAt\", \"updatedAt\") VALUES ('singleton', NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET \"lastBackupAt\" = NOW(), \"updatedAt\" = NOW();"
 
+# 30 Tage Aufbewahrung (lokal). Bewusst VOR dem S3-Teil: dessen Fehler dürfen sie nie verhindern.
+find "$BACKUP_DIR" -name 'db-*.sql.gz' -mtime +30 -delete
+
+# Löscht Off-Box-Kopien, die laut Dateiname (db-JJJJ-MM-TT_HHMM.sql.gz bzw. config-JJJJ-MM-TT_HHMM.tar.gz)
+# älter als 30 Tage sind. Fremde Dateien im Bucket werden nie angefasst. Rückgabe != 0, wenn die Liste
+# nicht gelesen werden konnte; ein einzelnes fehlgeschlagenes Löschen ist nur eine Warnung.
+s3_retention() {
+  CUTOFF_NUM="$(date -d '30 days ago' +%Y%m%d)"
+  S3_LISTING="$(AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+    aws s3 ls "s3://$S3_BACKUP_BUCKET/" --endpoint-url "$S3_ENDPOINT_URL")" || return 1
+  echo "$S3_LISTING" | while read -r _ _ _ KEY; do
+    case "$KEY" in
+      db-*.sql.gz|config-*.tar.gz) ;;
+      *) continue ;;
+    esac
+    KEY_DATE="${KEY#*-}"
+    KEY_DATE="${KEY_DATE%%_*}"
+    KEY_NUM="$(printf '%s' "$KEY_DATE" | tr -d '-')"
+    case "$KEY_NUM" in
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+      *) continue ;;
+    esac
+    if [ "$KEY_NUM" -lt "$CUTOFF_NUM" ]; then
+      if AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+        aws s3 rm "s3://$S3_BACKUP_BUCKET/$KEY" --endpoint-url "$S3_ENDPOINT_URL"; then
+        echo "Alte Off-Box-Kopie gelöscht: $KEY"
+      else
+        echo "WARNUNG: Alte Off-Box-Kopie nicht gelöscht: $KEY" >&2
+      fi
+    fi
+  done
+}
+
 # Off-Box-Kopie auf S3-kompatiblen Object Storage (z. B. Exoscale SOS) - optional, nur aktiv wenn
 # S3_BACKUP_BUCKET in .env gesetzt ist, damit Server ohne konfigurierten Object Storage unverändert
 # weiterlaufen.
@@ -72,19 +105,14 @@ if [ -n "${S3_BACKUP_BUCKET:-}" ]; then
   # PutBucketLifecycleConfiguration wird entweder stillschweigend ignoriert oder mit MalformedXML
   # abgelehnt, je nach Rule-Inhalt (getestet). Exoscales eigener Workaround (ein separater
   # Docker-Client) braucht zusätzlich aktiviertes Bucket-Versioning, was hier nicht gewünscht ist -
-  # daher wird die 30-Tage-Löschung analog zur lokalen find-Zeile unten direkt hier nachgebildet.
-  CUTOFF="$(date -d '30 days ago' +%Y-%m-%dT%H:%M:%S)"
-  OLD_KEYS="$(AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
-    aws s3api list-objects-v2 --bucket "$S3_BACKUP_BUCKET" --endpoint-url "$S3_ENDPOINT_URL" \
-    --query "Contents[?LastModified<='$CUTOFF'].Key" --output text)"
-  if [ "$OLD_KEYS" != "None" ] && [ -n "$OLD_KEYS" ]; then
-    for KEY in $OLD_KEYS; do
-      AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
-        aws s3 rm "s3://$S3_BACKUP_BUCKET/$KEY" --endpoint-url "$S3_ENDPOINT_URL"
-      echo "Alte Off-Box-Kopie gelöscht: $KEY"
-    done
+  # daher wird die 30-Tage-Löschung analog zur lokalen find-Zeile (siehe oben) direkt hier nachgebildet.
+  #
+  # Fehler dabei (2026-11): `aws s3api list-objects-v2` stürzte auf dem Server (aws-cli 2.31.35 mit
+  # System-Python 3.14) jede Nacht mit "badly formed help string" ab; wegen `set -e` endete das Skript
+  # hier, die Aufbewahrung lief weder in S3 noch lokal. Deshalb: nur `aws s3 ls`/`aws s3 rm` (derselbe
+  # Codepfad wie das funktionierende `aws s3 cp`), das Alter kommt aus dem Dateinamen, und ein Fehler
+  # in der Aufbewahrung bricht das Skript nie ab (nur Warnung auf stderr).
+  if ! s3_retention; then
+    echo "WARNUNG: S3-Aufbewahrung (30 Tage) konnte nicht ausgeführt werden." >&2
   fi
 fi
-
-# 30 Tage Aufbewahrung (lokal - siehe oben für die S3-Aufbewahrung)
-find "$BACKUP_DIR" -name 'db-*.sql.gz' -mtime +30 -delete
