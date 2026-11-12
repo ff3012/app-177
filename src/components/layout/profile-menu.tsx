@@ -24,6 +24,8 @@ interface ProfileMenuProps {
    * braucht auf Mobile deshalb eine neue Anlaufstelle. Desktop erreicht News weiterhin unverändert
    * über <Nav>, daher ist der Link hier unten sm:hidden. */
   canSendAnyNews: boolean;
+  /** MCP-Connector eingeschaltet UND der Benutzer hat ein MCP-Recht (lib/mcp/connections.ts). */
+  showKiApps: boolean;
   unreadNewsCount: number;
   vapidPublicKey: string | null;
   logoutAction: () => Promise<void>;
@@ -38,6 +40,7 @@ export function ProfileMenu({
   adminOrganizationNames,
   isDrohnengruppeMember,
   canSendAnyNews,
+  showKiApps,
   unreadNewsCount,
   vapidPublicKey,
   logoutAction,
@@ -283,6 +286,18 @@ export function ProfileMenu({
                 className="text-sm font-medium text-brand hover:underline"
               >
                 News
+              </Link>
+            </div>
+          )}
+
+          {showKiApps && (
+            <div className="mt-4 border-t border-neutral-200 pt-3">
+              <Link
+                href="/profile/ki-apps"
+                onClick={() => setOpen(false)}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                Verbundene KI-Apps
               </Link>
             </div>
           )}

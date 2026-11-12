@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { canSendAnyNews, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getVerwaltungNavItem } from '@/lib/nav-items';
 import { getUnreadNewsCount } from '@/lib/news/audience';
+import { getKiAppsVisibility } from '@/lib/mcp/connections';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
@@ -60,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const verwaltungNavItem = getVerwaltungNavItem(user);
   const showVerwaltungPill = verwaltungNavItem !== null;
   const verwaltungHref = verwaltungNavItem?.href ?? '/admin/heimatfeuerwehr';
+  const showKiApps = await getKiAppsVisibility(user.id);
 
   return (
     <TooltipProvider>
@@ -110,6 +112,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}
                 canSendAnyNews={canSendAnyNews(user)}
+                showKiApps={showKiApps}
                 unreadNewsCount={unreadNewsCount}
                 vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
                 logoutAction={logoutAction}
