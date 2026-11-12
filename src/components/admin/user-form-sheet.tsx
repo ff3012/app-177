@@ -25,6 +25,7 @@ import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { AdminOrgMultiSelect } from '@/components/admin/admin-org-multiselect';
 import { OrgSearchSelect } from '@/components/admin/org-search-select';
 import { formatRelativeDate } from '@/lib/format';
+import { mcpRank, type McpAccessLevel } from '@/lib/mcp/access';
 import { DRONE_ROLE_OPTIONS, userSchema, type DroneRoleOption, type UserInput } from '@/lib/validation/user.schema';
 import { createUser, updateUser, deleteUser, sendPasswordResetEmailToUser } from '@/app/(app)/admin/benutzer/actions';
 
@@ -69,6 +70,7 @@ export interface UserSheetTarget {
   passwordChangedAt: string | null;
   isBezirksAdmin: boolean;
   isBezirksDrohnenAdmin: boolean;
+  mcpAccess: McpAccessLevel;
 }
 
 interface UserFormSheetProps {
@@ -84,6 +86,7 @@ interface UserFormSheetProps {
   droneGroups: { id: string; name: string; isActive: boolean }[];
   viewerIsBezirksAdmin: boolean;
   viewerIsBezirksDrohnenAdmin: boolean;
+  viewerMcpAccess: McpAccessLevel;
   target?: UserSheetTarget;
   onSaved: () => void;
 }
@@ -92,6 +95,12 @@ const DRONE_ROLE_LABELS: Record<DroneRoleOption, string> = {
   NONE: 'Kein',
   PILOT: 'Mitglied',
   ADMIN: 'Admin',
+};
+
+const MCP_ACCESS_LABELS: Record<McpAccessLevel, string> = {
+  NONE: 'Kein',
+  READ: 'Lesen',
+  WRITE: 'Schreiben',
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -138,6 +147,7 @@ function buildDefaultValues(
     bos2AusbildungAm: target?.bos2AusbildungAm ?? '',
     isBezirksAdmin: target?.isBezirksAdmin ?? false,
     isBezirksDrohnenAdmin: target?.isBezirksDrohnenAdmin ?? false,
+    mcpAccess: target?.mcpAccess ?? 'NONE',
     sendWelcomeEmail: true,
   };
 }
@@ -164,6 +174,7 @@ export function UserFormSheet({
   onSaved,
   viewerIsBezirksAdmin,
   viewerIsBezirksDrohnenAdmin,
+  viewerMcpAccess,
 }: UserFormSheetProps) {
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | undefined>();
@@ -248,6 +259,13 @@ export function UserFormSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondaryOrganizationId]);
 
+  // Der Abschnitt "KI-Zugriff" erscheint nur, wenn der Betrachter überhaupt etwas vergeben darf; die Server Action
+  // prüft canGrantMcpAccess unabhängig davon (die Oberfläche ist nur Bedienkomfort).
+  const targetMcpAccess: McpAccessLevel = target?.mcpAccess ?? 'NONE';
+  const canEditMcp =
+    viewerIsBezirksAdmin || (viewerMcpAccess !== 'NONE' && mcpRank(targetMcpAccess) <= mcpRank(viewerMcpAccess));
+  const mcpOptionAllowed = (level: McpAccessLevel) => viewerIsBezirksAdmin || mcpRank(level) <= mcpRank(viewerMcpAccess);
+
   function requestClose(next: boolean) {
     if (!next && isDirty && !activationLink) {
       setConfirmDiscard(true);
@@ -279,6 +297,8 @@ export function UserFormSheet({
     formData.set('bos2AusbildungAm', values.bos2AusbildungAm);
     if (values.isBezirksAdmin) formData.set('isBezirksAdmin', 'on');
     if (values.isBezirksDrohnenAdmin) formData.set('isBezirksDrohnenAdmin', 'on');
+    // Nur senden, wenn der Abschnitt sichtbar war - sonst bleibt die Stufe auf dem Server unverändert.
+    if (canEditMcp) formData.set('mcpAccess', values.mcpAccess ?? 'NONE');
     if (values.sendWelcomeEmail) formData.set('sendWelcomeEmail', 'on');
 
     startTransition(async () => {
@@ -803,6 +823,38 @@ export function UserFormSheet({
                     )}
                   </div>
                 </section>
+
+                {canEditMcp && (
+                  <section>
+                    <SectionLabel>KI-Zugriff (MCP)</SectionLabel>
+                    <div className="rounded-lg border border-line">
+                      <div className="flex items-center justify-between gap-3.5 px-3.5 py-3">
+                        <div>
+                          <div className="text-[15px] font-medium text-ink">Claude / ChatGPT</div>
+                          <div className="mt-0.5 text-[13px] text-ink-muted">
+                            Zugriff über den MCP-Connector. Die Daten richten sich nach den bestehenden Rechten.
+                          </div>
+                        </div>
+                        <Controller
+                          control={control}
+                          name="mcpAccess"
+                          render={({ field }) => (
+                            <SegmentedControl
+                              aria-label="MCP-Zugriff"
+                              value={field.value ?? 'NONE'}
+                              onValueChange={field.onChange}
+                              options={(['NONE', 'READ', 'WRITE'] as const).map((level) => ({
+                                value: level,
+                                label: MCP_ACCESS_LABELS[level],
+                                disabled: !mcpOptionAllowed(level),
+                              }))}
+                            />
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </section>
+                )}
 
                 {serverError && <p className="text-sm text-danger">{serverError}</p>}
               </form>

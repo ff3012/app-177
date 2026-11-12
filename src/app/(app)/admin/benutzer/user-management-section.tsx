@@ -31,6 +31,7 @@ import type { AdminScope } from '@/lib/admin/scope';
 import type { AdminNavItem } from '@/lib/admin/nav-items';
 import { useMobileHeader } from '@/components/layout/mobile-header-context';
 import type { DroneRoleOption } from '@/lib/validation/user.schema';
+import type { McpAccessLevel } from '@/lib/mcp/access';
 import { formatRelativeDate, isOlderThanMonths } from '@/lib/format';
 import { getUserStatus, type UserStatus } from '@/lib/auth/user-status';
 import { groupByAbschnitt } from '@/lib/admin/group-by-abschnitt';
@@ -71,6 +72,7 @@ export interface UserRow {
   secondaryDienstgradId: string;
   isBezirksAdmin: boolean;
   isBezirksDrohnenAdmin: boolean;
+  mcpAccess: McpAccessLevel;
 }
 
 type SheetState = { mode: 'create' } | { mode: 'edit'; userId: string };
@@ -217,6 +219,7 @@ export function UserManagementSection({
   isFullAdmin,
   viewerIsBezirksAdmin,
   viewerIsBezirksDrohnenAdmin,
+  viewerMcpAccess,
   totalUsersCount,
   totalOrgsCount,
   filteredCount,
@@ -251,6 +254,7 @@ export function UserManagementSection({
   isFullAdmin: boolean;
   viewerIsBezirksAdmin: boolean;
   viewerIsBezirksDrohnenAdmin: boolean;
+  viewerMcpAccess: McpAccessLevel;
   totalUsersCount: number;
   totalOrgsCount: number;
   filteredCount: number;
@@ -646,6 +650,7 @@ export function UserManagementSection({
         secondaryDienstgradId: sheetTargetRow.secondaryDienstgradId,
         isBezirksAdmin: sheetTargetRow.isBezirksAdmin,
         isBezirksDrohnenAdmin: sheetTargetRow.isBezirksDrohnenAdmin,
+        mcpAccess: sheetTargetRow.mcpAccess,
       }
     : undefined;
 
@@ -975,6 +980,7 @@ export function UserManagementSection({
         droneGroups={droneGroups}
         viewerIsBezirksAdmin={viewerIsBezirksAdmin}
         viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
+        viewerMcpAccess={viewerMcpAccess}
         target={sheetTarget}
         onSaved={() => {
           setSheetState(null);
