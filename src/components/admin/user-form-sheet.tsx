@@ -361,7 +361,7 @@ export function UserFormSheet({
         toast.error(result.error);
         return;
       }
-      toast.success(result.revoked ? 'Alle Verbindungen gesperrt.' : 'Es gab keine aktiven Verbindungen.');
+      toast.success(result.revoked ? `${result.revoked} Token gesperrt.` : 'Keine aktiven Verbindungen.');
     } catch {
       // Der Server lehnt z. B. einen Datensatz außerhalb des eigenen Verwaltungsbereichs mit einem Fehler ab.
       toast.error('Die Verbindungen konnten nicht gesperrt werden (keine Berechtigung?).');

@@ -40,7 +40,10 @@ export default async function KiAppsPage() {
                 </div>
               </div>
               <form action={revokeMyConnection.bind(null, connection.oauthClientId)}>
-                <button type="submit" className="min-h-11 rounded-md border border-line-strong px-3 text-sm font-semibold text-red-700">
+                <button
+                  type="submit"
+                  aria-label={`Verbindung zu ${connection.clientName} beenden`}
+                  className="min-h-11 rounded-md border border-line-strong px-3 text-sm font-semibold text-red-700">
                   Beenden
                 </button>
               </form>

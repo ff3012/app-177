@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { assertPermission, canManageUserRecord } from '@/lib/auth/permissions';
 import type { SessionUser } from '@/types/next-auth';
+import { recordMcpAudit } from './audit';
 import { isMcpEnabled } from './enabled';
 import { revokeTokensOfUser } from './oauth/service';
 
@@ -44,7 +45,7 @@ export async function listConnections(userId: string, now: Date = new Date()): P
  * Benutzers widerrufen.
  */
 export async function revokeConnection(userId: string, oauthClientId: string): Promise<number> {
-  if (!oauthClientId) return 0;
+  if (typeof oauthClientId !== 'string' || !oauthClientId) return 0;
   return revokeTokensOfUser(userId, oauthClientId);
 }
 
@@ -67,6 +68,15 @@ export async function revokeAllConnectionsAs(
   assertPermission(canManageUserRecord(actor, target));
   // Kein Client-Filter: revokeTokensOfUser ohne zweiten Parameter widerruft alle gültigen Token dieses Benutzers.
   const revoked = await revokeTokensOfUser(target.id);
+  // Nur der Erfolgsfall wird protokolliert (eine Verweigerung wirft oben); Zusammenfassung statisch, nur mit Anzahl.
+  await recordMcpAudit({
+    userId: actor.id,
+    clientId: null,
+    tool: 'admin_revoke',
+    outcome: 'OK',
+    targetUserId: target.id,
+    summary: `Admin hat ${revoked} Token gesperrt`,
+  });
   return { revoked };
 }
 

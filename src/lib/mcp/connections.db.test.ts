@@ -74,6 +74,11 @@ describe('listConnections / revokeConnection', () => {
     });
 
     expect(await revokeConnection(userId!, 'gibt-es-nicht')).toBe(0);
+    // Leere oder keine Zeichenkette darf nie als "kein Filter" gelesen werden (würde alle Token des Benutzers widerrufen).
+    expect(await revokeConnection(userId!, '')).toBe(0);
+    expect(await revokeConnection(userId!, undefined as unknown as string)).toBe(0);
+    expect(await revokeConnection(userId!, { not: 'a string' } as unknown as string)).toBe(0);
+    expect(await listConnections(userId!)).toHaveLength(1);
     expect(await revokeConnection(userId!, mine.oauthClientId)).toBe(1);
     expect(await listConnections(userId!)).toHaveLength(0);
     // Der Token des anderen Benutzers am selben Client bleibt unberührt.
@@ -98,6 +103,8 @@ describe('revokeAllConnectionsAs (Admin sperrt alle Verbindungen eines Benutzers
   let targetId: string | undefined;
   let bezirksadminTargetId: string | undefined;
   let bystanderId: string | undefined;
+  // Der Akteur des Prüfprotokolls muss ein echter Benutzer sein (userId ist ein Fremdschlüssel).
+  let actorId: string | undefined;
 
   async function giveTokens(forUserId: string, tag: string): Promise<void> {
     await issueTestToken({ userId: forUserId, namePrefix: `${RUN}-${tag}-1` });
@@ -110,11 +117,16 @@ describe('revokeAllConnectionsAs (Admin sperrt alle Verbindungen eines Benutzers
     otherOrgId = orgs[1].id;
     targetId = (await prisma.user.create({ data: { email: `${RUN}-t@example.local`, passwordHash: 'x', firstName: 'T', lastName: RUN, homeOrganizationId: orgId, mcpAccess: 'READ' } })).id;
     bystanderId = (await prisma.user.create({ data: { email: `${RUN}-by@example.local`, passwordHash: 'x', firstName: 'BY', lastName: RUN, homeOrganizationId: orgId, mcpAccess: 'READ' } })).id;
+    actorId = (await prisma.user.create({ data: { email: `${RUN}-act@example.local`, passwordHash: 'x', firstName: 'ACT', lastName: RUN, homeOrganizationId: orgId, mcpAccess: 'NONE' } })).id;
     bezirksadminTargetId = (await prisma.user.create({ data: { email: `${RUN}-ba@example.local`, passwordHash: 'x', firstName: 'BA', lastName: RUN, homeOrganizationId: orgId, mcpAccess: 'READ', isBezirksAdmin: true } })).id;
   });
 
   afterAll(async () => {
-    const ids = [targetId, bezirksadminTargetId, bystanderId].filter((id): id is string => typeof id === 'string');
+    // Prüfprotokoll-Zeilen dieses Blocks (über die Testbenutzer als Ziel; der Akteur-Fremdschlüssel steht auf SetNull).
+    await prisma.mcpAuditLog.deleteMany({
+      where: { tool: 'admin_revoke', targetUserId: { in: [targetId, bezirksadminTargetId, bystanderId].filter((id): id is string => typeof id === 'string') } },
+    });
+    const ids = [targetId, bezirksadminTargetId, bystanderId, actorId].filter((id): id is string => typeof id === 'string');
     if (ids.length > 0) {
       await prisma.oauthToken.deleteMany({ where: { userId: { in: ids } } });
       await prisma.oauthAuthorizationCode.deleteMany({ where: { userId: { in: ids } } });
@@ -127,9 +139,12 @@ describe('revokeAllConnectionsAs (Admin sperrt alle Verbindungen eines Benutzers
     await giveTokens(bystanderId!, 'bystander');
     expect(await listConnections(targetId!)).toHaveLength(2);
 
-    const admin = sessionUserFixture({ id: 'admin-in', homeOrganizationId: orgId, feuerwehrAdminOrgIds: [orgId] });
+    const admin = sessionUserFixture({ id: actorId!, homeOrganizationId: orgId, feuerwehrAdminOrgIds: [orgId] });
     const result = await revokeAllConnectionsAs(admin, targetId!);
     expect(result).toEqual({ revoked: 2 });
+    const auditRows = await prisma.mcpAuditLog.findMany({ where: { tool: 'admin_revoke', targetUserId: targetId! } });
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]).toMatchObject({ userId: actorId, outcome: 'OK', clientId: null, summary: 'Admin hat 2 Token gesperrt' });
     expect(await listConnections(targetId!)).toHaveLength(0);
     expect(await listConnections(bystanderId!)).toHaveLength(2);
     // Zweiter Aufruf: nichts mehr zu sperren, kein Fehler.
@@ -138,8 +153,11 @@ describe('revokeAllConnectionsAs (Admin sperrt alle Verbindungen eines Benutzers
 
   it('Admin einer anderen Feuerwehr wird abgelehnt und ändert nichts', async () => {
     await giveTokens(targetId!, 'out');
-    const outsider = sessionUserFixture({ id: 'admin-out', homeOrganizationId: otherOrgId, feuerwehrAdminOrgIds: [otherOrgId] });
+    const outsider = sessionUserFixture({ id: actorId!, homeOrganizationId: otherOrgId, feuerwehrAdminOrgIds: [otherOrgId] });
+    const auditBefore = await prisma.mcpAuditLog.count({ where: { tool: 'admin_revoke' } });
     await expect(revokeAllConnectionsAs(outsider, targetId!)).rejects.toBeInstanceOf(ForbiddenError);
+    // Eine Verweigerung wird (anders als ein Erfolg) nicht protokolliert.
+    expect(await prisma.mcpAuditLog.count({ where: { tool: 'admin_revoke' } })).toBe(auditBefore);
     expect(await listConnections(targetId!)).toHaveLength(2);
   });
 

@@ -21,7 +21,7 @@ export default async function McpVerwaltungPage() {
     notFound();
   }
 
-  const [enabled, entries, activeConnections] = await Promise.all([
+  const [enabled, entries, activeTokens] = await Promise.all([
     isMcpEnabled(),
     prisma.mcpAuditLog.findMany({
       orderBy: { createdAt: 'desc' },
@@ -73,7 +73,7 @@ export default async function McpVerwaltungPage() {
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Prüfprotokoll</h2>
         <p className="mb-3 text-sm text-ink-muted">
-          Schreibaktionen und abgelehnte Zugriffe (die letzten {AUDIT_ROWS} Einträge; Einträge werden nach {MCP_AUDIT_RETENTION_DAYS} Tagen gelöscht). Aktive Verbindungen: {activeConnections}.
+          Schreibaktionen und abgelehnte Zugriffe (die letzten {AUDIT_ROWS} Einträge; Einträge werden nach {MCP_AUDIT_RETENTION_DAYS} Tagen gelöscht). Aktive Token: {activeTokens}.
         </p>
         {rows.length === 0 ? (
           <p className="text-sm text-ink-muted">Noch keine Einträge.</p>

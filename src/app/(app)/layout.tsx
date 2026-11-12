@@ -33,7 +33,7 @@ const isDevStage = process.env.APP_STAGE === 'dev';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
-  const [homeOrganization, secondaryOrganization, adminOrganizations, unreadNewsCount] = await Promise.all([
+  const [homeOrganization, secondaryOrganization, adminOrganizations, unreadNewsCount, showKiApps] = await Promise.all([
     // Explizites select statt findUnique ohne select: wappenImageData ist ein potenziell
     // mehrere hundert KB großer Bytes-Blob, der bei jeder Navigation sonst unnötig mitgeladen
     // würde, obwohl hier nur wappenImageMimeType (Präsenz-Check) gebraucht wird.
@@ -51,6 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ? prisma.organization.findMany({ where: { id: { in: user.feuerwehrAdminOrgIds } } })
       : Promise.resolve([]),
     getUnreadNewsCount(user.id),
+    getKiAppsVisibility(user.id),
   ]);
 
   const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'BFKDO St. Pölten';
@@ -61,7 +62,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const verwaltungNavItem = getVerwaltungNavItem(user);
   const showVerwaltungPill = verwaltungNavItem !== null;
   const verwaltungHref = verwaltungNavItem?.href ?? '/admin/heimatfeuerwehr';
-  const showKiApps = await getKiAppsVisibility(user.id);
 
   return (
     <TooltipProvider>
