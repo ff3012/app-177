@@ -12,6 +12,8 @@ export interface ToolDefinition {
   /** Mindeststufe: READ-Werkzeuge sehen alle, WRITE-Werkzeuge nur Benutzer mit WRITE. */
   access: 'READ' | 'WRITE';
   inputSchema: z.ZodRawShape;
+  /** true = der Server lehnt unbekannte Eingabefelder ab (z. B. isBezirksAdmin), statt sie still zu verwerfen. */
+  strictInput?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler: (ctx: ToolContext, input: any) => Promise<ToolResult>;
 }
@@ -22,6 +24,7 @@ export function defineTool<S extends z.ZodRawShape>(def: {
   description: string;
   access: 'READ' | 'WRITE';
   inputSchema: S;
+  strictInput?: boolean;
   handler: (ctx: ToolContext, input: z.infer<z.ZodObject<S>>) => Promise<ToolResult>;
 }): ToolDefinition {
   return def as ToolDefinition;

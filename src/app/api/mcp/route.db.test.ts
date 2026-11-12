@@ -1,4 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+// Die Willkommens-Mail darf in Tests nie wirklich versendet werden.
+const sendActivationEmail = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => undefined));
+vi.mock('@/lib/email/templates', () => ({ sendActivationEmail }));
+
 import { prisma } from '@/lib/db/prisma';
 import { isMcpEnabled, setMcpEnabled } from '@/lib/mcp/enabled';
 import { issueTestToken } from '@/lib/mcp/test-support-db';
@@ -6,6 +11,8 @@ import { DELETE, GET, OPTIONS, POST } from './route';
 
 const RUN = `mcp-route-${Date.now()}`;
 let userId: string | undefined;
+let writeUserId: string | undefined;
+let writeToken: string;
 let wasEnabled: boolean | undefined;
 let readToken: string;
 
@@ -31,17 +38,23 @@ beforeAll(async () => {
   });
   userId = user.id;
   readToken = (await issueTestToken({ userId, namePrefix: RUN })).accessToken;
+  const writeUser = await prisma.user.create({
+    data: { email: `${RUN}-write@example.local`, passwordHash: 'x', firstName: 'Route', lastName: `${RUN}-write`, homeOrganizationId: org.id, mcpAccess: 'WRITE', isBezirksAdmin: true },
+  });
+  writeUserId = writeUser.id;
+  writeToken = (await issueTestToken({ userId: writeUserId, namePrefix: `${RUN}-w` })).accessToken;
 });
 
 afterAll(async () => {
   if (wasEnabled !== undefined) await setMcpEnabled(wasEnabled);
-  if (userId) {
-    await prisma.oauthToken.deleteMany({ where: { userId } });
-    await prisma.oauthAuthorizationCode.deleteMany({ where: { userId } });
-    await prisma.mcpAuditLog.deleteMany({ where: { userId } });
+  const ids = [userId, writeUserId].filter((id): id is string => id !== undefined);
+  if (ids.length > 0) {
+    await prisma.oauthToken.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.oauthAuthorizationCode.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.mcpAuditLog.deleteMany({ where: { userId: { in: ids } } });
   }
   await prisma.oauthClient.deleteMany({ where: { name: { startsWith: RUN } } });
-  if (userId) await prisma.user.deleteMany({ where: { id: userId } });
+  if (ids.length > 0) await prisma.user.deleteMany({ where: { id: { in: ids } } });
   await prisma.$disconnect();
 });
 
@@ -110,6 +123,41 @@ describe('/api/mcp', () => {
     expect(names).toHaveLength(8);
     expect(names).not.toContain('create_user');
     expect(body.result.tools[0].annotations.readOnlyHint).toBe(true);
+  });
+
+  it('listet mit einem WRITE-Token zusätzlich create_user (Schreib-Annotationen, strenges Schema)', async () => {
+    const body = await (await POST(rpc('tools/list', {}, writeToken))).json();
+    const tools = body.result.tools as { name: string; annotations: Record<string, boolean>; inputSchema: { additionalProperties?: boolean } }[];
+    expect(tools.map((t) => t.name)).toContain('create_user');
+    expect(tools).toHaveLength(9);
+    const createUser = tools.find((t) => t.name === 'create_user')!;
+    expect(createUser.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false });
+    expect(createUser.inputSchema.additionalProperties).toBe(false);
+    for (const tool of tools.filter((t) => t.name !== 'create_user')) expect(tool.annotations.readOnlyHint).toBe(true);
+  });
+
+  it('lehnt create_user mit READ-Token ab und legt nichts an', async () => {
+    const email = `${RUN}-readcall@example.local`;
+    const org = await prisma.organization.findFirstOrThrow({ where: { type: 'FEUERWEHR' } });
+    const args = { firstName: 'Neu', lastName: RUN, email, stbNr: '4711', homeOrganizationId: org.id };
+    const body = await (await POST(rpc('tools/call', { name: 'create_user', arguments: args }, readToken))).json();
+    expect(body.error ?? body.result?.isError).toBeTruthy();
+    expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+    expect(sendActivationEmail).not.toHaveBeenCalled();
+  });
+
+  it('lehnt create_user mit unbekannten Feldern (isBezirksAdmin, mcpAccess) selbst als Bezirksadmin mit WRITE-Token ab und legt nichts an', async () => {
+    const email = `${RUN}-strict@example.local`;
+    const org = await prisma.organization.findFirstOrThrow({ where: { type: 'FEUERWEHR' } });
+    for (const extra of [{ isBezirksAdmin: true }, { mcpAccess: 'WRITE' }]) {
+      const args = { firstName: 'Neu', lastName: RUN, email, stbNr: '4711', homeOrganizationId: org.id, ...extra };
+      const response = await POST(rpc('tools/call', { name: 'create_user', arguments: args }, writeToken));
+      const body = await response.json();
+      expect(body.error ?? body.result?.isError).toBeTruthy();
+      expect(JSON.stringify(body)).toMatch(/unrecognized|Unbekannte/i);
+      expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+    }
+    expect(sendActivationEmail).not.toHaveBeenCalled();
   });
 
   it('führt ein Werkzeug aus', async () => {

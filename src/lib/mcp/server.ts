@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 import { hasMcpAccess } from './access';
 import type { McpPrincipal } from './auth';
 import { TOOLS } from './tools';
@@ -22,7 +23,7 @@ export function createMcpServer(principal: McpPrincipal): McpServer {
       tool.name,
       {
         description: tool.description,
-        inputSchema: tool.inputSchema,
+        inputSchema: tool.strictInput ? z.object(tool.inputSchema).strict() : tool.inputSchema,
         annotations: {
           readOnlyHint: tool.access === 'READ',
           destructiveHint: false,
