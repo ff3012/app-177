@@ -243,6 +243,15 @@ crontab -e
 0 5 * * * /opt/app-177/docker/report-retention.sh >> /var/log/ffapp-report-retention.log 2>&1
 ```
 
+## MCP-Aufräumen (täglich)
+
+`docker/mcp-retention.sh` ruft `/api/cron/mcp-retention` auf. Der Lauf löscht das MCP-Prüfprotokoll nach 180 Tagen, widerrufene bzw. abgelaufene OAuth-Token 30 Tage nach Widerruf/Ablauf, Autorisierungscodes einen Tag nach Ablauf und ungenutzte OAuth-Clients (älter als 30 Tage, ohne Token und Codes). Er läuft unabhängig vom Funktionsschalter. Einmal täglich ausführen:
+
+```bash
+crontab -e
+15 5 * * * /opt/app-177/docker/mcp-retention.sh >> /var/log/ffapp-mcp-retention.log 2>&1
+```
+
 ## Restore-Test
 
 DB-Restore (auf einem bereits laufenden Stack mit leerer/vorhandener DB):

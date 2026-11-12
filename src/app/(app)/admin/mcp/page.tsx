@@ -7,6 +7,7 @@ import { GeltungsbereichSelector } from '@/components/admin/geltungsbereich-sele
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { prisma } from '@/lib/db/prisma';
 import { isMcpEnabled } from '@/lib/mcp/enabled';
+import { MCP_AUDIT_RETENTION_DAYS } from '@/lib/mcp/retention';
 import { toggleMcpEnabled } from './actions';
 
 const AUDIT_ROWS = 50;
@@ -72,7 +73,7 @@ export default async function McpVerwaltungPage() {
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Prüfprotokoll</h2>
         <p className="mb-3 text-sm text-ink-muted">
-          Schreibaktionen und abgelehnte Zugriffe (die letzten {AUDIT_ROWS} Einträge). Aktive Verbindungen: {activeConnections}.
+          Schreibaktionen und abgelehnte Zugriffe (die letzten {AUDIT_ROWS} Einträge; Einträge werden nach {MCP_AUDIT_RETENTION_DAYS} Tagen gelöscht). Aktive Verbindungen: {activeConnections}.
         </p>
         {rows.length === 0 ? (
           <p className="text-sm text-ink-muted">Noch keine Einträge.</p>
