@@ -9,7 +9,7 @@ Ein MCP-Server (Model Context Protocol) in der App selbst: `POST /api/mcp` (Stre
 plus ein kleiner OAuth-2.1-Server (Authorization Code + PKCE S256, Dynamic Client Registration), über den sich Claude und ChatGPT mit dem
 normalen App-Login anmelden. Benutzer mit `User.mcpAccess` `READ` oder `WRITE` dürfen ihn nutzen. Alles hängt am Funktionsschalter
 `AppSettings.mcpEnabled` (`/admin/mcp`, nur Bezirksadmin, Standard aus); aus = `/api/mcp`, `/oauth/authorize`, `/oauth/register`, `/oauth/token`,
-`/oauth/revoke` und `/.well-known/oauth-*` antworten 404 bzw. `notFound()`. Route-Dateien: `src/app/api/mcp/route.ts`, `src/app/oauth/*`,
+`/oauth/revoke` und `/.well-known/oauth-*` antworten 404 bzw. `notFound()` (Ausnahme: die CORS-Preflight-Anfrage `OPTIONS` beantworten all diese Endpunkte unabhängig vom Schalter, sie enthält keine Daten). Route-Dateien: `src/app/api/mcp/route.ts`, `src/app/oauth/*`,
 `src/app/.well-known/*`, `src/app/api/cron/mcp-retention/route.ts`. In der Middleware öffentlich sind `/.well-known`, `/api/mcp`, `/oauth/token`,
 `/oauth/register`, `/oauth/revoke`; `/oauth/authorize` ist bewusst NICHT öffentlich (normaler Login).
 
@@ -44,7 +44,9 @@ und die Clients prüfen, dass die Ressourcen-URL zu der eingetragenen passt.
   (`localhost`, `127.0.0.1`, `[::1]`, beliebiger Port/Pfad, für lokale Werkzeuge wie den MCP Inspector). Maximal 5 Adressen je Client, je höchstens 2000 Zeichen.
   Eine unbekannte/nicht registrierte Adresse führt NIE zu einer Weiterleitung (Fehlerseite).
   **Die Pfade stammen aus der Plattform-Dokumentation und sind bei einer echten Verbindung auf DEV zu bestätigen. Plattformen ändern ihre Adressen - bei `invalid_redirect_uri`
-  (Registrierung) bzw. "Rücksprungadresse nicht registriert" nur diese Tabelle anpassen.**
+  (Registrierung) bzw. "Rücksprungadresse nicht registriert" nur diese Tabelle anpassen.** Die App protokolliert die abgelehnte Adresse nicht. Die tatsächliche Adresse steht in der Fehlermeldung der Plattform,
+  im Netzwerk-Tab der Browser-Entwicklertools während des Verbindungsversuchs (Parameter `redirect_uri` der Anfrage an `/oauth/authorize`; die Registrierung schickt oft der Server der Plattform, dort hilft nur deren Fehlermeldung)
+  oder in der Plattform-Dokumentation.
 - `/oauth/authorize` ist die einzige geschützte OAuth-Seite (normaler Login); die Middleware gibt für diesen Pfad die Query als `callbackUrl` mit (`lib/auth/callback-url.ts`).
   Die Anmeldung per E-Mail-Token kehrt nicht dorthin zurück - der Benutzer startet die Verbindung dann einfach neu (bekannte Einschränkung).
 - Issuer/Resource = `AUTH_URL`. `/.well-known/oauth-protected-resource` gibt es auch mit Pfadsuffix `/api/mcp` (RFC 9728), die 401-Antwort von `/api/mcp` verweist darauf.
@@ -63,8 +65,9 @@ macht Stufenprüfung, Mengenbegrenzung, Fehlerabbildung (deutsche Meldung, nie S
   Eingaben `YYYY-MM-DD` oder ISO ohne Zeitzone gelten als Wiener Zeit.
 - **Mengenbegrenzung** (`rate-limit.ts`, im Speicher des einen Containers, ein Neustart setzt sie zurück - akzeptiert): 120 Aufrufe/Minute je Token; zusätzlich höchstens 20 über MCP angelegte Benutzer/Stunde
   je Benutzer. Letzteres wird aus dem Prüfprotokoll gezählt (`countRecentOk`) und ist "weich" (prüfen-dann-handeln, parallele Aufrufe können knapp überschreiten).
-- **Prüfprotokoll** (`audit.ts`, `McpAuditLog`): alle Schreibaktionen (OK, bei Fehlern ERROR) und alle abgelehnten Zugriffe (DENIED). Die Zusammenfassungen sind statische Texte bzw. enthalten nur Name/E-Mail des
-  Ziels (nie Telefon/Freitext, Steuerzeichen werden entfernt, höchstens 500 Zeichen); Meldungen von `denied()`/`invalid()` landen bei Schreibwerkzeugen wörtlich im Protokoll und dürfen nie Eingaben wiedergeben.
+- **Prüfprotokoll** (`audit.ts`, `McpAuditLog`): alle Schreibaktionen (OK, bei Fehlern ERROR), alle abgelehnten Zugriffe (DENIED) und unerwartete Fehler auch in Lesewerkzeugen (ERROR, Zusammenfassung "Unerwarteter Fehler"; erwartbare Fehler
+  wie ungültige Eingaben werden bei Lesewerkzeugen nicht protokolliert), dazu die Admin-Sperre (siehe Betrieb). Die Zusammenfassungen sind statische Texte bzw. enthalten nur Name/E-Mail des
+  Ziels (nie Telefon/Freitext, höchstens 500 Zeichen; Steuerzeichen werden nur in der Zusammenfassung von `create_user` entfernt, `plain()` in `tools/create-user.ts`); Meldungen von `denied()`/`invalid()` landen bei Schreibwerkzeugen wörtlich im Protokoll und dürfen nie Eingaben wiedergeben.
   Ein Mengenbegrenzungs-DENIED wird je Token nur einmal pro Minute protokolliert. `get_user` für einen Benutzer außerhalb des Verwaltungsbereichs antwortet mit demselben Text wie bei einer unbekannten ID
   (keine Existenzabfrage), wird aber als DENIED protokolliert.
 - **Fehler und Logging:** Nie ein Fehlerobjekt oder dessen Meldung loggen - Prisma-Meldungen beginnen mit der gerenderten Abfrage (Namen, E-Mail-Adressen, Suchtexte). Immer `safeErrorSummary` (`safe-log.ts`) verwenden
@@ -80,13 +83,15 @@ und statischen Fehlermeldungen.
 
 ## Betrieb
 
-- Prüfprotokoll-Ansicht auf `/admin/mcp` (Schalter, die letzten 50 Einträge, Anzahl aktiver Verbindungen; nur Bezirksadmin). Aufräumen täglich über `/api/cron/mcp-retention`
+- Prüfprotokoll-Ansicht auf `/admin/mcp` (Schalter, die letzten 50 Einträge, Anzahl aktiver Token - Zeilen, nicht Verbindungen; nur Bezirksadmin). Aufräumen täglich über `/api/cron/mcp-retention`
   (`docker/mcp-retention.sh`, `?secret=CRON_SECRET`, läuft unabhängig vom Funktionsschalter): Protokoll `MCP_AUDIT_RETENTION_DAYS` = 180 Tage, Token `MCP_TOKEN_RETENTION_DAYS` = 30 Tage nach Widerruf/Ablauf des Refresh-Tokens,
-  Codes 1 Tag nach Ablauf, **nie benutzte OAuth-Client-Registrierungen** (ohne Token und Codes) nach 30 Tagen (`retention.ts`). Folge: Ein Client, der länger als rund 60 Tage nichts getan hat, bekommt `invalid_client` -
-  der Benutzer muss den Connector in Claude/ChatGPT neu hinzufügen. Die Konstanten stehen nur in `retention.ts`, `/admin/mcp` liest die 180 von dort.
+  Codes 1 Tag nach Ablauf, **OAuth-Clients ohne verbleibende Token/Codes (älter als 30 Tage)**, auch ehemals benutzte (`retention.ts`). Folge: Ein Client, der länger als rund 60 Tage (30 Tage Refresh-Token-Laufzeit plus 30 Tage Schonfrist)
+  nichts getan hat, ist unbekannt: `/oauth/authorize` zeigt die Fehlerkarte "Anmeldung nicht möglich" / "Unbekannte Anwendung (client_id).", der Token-Endpunkt antwortet `invalid_grant` (die Token wurden mit dem Client
+  per Kaskade gelöscht) - der Benutzer muss den Connector in Claude/ChatGPT entfernen und neu hinzufügen. Die Konstanten stehen nur in `retention.ts`, `/admin/mcp` liest die 180 von dort.
 - Jeder Benutzer sieht und beendet seine Verbindungen unter `/profile/ki-apps` (Menüeintrag "Verbundene KI-Apps" im Profilmenü nur bei eingeschaltetem Schalter und `mcpAccess` ungleich `NONE`);
   Admins sperren alle Token eines Benutzers im Benutzer-Sheet (Abschnitt "KI-Zugriff (MCP)", Button "Verbindungen sperren"; der Button erscheint nur mit `canEditMcp`, der Server erlaubt es jedem Admin, der
-  `canManageUserRecord` besteht).
+  `canManageUserRecord` besteht). Die Admin-Sperre (`revokeAllConnectionsAs`) schreibt bei Erfolg einen Prüfprotokoll-Eintrag (Werkzeug `admin_revoke`, Akteur = Admin, Ziel = Benutzer, Zusammenfassung nur mit der Anzahl
+  gesperrter Token); eine Verweigerung wird nicht protokolliert.
 - Keine neuen Umgebungsvariablen (`AUTH_URL` und `CRON_SECRET` sind schon im `environment:`-Block von `docker/docker-compose.yml`).
 - Abhängigkeit `@modelcontextprotocol/sdk` (setzt `zod` >= 3.25 voraus; `package.json` hat `^3.25.76`): das Protokoll (Transport, JSON-RPC, Schema-Validierung) wird nicht nachgebaut - dieselbe Begründung wie bei den anderen SDKs
   (SDK nur dort, wo ein Protokoll bzw. Kryptografie im Spiel ist).
@@ -101,4 +106,7 @@ und statischen Fehlermeldungen.
 - **Validierungsfehler des SDK** (Eingabe passt nicht zum Schema, bevor der Handler läuft) werden nicht im Prüfprotokoll erfasst.
 - **401-Pfad ohne IP-Begrenzung:** Ungültige Token an `/api/mcp` werden nicht je IP gedrosselt (Token sind 256 Bit zufällig; es gibt nur Hash-Lookups).
 - **E-Mail-Token-Login** kehrt nicht zu `/oauth/authorize` zurück (siehe OAuth).
-- **Admin-Sperre ist noch nicht protokolliert:** "Verbindungen sperren" durch einen Admin (`revokeAllConnectionsAs`) schreibt keinen Prüfprotokoll-Eintrag.
+- **Schalter und Stufe nicht protokolliert:** Änderungen von `mcpEnabled` (`/admin/mcp`) und von `mcpAccess` (Benutzerverwaltung) stehen nicht im MCP-Prüfprotokoll.
+- **Mengenbegrenzung je Token:** Die 120 Aufrufe/Minute gelten je Token; mehrere Token (mehrere Clients/Verbindungen) vervielfachen sie. Nur die Obergrenze für `create_user` (20/Stunde) gilt je Benutzer.
+- **`client_name` ist selbst angegeben:** Die unauthentifizierte Dynamic Client Registration übernimmt den Namen ungeprüft. Als Gegenmaßnahme zeigt die Freigabeseite neben dem Namen auch den Rückleitungs-Host ("Rückleitung an: …").
+- **`create_user` vergibt auch Rollen:** Zusätzlich zu Abschnittskommando-Admin (siehe oben) kann `create_user` Drohnengruppen-Admin und Feuerwehr-Admin vergeben - jeweils nur im eigenen Verwaltungsbereich des Aufrufers.

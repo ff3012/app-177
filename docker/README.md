@@ -248,7 +248,7 @@ crontab -e
 Der Connector ist standardmäßig **aus** (`AppSettings.mcpEnabled = false`): `/api/mcp`, `/oauth/authorize`, `/oauth/register`, `/oauth/token`, `/oauth/revoke` und
 `/.well-known/oauth-*` antworten dann wie "nicht vorhanden". Die Migration `20261112090000_mcp_connector` ist rein additiv (kein Backfill; `mcpAccess` ist überall `NONE`), es gibt
 **keine neue Umgebungsvariable** (genutzt werden nur `AUTH_URL` und `CRON_SECRET`, beide stehen schon im `environment:`-Block der `docker-compose.yml`). Einschalten
-als Bezirksadmin unter Verwaltung → KI-Zugriff; wer ihn nutzen darf, steht je Benutzer in der Benutzerverwaltung ("KI-Zugriff (MCP)": Kein Zugriff / Lesen / Schreiben).
+als Bezirksadmin unter Verwaltung → KI-Zugriff; wer ihn nutzen darf, steht je Benutzer in der Benutzerverwaltung ("KI-Zugriff (MCP)": Kein / Lesen / Schreiben).
 Technische Details und Grenzen: [src/lib/mcp/CLAUDE.md](../src/lib/mcp/CLAUDE.md).
 
 **Verbinden (Benutzer):** Die Connector-URL muss **exakt** `${AUTH_URL}/api/mcp` lauten, z. B. `https://app-17.bfkdo-stpoelten.at/api/mcp` - kein Schrägstrich am Ende und nie die alte,
@@ -262,22 +262,22 @@ Wer per E-Mail-Token angemeldet ist, kehrt nicht automatisch zur Freigabeseite z
 **Rücksprungadressen:** Die App akzeptiert nur feste, pfadgenaue Adressen (`HTTPS_REDIRECT_RULES` in `src/lib/mcp/oauth/redirect-uris.ts`: `claude.ai`/`claude.com` `/api/mcp/auth_callback`,
 `chatgpt.com` `/connector/oauth/…` bzw. `/connector_platform_oauth_redirect`). Diese Pfade stammen aus der Plattform-Dokumentation und sind bei der ersten echten Verbindung auf DEV
 zu bestätigen. Scheitert die Registrierung mit `invalid_redirect_uri` oder meldet die Freigabeseite "Rücksprungadresse nicht registriert", hat die Plattform ihre Adresse geändert:
-nur diese eine Tabelle anpassen und deployen.
+nur diese eine Tabelle anpassen und deployen. Die App protokolliert die abgelehnte Adresse nicht. Die tatsächliche Adresse steht in der Fehlermeldung der Plattform, im Netzwerk-Tab der Browser-Entwicklertools während des Verbindungsversuchs (Parameter `redirect_uri` der Anfrage an `/oauth/authorize`; die Registrierung schickt oft der Server der Plattform, dort hilft nur deren Fehlermeldung) oder in der Plattform-Dokumentation.
 
 **Einführungs-Checkliste:**
 1. **DEV zuerst** (`/opt/app-177-dev`, Vorgehen siehe "Laufende Nutzung" im Abschnitt zum zweiten Stack): Branch auschecken, Stack neu bauen. Auf DEV den Schalter einschalten, einem Testbenutzer `mcpAccess`
    geben, Claude und ChatGPT mit `https://dev.app-17.bfkdo-stpoelten.at/api/mcp` verbinden, Rücksprungpfade bestätigen, die Werkzeuge ausprobieren (Lesen, mit Schreiben `create_user`). Erst danach Prod.
 2. **Backup vor dem Deploy** (Prod): `/opt/app-177/docker/backup.sh` einmal von Hand laufen lassen und `tail /var/log/ffapp-backup.log` prüfen.
-3. **Deploy** (Prod): `git pull` + `docker compose -f docker/docker-compose.yml --env-file .env up -d --build`; die Migration läuft im Entrypoint.
+3. **Deploy** (Prod, nach dem Merge nach `main`): `git pull` + `docker compose -f docker/docker-compose.yml --env-file .env up -d --build`; die Migration läuft im Entrypoint.
 4. **Migrationsstand prüfen:** `docker compose -f docker/docker-compose.yml --env-file .env exec app node node_modules/prisma/build/index.js migrate status` - `20261112090000_mcp_connector`
-   muss als angewendet gelistet sein, keine offenen Migrationen.
+   muss als angewendet gelistet sein, keine offenen Migrationen. `migrate status` meldet dabei weiterhin den bekannten Checksummen-Befund zu `20260809010000_hierarchie_backfill` (siehe "Zweiter, separater Befund" oben) - das ist kein Fehler dieser Einführung; erwartet wird: keine offenen (pending) Migrationen.
 5. **Cron-Zeile** für das tägliche Aufräumen einrichten (nächster Abschnitt) und `mcp-retention.sh` einmal von Hand starten (erwartet `{"ok":true,...}`).
 6. **Schalter einschalten** (Verwaltung → KI-Zugriff) - erst nach dem erfolgreichen DEV-Test. Ausschalten ist jederzeit möglich und wirkt sofort.
 7. **`mcpAccess` an Testbenutzer vergeben** (zuerst nur wenige, Lesen; Schreiben nur bei Bedarf), dann schrittweise ausweiten. Das Prüfprotokoll steht auf `/admin/mcp`.
 
 ## MCP-Aufräumen (täglich)
 
-`docker/mcp-retention.sh` ruft `/api/cron/mcp-retention` auf. Der Lauf löscht das MCP-Prüfprotokoll nach 180 Tagen, widerrufene bzw. abgelaufene OAuth-Token 30 Tage nach Widerruf/Ablauf, Autorisierungscodes einen Tag nach Ablauf und ungenutzte OAuth-Clients (älter als 30 Tage, ohne Token und Codes; ein Client, der länger als rund 60 Tage nichts getan hat, bekommt danach `invalid_client` - der Benutzer muss den Connector neu hinzufügen). Er läuft unabhängig vom Funktionsschalter. Nur auf dem Prod-Stack einrichten (Dev hat bewusst keine Cronjobs). Einmal täglich ausführen:
+`docker/mcp-retention.sh` ruft `/api/cron/mcp-retention` auf. Der Lauf löscht das MCP-Prüfprotokoll nach 180 Tagen, widerrufene bzw. abgelaufene OAuth-Token 30 Tage nach Widerruf/Ablauf, Autorisierungscodes einen Tag nach Ablauf und OAuth-Clients ohne verbleibende Token/Codes (älter als 30 Tage; auch ehemals benutzte, deren Token inzwischen gelöscht sind). Ein Client, der länger als rund 60 Tage (30 Tage Refresh-Token-Laufzeit plus 30 Tage Schonfrist) nichts getan hat, ist danach unbekannt: `/oauth/authorize` zeigt die Fehlerkarte "Anmeldung nicht möglich" / "Unbekannte Anwendung (client_id).", der Token-Endpunkt antwortet `invalid_grant` (die Token wurden mit dem Client gelöscht) - der Benutzer muss den Connector in Claude/ChatGPT entfernen und neu hinzufügen. Er läuft unabhängig vom Funktionsschalter. Nur auf dem Prod-Stack einrichten (Dev hat bewusst keine Cronjobs). Einmal täglich ausführen:
 
 ```bash
 crontab -e
