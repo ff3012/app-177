@@ -24,7 +24,15 @@ export async function recordMcpAudit(entry: McpAuditEntry): Promise<void> {
       },
     });
   } catch (error) {
-    console.error('MCP-Prüfprotokoll konnte nicht geschrieben werden:', error);
+    // Nie das ganze Fehlerobjekt loggen: Prisma-Fehler können Argumentwerte (z. B. summary mit Name/E-Mail) enthalten.
+    const code = (error as { code?: unknown } | null)?.code;
+    const safe =
+      typeof code === 'string'
+        ? code
+        : error instanceof Error
+          ? error.message.slice(0, 200)
+          : 'unbekannter Fehler';
+    console.error('MCP-Prüfprotokoll konnte nicht geschrieben werden:', safe);
   }
 }
 

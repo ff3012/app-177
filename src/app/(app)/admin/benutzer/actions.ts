@@ -368,6 +368,7 @@ export async function updateUser(
   // Fehlt das Feld (Formular ohne MCP-Abschnitt), bleibt die bisherige Stufe - nie stillschweigend NONE.
   const nextMcpAccess = data.mcpAccess ?? targetUser.mcpAccess;
   if (nextMcpAccess !== targetUser.mcpAccess) {
+    // Bewusst die ALTE Heimatorganisation: sie deckt canManageUserRecord ab, die neue canManageUsersFor(data.homeOrganizationId).
     assertPermission(
       canGrantMcpAccess(
         currentUser,
@@ -404,7 +405,7 @@ export async function updateUser(
       secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
-      mcpAccess: nextMcpAccess,
+      ...(nextMcpAccess !== targetUser.mcpAccess ? { mcpAccess: nextMcpAccess } : {}),
     },
   });
 
