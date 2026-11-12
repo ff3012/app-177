@@ -10,12 +10,14 @@ import {
   assertPermission,
   canGrantBezirksAdmin,
   canGrantBezirksDrohnenAdmin,
+  canGrantMcpAccess,
   canManageDroneGroupFor,
   canManageUserRecord,
   canManageUsersFor,
   filterRemovableAdminOrgIds,
 } from '@/lib/auth/permissions';
 import { FEUERWEHR_KATEGORIE_LABEL } from '@/lib/organizations/feuerwehr-kategorie';
+import { getMcpAccessOf } from '@/lib/mcp/access-db';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
@@ -230,6 +232,18 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   if (data.isBezirksDrohnenAdmin) {
     assertPermission(canGrantBezirksDrohnenAdmin(currentUser));
   }
+  const requestedMcpAccess = data.mcpAccess ?? 'NONE';
+  if (requestedMcpAccess !== 'NONE') {
+    assertPermission(
+      canGrantMcpAccess(
+        currentUser,
+        await getMcpAccessOf(currentUser.id),
+        { homeOrganizationId: data.homeOrganizationId, mcpAccess: 'NONE' },
+        requestedMcpAccess,
+      ),
+      'Keine Berechtigung, dieses MCP-Recht zu vergeben.',
+    );
+  }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing) {
@@ -255,6 +269,7 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
       secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
+      mcpAccess: requestedMcpAccess,
       passwordHash,
     },
   });
@@ -350,6 +365,19 @@ export async function updateUser(
   if (currentUser.id === userId && targetUser.isBezirksAdmin && !data.isBezirksAdmin) {
     return { error: 'Du kannst dir den Bezirksadmin-Status nicht selbst entziehen.' };
   }
+  // Fehlt das Feld (Formular ohne MCP-Abschnitt), bleibt die bisherige Stufe - nie stillschweigend NONE.
+  const nextMcpAccess = data.mcpAccess ?? targetUser.mcpAccess;
+  if (nextMcpAccess !== targetUser.mcpAccess) {
+    assertPermission(
+      canGrantMcpAccess(
+        currentUser,
+        await getMcpAccessOf(currentUser.id),
+        { homeOrganizationId: targetUser.homeOrganizationId, mcpAccess: targetUser.mcpAccess },
+        nextMcpAccess,
+      ),
+      'Keine Berechtigung, dieses MCP-Recht zu vergeben.',
+    );
+  }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existing && existing.id !== userId) {
@@ -376,6 +404,7 @@ export async function updateUser(
       secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
       isBezirksAdmin: data.isBezirksAdmin,
       isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
+      mcpAccess: nextMcpAccess,
     },
   });
 

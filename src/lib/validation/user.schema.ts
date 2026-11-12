@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MCP_ACCESS_LEVELS, parseMcpAccess } from '@/lib/mcp/access';
 
 export const DRONE_ROLE_OPTIONS = ['NONE', 'PILOT', 'ADMIN'] as const;
 export type DroneRoleOption = (typeof DRONE_ROLE_OPTIONS)[number];
@@ -51,6 +52,8 @@ export const userSchema = z
     isBezirksAdmin: z.boolean(),
     isBezirksDrohnenAdmin: z.boolean(),
     sendWelcomeEmail: z.boolean(),
+    // Optional: fehlt das Feld (Formular ohne MCP-Abschnitt), bleibt der bestehende Wert unverändert.
+    mcpAccess: z.enum(MCP_ACCESS_LEVELS).optional(),
   })
   .refine((data) => !data.isBezirksDrohnenAdmin || data.droneRole === 'ADMIN', {
     message: 'Bezirks-Drohnenadmin erfordert die Rolle "Admin" in der zugeordneten Gruppe.',
@@ -105,5 +108,6 @@ export function parseUserFormData(formData: FormData) {
     isBezirksAdmin: formData.get('isBezirksAdmin') === 'on',
     isBezirksDrohnenAdmin: formData.get('isBezirksDrohnenAdmin') === 'on',
     sendWelcomeEmail: formData.get('sendWelcomeEmail') === 'on',
+    mcpAccess: parseMcpAccess(formData.get('mcpAccess')),
   };
 }
