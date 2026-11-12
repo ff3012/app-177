@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatViennaDay, parseRange } from './drone';
+import { parseRange } from './drone';
 
 describe('parseRange', () => {
   it('nimmt Datumsangaben als Wiener Tagesgrenzen (Sommerzeit)', () => {
@@ -34,12 +34,5 @@ describe('parseRange', () => {
     expect(() => parseRange('kaputt', '2026-03-01')).toThrow(/Ungültiges Datum/);
     expect(() => parseRange('2026-03-02', '2026-03-01')).toThrow(/vor/);
     expect(() => parseRange('2025-01-01', '2026-06-01')).toThrow(/366/);
-  });
-});
-
-describe('formatViennaDay', () => {
-  it('formatiert in Wiener Zeit, nicht in UTC', () => {
-    expect(formatViennaDay(new Date('2026-06-30T22:30:00Z'))).toBe('2026-07-01');
-    expect(formatViennaDay(new Date('2026-01-14T23:30:00Z'))).toBe('2026-01-15');
   });
 });

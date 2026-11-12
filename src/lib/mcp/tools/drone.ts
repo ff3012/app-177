@@ -13,39 +13,9 @@ import {
 import type { SessionUser } from '@/types/next-auth';
 import { clampLimit, decodeCursor, denied, invalid, toPage } from './context';
 import { defineTool } from './define';
+import { formatViennaDay, formatViennaIso, viennaWallTimeToDate } from './vienna-time';
 
 const MAX_RANGE_DAYS = 366;
-const VIENNA = 'Europe/Vienna';
-
-const viennaParts = new Intl.DateTimeFormat('en-US', {
-  timeZone: VIENNA,
-  hourCycle: 'h23',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
-
-/** Versatz von Europe/Vienna gegenüber UTC (in ms) zum gegebenen Zeitpunkt. */
-function viennaOffsetMs(at: Date): number {
-  const p = Object.fromEntries(viennaParts.formatToParts(at).map((part) => [part.type, part.value]));
-  const asUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second));
-  return asUtc - Math.floor(at.getTime() / 1000) * 1000;
-}
-
-/** Wandzeit in Europe/Vienna -> Zeitpunkt (unabhängig von der Server-Zeitzone, auch über Sommerzeitgrenzen). */
-function viennaWallTimeToDate(y: number, m: number, d: number, h: number, min: number, s: number, ms: number): Date {
-  const guess = Date.UTC(y, m - 1, d, h, min, s, ms);
-  const first = guess - viennaOffsetMs(new Date(guess));
-  return new Date(guess - viennaOffsetMs(new Date(first)));
-}
-
-/** Kalendertag `YYYY-MM-DD` in Europe/Vienna (nie über UTC, sonst rutscht ein Tag um Mitternacht). */
-export function formatViennaDay(date: Date): string {
-  return date.toLocaleDateString('en-CA', { timeZone: VIENNA });
-}
 
 function validDay(y: number, m: number, d: number): boolean {
   const check = new Date(Date.UTC(y, m - 1, d));
@@ -109,7 +79,7 @@ async function resolveGroupId(user: SessionUser, requested: string | undefined, 
 export const listDroneFlights = defineTool({
   name: 'list_drone_flights',
   description:
-    'Drohnengruppe: Flugbuch im Zeitraum (Datum, Ort, Drohne, Pilot, Zweck). Mitglieder sehen die eigenen Flüge (selbst geflogen oder erfasst), Gruppenadmins alle Flüge ihrer Gruppe. Zeitraum höchstens 366 Tage. Datumsangaben YYYY-MM-DD gelten als Tage in Wiener Zeit, ISO-Zeitpunkte ohne Zeitzone als Wiener Ortszeit.',
+    'Drohnengruppe: Flugbuch im Zeitraum (Datum, Beginn, Ort, Drohne, Pilot, Zweck). datum = Wiener Kalendertag, beginn = Wiener Ortszeit als ISO-8601 mit Offset (z. B. 2030-06-15T19:30:00+02:00). Mitglieder sehen die eigenen Flüge (selbst geflogen oder erfasst), Gruppenadmins alle Flüge ihrer Gruppe. Zeitraum höchstens 366 Tage. Datumsangaben YYYY-MM-DD gelten als Tage in Wiener Zeit, ISO-Zeitpunkte ohne Zeitzone als Wiener Ortszeit.',
   access: 'READ',
   inputSchema: {
     from: z.string().describe('Beginn, Datum YYYY-MM-DD oder ISO-Zeitpunkt'),
@@ -156,7 +126,8 @@ export const listDroneFlights = defineTool({
       data: {
         items: page.items.map((f) => ({
           id: f.id,
-          datum: f.startsAt.toISOString(),
+          datum: formatViennaDay(f.startsAt),
+          beginn: formatViennaIso(f.startsAt),
           ort: f.location,
           drohne: f.drone.name,
           pilot: `${f.pilotUser.lastName} ${f.pilotUser.firstName}`,

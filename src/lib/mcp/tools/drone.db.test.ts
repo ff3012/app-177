@@ -124,6 +124,28 @@ describe('list_drone_flights', () => {
     expect(places).toEqual([`${RUN} C`]);
   });
 
+  it('liefert Beginn als Wiener Ortszeit mit Offset und das Datum als Wiener Kalendertag', async () => {
+    const created = await prisma.droneFlight.create({
+      data: {
+        startsAt: new Date('2030-06-15T22:30:00Z'),
+        pilotUserId: ids.pilot,
+        location: `${RUN} spaet`,
+        droneId: drone.id,
+        purpose: 'UEBUNG',
+        registeredById: ids.pilot,
+      },
+    });
+    try {
+      const data = (await listDroneFlights.handler({ principal: principalFixture(memberUser('pilot')) }, { from: '2030-06-01', to: '2030-06-30' })).data as {
+        items: { id: string; datum: string; beginn: string }[];
+      };
+      const item = data.items.find((f) => f.id === created.id);
+      expect(item).toMatchObject({ datum: '2030-06-16', beginn: '2030-06-16T00:30:00+02:00' });
+    } finally {
+      await prisma.droneFlight.deleteMany({ where: { id: created.id } });
+    }
+  });
+
   it('lehnt Benutzer ohne Zugriff auf das Drohnenmodul und fremde Gruppen ab', async () => {
     await expect(listDroneFlights.handler({ principal: principalFixture(sessionUserFixture({ id: ids.ohne })) }, WIDE)).rejects.toMatchObject({ kind: 'denied' });
     await expect(

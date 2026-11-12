@@ -30,6 +30,8 @@ const ALL_KEYS = [
   'drohne-eigene-org',
   'sondergruppe',
   'ausserhalb',
+  'ganztag',
+  'abend',
 ];
 
 async function event(key: string, data: Record<string, unknown>) {
@@ -88,6 +90,9 @@ beforeAll(async () => {
   // Technisch in der eigenen Feuerwehr/abschnittsweit, aber Drohnengruppe B: Nicht-Mitglieder und Gruppe A dürfen es nie sehen.
   await event('drohne-eigene-org', { organizationId: orgA.id, isSectionWide: true, category: 'DROHNENGRUPPE', droneGroupId: groupB.id });
   await event('sondergruppe', { organizationId: orgA.id, sondergruppeId });
+  // Ganztägig am 15.6. (Wiener Mitternacht, 22:00 UTC am Vortag) und ein Abendtermin kurz vor Wiener Mitternacht.
+  await event('ganztag', { organizationId: orgA.id, allDay: true, startsAt: new Date('2030-06-14T22:00:00Z'), endsAt: new Date('2030-06-15T21:59:59Z') });
+  await event('abend', { organizationId: orgA.id, startsAt: new Date('2030-06-15T21:30:00Z'), endsAt: new Date('2030-06-15T22:30:00Z') });
   await event('ausserhalb', { organizationId: orgA.id, startsAt: new Date('2030-09-15T10:00:00Z'), endsAt: new Date('2030-09-15T12:00:00Z') });
 });
 
@@ -105,6 +110,8 @@ const foreignMember = (overrides = {}) =>
 
 type Item = {
   titel: string;
+  datum: string;
+  ganztaegig: boolean;
   beginn: string;
   ende: string;
   kategorie: string;
@@ -126,7 +133,7 @@ const titles = (r: Result) =>
 
 describe('list_calendar_events', () => {
   it('zeigt einem Mitglied eigene Feuerwehr, Abschnitt und Bezirk - nicht fremde Termine und keine Drohnengruppen-Termine', async () => {
-    expect(titles(await call(member()))).toEqual(['abschnitt', 'bezirk', 'eigen', 'sondergruppe']);
+    expect(titles(await call(member()))).toEqual(['abend', 'abschnitt', 'bezirk', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('zeigt Mitgliedern eines anderen Abschnitts nur deren Feuerwehr, Abschnitt und den Bezirk', async () => {
@@ -135,26 +142,26 @@ describe('list_calendar_events', () => {
 
   it('gibt Feuerwehr-, Abschnitts- und Bezirksadmins keine zusätzliche Sicht über die App hinaus', async () => {
     const feuerwehrAdmin = await call(member({ feuerwehrAdminOrgIds: [orgA.id] }));
-    expect(titles(feuerwehrAdmin)).toEqual(['abschnitt', 'bezirk', 'eigen', 'sondergruppe']);
+    expect(titles(feuerwehrAdmin)).toEqual(['abend', 'abschnitt', 'bezirk', 'eigen', 'ganztag', 'sondergruppe']);
     const abschnittsAdmin = await call(member({ abschnittAdminOrgIds: [abschnitt.id], feuerwehrAdminOrgIds: [abschnitt.id, orgA.id, orgB.id] }));
-    expect(titles(abschnittsAdmin)).toEqual(['abschnitt', 'bezirk', 'eigen', 'sondergruppe']);
+    expect(titles(abschnittsAdmin)).toEqual(['abend', 'abschnitt', 'bezirk', 'eigen', 'ganztag', 'sondergruppe']);
     const bezirksAdmin = await call(member({ isBezirksAdmin: true }));
-    expect(titles(bezirksAdmin)).toEqual(['abschnitt', 'bezirk', 'eigen', 'sondergruppe']);
+    expect(titles(bezirksAdmin)).toEqual(['abend', 'abschnitt', 'bezirk', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('zeigt Mitgliedern der Drohnengruppe A deren Termine und bezirksweite, nicht die der Gruppe B', async () => {
     const result = await call(member({ isDrohnengruppeMember: true, droneGroupId: groupA.id, droneGroupRole: 'PILOT' }));
-    expect(titles(result)).toEqual(['abschnitt', 'bezirk', 'drohne-a', 'drohne-bezirk', 'eigen', 'sondergruppe']);
+    expect(titles(result)).toEqual(['abend', 'abschnitt', 'bezirk', 'drohne-a', 'drohne-bezirk', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('zeigt Mitgliedern der Drohnengruppe B deren Termine, auch wenn sie technisch an der eigenen Feuerwehr hängen', async () => {
     const result = await call(member({ isDrohnengruppeMember: true, droneGroupId: groupB.id, droneGroupRole: 'ADMIN' }));
-    expect(titles(result)).toEqual(['abschnitt', 'bezirk', 'drohne-b', 'drohne-bezirk', 'drohne-eigene-org', 'eigen', 'sondergruppe']);
+    expect(titles(result)).toEqual(['abend', 'abschnitt', 'bezirk', 'drohne-b', 'drohne-bezirk', 'drohne-eigene-org', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('zeigt dem Bezirks-Drohnenadmin ohne Gruppe nur bezirksweite Drohnengruppen-Termine', async () => {
     const result = await call(member({ isBezirksDrohnenAdmin: true }));
-    expect(titles(result)).toEqual(['abschnitt', 'bezirk', 'drohne-bezirk', 'eigen', 'sondergruppe']);
+    expect(titles(result)).toEqual(['abend', 'abschnitt', 'bezirk', 'drohne-bezirk', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('versteckt Drohnengruppen-Termine vor Nicht-Mitgliedern, auch wenn sie an der eigenen Feuerwehr hängen', async () => {
@@ -167,7 +174,7 @@ describe('list_calendar_events', () => {
   it('kann die Sicht über organizationId nicht erweitern', async () => {
     expect(titles(await call(member(), { organizationId: foreignOrg.id }))).toEqual(['bezirk']);
     expect(titles(await call(member(), { organizationId: orgB.id }))).toEqual(['abschnitt']);
-    expect(titles(await call(member(), { organizationId: orgA.id }))).toEqual(['eigen', 'sondergruppe']);
+    expect(titles(await call(member(), { organizationId: orgA.id }))).toEqual(['abend', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('filtert nach Sondergruppe und Zeitraum', async () => {
@@ -180,14 +187,19 @@ describe('list_calendar_events', () => {
     const result = await call(member({ isDrohnengruppeMember: true, droneGroupId: groupA.id, droneGroupRole: 'PILOT' }));
     const find = (key: string) => result.items.find((i) => i.titel === `${RUN} ${key}`)!;
     expect(find('eigen')).toMatchObject({
-      beginn: START.toISOString(),
-      ende: END.toISOString(),
+      datum: '2030-06-15',
+      beginn: '2030-06-15T12:00:00+02:00',
+      ende: '2030-06-15T14:00:00+02:00',
       kategorie: 'Allgemein',
       abschnittsweit: false,
       bezirksweit: false,
       sondergruppe: null,
       drohnengruppe: null,
     });
+    // Ganztägig: Wiener Datum/Offset statt UTC (sonst "14. Juni, 22:00Z").
+    expect(find('ganztag')).toMatchObject({ ganztaegig: true, datum: '2030-06-15', beginn: '2030-06-15T00:00:00+02:00', ende: '2030-06-15T23:59:59+02:00' });
+    // Abendtermin: 23:30 Wiener Zeit am 15.6., obwohl UTC erst 21:30.
+    expect(find('abend')).toMatchObject({ ganztaegig: false, datum: '2030-06-15', beginn: '2030-06-15T23:30:00+02:00', ende: '2030-06-16T00:30:00+02:00' });
     expect(find('bezirk').bezirksweit).toBe(true);
     expect(find('abschnitt').abschnittsweit).toBe(true);
     expect(find('sondergruppe').sondergruppe).toBe(RUN);
@@ -218,20 +230,53 @@ describe('list_calendar_events', () => {
     } finally {
       await prisma.event.deleteMany({ where: { id: long.id } });
     }
+
+    // Kürzen zerreißt kein Surrogatpaar: 999 Zeichen + 5 Emojis -> 999 + 1 Emoji.
+    const emoji = await prisma.event.create({
+      data: {
+        title: `${RUN} emoji`,
+        startsAt: START,
+        endsAt: END,
+        createdById: creatorId!,
+        organizationId: orgA.id,
+        description: 'x'.repeat(999) + '😀'.repeat(5),
+      },
+    });
+    try {
+      const result = await call(member(), { includeDescription: true });
+      const text = result.items.find((i) => i.titel === `${RUN} emoji`)?.beschreibung ?? '';
+      expect(Array.from(text)).toHaveLength(1000);
+      expect(text.endsWith('😀')).toBe(true);
+      expect(/[�-�](?![�-�])|(?<![�-�])[�-�]/.test(text)).toBe(false);
+    } finally {
+      await prisma.event.deleteMany({ where: { id: emoji.id } });
+    }
   });
 
   it('blättert über Seiten', async () => {
+    const first = await call(member(), { limit: 1 });
+    expect(first.items).toHaveLength(1);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await call(member(), { limit: 1, cursor: first.nextCursor! });
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0].titel).not.toBe(first.items[0].titel);
+
+    // Vollständiger Durchlauf mit großen Seiten; die lokale Datenbank kann weitere Termine im Zeitraum enthalten.
     const seen: string[] = [];
     let cursor: string | undefined;
-    for (let page = 0; page < 20; page++) {
-      const result = await call(member(), { limit: 1, ...(cursor ? { cursor } : {}) });
-      expect(result.items.length).toBeLessThanOrEqual(1);
+    let finished = false;
+    for (let page = 0; page < 1000; page++) {
+      const result = await call(member(), { limit: 50, ...(cursor ? { cursor } : {}) });
       seen.push(...result.items.map((i) => i.titel));
-      if (!result.nextCursor) break;
+      if (!result.nextCursor) {
+        finished = true;
+        break;
+      }
       cursor = result.nextCursor;
     }
+    expect(finished).toBe(true);
     expect(new Set(seen).size).toBe(seen.length);
-    expect(seen.map((t) => t.replace(`${RUN} `, '')).filter((t) => ALL_KEYS.includes(t)).sort()).toEqual(['abschnitt', 'bezirk', 'eigen', 'sondergruppe']);
+    expect(seen.map((t) => t.replace(`${RUN} `, '')).filter((t) => ALL_KEYS.includes(t)).sort()).toEqual(['abend', 'abschnitt', 'bezirk', 'eigen', 'ganztag', 'sondergruppe']);
   });
 
   it('verlangt einen gültigen Zeitraum von höchstens 366 Tagen', async () => {
