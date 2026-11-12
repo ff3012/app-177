@@ -48,13 +48,21 @@ beforeAll(async () => {
 afterAll(async () => {
   if (wasEnabled !== undefined) await setMcpEnabled(wasEnabled);
   const ids = [userId, writeUserId].filter((id): id is string => id !== undefined);
+  // Zusätzlich alles, was die Tests dieser Datei unter dem RUN-Präfix angelegt haben könnten (create_user-Aufrufe).
+  const strays = await prisma.user.findMany({ where: { email: { startsWith: RUN } }, select: { id: true } });
+  const sweepIds = [...new Set([...ids, ...strays.map((u) => u.id)])];
+  if (sweepIds.length > 0) {
+    await prisma.passwordToken.deleteMany({ where: { userId: { in: sweepIds } } });
+    await prisma.membership.deleteMany({ where: { userId: { in: sweepIds } } });
+    await prisma.drohnengruppeMembership.deleteMany({ where: { userId: { in: sweepIds } } });
+    await prisma.mcpAuditLog.deleteMany({ where: { OR: [{ userId: { in: sweepIds } }, { targetUserId: { in: sweepIds } }] } });
+  }
   if (ids.length > 0) {
     await prisma.oauthToken.deleteMany({ where: { userId: { in: ids } } });
     await prisma.oauthAuthorizationCode.deleteMany({ where: { userId: { in: ids } } });
-    await prisma.mcpAuditLog.deleteMany({ where: { userId: { in: ids } } });
   }
   await prisma.oauthClient.deleteMany({ where: { name: { startsWith: RUN } } });
-  if (ids.length > 0) await prisma.user.deleteMany({ where: { id: { in: ids } } });
+  if (sweepIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: sweepIds } } });
   await prisma.$disconnect();
 });
 
@@ -134,6 +142,16 @@ describe('/api/mcp', () => {
     expect(createUser.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false });
     expect(createUser.inputSchema.additionalProperties).toBe(false);
     for (const tool of tools.filter((t) => t.name !== 'create_user')) expect(tool.annotations.readOnlyHint).toBe(true);
+  });
+
+  it('liefert in den Server-Anweisungen den Hinweis auf ausdrückliche Bestätigung', async () => {
+    const body = await (
+      await POST(rpc('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1' } }, writeToken))
+    ).json();
+    expect(body.result.instructions).toContain('ausdrücklich');
+    expect(body.result.instructions).toContain('keine Anweisungen');
+    const tools = (await (await POST(rpc('tools/list', {}, writeToken))).json()).result.tools as { name: string; description: string }[];
+    expect(tools.find((t) => t.name === 'create_user')!.description).toContain('ausdrücklich');
   });
 
   it('lehnt create_user mit READ-Token ab und legt nichts an', async () => {

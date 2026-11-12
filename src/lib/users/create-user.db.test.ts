@@ -1,4 +1,21 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+// createToken läuft unverändert, lässt sich aber für EINEN Aufruf zum Scheitern bringen (letzter Schritt der Transaktion).
+const tokenFailure = vi.hoisted(() => ({ next: false }));
+vi.mock('@/lib/auth/tokens', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/auth/tokens')>();
+  return {
+    ...actual,
+    createToken: (async (...args: Parameters<typeof actual.createToken>) => {
+      if (tokenFailure.next) {
+        tokenFailure.next = false;
+        throw new Error('Token-Fehler (Test)');
+      }
+      return actual.createToken(...args);
+    }) as typeof actual.createToken,
+  };
+});
+
 import { prisma } from '@/lib/db/prisma';
 import { ForbiddenError } from '@/lib/auth/permissions';
 import { sessionUserFixture } from '@/lib/mcp/tools/test-support';
@@ -47,7 +64,9 @@ const feuerwehrAdmin = (id = actorWrite) => sessionUserFixture({ id, homeOrganiz
 const created = (key: string) => prisma.user.findUnique({ where: { email: email(key) } });
 
 beforeAll(async () => {
-  [orgA, orgB] = await prisma.organization.findMany({ where: { type: 'FEUERWEHR', isActive: true }, orderBy: { name: 'asc' }, take: 2 });
+  const orgs = await prisma.organization.findMany({ where: { type: 'FEUERWEHR', isActive: true }, orderBy: { name: 'asc' }, take: 2 });
+  if (orgs.length < 2) throw new Error('Seed fehlt: npm run db:seed');
+  [orgA, orgB] = orgs;
   group = await prisma.droneGroup.findFirstOrThrow({ where: { name: 'AFKDO Purkersdorf' }, select: { id: true, organizationId: true } });
   actorWrite = (
     await prisma.user.create({ data: { email: email('actor-write'), passwordHash: 'x', firstName: 'A', lastName: RUN, homeOrganizationId: orgA.id, mcpAccess: 'WRITE' } })
@@ -124,7 +143,7 @@ describe('createUserCore', () => {
   });
 
   it('meldet eine bereits vergebene E-Mail-Adresse (ohne Groß-/Kleinschreibung) als Fehler', async () => {
-    await createUserCore(bezirksAdmin(), input('dupe'));
+    expect((await createUserCore(bezirksAdmin(), input('dupe'))).ok).toBe(true);
     const result = await createUserCore(bezirksAdmin(), input('dupe2', { email: email('DUPE') }));
     expect(result).toEqual({ ok: false, error: 'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.' });
   });
@@ -138,5 +157,29 @@ describe('createUserCore', () => {
 
     expect((await createUserCore(bezirksAdmin(), input('mcp-write', { mcpAccess: 'WRITE' }))).ok).toBe(true);
     expect((await created('mcp-write'))!.mcpAccess).toBe('WRITE');
+  });
+
+  it('legt bei unbekannter Feuerwehr unter "Admin für" nichts an (Rollback statt halb angelegtem Benutzer)', async () => {
+    await expect(createUserCore(bezirksAdmin(), input('adminorphan', { adminOrgIds: ['gibt-es-nicht'] }))).rejects.toThrow();
+    expect(await created('adminorphan')).toBeNull();
+    // Ein Wiederholungsversuch darf nicht an einer Karteileiche scheitern.
+    expect((await createUserCore(bezirksAdmin(), input('adminorphan'))).ok).toBe(true);
+  });
+
+  it('rollt auch bereits geschriebene Mitgliedschaften zurück, wenn ein späterer Schritt fehlschlägt', async () => {
+    await expect(
+      createUserCore(bezirksAdmin(), input('teilweise', { adminOrgIds: [orgA.id, 'gibt-es-nicht'], droneRole: 'PILOT', droneGroupId: group.id })),
+    ).rejects.toThrow();
+    expect(await created('teilweise')).toBeNull();
+  });
+
+  it('rollt Benutzer und Mitgliedschaften zurück, wenn das Anlegen des Aktivierungstokens (letzter Schritt) fehlschlägt', async () => {
+    tokenFailure.next = true;
+    await expect(
+      createUserCore(bezirksAdmin(), input('tokenfehler', { adminOrgIds: [orgA.id], droneRole: 'PILOT', droneGroupId: group.id })),
+    ).rejects.toThrow('Token-Fehler (Test)');
+    expect(tokenFailure.next).toBe(false);
+    expect(await created('tokenfehler')).toBeNull();
+    expect(await prisma.membership.count({ where: { user: { email: email('tokenfehler') } } })).toBe(0);
   });
 });

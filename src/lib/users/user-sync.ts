@@ -1,4 +1,4 @@
-import { DroneRole, MembershipRole } from '@prisma/client';
+import { DroneRole, MembershipRole, type Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
   assertPermission,
@@ -34,8 +34,13 @@ export function canGrantAdminFor(currentUser: SessionUser, adminOrgIds: string[]
  * löschende Menge jetzt explizit ermittelt und auf Organisationen im eigenen Verwaltungsbereich gefiltert:
  * eine Mitgliedschaft für eine Organisation, über die der Aufrufer kein Recht hat, bleibt unangetastet.
  */
-export async function syncAdminMemberships(currentUser: SessionUser, userId: string, adminOrgIds: string[]) {
-  const existingAdminMemberships = await prisma.membership.findMany({
+export async function syncAdminMemberships(
+  currentUser: SessionUser,
+  userId: string,
+  adminOrgIds: string[],
+  db: Prisma.TransactionClient | PrismaClient = prisma,
+) {
+  const existingAdminMemberships = await db.membership.findMany({
     where: { userId, role: MembershipRole.ADMIN },
     select: { organizationId: true },
   });
@@ -46,12 +51,12 @@ export async function syncAdminMemberships(currentUser: SessionUser, userId: str
   );
 
   if (removableOrgIds.length > 0) {
-    await prisma.membership.deleteMany({
+    await db.membership.deleteMany({
       where: { userId, role: MembershipRole.ADMIN, organizationId: { in: removableOrgIds } },
     });
   }
   for (const organizationId of adminOrgIds) {
-    await prisma.membership.upsert({
+    await db.membership.upsert({
       where: { userId_organizationId_role: { userId, organizationId, role: MembershipRole.ADMIN } },
       update: {},
       create: { userId, organizationId, role: MembershipRole.ADMIN },
@@ -95,8 +100,9 @@ export async function syncDroneMembership(
   droneRole: DroneRoleOption,
   droneGroupId: string | null,
   ausbildung: AusbildungsDaten,
+  db: Prisma.TransactionClient | PrismaClient = prisma,
 ) {
-  const existing = await prisma.drohnengruppeMembership.findUnique({ where: { userId } });
+  const existing = await db.drohnengruppeMembership.findUnique({ where: { userId } });
   const currentRole: DroneRoleOption = !existing ? 'NONE' : existing.role === DroneRole.ADMIN ? 'ADMIN' : 'PILOT';
   const currentGroupId = existing?.droneGroupId ?? null;
   const targetGroupId = droneRole === 'NONE' ? null : droneGroupId;
@@ -117,7 +123,7 @@ export async function syncDroneMembership(
     new Set([currentGroupId, targetGroupId].filter((id): id is string => Boolean(id))),
   );
   for (const groupId of affectedGroupIds) {
-    const group = await prisma.droneGroup.findUnique({
+    const group = await db.droneGroup.findUnique({
       where: { id: groupId },
       select: { id: true, organizationId: true },
     });
@@ -128,7 +134,7 @@ export async function syncDroneMembership(
   }
 
   if (droneRole === 'NONE') {
-    await prisma.drohnengruppeMembership.deleteMany({ where: { userId } });
+    await db.drohnengruppeMembership.deleteMany({ where: { userId } });
     return;
   }
   if (!droneGroupId) {
@@ -136,7 +142,7 @@ export async function syncDroneMembership(
   }
   const role = droneRole === 'ADMIN' ? DroneRole.ADMIN : DroneRole.PILOT;
   const ausbildungUpdate = toAusbildungsUpdate(ausbildung);
-  await prisma.drohnengruppeMembership.upsert({
+  await db.drohnengruppeMembership.upsert({
     where: { userId },
     update: { role, droneGroupId, ...ausbildungUpdate },
     create: { userId, role, droneGroupId, ...ausbildungUpdate },

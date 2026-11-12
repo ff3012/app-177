@@ -22,7 +22,12 @@ import {
 } from './user-sync';
 
 export type CreateUserResult =
-  | { ok: true; user: { id: string; email: string; firstName: string; lastName: string }; activationToken: string }
+  | {
+      ok: true;
+      user: { id: string; email: string; firstName: string; lastName: string };
+      /** Geheimnis - nie loggen, nie in Antworten/Audit ausgeben. */
+      activationToken: string;
+    }
   | { ok: false; error?: string; fieldErrors?: FieldErrors };
 
 /**
@@ -72,37 +77,51 @@ export async function createUserCore(currentUser: SessionUser, data: UserInput):
 
   // Unbenutzbarer Platzhalter-Hash: der Benutzer setzt sein eigenes Passwort über den Aktivierungslink.
   const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
-  const user = await prisma.user.create({
-    data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email.toLowerCase(),
-      stbNr: data.stbNr || null,
-      phone: data.phone || null,
-      isActive: false,
-      istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
-      dienstgradId: data.dienstgradId || null,
-      homeOrganizationId: data.homeOrganizationId,
-      secondaryOrganizationId: data.secondaryOrganizationId || null,
-      // Ohne zweite Feuerwehr darf kein Dienstgrad dafür bestehen bleiben - siehe Kommentar bei
-      // updateUser, dieselbe Regel gilt hier fürs Anlegen.
-      secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
-      isBezirksAdmin: data.isBezirksAdmin,
-      isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
-      mcpAccess: requestedMcpAccess,
-      passwordHash,
-    },
+  // Anlegen, Rollen und Aktivierungstoken in EINER Transaktion: schlägt ein späterer Schritt fehl (z. B. eine
+  // unbekannte Feuerwehr bei "Admin für", FK-Verletzung), bleibt kein halb angelegter, inaktiver Benutzer ohne
+  // Token zurück. ForbiddenError aus den Sync-Funktionen läuft unverändert durch (mit Rollback). bcrypt läuft
+  // bewusst VOR der Transaktion, damit sie nur kurz offen ist.
+  const { user, activationToken } = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email.toLowerCase(),
+        stbNr: data.stbNr || null,
+        phone: data.phone || null,
+        isActive: false,
+        istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
+        dienstgradId: data.dienstgradId || null,
+        homeOrganizationId: data.homeOrganizationId,
+        secondaryOrganizationId: data.secondaryOrganizationId || null,
+        // Ohne zweite Feuerwehr darf kein Dienstgrad dafür bestehen bleiben - siehe Kommentar bei
+        // updateUser, dieselbe Regel gilt hier fürs Anlegen.
+        secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
+        isBezirksAdmin: data.isBezirksAdmin,
+        isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
+        mcpAccess: requestedMcpAccess,
+        passwordHash,
+      },
+    });
+
+    await syncAdminMemberships(currentUser, created.id, data.adminOrgIds, tx);
+    await syncDroneMembership(
+      currentUser,
+      created.id,
+      data.droneRole,
+      data.droneGroupId,
+      {
+        a1a3LizenzAm: data.a1a3LizenzAm,
+        a2LizenzAm: data.a2LizenzAm,
+        stuetzpunktausbildungAm: data.stuetzpunktausbildungAm,
+        bos1AusbildungAm: data.bos1AusbildungAm,
+        bos2AusbildungAm: data.bos2AusbildungAm,
+      },
+      tx,
+    );
+    const token = await createToken(created.id, TokenPurpose.ACTIVATION, tx);
+    return { user: created, activationToken: token };
   });
 
-  await syncAdminMemberships(currentUser, user.id, data.adminOrgIds);
-  await syncDroneMembership(currentUser, user.id, data.droneRole, data.droneGroupId, {
-    a1a3LizenzAm: data.a1a3LizenzAm,
-    a2LizenzAm: data.a2LizenzAm,
-    stuetzpunktausbildungAm: data.stuetzpunktausbildungAm,
-    bos1AusbildungAm: data.bos1AusbildungAm,
-    bos2AusbildungAm: data.bos2AusbildungAm,
-  });
-
-  const activationToken = await createToken(user.id, TokenPurpose.ACTIVATION);
   return { ok: true, user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName }, activationToken };
 }

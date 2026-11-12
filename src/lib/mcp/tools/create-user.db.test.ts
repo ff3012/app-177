@@ -34,8 +34,10 @@ const created = (key: string) => prisma.user.findUnique({ where: { email: email(
 
 beforeAll(async () => {
   const orgs = await prisma.organization.findMany({ where: { type: 'FEUERWEHR', isActive: true, parentId: { not: null } }, orderBy: { name: 'asc' } });
+  if (orgs.length < 2) throw new Error('Seed fehlt: npm run db:seed');
   orgA = orgs[0];
   orgB = orgs.find((o) => o.parentId !== orgA.parentId)!;
+  if (!orgB) throw new Error('Seed fehlt: npm run db:seed (zwei Abschnitte erwartet)');
   group = await prisma.droneGroup.findFirstOrThrow({ where: { name: 'AFKDO Purkersdorf' } });
   const mk = (key: string) =>
     prisma.user.create({ data: { email: email(key), passwordHash: 'x', firstName: 'Akteur', lastName: RUN, homeOrganizationId: orgA.id, mcpAccess: 'WRITE' } });
@@ -62,6 +64,34 @@ afterAll(async () => {
 });
 
 describe('create_user', () => {
+  it('verlangt in der Beschreibung ausdrückliche Bestätigung durch den Benutzer', () => {
+    expect(createUserTool.description).toContain('ausdrücklich');
+    expect(createUserTool.description).toContain('Heimatfeuerwehr und Rollen');
+  });
+
+  it('lehnt eine unbekannte Feuerwehr unter "Admin für" ab (auch als Bezirksadmin) und legt nichts an', async () => {
+    await expect(run('adminunbekannt', { adminOrgIds: [orgA.id, 'gibt-es-nicht'] }, bezirksadmin())).rejects.toMatchObject({
+      kind: 'invalid',
+      message: 'Admin-Feuerwehr wurde nicht gefunden.',
+    });
+    expect(await created('adminunbekannt')).toBeNull();
+    expect(sendActivationEmail).not.toHaveBeenCalled();
+  });
+
+  it('dedupliziert "Admin für" (doppelte Feuerwehr-ID ist kein Fehler)', async () => {
+    await run('admindoppelt', { adminOrgIds: [orgA.id, orgA.id] }, bezirksadmin());
+    const row = await created('admindoppelt');
+    expect(await prisma.membership.count({ where: { userId: row!.id } })).toBe(1);
+  });
+
+  it('entfernt Steuerzeichen aus dem Prüfprotokoll-Text (Zeilenumbruch, ANSI-Escape)', async () => {
+    const result = await run('steuer', { firstName: 'Neu\nZeile', lastName: `${RUN}\u001b[31mrot\r\tX` });
+    const summary = result.audit!.summary;
+    expect(summary).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+    expect(summary).toContain('Neu Zeile');
+    expect(summary).toContain(email('steuer'));
+  });
+
   it('legt den Benutzer an, sendet die Willkommens-Mail nur an ihn und gibt nie Token oder Link aus', async () => {
     const result = await run('ok');
     const row = await created('ok');
