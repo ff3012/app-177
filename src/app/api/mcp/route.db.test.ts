@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/db/prisma';
 import { isMcpEnabled, setMcpEnabled } from '@/lib/mcp/enabled';
 import { issueTestToken } from '@/lib/mcp/test-support-db';
-import { OPTIONS, POST } from './route';
+import { DELETE, GET, OPTIONS, POST } from './route';
 
 const RUN = `mcp-route-${Date.now()}`;
 let userId: string | undefined;
@@ -52,11 +52,54 @@ describe('/api/mcp', () => {
     expect(response.headers.get('WWW-Authenticate')).toBe(
       'Bearer resource_metadata="https://app-17.example.test/.well-known/oauth-protected-resource/api/mcp"',
     );
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(await response.json()).toMatchObject({ error: 'invalid_token' });
+  });
+
+  it('nennt bei ungültigem Token error="invalid_token" in der Herausforderung', async () => {
+    const response = await POST(rpc('tools/list', {}, 'ungueltig'));
+    expect(response.status).toBe(401);
+    expect(response.headers.get('WWW-Authenticate')).toBe(
+      'Bearer error="invalid_token", resource_metadata="https://app-17.example.test/.well-known/oauth-protected-resource/api/mcp"',
+    );
+  });
+
+  it('antwortet bei Stufe NONE mit 403 und insufficient_scope', async () => {
+    await prisma.user.update({ where: { id: userId! }, data: { mcpAccess: 'NONE' } });
+    try {
+      const response = await POST(rpc('tools/list', {}, readToken));
+      expect(response.status).toBe(403);
+      expect(response.headers.get('WWW-Authenticate')).toBe(
+        'Bearer error="insufficient_scope", resource_metadata="https://app-17.example.test/.well-known/oauth-protected-resource/api/mcp"',
+      );
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response.json()).toMatchObject({ error: 'insufficient_scope' });
+    } finally {
+      await prisma.user.update({ where: { id: userId! }, data: { mcpAccess: 'READ' } });
+    }
+  });
+
+  it('antwortet auf GET und DELETE mit 405 (ohne offenen Stream)', async () => {
+    for (const handler of [GET, DELETE]) {
+      const response = await handler(
+        new Request('http://localhost/api/mcp', {
+          method: handler === GET ? 'GET' : 'DELETE',
+          headers: { Accept: 'text/event-stream', Authorization: `Bearer ${readToken}` },
+        }),
+      );
+      expect(response.status).toBe(405);
+      expect(response.headers.get('Allow')).toBe('POST, OPTIONS');
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect((await response.json()).error.code).toBe(-32000);
+    }
   });
 
   it('listet mit gültigem Token die Werkzeuge der Stufe (READ: keine Schreibwerkzeuge)', async () => {
     const response = await POST(rpc('tools/list', {}, readToken));
     expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     const body = await response.json();
     const names = body.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('list_organizations');
@@ -76,7 +119,11 @@ describe('/api/mcp', () => {
   it('antwortet bei ausgeschaltetem Funktionsschalter mit 404', async () => {
     await setMcpEnabled(false);
     try {
-      expect((await POST(rpc('tools/list', {}, readToken))).status).toBe(404);
+      const response = await POST(rpc('tools/list', {}, readToken));
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect((await GET(new Request('http://localhost/api/mcp', { method: 'GET' }))).status).toBe(404);
     } finally {
       await setMcpEnabled(true);
     }
