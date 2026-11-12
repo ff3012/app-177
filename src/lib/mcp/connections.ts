@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/db/prisma';
+import { assertPermission, canManageUserRecord } from '@/lib/auth/permissions';
+import type { SessionUser } from '@/types/next-auth';
 import { isMcpEnabled } from './enabled';
 import { revokeTokensOfUser } from './oauth/service';
 
@@ -44,6 +46,28 @@ export async function listConnections(userId: string, now: Date = new Date()): P
 export async function revokeConnection(userId: string, oauthClientId: string): Promise<number> {
   if (!oauthClientId) return 0;
   return revokeTokensOfUser(userId, oauthClientId);
+}
+
+/**
+ * Admin-Weg: sperrt ALLE Verbindungen (alle Clients) eines Benutzers - bewusst ohne Client-Filter, ein einzelner Client
+ * wird hier nie gemeint (dafür gibt es revokeConnection). Wer das darf, folgt der Regel für den Datensatz
+ * (canManageUserRecord: eigener Verwaltungsbereich und nicht höhere Rechtestufe); sonst wirft assertPermission einen
+ * ForbiddenError. Der Akteur kommt vom Aufrufer (aus der Sitzung), nie aus Formularfeldern.
+ */
+export async function revokeAllConnectionsAs(
+  actor: SessionUser,
+  userId: string,
+): Promise<{ error?: string; revoked?: number }> {
+  if (typeof userId !== 'string' || !userId) return { error: 'Benutzer wurde nicht gefunden.' };
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, homeOrganizationId: true, isBezirksAdmin: true, isBezirksDrohnenAdmin: true },
+  });
+  if (!target) return { error: 'Benutzer wurde nicht gefunden.' };
+  assertPermission(canManageUserRecord(actor, target));
+  // Kein Client-Filter: revokeTokensOfUser ohne zweiten Parameter widerruft alle gültigen Token dieses Benutzers.
+  const revoked = await revokeTokensOfUser(target.id);
+  return { revoked };
 }
 
 /** Soll der Menüeintrag "Verbundene KI-Apps" erscheinen? Schalter an UND der Benutzer hat ein MCP-Recht. */

@@ -27,7 +27,7 @@ import { OrgSearchSelect } from '@/components/admin/org-search-select';
 import { formatRelativeDate } from '@/lib/format';
 import { mcpRank, type McpAccessLevel } from '@/lib/mcp/access';
 import { DRONE_ROLE_OPTIONS, userSchema, type DroneRoleOption, type UserInput } from '@/lib/validation/user.schema';
-import { createUser, updateUser, deleteUser, sendPasswordResetEmailToUser } from '@/app/(app)/admin/benutzer/actions';
+import { createUser, updateUser, deleteUser, sendPasswordResetEmailToUser, revokeMcpTokens } from '@/app/(app)/admin/benutzer/actions';
 
 const RESET_COOLDOWN_MS = 60_000;
 
@@ -185,6 +185,7 @@ export function UserFormSheet({
   const [resetSent, setResetSent] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+  const [revokePending, setRevokePending] = useState(false);
   const resetCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
@@ -349,6 +350,24 @@ export function UserFormSheet({
     // (sendPasswordResetEmailToUser) schützt unabhängig davon vor tatsächlichem Spam.
     setResetSent(true);
     resetCooldownRef.current = setTimeout(() => setResetSent(false), RESET_COOLDOWN_MS);
+  }
+
+  async function handleRevokeMcp() {
+    if (!target) return;
+    setRevokePending(true);
+    try {
+      const result = await revokeMcpTokens(target.id);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(result.revoked ? 'Alle Verbindungen gesperrt.' : 'Es gab keine aktiven Verbindungen.');
+    } catch {
+      // Der Server lehnt z. B. einen Datensatz außerhalb des eigenen Verwaltungsbereichs mit einem Fehler ab.
+      toast.error('Die Verbindungen konnten nicht gesperrt werden (keine Berechtigung?).');
+    } finally {
+      setRevokePending(false);
+    }
   }
 
   async function handleDelete() {
@@ -852,6 +871,14 @@ export function UserFormSheet({
                           )}
                         />
                       </div>
+                      {mode === 'edit' && target && (
+                        <div className="flex items-center justify-between gap-3.5 border-t border-line px-3.5 py-3">
+                          <div className="text-[13px] text-ink-muted">Beendet alle bestehenden Verbindungen dieses Benutzers sofort.</div>
+                          <Button type="button" variant="outline" disabled={pending || revokePending} onClick={handleRevokeMcp}>
+                            Verbindungen sperren
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </section>
                 )}

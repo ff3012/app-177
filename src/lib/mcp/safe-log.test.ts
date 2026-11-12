@@ -15,6 +15,20 @@ describe('safeErrorSummary', () => {
     expect(output).not.toContain('10.0.0.5');
   });
 
+  it('unterdrückt die Meldung auch bei einem allgemein benannten Fehler, der mit "Invalid `prisma." beginnt', () => {
+    const error = new Error('Invalid `prisma.user.findMany()` invocation:\n\n{ where: { email: "max@example.org" } }');
+    const summary = safeErrorSummary(error);
+    expect(summary).toBe('Error');
+    expect(summary).not.toContain('max@example.org');
+    // Auch ohne Backticks (Variante "Invalid prisma.").
+    expect(safeErrorSummary(new Error('Invalid prisma.user.create() invocation: max@example.org'))).toBe('Error');
+  });
+
+  it('unterdrückt die Meldung, wenn nur der Klassenname mit PrismaClient beginnt', () => {
+    class PrismaClientCustomError extends Error {}
+    expect(safeErrorSummary(new PrismaClientCustomError('mit max@example.org'))).toBe('Error');
+  });
+
   it('nimmt bei Prisma-Fehlern den Code auf', () => {
     const error = Object.assign(new Error('secret'), { name: 'PrismaClientKnownRequestError', code: 'P2002' });
     expect(safeErrorSummary(error)).toBe('PrismaClientKnownRequestError code=P2002');

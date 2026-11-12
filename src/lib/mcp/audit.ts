@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { safeErrorSummary } from './safe-log';
 
 export interface McpAuditEntry {
   userId: string | null;
@@ -25,14 +26,7 @@ export async function recordMcpAudit(entry: McpAuditEntry): Promise<void> {
     });
   } catch (error) {
     // Nie das ganze Fehlerobjekt loggen: Prisma-Fehler können Argumentwerte (z. B. summary mit Name/E-Mail) enthalten.
-    const code = (error as { code?: unknown } | null)?.code;
-    const safe =
-      typeof code === 'string'
-        ? code
-        : error instanceof Error
-          ? error.message.slice(0, 200)
-          : 'unbekannter Fehler';
-    console.error('MCP-Prüfprotokoll konnte nicht geschrieben werden:', safe);
+    console.error('MCP-Prüfprotokoll konnte nicht geschrieben werden:', safeErrorSummary(error));
   }
 }
 

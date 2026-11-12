@@ -18,6 +18,7 @@ import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
 import { parseUserFormData, userSchema } from '@/lib/validation/user.schema';
 import { createUserCore } from '@/lib/users/create-user';
+import { revokeAllConnectionsAs } from '@/lib/mcp/connections';
 import {
   assertGrantMcpAccess,
   canGrantAdminFor,
@@ -457,4 +458,15 @@ export async function rejectRegistration(registrationId: string): Promise<{ erro
   }
   revalidatePath('/admin/benutzer');
   return {};
+}
+
+/**
+ * Sperrt ALLE MCP-Verbindungen (OAuth-Token, alle Clients) eines Benutzers, z. B. bei Verdacht auf Missbrauch. Wer das
+ * darf, folgt der Regel für den Datensatz (canManageUserRecord: eigener Verwaltungsbereich und nicht höhere Rechtestufe);
+ * die Prüfung steckt in revokeAllConnectionsAs, der Akteur kommt aus der Sitzung. Der Benutzer kann sich danach selbst
+ * neu verbinden, solange er noch MCP-Recht hat - zum dauerhaften Ausschluss zusätzlich die Stufe auf "Kein" setzen.
+ */
+export async function revokeMcpTokens(userId: string): Promise<{ error?: string; revoked?: number }> {
+  const currentUser = await requireUser();
+  return revokeAllConnectionsAs(currentUser, userId);
 }

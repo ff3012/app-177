@@ -4,6 +4,7 @@ import { OauthError } from '@/lib/mcp/oauth/errors';
 import { jsonResponse, notFoundResponse, oauthErrorResponse, optionsResponse, rateLimitedResponse } from '@/lib/mcp/oauth/http';
 import { exchangeAuthorizationCode, refreshAccessToken } from '@/lib/mcp/oauth/service';
 import { checkRateLimit } from '@/lib/mcp/rate-limit';
+import { safeErrorSummary } from '@/lib/mcp/safe-log';
 
 export function OPTIONS() {
   return optionsResponse();
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     if (error instanceof OauthError) return oauthErrorResponse(error);
-    console.error('OAuth-Token-Endpunkt fehlgeschlagen:', error);
+    console.error('OAuth-Token-Endpunkt fehlgeschlagen:', safeErrorSummary(error));
     return oauthErrorResponse(new OauthError('server_error', 'Interner Fehler.', 500));
   }
 }
