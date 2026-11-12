@@ -10,15 +10,14 @@ import {
   assertPermission,
   canGrantBezirksAdmin,
   canGrantBezirksDrohnenAdmin,
-  canGrantMcpAccess,
   canManageUserRecord,
   canManageUsersFor,
 } from '@/lib/auth/permissions';
-import { getMcpAccessOf } from '@/lib/mcp/access-db';
 import { hashPassword } from '@/lib/password';
 import { createToken } from '@/lib/auth/tokens';
 import { sendActivationEmail, sendPasswordResetEmail } from '@/lib/email/templates';
 import { parseUserFormData, userSchema } from '@/lib/validation/user.schema';
+import { createUserCore } from '@/lib/users/create-user';
 import {
   assertGrantMcpAccess,
   canGrantAdminFor,
@@ -48,76 +47,13 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
   }
   const data = parsed.data;
 
-  // Ein Feuerwehr-Admin darf neue Benutzer NUR mit seiner eigenen Feuerwehr als Heimat-Feuerwehr
-  // anlegen (siehe canManageUsersFor-Kommentar) - und Admin-Rechte nur für Feuerwehren vergeben,
-  // die er selbst verwaltet.
-  assertPermission(canManageUsersFor(currentUser, data.homeOrganizationId));
-  assertPermission(canGrantAdminFor(currentUser, data.adminOrgIds));
-  if (data.secondaryOrganizationId) {
-    assertPermission(canManageUsersFor(currentUser, data.secondaryOrganizationId));
-    const categoryError = await validateSecondaryOrganizationCategory(data.homeOrganizationId, data.secondaryOrganizationId);
-    if (categoryError) {
-      return { fieldErrors: categoryError };
-    }
+  // Rechteprüfungen, Anlegen, Mitgliedschaften und Aktivierungstoken: gemeinsame Kernlogik (auch vom MCP-Werkzeug
+  // create_user genutzt). ForbiddenError wird wie bisher nicht abgefangen.
+  const result = await createUserCore(currentUser, data);
+  if (!result.ok) {
+    return result.fieldErrors ? { fieldErrors: result.fieldErrors } : { error: result.error };
   }
-  if (data.isBezirksAdmin) {
-    assertPermission(canGrantBezirksAdmin(currentUser));
-  }
-  if (data.isBezirksDrohnenAdmin) {
-    assertPermission(canGrantBezirksDrohnenAdmin(currentUser));
-  }
-  const requestedMcpAccess = data.mcpAccess ?? 'NONE';
-  if (requestedMcpAccess !== 'NONE') {
-    assertPermission(
-      canGrantMcpAccess(
-        currentUser,
-        await getMcpAccessOf(currentUser.id),
-        { homeOrganizationId: data.homeOrganizationId, mcpAccess: 'NONE' },
-        requestedMcpAccess,
-      ),
-      'Keine Berechtigung, dieses MCP-Recht zu vergeben.',
-    );
-  }
-
-  const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
-  if (existing) {
-    return { error: 'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.' };
-  }
-
-  // Unbenutzbarer Platzhalter-Hash: der Benutzer setzt sein eigenes Passwort über den Aktivierungslink.
-  const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
-  const user = await prisma.user.create({
-    data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email.toLowerCase(),
-      stbNr: data.stbNr || null,
-      phone: data.phone || null,
-      isActive: false,
-      istAtemschutzgeraeteTraeger: data.istAtemschutzgeraeteTraeger,
-      dienstgradId: data.dienstgradId || null,
-      homeOrganizationId: data.homeOrganizationId,
-      secondaryOrganizationId: data.secondaryOrganizationId || null,
-      // Ohne zweite Feuerwehr darf kein Dienstgrad dafür bestehen bleiben - siehe Kommentar bei
-      // updateUser unten, dieselbe Regel gilt hier fürs Anlegen.
-      secondaryDienstgradId: data.secondaryOrganizationId ? data.secondaryDienstgradId || null : null,
-      isBezirksAdmin: data.isBezirksAdmin,
-      isBezirksDrohnenAdmin: data.isBezirksDrohnenAdmin,
-      mcpAccess: requestedMcpAccess,
-      passwordHash,
-    },
-  });
-
-  await syncAdminMemberships(currentUser, user.id, data.adminOrgIds);
-  await syncDroneMembership(currentUser, user.id, data.droneRole, data.droneGroupId, {
-    a1a3LizenzAm: data.a1a3LizenzAm,
-    a2LizenzAm: data.a2LizenzAm,
-    stuetzpunktausbildungAm: data.stuetzpunktausbildungAm,
-    bos1AusbildungAm: data.bos1AusbildungAm,
-    bos2AusbildungAm: data.bos2AusbildungAm,
-  });
-
-  const token = await createToken(user.id, TokenPurpose.ACTIVATION);
+  const { user, activationToken: token } = result;
 
   if (!data.sendWelcomeEmail) {
     // Kein Mail-Versand gewünscht: Aktivierungslink stattdessen dem Admin zum manuellen Weitergeben anzeigen.
