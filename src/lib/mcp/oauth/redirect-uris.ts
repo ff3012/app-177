@@ -1,10 +1,26 @@
 /**
- * Erlaubte Rücksprungadressen für Connector-Clients. Host-genau (kein Suffix-Abgleich), nur https - ausgenommen
- * Loopback für lokale Werkzeuge (z. B. MCP Inspector). VOR dem Livegang gegen die aktuellen Dokumentationen von
- * Claude (support.claude.com, "custom connectors") und OpenAI (developers.openai.com, "developer mode") prüfen -
- * Stand der Planung: claude.ai nutzt https://claude.ai/api/mcp/auth_callback, ChatGPT einen Pfad unter chatgpt.com.
+ * Erlaubte Rücksprungadressen für Connector-Clients - ALLE Regeln stehen in dieser einen Tabelle.
+ *
+ * Host-genau (kein Suffix-Abgleich, kein "www."), nur https, Standard-Port, kein Fragment, keine Zugangsdaten in der
+ * Adresse. Zusätzlich ist der PFAD festgelegt: `exactPaths` müssen exakt passen (auch kein Schrägstrich am Ende),
+ * `pathPrefixes` müssen am Anfang des Pfads stehen. Eine Query ist erlaubt, sie kann den Pfad nicht verändern.
+ *
+ * Pfade bei echter Verbindung auf DEV bestätigen: Stand der Planung nutzt claude.ai den Pfad
+ * /api/mcp/auth_callback und ChatGPT einen Pfad unter /connector/oauth/ bzw. /connector_platform_oauth_redirect.
+ * Weichen die echten Adressen ab, wird nur diese Tabelle angepasst (Quellen: support.claude.com "custom connectors",
+ * developers.openai.com "developer mode").
  */
-const ALLOWED_HTTPS_HOSTS = new Set(['claude.ai', 'www.claude.ai', 'claude.com', 'chatgpt.com', 'www.chatgpt.com']);
+export const HTTPS_REDIRECT_RULES: ReadonlyArray<{
+  host: string;
+  exactPaths?: readonly string[];
+  pathPrefixes?: readonly string[];
+}> = [
+  { host: 'claude.ai', exactPaths: ['/api/mcp/auth_callback'] },
+  { host: 'claude.com', exactPaths: ['/api/mcp/auth_callback'] },
+  { host: 'chatgpt.com', exactPaths: ['/connector_platform_oauth_redirect'], pathPrefixes: ['/connector/oauth/'] },
+];
+
+/** Lokale Werkzeuge (z. B. MCP Inspector): http, beliebiger Port und Pfad. */
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 export function isAllowedRedirectUri(uri: string): boolean {
@@ -15,9 +31,13 @@ export function isAllowedRedirectUri(uri: string): boolean {
     return false;
   }
   if (url.hash || url.username || url.password) return false;
-  if (url.protocol === 'https:') return ALLOWED_HTTPS_HOSTS.has(url.hostname);
   if (url.protocol === 'http:') return LOOPBACK_HOSTS.has(url.hostname);
-  return false;
+  if (url.protocol !== 'https:' || url.port) return false;
+  const rule = HTTPS_REDIRECT_RULES.find((r) => r.host === url.hostname);
+  if (!rule) return false;
+  return (
+    (rule.exactPaths ?? []).includes(url.pathname) || (rule.pathPrefixes ?? []).some((prefix) => url.pathname.startsWith(prefix))
+  );
 }
 
 /** Hängt Parameter an die Rücksprungadresse (vorhandene Query bleibt erhalten), undefinierte Werte entfallen. */

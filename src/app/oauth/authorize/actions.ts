@@ -5,13 +5,11 @@ import { requireUser } from '@/lib/auth/session';
 import { isMcpEnabled } from '@/lib/mcp/enabled';
 import { OauthError } from '@/lib/mcp/oauth/errors';
 import { buildRedirect } from '@/lib/mcp/oauth/redirect-uris';
-import { createAuthorizationCode, validateAuthorizeRequest } from '@/lib/mcp/oauth/service';
-
-const PARAM_NAMES = ['response_type', 'client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'scope', 'state'] as const;
+import { AUTHORIZE_PARAM_NAMES, createAuthorizationCode, validateAuthorizeRequest } from '@/lib/mcp/oauth/service';
 
 function readParams(formData: FormData): Record<string, string | undefined> {
   const params: Record<string, string | undefined> = {};
-  for (const name of PARAM_NAMES) {
+  for (const name of AUTHORIZE_PARAM_NAMES) {
     const value = formData.get(name);
     params[name] = typeof value === 'string' && value !== '' ? value : undefined;
   }

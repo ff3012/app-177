@@ -6,7 +6,8 @@ const ISSUER = 'https://app-17.example.test';
 describe('getIssuer', () => {
   const original = process.env.AUTH_URL;
   afterEach(() => {
-    process.env.AUTH_URL = original;
+    if (original === undefined) delete process.env.AUTH_URL;
+    else process.env.AUTH_URL = original;
   });
 
   it('nimmt AUTH_URL ohne Schrägstrich am Ende', () => {
@@ -40,6 +41,7 @@ describe('authorizationServerMetadata', () => {
   it('verlangt PKCE S256, kennt nur öffentliche Clients und beide Grant-Typen', () => {
     expect(meta.code_challenge_methods_supported).toEqual(['S256']);
     expect(meta.token_endpoint_auth_methods_supported).toEqual(['none']);
+    expect(meta.revocation_endpoint_auth_methods_supported).toEqual(['none']);
     expect(meta.grant_types_supported).toEqual(['authorization_code', 'refresh_token']);
     expect(meta.response_types_supported).toEqual(['code']);
   });

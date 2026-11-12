@@ -14,6 +14,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Ohne userId (beforeAll fehlgeschlagen) würde Prisma `undefined` als "kein Filter" lesen und ALLES löschen.
+  if (!userId) {
+    await prisma.$disconnect();
+    return;
+  }
   await prisma.mcpAuditLog.deleteMany({ where: { OR: [{ userId }, { clientId: RUN }] } });
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.$disconnect();

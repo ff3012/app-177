@@ -4,10 +4,8 @@ import { getMcpAccessOf } from '@/lib/mcp/access-db';
 import { isMcpEnabled } from '@/lib/mcp/enabled';
 import { buildRedirect } from '@/lib/mcp/oauth/redirect-uris';
 import { grantedScope } from '@/lib/mcp/oauth/scopes';
-import { validateAuthorizeRequest } from '@/lib/mcp/oauth/service';
+import { AUTHORIZE_PARAM_NAMES, validateAuthorizeRequest } from '@/lib/mcp/oauth/service';
 import { approveAuthorization, denyAuthorization } from './actions';
-
-const PARAM_NAMES = ['response_type', 'client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'scope', 'state'] as const;
 
 function ErrorCard({ title, message }: { title: string; message: string }) {
   return (
@@ -32,7 +30,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
 
   const raw = await searchParams;
   const params: Record<string, string | undefined> = {};
-  for (const name of PARAM_NAMES) {
+  for (const name of AUTHORIZE_PARAM_NAMES) {
     const value = raw[name];
     params[name] = Array.isArray(value) ? value[0] : value;
   }
@@ -58,7 +56,8 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
   }
 
   const canWrite = scope.split(' ').includes('mcp:write');
-  const hidden = PARAM_NAMES.map((name) => (params[name] ? <input key={name} type="hidden" name={name} value={params[name]} /> : null));
+  const redirectHost = new URL(result.request.redirectUri).host;
+  const hidden = AUTHORIZE_PARAM_NAMES.map((name) => (params[name] ? <input key={name} type="hidden" name={name} value={params[name]} /> : null));
 
   return (
     <div className="pt-safe flex min-h-screen items-center justify-center bg-[#f6f6f7] px-4 py-10">
@@ -68,6 +67,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
           <strong>{result.request.clientName}</strong> möchte sich im Namen von <strong>{user.name}</strong> mit der Feuerwehr-App
           verbinden.
         </p>
+        <p className="mb-4 text-xs text-neutral-500">Rückleitung an: {redirectHost}</p>
         <ul className="mb-4 list-disc pl-5 text-sm text-neutral-700">
           <li>Daten abfragen, die du auch in der App sehen darfst (Benutzer, Drohnengruppe, Kalender, Atemschutz)</li>
           {canWrite && <li>Neue Benutzer anlegen, soweit du das in der App darfst</li>}

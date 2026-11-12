@@ -1,7 +1,7 @@
 import { getClientIp } from '@/lib/auth/client-ip';
 import { isMcpEnabled } from '@/lib/mcp/enabled';
 import { OauthError } from '@/lib/mcp/oauth/errors';
-import { jsonResponse, notFoundResponse, oauthErrorResponse, optionsResponse } from '@/lib/mcp/oauth/http';
+import { jsonResponse, notFoundResponse, oauthErrorResponse, optionsResponse, rateLimitedResponse } from '@/lib/mcp/oauth/http';
 import { registerClient } from '@/lib/mcp/oauth/service';
 import { checkRateLimit } from '@/lib/mcp/rate-limit';
 
@@ -13,9 +13,8 @@ export function OPTIONS() {
 export async function POST(request: Request) {
   if (!(await isMcpEnabled())) return notFoundResponse();
   const ip = await getClientIp();
-  if (!checkRateLimit(`oauth-register:${ip}`, 20, 60 * 60 * 1000).allowed) {
-    return oauthErrorResponse(new OauthError('invalid_request', 'Zu viele Registrierungen, bitte später erneut versuchen.', 429));
-  }
+  const limit = checkRateLimit(`oauth-register:${ip}`, 20, 60 * 60 * 1000);
+  if (!limit.allowed) return rateLimitedResponse('Zu viele Registrierungen, bitte später erneut versuchen.', limit.retryAfterSeconds);
 
   let body: { client_name?: unknown; redirect_uris?: unknown };
   try {
@@ -23,12 +22,16 @@ export async function POST(request: Request) {
   } catch {
     return oauthErrorResponse(new OauthError('invalid_client_metadata', 'Der Body muss JSON sein.'));
   }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return oauthErrorResponse(new OauthError('invalid_client_metadata', 'Der Body muss ein JSON-Objekt sein.'));
+  }
 
   try {
     const client = await registerClient({ clientName: body.client_name, redirectUris: body.redirect_uris });
     return jsonResponse(
       {
         client_id: client.clientId,
+        client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000),
         client_name: client.name,
         redirect_uris: client.redirectUris,
         token_endpoint_auth_method: 'none',

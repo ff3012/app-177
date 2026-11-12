@@ -17,6 +17,14 @@ describe('grantedScope', () => {
     expect(grantedScope('', 'READ')).toBe('mcp:read');
   });
 
+  it('behandelt eine Anfrage mit NUR unbekannten Scopes wie "keine Anfrage" und gewährt die volle eigene Stufe', () => {
+    // Bewusst so (z. B. scope=openid von generischen OAuth-Clients): unbekannte Scopes werden verworfen, bleibt nichts
+    // übrig, gilt der Standard - alles, was die Stufe erlaubt. Mehr als die eigene Stufe gibt es nie.
+    expect(grantedScope('openid', 'WRITE')).toBe('mcp:read mcp:write');
+    expect(grantedScope('openid profile', 'READ')).toBe('mcp:read');
+    expect(grantedScope('openid', 'NONE')).toBe('');
+  });
+
   it('schneidet die Anfrage auf die eigene Stufe zu', () => {
     expect(grantedScope('mcp:read mcp:write', 'READ')).toBe('mcp:read');
     expect(grantedScope('mcp:read', 'WRITE')).toBe('mcp:read');

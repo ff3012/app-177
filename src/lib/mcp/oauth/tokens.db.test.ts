@@ -33,6 +33,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Ohne userId (beforeAll fehlgeschlagen) würde Prisma `undefined` als "kein Filter" lesen und ALLES löschen.
+  if (!userId) {
+    await prisma.$disconnect();
+    return;
+  }
   await prisma.oauthToken.deleteMany({ where: { userId } });
   await prisma.oauthAuthorizationCode.deleteMany({ where: { userId } });
   await prisma.oauthClient.deleteMany({ where: { name: { startsWith: RUN } } });
@@ -100,8 +105,11 @@ describe('exchangeAuthorizationCode', () => {
   it('lehnt ab, wenn der Benutzer inzwischen keinen Zugriff mehr hat', async () => {
     const code = await newCode();
     await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'NONE' } });
-    await expect(exchangeAuthorizationCode(exchangeInput(code))).rejects.toMatchObject({ code: 'invalid_grant' });
-    await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'WRITE' } });
+    try {
+      await expect(exchangeAuthorizationCode(exchangeInput(code))).rejects.toMatchObject({ code: 'invalid_grant' });
+    } finally {
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'WRITE' } });
+    }
   });
 });
 
@@ -137,12 +145,47 @@ describe('refreshAccessToken', () => {
 
   it('schneidet den Umfang auf die aktuelle Stufe zu und verweigert bei NONE', async () => {
     const first = await freshTokens();
-    await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'READ' } });
-    const downgraded = await refreshAccessToken({ refreshToken: first.refresh_token, clientId: client.clientId });
-    expect(downgraded.scope).toBe('mcp:read');
-    await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'NONE' } });
-    await expect(refreshAccessToken({ refreshToken: downgraded.refresh_token, clientId: client.clientId })).rejects.toMatchObject({ code: 'invalid_grant' });
-    await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'WRITE' } });
+    try {
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'READ' } });
+      const downgraded = await refreshAccessToken({ refreshToken: first.refresh_token, clientId: client.clientId });
+      expect(downgraded.scope).toBe('mcp:read');
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'NONE' } });
+      await expect(refreshAccessToken({ refreshToken: downgraded.refresh_token, clientId: client.clientId })).rejects.toMatchObject({ code: 'invalid_grant' });
+    } finally {
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'WRITE' } });
+    }
+  });
+
+  async function expectChainRevoked(tokens: { access_token: string; refresh_token: string }) {
+    const row = await prisma.oauthToken.findUniqueOrThrow({ where: { accessTokenHash: hashSecret(tokens.access_token) } });
+    expect(row.refreshTokenHash).toBe(hashSecret(tokens.refresh_token));
+    expect(row.revokedAt).not.toBeNull();
+  }
+
+  it('Refresh bei Zugriffsstufe NONE widerruft den neuesten Token der Kette (Access und Refresh ungültig)', async () => {
+    const first = await freshTokens();
+    const second = await refreshAccessToken({ refreshToken: first.refresh_token, clientId: client.clientId });
+    try {
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'NONE' } });
+      await expect(refreshAccessToken({ refreshToken: second.refresh_token, clientId: client.clientId })).rejects.toMatchObject({ code: 'invalid_grant' });
+      await expectChainRevoked(second);
+      // Auch der Refresh-Token ist danach nicht mehr einlösbar, selbst wenn der Zugriff zurückkommt.
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'WRITE' } });
+      await expect(refreshAccessToken({ refreshToken: second.refresh_token, clientId: client.clientId })).rejects.toMatchObject({ code: 'invalid_grant' });
+    } finally {
+      await prisma.user.update({ where: { id: userId }, data: { mcpAccess: 'WRITE' } });
+    }
+  });
+
+  it('Refresh bei deaktiviertem Konto widerruft den neuesten Token der Kette', async () => {
+    const tokens = await freshTokens();
+    try {
+      await prisma.user.update({ where: { id: userId }, data: { isActive: false } });
+      await expect(refreshAccessToken({ refreshToken: tokens.refresh_token, clientId: client.clientId })).rejects.toMatchObject({ code: 'invalid_grant' });
+      await expectChainRevoked(tokens);
+    } finally {
+      await prisma.user.update({ where: { id: userId }, data: { isActive: true } });
+    }
   });
 });
 
@@ -155,6 +198,18 @@ describe('revokeToken / revokeTokensOfUser', () => {
     await revokeToken({ token: 'unbekannt' });
     const rows = await prisma.oauthToken.findMany({ where: { accessTokenHash: { in: [hashSecret(a.access_token), hashSecret(b.access_token)] } } });
     expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
+  });
+
+  it('revokeToken mit einem anderen clientId ist wirkungslos', async () => {
+    const tokens = await exchangeAuthorizationCode(exchangeInput(await newCode()));
+    await revokeToken({ token: tokens.access_token, clientId: otherClient.clientId });
+    await revokeToken({ token: tokens.refresh_token, clientId: otherClient.clientId });
+    const row = await prisma.oauthToken.findUniqueOrThrow({ where: { accessTokenHash: hashSecret(tokens.access_token) } });
+    expect(row.revokedAt).toBeNull();
+    // Mit dem richtigen clientId wirkt der Widerruf.
+    await revokeToken({ token: tokens.access_token, clientId: client.clientId });
+    const after = await prisma.oauthToken.findUniqueOrThrow({ where: { accessTokenHash: hashSecret(tokens.access_token) } });
+    expect(after.revokedAt).not.toBeNull();
   });
 
   it('revokeTokensOfUser widerruft alle noch gültigen Token und nennt die Anzahl', async () => {

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/db/prisma';
 import { OauthError } from './errors';
+import { hashSecret } from './secrets';
 import { createAuthorizationCode, registerClient, validateAuthorizeRequest } from './service';
 
 const RUN = `oauth-${Date.now()}`;
@@ -47,6 +48,23 @@ describe('registerClient', () => {
     await expect(registerClient({ clientName: `${RUN}-c`, redirectUris: ['https://evil.example/cb'] })).rejects.toMatchObject({
       code: 'invalid_redirect_uri',
     });
+  });
+
+  it('lehnt zu lange Rücksprungadressen ab (über 2000 Zeichen)', async () => {
+    const tooLong = `${REDIRECT}?x=${'a'.repeat(2000)}`;
+    expect(tooLong.length).toBeGreaterThan(2000);
+    await expect(registerClient({ clientName: `${RUN}-long`, redirectUris: [tooLong] })).rejects.toMatchObject({ code: 'invalid_redirect_uri' });
+  });
+
+  it('kürzt den Namen auf 100 Zeichen und schneidet Leerraum erst danach ab', async () => {
+    // 99 Zeichen, dann Leerzeichen an Position 100 -> nach dem Kürzen bleibt ein Leerzeichen am Ende, das getrimmt wird.
+    const name = `${RUN}-${'n'.repeat(99 - RUN.length - 1)} ${'z'.repeat(20)}`;
+    expect(name[99]).toBe(' ');
+    const created = await registerClient({ clientName: name, redirectUris: [REDIRECT] });
+    expect(created.name).toBe(name.slice(0, 99));
+    expect(created.name.length).toBe(99);
+    const padded = await registerClient({ clientName: `   ${RUN}-pad   `, redirectUris: [REDIRECT] });
+    expect(padded.name).toBe(`${RUN}-pad`);
   });
 
   it('lehnt fehlenden Namen und leere Adressliste ab', async () => {
@@ -117,6 +135,7 @@ describe('createAuthorizationCode', () => {
   it('speichert nur den Hash, 60 Sekunden gültig, mit zugeschnittenem Umfang', async () => {
     const { code } = await createAuthorizationCode({ userId: userIds.read, request: await request() });
     const row = await prisma.oauthAuthorizationCode.findFirstOrThrow({ where: { userId: userIds.read }, orderBy: { createdAt: 'desc' } });
+    expect(row.codeHash).toBe(hashSecret(code));
     expect(row.codeHash).not.toBe(code);
     expect(row.codeHash).toHaveLength(64);
     expect(row.scope).toBe('mcp:read');
