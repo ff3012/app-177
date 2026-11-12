@@ -19,6 +19,11 @@ const PUBLIC_PATH_PREFIXES = [
   '/fahrzeug-reservierung',
   '/how-to.html',
   '/offline-kalender',
+  '/.well-known',
+  '/api/mcp',
+  '/oauth/token',
+  '/oauth/register',
+  '/oauth/revoke',
   '/sw.js',
 ];
 
