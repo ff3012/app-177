@@ -104,6 +104,10 @@ describe('/api/mcp', () => {
     const names = body.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('list_organizations');
     expect(names).toContain('list_dienstgrade');
+    for (const name of ['list_users', 'get_user', 'get_atemschutz_status', 'list_drone_flights', 'get_drone_readiness', 'list_calendar_events']) {
+      expect(names).toContain(name);
+    }
+    expect(names).toHaveLength(8);
     expect(names).not.toContain('create_user');
     expect(body.result.tools[0].annotations.readOnlyHint).toBe(true);
   });
