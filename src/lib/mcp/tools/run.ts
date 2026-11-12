@@ -6,10 +6,11 @@ import type { ToolDefinition } from './define';
 
 export const RATE_LIMIT_PER_MINUTE = 120;
 
-interface RunResult {
+// `type` statt `interface`: nur Typalias-Objekte sind dem Rückgabetyp des MCP-SDK (Index-Signatur) zuweisbar.
+type RunResult = {
   content: { type: 'text'; text: string }[];
   isError?: boolean;
-}
+};
 
 const text = (value: string): RunResult['content'] => [{ type: 'text', text: value }];
 
