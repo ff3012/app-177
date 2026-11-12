@@ -4,6 +4,7 @@ import type { SessionUser } from '@/types/next-auth';
 import { mcpRank, type McpAccessLevel } from './access';
 import { scopeLevel } from './oauth/scopes';
 import { hashSecret } from './oauth/secrets';
+import { safeErrorSummary } from './safe-log';
 
 export interface McpPrincipal {
   user: SessionUser;
@@ -46,7 +47,7 @@ export async function authenticateBearer(authorization: string | null, now: Date
   // Best-effort und gedrosselt (höchstens 1x/Minute je Token) - die Anzeige "zuletzt benutzt" ist nicht kritisch.
   if (!token.lastUsedAt || now.getTime() - token.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS) {
     prisma.oauthToken.update({ where: { id: token.id }, data: { lastUsedAt: now } }).catch((error) => {
-      console.error('lastUsedAt des OAuth-Tokens konnte nicht aktualisiert werden:', error);
+      console.error('[mcp] lastUsedAt des OAuth-Tokens konnte nicht aktualisiert werden:', safeErrorSummary(error));
     });
   }
 

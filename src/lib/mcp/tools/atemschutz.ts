@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getExpiryStatus, getFinnentestExpiryDate, type AtemschutzExpiryStatus } from '@/lib/heimatfeuerwehr/atemschutz-status';
 import { clampLimit, decodeCursor, denied, encodeCursor } from './context';
 import { defineTool } from './define';
+import { viennaDayOrNull } from './vienna-time';
 
 /** Schlechtester Zustand gewinnt; "keine Angabe" nur, wenn beide Werte fehlen. */
 export function combineStatus(a: AtemschutzExpiryStatus, b: AtemschutzExpiryStatus): AtemschutzExpiryStatus {
@@ -14,7 +15,7 @@ export function combineStatus(a: AtemschutzExpiryStatus, b: AtemschutzExpiryStat
   return 'aktiv';
 }
 
-const day = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : null);
+const day = viennaDayOrNull;
 
 interface AtemschutzRow {
   id: string;

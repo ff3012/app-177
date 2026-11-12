@@ -57,11 +57,26 @@ describe('runTool', () => {
   it('gibt bei unerwarteten Fehlern nur eine allgemeine Meldung zurück (kein Stacktrace) und protokolliert ERROR', async () => {
     const { audit, principal } = setup();
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const result = await runTool(principal, readTool(async () => { throw new Error('connection refused 10.0.0.5'); }), {}, { audit });
+    const error = new Error('Invalid prisma.user.findMany() where email "max@example.org" host 10.0.0.5');
+    error.name = 'PrismaClientValidationError';
+    const result = await runTool(principal, readTool(async () => { throw error; }), {}, { audit });
+    const logged = JSON.stringify(spy.mock.calls);
     spy.mockRestore();
+    expect(result).toEqual({ isError: true, content: [{ type: 'text', text: 'Die Anfrage konnte nicht verarbeitet werden. Bitte später erneut versuchen.' }] });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'ERROR', summary: 'Unerwarteter Fehler' }));
+    expect(logged).toContain('PrismaClientValidationError');
+    expect(logged).not.toContain('max@example.org');
+    expect(logged).not.toContain('10.0.0.5');
+  });
+
+  it('verweigert ein Werkzeug oberhalb der MCP-Stufe (DENIED, Handler wird nicht aufgerufen)', async () => {
+    const audit = vi.fn(async () => undefined);
+    const handler = vi.fn(async () => ({ data: 1 }));
+    const principal = principalFixture(sessionUserFixture({ id: 'u1' }), 'READ');
+    const result = await runTool(principal, writeTool(handler), {}, { audit });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).not.toContain('10.0.0.5');
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'ERROR' }));
+    expect(handler).not.toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'DENIED', tool: 'demo_write', summary: 'Unzureichende MCP-Stufe' }));
   });
 
   it('begrenzt die Aufrufe je Token pro Minute', async () => {
@@ -74,5 +89,13 @@ describe('runTool', () => {
     expect(blocked.isError).toBe(true);
     expect(blocked.content[0].text).toMatch(/Zu viele Anfragen/);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'DENIED', summary: expect.stringContaining('Mengenbegrenzung') }));
+  });
+
+  it('protokolliert bei Dauerfeuer nur die erste Mengenbegrenzung je Token und Fenster', async () => {
+    const { audit, principal } = setup();
+    const tool = readTool(async () => ({ data: 1 }));
+    for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i++) await runTool(principal, tool, {}, { audit });
+    for (let i = 0; i < 25; i++) expect((await runTool(principal, tool, {}, { audit })).isError).toBe(true);
+    expect(audit).toHaveBeenCalledTimes(1);
   });
 });

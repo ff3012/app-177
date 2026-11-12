@@ -47,6 +47,11 @@ describe('authenticateBearer', () => {
     }
   });
 
+  it('lehnt ein Refresh-Token als Bearer ab (401)', async () => {
+    const { refreshToken } = await issueTestToken({ userId, namePrefix: `${RUN}-refresh` });
+    expect(await authenticateBearer(bearer(refreshToken))).toEqual({ ok: false, status: 401, error: 'invalid_token' });
+  });
+
   it('lehnt widerrufene und abgelaufene Token ab (401)', async () => {
     const revoked = await issueTestToken({ userId, namePrefix: `${RUN}-rev` });
     await prisma.oauthToken.updateMany({ where: { accessTokenHash: hashSecret(revoked.accessToken) }, data: { revokedAt: new Date() } });

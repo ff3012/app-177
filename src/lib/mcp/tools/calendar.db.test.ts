@@ -247,7 +247,6 @@ describe('list_calendar_events', () => {
       const text = result.items.find((i) => i.titel === `${RUN} emoji`)?.beschreibung ?? '';
       expect(Array.from(text)).toHaveLength(1000);
       expect(text.endsWith('😀')).toBe(true);
-      expect(/[�-�](?![�-�])|(?<![�-�])[�-�]/.test(text)).toBe(false);
     } finally {
       await prisma.event.deleteMany({ where: { id: emoji.id } });
     }

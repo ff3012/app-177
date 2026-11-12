@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import type { SessionUser } from '@/types/next-auth';
 import { clampLimit, decodeCursor, denied, invalid, toPage } from './context';
 import { defineTool } from './define';
+import { viennaDayOrNull } from './vienna-time';
 
 type StatusFilter = 'aktiv' | 'inaktiv' | 'deaktiviert';
 
@@ -65,7 +66,7 @@ const userSelect = {
 
 type UserRecord = Prisma.UserGetPayload<{ select: typeof userSelect }>;
 
-const day = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : null);
+const day = viennaDayOrNull;
 
 function toUserDto(user: UserRecord) {
   return {
@@ -145,8 +146,10 @@ export const getUser = defineTool({
     const user = principal.user;
     requireUserAdmin(user);
     const row = await prisma.user.findUnique({ where: { id: input.userId }, select: userSelect });
-    // Außerhalb des Bereichs wird bewusst wie "unbekannt" geantwortet - sonst ließe sich die Existenz von Benutzern erraten.
-    if (!row || !canManageUsersFor(user, row.homeOrganization.id)) throw invalid('Benutzer wurde nicht gefunden.');
+    // Außerhalb des Bereichs wird bewusst derselbe Text wie bei "unbekannt" geantwortet - sonst ließe sich die Existenz von
+    // Benutzern erraten. Der Fall "existiert, aber außerhalb" wird als DENIED protokolliert, "unbekannt" nicht.
+    if (!row) throw invalid('Benutzer wurde nicht gefunden.');
+    if (!canManageUsersFor(user, row.homeOrganization.id)) throw denied('Benutzer wurde nicht gefunden.');
     const training = row.droneMembership;
     return {
       data: {

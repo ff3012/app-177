@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatViennaDay, formatViennaIso, viennaWallTimeToDate } from './vienna-time';
+import { formatViennaDay, formatViennaIso, viennaDayOrNull, viennaWallTimeToDate } from './vienna-time';
 
 describe('formatViennaDay', () => {
   it('nimmt den Wiener Kalendertag, nicht den UTC-Tag', () => {
@@ -34,5 +34,20 @@ describe('formatViennaIso', () => {
 
   it('schneidet Millisekunden ab, ohne den Tag zu verschieben', () => {
     expect(formatViennaIso(new Date('2030-06-14T21:59:59.999Z'))).toBe('2030-06-14T23:59:59+02:00');
+  });
+});
+
+describe('viennaDayOrNull', () => {
+  it('liefert null für fehlende Datumswerte', () => {
+    expect(viennaDayOrNull(null)).toBeNull();
+  });
+
+  it('nimmt den Wiener Tag, auch wenn UTC noch am Vortag liegt (unabhängig von der Prozess-Zeitzone)', () => {
+    expect(viennaDayOrNull(new Date('2027-03-28T23:00:00Z'))).toBe('2027-03-29');
+  });
+
+  it('lässt ein auf UTC-Mitternacht gespeichertes Datum (Prisma @db.Date) auf demselben Tag', () => {
+    expect(viennaDayOrNull(new Date('2027-03-29T00:00:00Z'))).toBe('2027-03-29');
+    expect(viennaDayOrNull(new Date('2027-07-15T00:00:00Z'))).toBe('2027-07-15');
   });
 });

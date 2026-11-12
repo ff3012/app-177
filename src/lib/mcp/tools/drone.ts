@@ -24,7 +24,7 @@ function validDay(y: number, m: number, d: number): boolean {
 }
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
-const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?$/;
 const ZONED_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /**
@@ -44,7 +44,7 @@ export function parseRangeBound(value: string, endOfDay: boolean): Date {
   } else if (local) {
     const [y, m, d, h, min] = [Number(local[1]), Number(local[2]), Number(local[3]), Number(local[4]), Number(local[5])];
     const sec = Number(local[6] ?? 0);
-    const ms = Number((local[7] ?? '0').padEnd(3, '0'));
+    const ms = Number((local[7] ?? '0').slice(0, 3).padEnd(3, '0'));
     if (validDay(y, m, d) && h < 24 && min < 60 && sec < 60) date = viennaWallTimeToDate(y, m, d, h, min, sec, ms);
   } else if (ZONED_DATE_TIME.test(trimmed)) {
     date = new Date(trimmed);

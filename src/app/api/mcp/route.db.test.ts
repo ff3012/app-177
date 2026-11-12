@@ -120,6 +120,18 @@ describe('/api/mcp', () => {
     expect(JSON.parse(body.result.content[0].text).items.length).toBeGreaterThan(10);
   });
 
+  it('lehnt zu große Anfragen mit 413 ab (mit CORS- und no-store-Headern)', async () => {
+    const huge = new Request('http://localhost/api/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${readToken}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_dienstgrade', arguments: { pad: 'x'.repeat(70 * 1024) } } }),
+    });
+    const response = await POST(huge);
+    expect(response.status).toBe(413);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  });
+
   it('antwortet bei ausgeschaltetem Funktionsschalter mit 404', async () => {
     await setMcpEnabled(false);
     try {

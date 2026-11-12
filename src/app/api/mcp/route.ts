@@ -3,10 +3,14 @@ import { authenticateBearer } from '@/lib/mcp/auth';
 import { isMcpEnabled } from '@/lib/mcp/enabled';
 import { CORS_HEADERS, notFoundResponse, optionsResponse } from '@/lib/mcp/oauth/http';
 import { getIssuer } from '@/lib/mcp/oauth/metadata';
+import { safeErrorSummary } from '@/lib/mcp/safe-log';
 import { createMcpServer } from '@/lib/mcp/server';
 
 // Bewusst keine Origin-/DNS-Rebinding-Prüfung: Remote-Server mit Bearer-Token, CORS "*" und ohne Cookies - ein
 // fremder Origin kann ohne Token nichts erreichen, und es gibt keine ambiente Berechtigung, die er mitnehmen könnte.
+
+/** Kein MCP-Aufruf dieser Werkzeuge braucht mehr; größere Anfragen beantwortet das SDK mit 413. */
+const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 
 export function OPTIONS() {
   return optionsResponse();
@@ -68,14 +72,16 @@ async function handle(request: Request): Promise<Response> {
     if (!auth.ok) return unauthorized(auth.status, authorization !== null);
 
     const server = createMcpServer(auth.principal);
-    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+      maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
+    });
     await server.connect(transport);
     return withCors(await transport.handleRequest(request));
   } catch (error) {
-    // Nur ein harmloser Auszug ins Log - nie Anfrage, Header oder das ganze Fehlerobjekt (könnten das Token enthalten).
-    const code = (error as { code?: unknown } | null)?.code;
-    const safe = typeof code === 'string' ? code : String((error as { message?: unknown } | null)?.message ?? 'unbekannt').slice(0, 200);
-    console.error('MCP-Endpunkt: unerwarteter Fehler:', safe);
+    // Nur eine harmlose Kurzfassung ins Log - nie Anfrage, Header oder das ganze Fehlerobjekt (könnten das Token enthalten).
+    console.error('[mcp] Endpunktfehler', safeErrorSummary(error));
     return jsonError(500, 'server_error', 'Interner Fehler.');
   }
 }

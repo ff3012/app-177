@@ -22,6 +22,10 @@ describe('Cursor', () => {
     expect(decodeCursor('###')).toBe(0);
     expect(decodeCursor(Buffer.from('-4').toString('base64url'))).toBe(0);
     expect(decodeCursor(Buffer.from('abc').toString('base64url'))).toBe(0);
+    for (const bad of ['1e3', '0x10', '99999999999999999999', '-1', '+5', '1.5', ' 7', '12abc', '']) {
+      expect(decodeCursor(Buffer.from(bad).toString('base64url')), bad).toBe(0);
+    }
+    expect(decodeCursor(Buffer.from('999999999').toString('base64url'))).toBe(999999999);
   });
 });
 

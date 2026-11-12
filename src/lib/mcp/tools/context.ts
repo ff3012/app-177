@@ -36,11 +36,15 @@ export function encodeCursor(offset: number): string {
 
 export function decodeCursor(cursor: string | undefined): number {
   if (!cursor) return 0;
-  const value = Number(Buffer.from(cursor, 'base64url').toString());
-  return Number.isInteger(value) && value >= 0 ? value : 0;
+  const decoded = Buffer.from(cursor, 'base64url').toString();
+  // Nur reine Ziffernfolgen (höchstens 9 Stellen): kein '1e3', '0x10', Vorzeichen oder Zahlen jenseits sicherer Offsets.
+  return /^\d{1,9}$/.test(decoded) ? Number(decoded) : 0;
 }
 
-/** `rows` wurden mit take: limit + 1 und skip: offset geladen; ein Überhang bedeutet "es gibt eine Folgeseite". */
+/**
+ * Aufrufer brauchen ein deterministisches `orderBy` mit eindeutigem Tiebreaker (z. B. `id`), sonst überspringt oder
+ * wiederholt die Blätterung Zeilen.
+ * `rows` wurden mit take: limit + 1 und skip: offset geladen; ein Überhang bedeutet "es gibt eine Folgeseite". */
 export function toPage<T>(rows: T[], limit: number, offset: number): { items: T[]; nextCursor: string | null } {
   const hasMore = rows.length > limit;
   return { items: hasMore ? rows.slice(0, limit) : rows, nextCursor: hasMore ? encodeCursor(offset + limit) : null };

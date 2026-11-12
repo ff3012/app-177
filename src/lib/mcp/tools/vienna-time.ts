@@ -43,3 +43,6 @@ export function formatViennaIso(date: Date): string {
   const abs = Math.abs(minutes);
   return `${base}${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
 }
+
+/** Wie `formatViennaDay`, für optionale Datumsfelder (Kalendertage ohne Uhrzeit, z. B. Untersuchungsdatum). */
+export const viennaDayOrNull = (date: Date | null): string | null => (date ? formatViennaDay(date) : null);

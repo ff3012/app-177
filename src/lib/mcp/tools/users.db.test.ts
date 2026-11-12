@@ -91,6 +91,20 @@ describe('list_users', () => {
   });
 });
 
+describe('Rollenmatrix: reiner Drohnengruppen-Admin', () => {
+  // Admin Drohnengruppe, aber weder Bezirksadmin noch Abschnitts-/Feuerwehr-Admin: darf die Benutzerverwaltung nicht nutzen.
+  const droneAdmin = () =>
+    principalFixture(sessionUserFixture({ isDrohnengruppeMember: true, droneGroupId: 'g-test', droneGroupRole: 'ADMIN' }));
+
+  it('list_users wird abgelehnt', async () => {
+    await expect(listUsers.handler({ principal: droneAdmin() }, {})).rejects.toMatchObject({ kind: 'denied' });
+  });
+
+  it('get_user wird abgelehnt', async () => {
+    await expect(getUser.handler({ principal: droneAdmin() }, { userId: ids.aktiv })).rejects.toMatchObject({ kind: 'denied' });
+  });
+});
+
 describe('get_user', () => {
   it('liefert einem Admin den Benutzer seiner Feuerwehr samt Ausbildung', async () => {
     const result = (await getUser.handler({ principal: asAdmin([orgA.id]) }, { userId: ids.aktiv })).data as { id: string; ausbildung: object };
@@ -98,9 +112,15 @@ describe('get_user', () => {
     expect(result.ausbildung).toEqual({ a1a3Lizenz: null, a2Lizenz: null, stuetzpunktausbildung: null, bos1: null, bos2: null });
   });
 
-  it('antwortet für Benutzer außerhalb des Bereichs wie für unbekannte: nicht gefunden', async () => {
-    await expect(getUser.handler({ principal: asAdmin([orgA.id]) }, { userId: ids.fremd })).rejects.toMatchObject({ message: 'Benutzer wurde nicht gefunden.' });
-    await expect(getUser.handler({ principal: asAdmin([orgA.id]) }, { userId: 'gibt-es-nicht' })).rejects.toMatchObject({ message: 'Benutzer wurde nicht gefunden.' });
+  it('antwortet für Benutzer außerhalb des Bereichs mit demselben Text wie für unbekannte; nur der erste Fall wird als DENIED protokolliert', async () => {
+    await expect(getUser.handler({ principal: asAdmin([orgA.id]) }, { userId: ids.fremd })).rejects.toMatchObject({
+      kind: 'denied',
+      message: 'Benutzer wurde nicht gefunden.',
+    });
+    await expect(getUser.handler({ principal: asAdmin([orgA.id]) }, { userId: 'gibt-es-nicht' })).rejects.toMatchObject({
+      kind: 'invalid',
+      message: 'Benutzer wurde nicht gefunden.',
+    });
   });
 
   it('lehnt Mitglieder ohne Verwaltungsrecht ab', async () => {

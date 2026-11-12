@@ -1,6 +1,8 @@
+import { hasMcpAccess } from '../access';
 import { recordMcpAudit } from '../audit';
 import type { McpPrincipal } from '../auth';
 import { checkRateLimit } from '../rate-limit';
+import { safeErrorSummary } from '../safe-log';
 import { ToolError } from './context';
 import type { ToolDefinition } from './define';
 
@@ -17,7 +19,8 @@ const text = (value: string): RunResult['content'] => [{ type: 'text', text: val
 /**
  * Führt ein Werkzeug aus: Mengenbegrenzung je Token, Fehlerabbildung auf MCP-Werkzeugfehler (deutsch, ohne
  * Stacktrace) und Prüfprotokoll. Protokolliert werden alle abgelehnten Zugriffe (DENIED), alle Schreibaktionen
- * (OK über ToolResult.audit, ERROR bei Fehlern) und alle unerwarteten Fehler.
+ * (OK über ToolResult.audit, ERROR bei Fehlern) und alle unerwarteten Fehler. Meldungen von denied()/invalid() werden
+ * bei Schreibwerkzeugen wörtlich protokolliert - sie müssen statische Texte sein und dürfen nie Eingaben wiedergeben.
  */
 export async function runTool(
   principal: McpPrincipal,
@@ -28,9 +31,18 @@ export async function runTool(
   const audit = deps.audit ?? recordMcpAudit;
   const base = { userId: principal.user.id, clientId: principal.clientId, tool: tool.name };
 
+  // Zweite Verteidigungslinie: createMcpServer registriert ohnehin nur erlaubte Werkzeuge.
+  if (!hasMcpAccess(principal.access, tool.access)) {
+    await audit({ ...base, outcome: 'DENIED', summary: 'Unzureichende MCP-Stufe' });
+    return { isError: true, content: text('Für dieses Werkzeug fehlt die nötige Berechtigung.') };
+  }
+
   const limit = checkRateLimit(`mcp:${principal.tokenId}`, RATE_LIMIT_PER_MINUTE, 60_000);
   if (!limit.allowed) {
-    await audit({ ...base, outcome: 'DENIED', summary: 'Mengenbegrenzung überschritten' });
+    // Nur die erste Ablehnung je Token und Fenster protokollieren - sonst füllt ein Dauerfeuer das Prüfprotokoll.
+    if (checkRateLimit(`mcp-audit-rl:${principal.tokenId}`, 1, 60_000).allowed) {
+      await audit({ ...base, outcome: 'DENIED', summary: 'Mengenbegrenzung überschritten' });
+    }
     return { isError: true, content: text(`Zu viele Anfragen. Bitte in ${limit.retryAfterSeconds} Sekunden erneut versuchen.`) };
   }
 
@@ -49,7 +61,8 @@ export async function runTool(
       }
       return { isError: true, content: text(error.message) };
     }
-    console.error(`MCP-Werkzeug ${tool.name} ist fehlgeschlagen:`, error);
+    // Nie das Fehlerobjekt loggen: Prisma-Meldungen beginnen mit der gerenderten Abfrage (Namen, E-Mails, Suchtexte).
+    console.error('[mcp] Werkzeugfehler', tool.name, safeErrorSummary(error));
     await audit({ ...base, outcome: 'ERROR', summary: 'Unerwarteter Fehler' });
     return { isError: true, content: text('Die Anfrage konnte nicht verarbeitet werden. Bitte später erneut versuchen.') };
   }
