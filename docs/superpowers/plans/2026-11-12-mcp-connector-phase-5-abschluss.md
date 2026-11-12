@@ -15,7 +15,7 @@
 ## Global Constraints
 
 - **Verbindungen:** Jeder sieht und beendet nur seine eigenen. Ein Admin sperrt alle Token eines Benutzers nur, wenn `canManageUserRecord(currentUser, target)` gilt (Rechtestufe des Ziels wird mitgeprüft).
-- **Aufbewahrung:** Prüfprotokoll 180 Tage; widerrufene oder abgelaufene Token 30 Tage nach Widerruf/Ablauf; Autorisierungscodes einen Tag nach Ablauf. Täglicher Cron `/api/cron/mcp-retention` (Secret-Muster wie `report-retention`), Host-Skript `docker/mcp-retention.sh` (LF-Zeilenenden, ausführbar im Repo).
+- **Aufbewahrung:** Prüfprotokoll 180 Tage; widerrufene oder abgelaufene Token 30 Tage nach Widerruf/Ablauf; Autorisierungscodes einen Tag nach Ablauf; **OAuth-Clients** ohne jedes Token und ohne Code, die älter als 30 Tage sind (die offene Client-Registrierung würde sonst unbegrenzt Zeilen sammeln). Täglicher Cron `/api/cron/mcp-retention` (Secret-Muster wie `report-retention`), Host-Skript `docker/mcp-retention.sh` (LF-Zeilenenden, ausführbar im Repo).
 - **Schalter aus:** Die Profilseite antwortet 404, der Menüeintrag fehlt. Das Aufräumen läuft unabhängig vom Schalter.
 - **Keine neuen Umgebungsvariablen** (der Cron nutzt das vorhandene `CRON_SECRET`).
 - **Host-Skripte:** nie mit `bash -x`/`set -x` debuggen (sie exportieren alle `.env`-Werte); `.env` wird zeilenweise gelesen, nie mit `source`.
@@ -442,7 +442,7 @@ git commit -m "feat: Admin sperrt MCP-Verbindungen eines Benutzers, Prüfprotoko
 - Test: `src/lib/mcp/retention.db.test.ts`
 
 **Interfaces:**
-- Produces: `AUDIT_RETENTION_DAYS = 180`, `TOKEN_RETENTION_DAYS = 30`, `purgeMcpData(now?: Date): Promise<{ audit: number; tokens: number; codes: number }>`.
+- Produces: `AUDIT_RETENTION_DAYS = 180`, `TOKEN_RETENTION_DAYS = 30`, `purgeMcpData(now?: Date): Promise<{ audit: number; tokens: number; codes: number; clients: number }>`. Reihenfolge im Service: erst Tokens und Codes löschen, DANACH die verwaisten Clients (sonst wären Clients mit gerade gelöschten Token noch "belegt").
 
 - [ ] **Step 1: Failing DB-Test**
 
@@ -509,6 +509,19 @@ describe('purgeMcpData', () => {
     expect(left.map((t) => t.accessTokenHash).sort()).toEqual([hashSecret(`${RUN}-a-frisch-widerrufen`), hashSecret(`${RUN}-a-gueltig`)].sort());
   });
 
+  it('löscht verwaiste Clients (älter als 30 Tage, ohne Token und Codes), behält Clients mit Token oder jüngere', async () => {
+    const old = new Date(Date.now() - 31 * DAY);
+    const orphan = await prisma.oauthClient.create({ data: { clientId: `mcp_${RUN}_orphan`, name: `${RUN}-orphan`, redirectUris: ['https://claude.ai/cb'], createdAt: old } });
+    await prisma.oauthClient.create({ data: { clientId: `mcp_${RUN}_young`, name: `${RUN}-young`, redirectUris: ['https://claude.ai/cb'] } });
+    // Der Client aus beforeAll hat gültige Token (Test oben) und ist ebenfalls alt - er darf NICHT gelöscht werden.
+    await prisma.oauthClient.update({ where: { id: clientRowId }, data: { createdAt: old } });
+    const result = await purgeMcpData();
+    expect(result.clients).toBeGreaterThanOrEqual(1);
+    expect(await prisma.oauthClient.findUnique({ where: { id: orphan.id } })).toBeNull();
+    expect(await prisma.oauthClient.findUnique({ where: { clientId: `mcp_${RUN}_young` } })).not.toBeNull();
+    expect(await prisma.oauthClient.findUnique({ where: { id: clientRowId } })).not.toBeNull();
+  });
+
   it('löscht Autorisierungscodes einen Tag nach Ablauf', async () => {
     const base = { oauthClientId: clientRowId, userId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scope: 'mcp:read' };
     await prisma.oauthAuthorizationCode.create({ data: { ...base, codeHash: hashSecret(`${RUN}-c-alt`), expiresAt: new Date(Date.now() - 2 * DAY) } });
@@ -543,13 +556,19 @@ export async function purgeMcpData(now: Date = new Date()): Promise<{ audit: num
   const auditCutoff = new Date(now.getTime() - AUDIT_RETENTION_DAYS * DAY_MS);
   const tokenCutoff = new Date(now.getTime() - TOKEN_RETENTION_DAYS * DAY_MS);
   const codeCutoff = new Date(now.getTime() - DAY_MS);
+  const clientCutoff = new Date(now.getTime() - TOKEN_RETENTION_DAYS * DAY_MS);
 
   const [audit, tokens, codes] = await Promise.all([
     prisma.mcpAuditLog.deleteMany({ where: { createdAt: { lt: auditCutoff } } }),
     prisma.oauthToken.deleteMany({ where: { OR: [{ revokedAt: { lt: tokenCutoff } }, { refreshExpiresAt: { lt: tokenCutoff } }] } }),
     prisma.oauthAuthorizationCode.deleteMany({ where: { expiresAt: { lt: codeCutoff } } }),
   ]);
-  return { audit: audit.count, tokens: tokens.count, codes: codes.count };
+  // Erst NACH dem Löschen von Token und Codes: ein Client ohne jedes Token und ohne Code, der älter als 30 Tage ist, ist verwaist
+  // (die offene Client-Registrierung erzeugt sonst unbegrenzt Zeilen).
+  const clients = await prisma.oauthClient.deleteMany({
+    where: { createdAt: { lt: clientCutoff }, tokens: { none: {} }, authCodes: { none: {} } },
+  });
+  return { audit: audit.count, tokens: tokens.count, codes: codes.count, clients: clients.count };
 }
 ```
 

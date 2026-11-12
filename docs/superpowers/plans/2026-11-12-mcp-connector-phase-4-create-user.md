@@ -19,7 +19,7 @@
 - **Neuer Benutzer:** `isActive: false`, Platzhalter-Passwort, Aktivierungstoken (7 Tage). Die Willkommens-Mail geht **immer** an den neuen Benutzer; der Aktivierungslink erscheint nie in der Antwort. Schlägt die Mail fehl, bleibt der Benutzer angelegt (`emailSent: false`).
 - **Alle Validierungen** kommen aus `userSchema` (Standesbuchnummer, Telefonformat E.164, Ausbildungs-Reihenfolge, Drohnenrolle braucht Gruppe).
 - **Mengenbegrenzung:** höchstens 20 erfolgreich angelegte Benutzer pro Stunde und Benutzer (gezählt über das Prüfprotokoll).
-- **Prüfprotokoll:** jeder Aufruf (OK, abgelehnt, Fehler). Die Zusammenfassung enthält Name, E-Mail und Feuerwehr des neuen Benutzers, **keine** Telefonnummer.
+- **Prüfprotokoll:** jeder Aufruf (OK, abgelehnt, Fehler). Die Zusammenfassung enthält Name, E-Mail und Feuerwehr des neuen Benutzers **und die E-Mail des Aufrufers** (`McpAuditLog.userId` wird bei Löschung des Aufrufers `NULL`; so bleibt "wer hat das getan" lesbar), **keine** Telefonnummer.
 - **Werkzeug nur ab `WRITE`:** `createMcpServer` registriert es nur für `WRITE`; der Handler prüft die Stufe zusätzlich selbst.
 - Übrige Konventionen wie in den Phasen 1–3 (CRLF, Tests, Commits nur auf Anweisung).
 
@@ -44,7 +44,7 @@
 - Modify: `src/app/(app)/admin/benutzer/actions.ts`
 
 **Interfaces:**
-- Produces (alle aus `src/lib/users/user-sync.ts`, **Rumpf wortgleich** wie in `actions.ts`): `canGrantAdminFor(currentUser: SessionUser, adminOrgIds: string[]): boolean`, `syncAdminMemberships(currentUser: SessionUser, userId: string, adminOrgIds: string[]): Promise<void>`, `type AusbildungsDaten = Record<Ausbildungsstufe, string>`, `syncDroneMembership(currentUser, userId, droneRole: DroneRoleOption, droneGroupId: string | null, ausbildung: AusbildungsDaten): Promise<void>`, `type FieldErrors = Record<string, string[] | undefined>`, `validateSecondaryOrganizationCategory(homeOrganizationId: string, secondaryOrganizationId: string): Promise<FieldErrors | null>`.
+- Produces (alle aus `src/lib/users/user-sync.ts`; **Rumpf wortgleich** wie in `actions.ts`, mit einer Ausnahme: `assertGrantMcpAccess` ist neu, siehe Step 2b): `canGrantAdminFor(currentUser: SessionUser, adminOrgIds: string[]): boolean`, `syncAdminMemberships(currentUser: SessionUser, userId: string, adminOrgIds: string[]): Promise<void>`, `type AusbildungsDaten = Record<Ausbildungsstufe, string>`, `syncDroneMembership(currentUser, userId, droneRole: DroneRoleOption, droneGroupId: string | null, ausbildung: AusbildungsDaten): Promise<void>`, `type FieldErrors = Record<string, string[] | undefined>`, `validateSecondaryOrganizationCategory(homeOrganizationId: string, secondaryOrganizationId: string): Promise<FieldErrors | null>`, `assertGrantMcpAccess(currentUser: SessionUser, target: { homeOrganizationId: string; mcpAccess: McpAccessLevel }, newLevel: McpAccessLevel): Promise<void>` (neu).
 
 Dies ist ein **reines Verschieben**. Es gibt keinen neuen Test, weil die Funktionen bisher nicht einzeln aufrufbar waren; ihr Verhalten wird in Task 2 durch Tests des Kerns festgenagelt, und `updateUser` (der sie ebenfalls nutzt) bleibt über `tsc`/`build` und die Sichtprüfung auf DEV abgesichert.
 
@@ -78,6 +78,47 @@ Aus `src/app/(app)/admin/benutzer/actions.ts` die folgenden Deklarationen **samt
 4. `function toAusbildungsUpdate(...)` — bleibt **nicht exportiert** (wird nur von `syncDroneMembership` genutzt)
 5. `async function syncDroneMembership(...)` → `export async function ...`
 6. `async function validateSecondaryOrganizationCategory(...)` → `export async function ...`; in der Signatur den Rückgabetyp `Promise<UserFormState['fieldErrors'] | null>` durch `Promise<FieldErrors | null>` ersetzen (derselbe Typ, ohne Abhängigkeit zur Action-Datei).
+
+- [ ] **Step 2b: Gemeinsamen Helfer für die MCP-Vergabe anlegen und `updateUser` darauf umstellen**
+
+Die Prüfung "darf diese MCP-Stufe vergeben werden?" steht seit Phase 1 inline in `updateUser` und käme sonst ein zweites Mal in `createUserCore` vor. Deshalb **einmal** als Helfer in `user-sync.ts` (neu, nicht verschoben). Imports in `user-sync.ts` ergänzen: in der Liste aus `@/lib/auth/permissions` zusätzlich `canGrantMcpAccess`, außerdem:
+
+```ts
+import { getMcpAccessOf } from '@/lib/mcp/access-db';
+import type { McpAccessLevel } from '@/lib/mcp/access';
+```
+
+und die Funktion anfügen:
+
+```ts
+/**
+ * Wirft ForbiddenError, wenn currentUser die MCP-Stufe von `target` nicht auf `newLevel` setzen darf
+ * (canGrantMcpAccess mit der AKTUELLEN eigenen Stufe aus der Datenbank). Wird NUR aufgerufen, wenn sich die Stufe
+ * tatsächlich ändert (bzw. beim Anlegen `newLevel !== 'NONE'`).
+ */
+export async function assertGrantMcpAccess(
+  currentUser: SessionUser,
+  target: { homeOrganizationId: string; mcpAccess: McpAccessLevel },
+  newLevel: McpAccessLevel,
+): Promise<void> {
+  assertPermission(
+    canGrantMcpAccess(currentUser, await getMcpAccessOf(currentUser.id), target, newLevel),
+    'Keine Berechtigung, dieses MCP-Recht zu vergeben.',
+  );
+}
+```
+
+In `actions.ts` (`updateUser`) im Block `if (nextMcpAccess !== targetUser.mcpAccess) { ... }` den vorhandenen Aufruf `assertPermission(canGrantMcpAccess(...), 'Keine Berechtigung, dieses MCP-Recht zu vergeben.');` (Kommentar zur ALTEN Heimat-Organisation davor **behalten**) ersetzen durch:
+
+```ts
+    await assertGrantMcpAccess(
+      currentUser,
+      { homeOrganizationId: targetUser.homeOrganizationId, mcpAccess: targetUser.mcpAccess },
+      nextMcpAccess,
+    );
+```
+
+`assertGrantMcpAccess` zur Importliste aus `@/lib/users/user-sync` in `actions.ts` hinzufügen. Die Importe `canGrantMcpAccess` (aus `@/lib/auth/permissions`) und `getMcpAccessOf` (aus `@/lib/mcp/access-db`) in `actions.ts` entfernen, **sobald** `grep` zeigt, dass sie dort nicht mehr vorkommen.
 
 - [ ] **Step 3: `actions.ts` auf die Importe umstellen**
 
@@ -117,7 +158,7 @@ git commit -m "refactor: Hilfsfunktionen der Benutzerverwaltung nach lib/users/u
 - Test: `src/lib/users/create-user.db.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1, `UserInput` (`@/lib/validation/user.schema`), `canGrantMcpAccess`, `getMcpAccessOf`, `createToken`, `hashPassword`, `ForbiddenError`.
+- Consumes: Task 1 (inkl. `assertGrantMcpAccess`), `UserInput` (`@/lib/validation/user.schema`), `createToken`, `hashPassword`, `ForbiddenError`.
 - Produces:
   - `type CreateUserResult = { ok: true; user: { id: string; email: string; firstName: string; lastName: string }; activationToken: string } | { ok: false; error?: string; fieldErrors?: FieldErrors }`
   - `createUserCore(currentUser: SessionUser, data: UserInput): Promise<CreateUserResult>` — wirft `ForbiddenError` bei fehlendem Recht (wie bisher `assertPermission`); legt **keine** E-Mail an.
@@ -282,17 +323,22 @@ import {
   assertPermission,
   canGrantBezirksAdmin,
   canGrantBezirksDrohnenAdmin,
-  canGrantMcpAccess,
   canManageDroneGroupFor,
   canManageUsersFor,
 } from '@/lib/auth/permissions';
 import { createToken } from '@/lib/auth/tokens';
 import { prisma } from '@/lib/db/prisma';
-import { getMcpAccessOf } from '@/lib/mcp/access-db';
 import { hashPassword } from '@/lib/password';
 import type { UserInput } from '@/lib/validation/user.schema';
 import type { SessionUser } from '@/types/next-auth';
-import { canGrantAdminFor, syncAdminMemberships, syncDroneMembership, validateSecondaryOrganizationCategory, type FieldErrors } from './user-sync';
+import {
+  assertGrantMcpAccess,
+  canGrantAdminFor,
+  syncAdminMemberships,
+  syncDroneMembership,
+  validateSecondaryOrganizationCategory,
+  type FieldErrors,
+} from './user-sync';
 
 export type CreateUserResult =
   | { ok: true; user: { id: string; email: string; firstName: string; lastName: string }; activationToken: string }
@@ -325,15 +371,7 @@ export async function createUserCore(currentUser: SessionUser, data: UserInput):
   }
   const requestedMcpAccess = data.mcpAccess ?? 'NONE';
   if (requestedMcpAccess !== 'NONE') {
-    assertPermission(
-      canGrantMcpAccess(
-        currentUser,
-        await getMcpAccessOf(currentUser.id),
-        { homeOrganizationId: data.homeOrganizationId, mcpAccess: 'NONE' },
-        requestedMcpAccess,
-      ),
-      'Keine Berechtigung, dieses MCP-Recht zu vergeben.',
-    );
+    await assertGrantMcpAccess(currentUser, { homeOrganizationId: data.homeOrganizationId, mcpAccess: 'NONE' }, requestedMcpAccess);
   }
   // Neu gegenüber der früheren Inline-Fassung: das Recht für die Drohnengruppe wird VOR dem Anlegen geprüft.
   // syncDroneMembership prüft es zwar auch, aber erst nach prisma.user.create - bei fehlendem Recht blieb dadurch
@@ -435,7 +473,7 @@ export async function createUser(_prevState: UserFormState, formData: FormData):
 }
 ```
 
-und oben `import { createUserCore } from '@/lib/users/create-user';` ergänzen. Danach nicht mehr benutzte Importe entfernen (mit `grep` je Name prüfen): voraussichtlich `crypto`, `hashPassword`, `createToken`/`TokenPurpose` (falls `sendPasswordResetEmailToUser` sie noch braucht, bleiben sie), `canGrantBezirksAdmin`, `canGrantBezirksDrohnenAdmin` (werden von `updateUser` weiter gebraucht — bleiben), `getMcpAccessOf`/`canGrantMcpAccess` (von `updateUser` weiter gebraucht — bleiben).
+und oben `import { createUserCore } from '@/lib/users/create-user';` ergänzen. Danach nicht mehr benutzte Importe entfernen (mit `grep` je Name prüfen): voraussichtlich `crypto`, `hashPassword`, `createToken`/`TokenPurpose` (falls `sendPasswordResetEmailToUser` sie noch braucht, bleiben sie), `canGrantBezirksAdmin`, `canGrantBezirksDrohnenAdmin` (werden von `updateUser` weiter gebraucht — bleiben), `getMcpAccessOf`/`canGrantMcpAccess` (seit Task 1 Step 2b nur noch im Helfer `assertGrantMcpAccess`, in `actions.ts` also entfernen, falls `grep` keine Verwendung mehr zeigt).
 
 - [ ] **Step 6: Prüfen**
 
@@ -539,6 +577,7 @@ describe('create_user', () => {
     expect(JSON.stringify(result)).not.toContain(token);
     expect(result.audit).toMatchObject({ targetUserId: row!.id });
     expect(result.audit!.summary).toContain(email('ok'));
+    expect(result.audit!.summary).toContain('durch ');
   });
 
   it('legt Rollen an: Admin für die eigene Feuerwehr, Drohnengruppen-Mitglied mit Ausbildung (als Bezirksadmin)', async () => {
@@ -760,7 +799,7 @@ export const createUserTool = defineTool({
       },
       audit: {
         targetUserId: result.user.id,
-        summary: `Benutzer angelegt: ${result.user.firstName} ${result.user.lastName} <${result.user.email}> (${organizationName})`,
+        summary: `Benutzer angelegt: ${result.user.firstName} ${result.user.lastName} <${result.user.email}> (${organizationName}), durch ${user.email}`,
       },
     };
   },

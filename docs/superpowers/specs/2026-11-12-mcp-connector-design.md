@@ -50,7 +50,7 @@ Connector beantwortet Abfragen zu Benutzerverwaltung, Drohnengruppe, Kalender un
 
 - Neues Feld `User.mcpAccess` (Enum `McpAccess`: `NONE` Standard, `READ`, `WRITE`). `WRITE` schließt `READ`
   ein. Ein Feld statt zwei Schaltern verhindert den ungültigen Zustand "Write ohne Read".
-- Neue Funktion `canGrantMcpAccess(user, target, level)` in `permissions.ts`:
+- Neue Funktion `canGrantMcpAccess(currentUser, viewerAccess, target, newLevel)` in `permissions.ts` (`viewerAccess` ist die eigene MCP-Stufe des Aufrufers, aus der Datenbank gelesen):
   - Bezirksadmin darf jede Stufe an jeden vergeben.
   - Abschnitts-/Feuerwehr-Admin nur, wenn `canManageUsersFor(user, target.homeOrganizationId)` gilt **und**
     sowohl die neue Stufe als auch die bisherige Stufe des Ziels **nicht höher** sind als die eigene.
