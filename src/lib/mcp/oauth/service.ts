@@ -3,7 +3,7 @@ import { hasMcpAccess } from '@/lib/mcp/access';
 import { OauthError } from './errors';
 import { isAllowedRedirectUri } from './redirect-uris';
 import { grantedScope } from './scopes';
-import { hashSecret, isValidCodeChallenge, randomSecret } from './secrets';
+import { hashSecret, isValidCodeChallenge, randomSecret, verifyPkceS256 } from './secrets';
 
 export const CODE_TTL_MS = 60_000;
 export const ACCESS_TTL_MS = 60 * 60 * 1000;
@@ -112,4 +112,131 @@ export async function createAuthorizationCode(input: { userId: string; request: 
     },
   });
   return { code };
+}
+
+// ---------------------------------------------------------------- Token
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: 'Bearer';
+  expires_in: number;
+  refresh_token: string;
+  scope: string;
+}
+
+const invalidGrant = (message = 'Der Code oder Refresh-Token ist ungültig, abgelaufen oder bereits benutzt.') =>
+  new OauthError('invalid_grant', message);
+
+async function issueTokens(input: { userId: string; oauthClientId: string; scope: string }): Promise<TokenResponse> {
+  const accessToken = randomSecret();
+  const refreshToken = randomSecret();
+  await prisma.oauthToken.create({
+    data: {
+      accessTokenHash: hashSecret(accessToken),
+      refreshTokenHash: hashSecret(refreshToken),
+      oauthClientId: input.oauthClientId,
+      userId: input.userId,
+      scope: input.scope,
+      expiresAt: new Date(Date.now() + ACCESS_TTL_MS),
+      refreshExpiresAt: new Date(Date.now() + REFRESH_TTL_MS),
+    },
+  });
+  return {
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: Math.floor(ACCESS_TTL_MS / 1000),
+    refresh_token: refreshToken,
+    scope: input.scope,
+  };
+}
+
+/**
+ * Autorisierungscode gegen Token tauschen. PKCE wird VOR dem Verbrauch geprüft (Fehlversuche verbrennen den Code
+ * nicht und erlauben kein Raten); der Verbrauch selbst ist atomar (updateMany ... usedAt: null), zwei gleichzeitige
+ * Einlösungen können also nie beide gelingen.
+ */
+export async function exchangeAuthorizationCode(input: {
+  code: string;
+  clientId: string;
+  redirectUri: string;
+  codeVerifier: string;
+}): Promise<TokenResponse> {
+  const row = await prisma.oauthAuthorizationCode.findUnique({
+    where: { codeHash: hashSecret(input.code) },
+    include: { oauthClient: true },
+  });
+  if (
+    !row ||
+    row.usedAt ||
+    row.expiresAt.getTime() <= Date.now() ||
+    row.oauthClient.clientId !== input.clientId ||
+    row.redirectUri !== input.redirectUri ||
+    !verifyPkceS256(input.codeVerifier, row.codeChallenge)
+  ) {
+    throw invalidGrant();
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: row.userId }, select: { isActive: true, mcpAccess: true } });
+  if (!user || !user.isActive || !hasMcpAccess(user.mcpAccess, 'READ')) throw invalidGrant('Dieses Konto hat keinen MCP-Zugriff.');
+  const scope = grantedScope(row.scope, user.mcpAccess);
+  if (!scope) throw invalidGrant();
+
+  const claimed = await prisma.oauthAuthorizationCode.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: new Date() } });
+  if (claimed.count !== 1) throw invalidGrant();
+
+  return issueTokens({ userId: row.userId, oauthClientId: row.oauthClientId, scope });
+}
+
+/** Widerruft alle noch gültigen Token eines Benutzers (optional nur für einen Client). Gibt die Anzahl zurück. */
+export async function revokeTokensOfUser(userId: string, oauthClientId?: string): Promise<number> {
+  const result = await prisma.oauthToken.updateMany({
+    where: { userId, revokedAt: null, ...(oauthClientId ? { oauthClientId } : {}) },
+    data: { revokedAt: new Date() },
+  });
+  return result.count;
+}
+
+/**
+ * Refresh mit Rotation: der vorgelegte Refresh-Token wird widerrufen und ein neuer Satz ausgegeben. Legt jemand einen
+ * bereits widerrufenen/ersetzten Refresh-Token vor, gilt das als Diebstahlsverdacht - dann werden ALLE Token des
+ * Benutzers für diesen Client widerrufen. Der Umfang wird auf die aktuelle Stufe zugeschnitten.
+ */
+export async function refreshAccessToken(input: { refreshToken: string; clientId: string }): Promise<TokenResponse> {
+  const row = await prisma.oauthToken.findUnique({
+    where: { refreshTokenHash: hashSecret(input.refreshToken) },
+    include: { oauthClient: true },
+  });
+  if (!row || row.oauthClient.clientId !== input.clientId) throw invalidGrant();
+
+  if (row.revokedAt) {
+    await revokeTokensOfUser(row.userId, row.oauthClientId);
+    throw invalidGrant();
+  }
+  if (row.refreshExpiresAt.getTime() <= Date.now()) throw invalidGrant();
+
+  const user = await prisma.user.findUnique({ where: { id: row.userId }, select: { isActive: true, mcpAccess: true } });
+  if (!user || !user.isActive || !hasMcpAccess(user.mcpAccess, 'READ')) {
+    await revokeTokensOfUser(row.userId, row.oauthClientId);
+    throw invalidGrant('Dieses Konto hat keinen MCP-Zugriff.');
+  }
+  const scope = grantedScope(row.scope, user.mcpAccess);
+  if (!scope) throw invalidGrant();
+
+  const rotated = await prisma.oauthToken.updateMany({ where: { id: row.id, revokedAt: null }, data: { revokedAt: new Date() } });
+  if (rotated.count !== 1) throw invalidGrant();
+
+  return issueTokens({ userId: row.userId, oauthClientId: row.oauthClientId, scope });
+}
+
+/** RFC 7009: Access- oder Refresh-Token widerrufen; unbekannte Werte werden stillschweigend ignoriert. */
+export async function revokeToken(input: { token: string; clientId?: string }): Promise<void> {
+  const hash = hashSecret(input.token);
+  await prisma.oauthToken.updateMany({
+    where: {
+      revokedAt: null,
+      OR: [{ accessTokenHash: hash }, { refreshTokenHash: hash }],
+      ...(input.clientId ? { oauthClient: { clientId: input.clientId } } : {}),
+    },
+    data: { revokedAt: new Date() },
+  });
 }
