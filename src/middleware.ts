@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/auth.config';
+import { buildLoginCallbackUrl } from '@/lib/auth/callback-url';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -34,7 +35,7 @@ export default auth((req) => {
   // token.id wird im jwt()-Callback von auth.config.ts geleert, wenn der Benutzer nicht mehr existiert/aktiv ist.
   if (!req.auth?.user?.id && !isPublic) {
     const loginUrl = new URL('/login', req.nextUrl.origin);
-    loginUrl.searchParams.set('callbackUrl', pathname);
+    loginUrl.searchParams.set('callbackUrl', buildLoginCallbackUrl(pathname, req.nextUrl.search));
     return NextResponse.redirect(loginUrl);
   }
 });
