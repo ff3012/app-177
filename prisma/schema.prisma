@@ -322,6 +322,13 @@ model User {
   // beide haben. Siehe docs/superpowers/specs/2026-08-10-bezirksadmin-drohnenadmin-rollen-design.md.
   isBezirksDrohnenAdmin Boolean @default(false)
 
+  // Recht für den MCP-Connector (siehe McpAccess). Vergabe: lib/auth/permissions.ts canGrantMcpAccess.
+  mcpAccess McpAccess @default(NONE)
+
+  oauthTokens    OauthToken[]
+  oauthAuthCodes OauthAuthorizationCode[]
+  mcpAuditLogs   McpAuditLog[]
+
   // Persönliche, gespeicherte Kalender-Filtereinstellung (siehe docs/superpowers/specs/
   // 2026-09-01-kalender-sondergruppen-design.md) - welche Sondergruppen dieses Mitglied im eigenen
   // Kalender ausblendet. Leeres Array ist ein bewusster Opt-in-Sentinel ("noch keine Auswahl
@@ -642,6 +649,8 @@ model AppSettings {
   lastBackupAt                 DateTime?
   lastS3BackupAt               DateTime?
   updatedAt                    DateTime  @updatedAt
+  // Funktionsschalter für den MCP-Connector. Aus: /api/mcp und /oauth/* antworten wie "nicht vorhanden".
+  mcpEnabled Boolean @default(false)
 }
 
 model DroneFlight {
@@ -673,6 +682,20 @@ enum ChecklistStatus {
   DRAFT
   SUBMITTED
   DISCARDED
+}
+
+// MCP-Connector (Claude/ChatGPT), siehe docs/superpowers/specs/2026-11-12-mcp-connector-design.md.
+// WRITE schließt READ ein.
+enum McpAccess {
+  NONE
+  READ
+  WRITE
+}
+
+enum McpAuditOutcome {
+  OK
+  DENIED
+  ERROR
 }
 
 // Checkliste Drohnenflug (BOS-Formular v9). Der vollständige Formularstand liegt in "data" (Json, Schema:
@@ -1155,4 +1178,72 @@ model WastlImageCache {
   data      Bytes
   mimeType  String
   fetchedAt DateTime @default(now())
+}
+
+// OAuth-Client eines MCP-Connectors (Dynamic Client Registration). Öffentlicher Client (PKCE, kein Secret).
+// `clientId` ist die nach außen gegebene Kennung, `id` der interne Schlüssel.
+model OauthClient {
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  name         String
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  authCodes OauthAuthorizationCode[]
+  tokens    OauthToken[]
+}
+
+// Einmal einlösbarer Autorisierungscode, nur als SHA-256-Hash gespeichert, 60 Sekunden gültig.
+model OauthAuthorizationCode {
+  id            String      @id @default(cuid())
+  codeHash      String      @unique
+  oauthClientId String
+  oauthClient   OauthClient @relation(fields: [oauthClientId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  codeChallenge String
+  scope         String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId])
+}
+
+// Access-Token (1 h) + Refresh-Token (30 Tage, rotierend), beide nur als Hash. revokedAt gesetzt =
+// widerrufen ODER durch Rotation ersetzt (Wiederverwendung eines ersetzten Refresh-Tokens widerruft die ganze Kette).
+model OauthToken {
+  id               String      @id @default(cuid())
+  accessTokenHash  String      @unique
+  refreshTokenHash String      @unique
+  oauthClientId    String
+  oauthClient      OauthClient @relation(fields: [oauthClientId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope            String
+  expiresAt        DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime    @default(now())
+
+  @@index([userId, oauthClientId])
+}
+
+// Prüfprotokoll: alle Schreibaktionen und alle abgelehnten Zugriffe. summary enthält bewusst keine
+// Freitexte (Telefonnummer u. Ä.).
+model McpAuditLog {
+  id           String          @id @default(cuid())
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  clientId     String?
+  tool         String
+  outcome      McpAuditOutcome
+  targetUserId String?
+  summary      String
+  createdAt    DateTime        @default(now())
+
+  @@index([createdAt])
+  @@index([userId, tool, createdAt])
 }

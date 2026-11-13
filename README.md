@@ -70,6 +70,13 @@ kein App-Store-Build nötig.
 - **Feedback** – jeder Benutzer kann über das Profilmenü eine Sterne-Bewertung + Freitext senden.
 - **Native Hüllen (Capacitor)** – `capacitor.config.ts` und `android/` verpacken die gehostete Web-App in
   eine native App (WebView auf die Live-Domain); Push läuft dort über Firebase Cloud Messaging.
+- **MCP-Connector für Claude und ChatGPT** – Benutzer mit dem Recht "KI-Zugriff (MCP)" (Lesen/Schreiben, in der Benutzerverwaltung
+  vergeben) können Claude oder ChatGPT mit der App verbinden: Abfragen zu Benutzerverwaltung, Drohnengruppe (Flugbuch,
+  90-Tage-Regel, Einsatzbereitschaft), Kalender und Atemschutzstatus sowie (mit "Schreiben") Neuanlage von Benutzern. Die KI sieht nur,
+  was der Benutzer auch in der App sehen darf. Anmeldung per OAuth mit dem normalen App-Login, Verbindungen verwaltet jeder unter
+  "Verbundene KI-Apps" im Profil; ein-/ausgeschaltet (standardmäßig aus) vom Bezirksadmin unter Verwaltung → KI-Zugriff. Prüfprotokoll für
+  Schreibaktionen und abgelehnte Zugriffe. Als Connector-URL wird `https://<Domain>/api/mcp` eingetragen (genau die `AUTH_URL` der App,
+  ohne Schrägstrich am Ende). Technik: [src/lib/mcp/CLAUDE.md](src/lib/mcp/CLAUDE.md), Einführung: [docker/README.md](docker/README.md).
 
 ## Tech-Stack
 
@@ -78,7 +85,7 @@ Tailwind CSS + shadcn/ui (Radix) in der Verwaltung · Mailjet (Transaktions-E-Ma
 Firebase Cloud Messaging (News-Modul) · exceljs (Excel-Export/Import) · ical-generator/node-ical
 (Kalender .ics Export/Import) · google-auth-library (Google-Kalender-Rückschreiben) ·
 qrcode/sharp (Dashboard Feuerwehrhaus, Foto-Vorschauen) · @react-pdf/renderer (Berichts- und
-Checklisten-PDFs) · @aws-sdk/client-s3 (Exoscale SOS: Foto-Uploads, Berichts-/Checklisten-PDFs,
+Checklisten-PDFs) · @modelcontextprotocol/sdk (MCP-Endpunkt) · @aws-sdk/client-s3 (Exoscale SOS: Foto-Uploads, Berichts-/Checklisten-PDFs,
 Backup-Status-Check) · Capacitor (native Hülle) · vitest (Tests)
 
 ## Lokale Entwicklung
@@ -124,7 +131,7 @@ ersetzen es.
 Siehe [docker/README.md](docker/README.md) für das Produktions-Setup (Hetzner Ubuntu Server, Docker
 Compose, Caddy, Backups inkl. Off-Box-Kopie nach Exoscale SOS mit 30 Tagen Aufbewahrung, VAPID-Schlüssel,
 Cronjobs für terminierte News/Kalender-Import/Atemschutz-Warnung/System-Check/Facebook-Feed/
-Foto-Aufräumung/Berichts-Aufbewahrung).
+Foto-Aufräumung/Berichts-Aufbewahrung/MCP-Aufräumen).
 
 ## Bezirk 17 St. Pölten
 

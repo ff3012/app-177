@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 
-> **Module-specific deep-dive documentation has moved to nested CLAUDE.md files** (loaded automatically when Claude works in that directory): Kalender → `src/components/calendar/CLAUDE.md`, Drohnengruppe → `src/components/drone/CLAUDE.md`, Verwaltung/admin → `src/app/(app)/admin/CLAUDE.md`, Email → `src/lib/email/CLAUDE.md`, News → `src/lib/push/CLAUDE.md`, Meine Feuerwehr/Fahrzeug-Reservierungen/Tätigkeitsbericht-Übungsbericht/Startbildschirm/Funktionsschalter → `src/app/(app)/meine-feuerwehr/CLAUDE.md`, Dashboard Feuerwehrhaus → `src/app/dashboard/CLAUDE.md`. This root file keeps only universal, cross-cutting content.
+> **Module-specific deep-dive documentation has moved to nested CLAUDE.md files** (loaded automatically when Claude works in that directory): Kalender → `src/components/calendar/CLAUDE.md`, Drohnengruppe → `src/components/drone/CLAUDE.md`, Verwaltung/admin → `src/app/(app)/admin/CLAUDE.md`, Email → `src/lib/email/CLAUDE.md`, News → `src/lib/push/CLAUDE.md`, MCP-Connector (Claude/ChatGPT) → `src/lib/mcp/CLAUDE.md`, Meine Feuerwehr/Fahrzeug-Reservierungen/Tätigkeitsbericht-Übungsbericht/Startbildschirm/Funktionsschalter → `src/app/(app)/meine-feuerwehr/CLAUDE.md`, Dashboard Feuerwehrhaus → `src/app/dashboard/CLAUDE.md`. This root file keeps only universal, cross-cutting content.
 
 ## What this is
 
@@ -22,9 +22,10 @@ list view), **Drohnengruppe** (drone flight log, including a QR-code quick-regis
 **News** (Web Push notifications to a Feuerwehr or a Drohnengruppe, sent immediately or scheduled — see
 below), plus **Meine Feuerwehr** (Atemschutz, Fahrzeug-Reservierungen, Tätigkeits-/Übungsbericht), **Foto-Uploads**
 (short-lived photo collections per Feuerwehr, S3, auto-deleted after 96 h), **Verwaltung**, **Dashboard
-Feuerwehrhaus**, public self-registration (`/registrieren`, an admin approves) and the Drohnengruppe's
+Feuerwehrhaus**, public self-registration (`/registrieren`, an admin approves), the Drohnengruppe's
 **Checkliste Drohnenflug** (nine-step BOS checklist wizard, test version behind a per-group feature switch;
-documented in `src/components/drone/CLAUDE.md`). Installable as a PWA (manifest + minimal service worker) so it can be added to an iOS/Android home
+documented in `src/components/drone/CLAUDE.md`) and the **MCP-Connector** for Claude/ChatGPT (`/api/mcp` + OAuth,
+per-user right `User.mcpAccess`, behind `AppSettings.mcpEnabled`, default off; documented in `src/lib/mcp/CLAUDE.md`). Installable as a PWA (manifest + minimal service worker) so it can be added to an iOS/Android home
 screen without an app-store build; a Capacitor native shell (`capacitor.config.ts`, `android/`, Android push via FCM)
 also wraps the live web app. All UI copy and commit-adjacent docs are German; code identifiers are a
 German/English mix (keep matching the existing convention in a given file).
@@ -63,7 +64,8 @@ Tests: vitest (`vitest.config.ts` = unit tests, excludes `*.db.test.ts`; `vitest
 sequentially against whatever `DATABASE_URL` in `.env` points to — there is NO guard, so only run it with the local dev database, never a
 dev/prod URL). Both configs set
 `oxc.jsx.runtime: 'automatic'` (vite 8 uses oxc, the old `esbuild` option is ignored). Coverage today is the Checkliste
-Drohnenflug (`src/lib/drone/checklist/*`, `src/lib/auth/permissions.checklist.test.ts`) and a few validation helpers; most older
+Drohnenflug (`src/lib/drone/checklist/*`, `src/lib/auth/permissions.checklist.test.ts`), the MCP-Connector (`src/lib/mcp/**`, `src/app/api/mcp/*`, unit and `*.db.test.ts`;
+the retention DB test deletes old real rows in the local database, so again: local DB only) and a few validation helpers; most older
 modules have no automated tests, so for those the verification remains `tsc` + `npm run build` + manual checks.
 
 Local Postgres for dev: `docker compose -f docker-compose.dev.yml up -d` (exposes `localhost:5432`), then copy
@@ -108,7 +110,7 @@ production bug, caught only after the News module's scheduled-send feature made 
 remove or "simplify" the `TZ` env var or the `tzdata` install.
 
 **Host cron scripts (`docker/*.sh`: backup, send-scheduled-news, system-check-email, atemschutz-warnung-email, facebook-fetch,
-kalender-ics-sync, photo-cleanup, report-retention)** run from the host crontab outside Docker and read `.env` line by line
+kalender-ics-sync, photo-cleanup, report-retention, mcp-retention)** run from the host crontab outside Docker and read `.env` line by line
 (never `source` it). Three lessons, all from real incidents:
 - **No `aws s3api` in `backup.sh`.** Its S3 retention used `aws s3api list-objects-v2 --query`; with aws-cli 2.31 on the host's system
   Python 3.14 that command crashes ("badly formed help string") and `set -e` aborted the script right after the upload — for months
@@ -126,8 +128,8 @@ kalender-ics-sync, photo-cleanup, report-retention)** run from the host crontab 
 **Stack**: Next.js App Router (TypeScript) · PostgreSQL via Prisma · Auth.js v5 (beta) with the Credentials
 provider, JWT sessions · Tailwind · `react-hook-form` + `zod` for all forms · `exceljs` for XLSX export ·
 `ical-generator` for .ics · Mailjet REST API directly via `fetch` (no SDK) for transactional email ·
-`@aws-sdk/client-s3` (+ `s3-request-presigner`) for the System Check's live S3/Exoscale probe and for the Foto-Upload, Bericht-PDF and Checklisten-PDF storage (one of two SDK dependencies
-in the codebase, see "System Check" below for why) · `firebase-admin` (the other one — the FCM Admin SDK,
+`@aws-sdk/client-s3` (+ `s3-request-presigner`) for the System Check's live S3/Exoscale probe and for the Foto-Upload, Bericht-PDF and Checklisten-PDF storage (one of three SDK dependencies
+in the codebase, see "System Check" below for why) · `firebase-admin` (the second — the FCM Admin SDK,
 used specifically for native Android push, see `src/lib/push/fcm-client.ts` and
 `docs/superpowers/specs/2026-08-27-android-native-push-fcm-design.md`; it's there because it was the
 explicit, approved choice for that feature per the design spec, not because this codebase generally prefers
@@ -140,13 +142,19 @@ searchable multi-select in `UserFormSheet` (see Benutzerverwaltung-Brief.md unde
 `google-auth-library` for the Google-Calendar-Rückschreiben write side (see "Google-Kalender-
 Rückschreiben" below) - only the lean auth/JWT-signing package, not the full `googleapis` client,
 same "SDK only where real cryptography is involved" reasoning as `@aws-sdk/client-s3` above. `@react-pdf/renderer` renders the
-Tätigkeits-/Übungsbericht and Checkliste PDFs server-side (Helvetica, no custom fonts); `vitest` is the test runner (see Commands);
+Tätigkeits-/Übungsbericht and Checkliste PDFs server-side (Helvetica, no custom fonts); `@modelcontextprotocol/sdk` (the third SDK dependency) implements the MCP endpoint (`src/lib/mcp/server.ts`, web-standard Streamable-HTTP transport, stateless): the
+protocol layer (JSON-RPC, transport, schema validation) is not worth hand-rolling, the same "SDK only where a protocol or real cryptography is involved" reasoning as above; it needs
+`zod` >= 3.25 (`package.json` has `^3.25.76`). `vitest` is the test runner (see Commands);
 `@capacitor/*` + `capacitor.config.ts` wrap the live web app in native Android/iOS shells.
 
 ### Route groups
 
 - `src/app/(auth)/*` — public pages: `/login`, `/passwort-vergessen`, `/passwort-zuruecksetzen/[token]`,
   `/aktivieren/[token]`. Listed explicitly in `src/middleware.ts`'s `PUBLIC_PATH_PREFIXES`.
+- `src/app/api/mcp/*`, `src/app/oauth/*`, `src/app/.well-known/*` — the MCP-Connector's endpoints (Bearer-token MCP endpoint, OAuth 2.1 server, discovery metadata), all
+  top-level and without `(app)` chrome. `/.well-known`, `/api/mcp`, `/oauth/token`, `/oauth/register` and `/oauth/revoke` are in `PUBLIC_PATH_PREFIXES`; `/oauth/authorize` deliberately
+  is NOT (it is the one OAuth page behind the normal login, the middleware passes its query on as `callbackUrl`). The whole feature answers 404 while `AppSettings.mcpEnabled` is off.
+  See `src/lib/mcp/CLAUDE.md`.
 - `src/app/(app)/*` — everything else. `src/app/(app)/layout.tsx` calls `requireUser()` for every page in
   this group, so individual pages don't need their own "am I logged in" check — but they still need their
   own **authorization** check (see Permissions below), since the layout only proves you're logged in, not

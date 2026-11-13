@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { canAccessUserManagementAdmin, canManageDroneGroupFor, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
+import { getMcpAccessOf } from '@/lib/mcp/access-db';
 import { getReachableScopes, resolveAdminScope } from '@/lib/admin/scope';
 import { UserManagementSection, type UserRow } from './user-management-section';
 import { PendingRegistrationsSection, type PendingRegistrationRow } from './pending-registrations-section';
@@ -176,6 +177,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
   }
   const fullAdmin = isBezirksAdmin(currentUser);
   const viewerIsBezirksDrohnenAdmin = currentUser.isBezirksDrohnenAdmin;
+  const viewerMcpAccess = await getMcpAccessOf(currentUser.id);
   const reachableScopes = await getReachableScopes(currentUser);
 
   const abschnitte = reachableScopes
@@ -338,6 +340,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
       secondaryDienstgradId: u.secondaryDienstgradId ?? '',
       isBezirksAdmin: u.isBezirksAdmin,
       isBezirksDrohnenAdmin: u.isBezirksDrohnenAdmin,
+      mcpAccess: u.mcpAccess,
     };
   });
 
@@ -389,6 +392,7 @@ export default async function BenutzerverwaltungPage({ searchParams }: Benutzerv
         isFullAdmin={fullAdmin}
         viewerIsBezirksAdmin={fullAdmin}
         viewerIsBezirksDrohnenAdmin={viewerIsBezirksDrohnenAdmin}
+        viewerMcpAccess={viewerMcpAccess}
         totalUsersCount={totalUsersCount}
         totalOrgsCount={homeOrgGroups.length}
         filteredCount={filteredCount}

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { canSendAnyNews, isBezirksAdmin } from '@/lib/auth/permissions';
 import { getVerwaltungNavItem } from '@/lib/nav-items';
 import { getUnreadNewsCount } from '@/lib/news/audience';
+import { getKiAppsVisibility } from '@/lib/mcp/connections';
 import { Nav } from '@/components/layout/nav';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
 import { ProfileMenu } from '@/components/layout/profile-menu';
@@ -32,7 +33,7 @@ const isDevStage = process.env.APP_STAGE === 'dev';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
-  const [homeOrganization, secondaryOrganization, adminOrganizations, unreadNewsCount] = await Promise.all([
+  const [homeOrganization, secondaryOrganization, adminOrganizations, unreadNewsCount, showKiApps] = await Promise.all([
     // Explizites select statt findUnique ohne select: wappenImageData ist ein potenziell
     // mehrere hundert KB großer Bytes-Blob, der bei jeder Navigation sonst unnötig mitgeladen
     // würde, obwohl hier nur wappenImageMimeType (Präsenz-Check) gebraucht wird.
@@ -50,6 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ? prisma.organization.findMany({ where: { id: { in: user.feuerwehrAdminOrgIds } } })
       : Promise.resolve([]),
     getUnreadNewsCount(user.id),
+    getKiAppsVisibility(user.id),
   ]);
 
   const mobileHeaderLabel = homeOrganization ? buildMobileHeaderLabel(homeOrganization) : 'BFKDO St. Pölten';
@@ -110,6 +112,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 adminOrganizationNames={adminOrganizations.map((org) => org.shortName ?? org.name)}
                 isDrohnengruppeMember={user.isDrohnengruppeMember}
                 canSendAnyNews={canSendAnyNews(user)}
+                showKiApps={showKiApps}
                 unreadNewsCount={unreadNewsCount}
                 vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
                 logoutAction={logoutAction}

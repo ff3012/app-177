@@ -42,7 +42,11 @@ export function getAdminNavItems(user: SessionUser): AdminNavItem[] {
   }
 
   if (isBezirksAdmin(user)) {
-    items.push({ href: '/admin/email', label: 'E-Mail' }, { href: '/admin/status', label: 'Status' });
+    items.push(
+      { href: '/admin/email', label: 'E-Mail' },
+      { href: '/admin/status', label: 'Status' },
+      { href: '/admin/mcp', label: 'KI-Zugriff' },
+    );
   }
 
   return items;

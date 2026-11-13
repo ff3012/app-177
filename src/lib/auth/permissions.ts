@@ -1,5 +1,6 @@
 import type { SessionUser } from '@/types/next-auth';
 import type { NewsAudience } from '@prisma/client';
+import { mcpRank, type McpAccessLevel } from '@/lib/mcp/access';
 
 export function isBezirksAdmin(user: SessionUser): boolean {
   return user.isBezirksAdmin;
@@ -413,6 +414,25 @@ export function canManageUserRecord(
     return false;
   }
   return true;
+}
+
+/**
+ * Darf currentUser die MCP-Stufe von `target` auf `newLevel` setzen? Bezirksadmin: immer. Sonst nur im eigenen
+ * Verwaltungsbereich (canManageUsersFor) UND ohne die eigene Stufe zu überschreiten - weder die neue noch die
+ * bisherige Stufe des Ziels darf höher sein als viewerAccess. Ein Admin ohne WRITE kann so weder WRITE vergeben noch
+ * einem WRITE-Benutzer die Stufe senken. Gleiche Stufe = keine Änderung = immer erlaubt (damit ein unverändert
+ * mitgeschicktes Formularfeld nie eine Prüfung auslöst).
+ */
+export function canGrantMcpAccess(
+  currentUser: SessionUser,
+  viewerAccess: McpAccessLevel,
+  target: { homeOrganizationId: string; mcpAccess: McpAccessLevel },
+  newLevel: McpAccessLevel,
+): boolean {
+  if (newLevel === target.mcpAccess) return true;
+  if (isBezirksAdmin(currentUser)) return true;
+  if (!canManageUsersFor(currentUser, target.homeOrganizationId)) return false;
+  return mcpRank(newLevel) <= mcpRank(viewerAccess) && mcpRank(target.mcpAccess) <= mcpRank(viewerAccess);
 }
 
 /** Sichtbarkeit des Verwaltungsmenüs "Benutzer" - Site-Admin ODER Admin von mindestens einer

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { TokenPurpose } from '@prisma/client';
+import { TokenPurpose, type Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 
 const ACTIVATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -16,12 +16,19 @@ function hashToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
 }
 
-/** Erzeugt einen neuen One-Time-Token für den Benutzer und gibt den (rohen, ungehashten) Token zurück. */
-export async function createToken(userId: string, purpose: TokenPurpose): Promise<string> {
+/**
+ * Erzeugt einen neuen One-Time-Token für den Benutzer und gibt den (rohen, ungehashten) Token zurück.
+ * `db` erlaubt den Aufruf innerhalb einer Transaktion (z. B. beim Anlegen eines Benutzers).
+ */
+export async function createToken(
+  userId: string,
+  purpose: TokenPurpose,
+  db: Prisma.TransactionClient | PrismaClient = prisma,
+): Promise<string> {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const ttl = TTL_BY_PURPOSE[purpose];
 
-  await prisma.passwordToken.create({
+  await db.passwordToken.create({
     data: {
       userId,
       token: hashToken(rawToken),
