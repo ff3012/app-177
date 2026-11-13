@@ -6,12 +6,19 @@ import { after } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { canManageChecklists } from '@/lib/auth/permissions';
-import { createChecklistDraft, discardChecklist, saveChecklistDraft, submitChecklist } from '@/lib/drone/checklist/service';
+import {
+  createChecklistDraft,
+  deleteChecklist,
+  discardChecklist,
+  saveChecklistDraft,
+  submitChecklist,
+} from '@/lib/drone/checklist/service';
 import type { MissingItem } from '@/lib/drone/checklist/rules';
 import { deliverChecklist } from '@/lib/drone/checklist/delivery';
 
 export type SaveResult = { ok: true; savedAt: string } | { ok: false; error: string };
 export type SubmitResult = { ok: true } | { ok: false; error: string; missing?: MissingItem[] };
+export type DeleteResult = { ok: true } | { ok: false; error: string };
 
 /** Legt einen Entwurf an und öffnet den Wizard (Formular-Action der Karte "Checkliste starten"). */
 export async function startChecklist(droneGroupId: string): Promise<void> {
@@ -39,6 +46,16 @@ export async function discardChecklistAction(id: string): Promise<void> {
   const result = await discardChecklist(user, id);
   if (!result.ok && result.code === 'NOT_FOUND') notFound();
   revalidatePath('/drohnen');
+}
+
+/** Endgültig löschen (nur Entwürfe, Ersteller oder Admin der Gruppe, nicht mit verknüpftem Flug) - Aktion der Entwurfsliste. */
+export async function deleteChecklistAction(id: string): Promise<DeleteResult> {
+  const user = await requireUser();
+  const result = await deleteChecklist(user, id);
+  revalidatePath('/drohnen');
+  revalidatePath('/admin/drohnen/checklisten');
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 /**

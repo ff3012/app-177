@@ -10,6 +10,7 @@ import { viennaDateParts } from '@/lib/drone/checklist/columns';
 import { AdminMobileTabs } from '@/components/admin/admin-mobile-tabs';
 import { getAdminNavItems } from '@/lib/admin/nav-items';
 import { resendChecklistMailAction } from '@/app/(app)/drohnen/checkliste/actions';
+import { DeleteDraftButton } from '@/components/drone/checklist/delete-draft-button';
 
 const PAGE_SIZE = 25;
 const STATUS_FILTERS: { key: string; label: string; status?: ChecklistStatus }[] = [
@@ -129,6 +130,7 @@ export default async function ChecklistenVerwaltungPage({
                       {item.createdById === user.id ? 'Fortsetzen' : 'Ansehen'}
                     </Link>
                   )}
+                  {item.status === 'DRAFT' && <DeleteDraftButton checklistId={item.id} title={item.title} inFlight={item.inFlight} variant="text" />}
                 </div>
               </li>
             );

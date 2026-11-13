@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { startChecklist } from '@/app/(app)/drohnen/checkliste/actions';
 import { TOTAL_STEPS } from '@/lib/drone/checklist/labels';
 import type { DraftListItem } from '@/lib/drone/checklist/queries';
+import { DeleteDraftButton } from './delete-draft-button';
 import { DiscardDraftButton } from './discard-draft-button';
 
 function savedAt(date: Date): string {
@@ -55,7 +56,8 @@ export function ChecklistCard({ droneGroupId, drafts, canStart }: { droneGroupId
                 >
                   {draft.inFlight ? 'Zum Flug' : 'Fortsetzen'}
                 </Link>
-                {draft.isOwn && <DiscardDraftButton checklistId={draft.id} title={draft.title} />}
+                {draft.canManage && <DiscardDraftButton checklistId={draft.id} title={draft.title} />}
+                {draft.canManage && <DeleteDraftButton checklistId={draft.id} title={draft.title} inFlight={draft.inFlight} />}
               </li>
             ))}
           </ul>

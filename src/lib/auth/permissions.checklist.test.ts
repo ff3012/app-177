@@ -3,6 +3,7 @@ import type { SessionUser } from '@/types/next-auth';
 import {
   canConfirmChecklist,
   canCreateChecklist,
+  canDeleteChecklist,
   canDiscardChecklist,
   canDownloadChecklistPdf,
   canEditChecklist,
@@ -205,6 +206,27 @@ describe('canDiscardChecklist', () => {
     }
     expect(canDiscardChecklist(filler, submitted, GROUP)).toBe(false);
     expect(canDiscardChecklist(groupAdmin, discarded, GROUP)).toBe(false);
+  });
+});
+
+describe('canDeleteChecklist', () => {
+  it('erlaubt Ersteller und Admins, einen Entwurf endgültig zu löschen', () => {
+    for (const u of [filler, groupAdmin, bezirksDrohnenAdmin, bezirksAdmin, abschnittsAdmin]) {
+      expect(canDeleteChecklist(u, draft, GROUP), u.id).toBe(true);
+    }
+  });
+
+  it('verweigert allen anderen (auch BOS1-Piloten und anderen Mitgliedern)', () => {
+    for (const u of [member('bos1'), otherMember, viewer, foreignMember, foreignAdmin, outsider]) {
+      expect(canDeleteChecklist(u, draft, GROUP), u.id).toBe(false);
+    }
+  });
+
+  it('löscht nur Entwürfe: abgeschlossene und verworfene nie, auch nicht der Admin oder der Ersteller', () => {
+    for (const u of [filler, groupAdmin, bezirksAdmin]) {
+      expect(canDeleteChecklist(u, submitted, GROUP), u.id).toBe(false);
+      expect(canDeleteChecklist(u, discarded, GROUP), u.id).toBe(false);
+    }
   });
 });
 

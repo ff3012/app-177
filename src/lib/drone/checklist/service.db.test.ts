@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import type { SessionUser } from '@/types/next-auth';
 import { OPERATION_CHECK_KEYS, PREFLIGHT_CHECK_KEYS, type ChecklistData } from './data';
 import { viennaDateParts } from './columns';
-import { createChecklistDraft, discardChecklist, saveChecklistDraft, submitChecklist } from './service';
+import { createChecklistDraft, deleteChecklist, discardChecklist, saveChecklistDraft, submitChecklist } from './service';
 
 const RUN = `ck-test-${Date.now()}`;
 const allChecked = (keys: readonly string[]) => Object.fromEntries(keys.map((k) => [k, true]));
@@ -94,6 +94,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Flüge, die Tests an Checklisten gehängt haben, zuerst (Fremdschlüssel).
+  await prisma.droneFlight.deleteMany({ where: { location: { startsWith: RUN } } });
   await prisma.droneChecklist.deleteMany({ where: { createdById: { in: userIds } } });
   await prisma.drone.deleteMany({ where: { name: { startsWith: RUN } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -273,6 +275,84 @@ describe('discardChecklist', () => {
     const id = await newDraft();
     await discardChecklist(users.filler, id);
     expect(await discardChecklist(users.filler, id)).toMatchObject({ ok: false });
+  });
+});
+
+describe('deleteChecklist', () => {
+  const exists = async (id: string) => (await prisma.droneChecklist.count({ where: { id } })) === 1;
+
+  it('löscht einen eigenen Entwurf endgültig (Zeile und Drohnen-Zuordnung sind weg)', async () => {
+    const id = await newDraft();
+    await saveChecklistDraft(users.filler, { id, step: 2, data: { drohnen: [drone.id] } });
+    expect(await prisma.droneChecklistDrone.count({ where: { checklistId: id } })).toBe(1);
+    expect((await deleteChecklist(users.filler, id)).ok).toBe(true);
+    expect(await exists(id)).toBe(false);
+    expect(await prisma.droneChecklistDrone.count({ where: { checklistId: id } })).toBe(0);
+  });
+
+  it('erlaubt dem Admin der Gruppe, einen fremden Entwurf zu löschen', async () => {
+    const id = await newDraft();
+    expect((await deleteChecklist(users.admin, id)).ok).toBe(true);
+    expect(await exists(id)).toBe(false);
+  });
+
+  it('verweigert dem BOS1-Piloten und anderen Mitgliedern, einen fremden Entwurf zu löschen', async () => {
+    const id = await newDraft();
+    expect(await deleteChecklist(users.bos1, id)).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(await deleteChecklist(users.plain, id)).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(await exists(id)).toBe(true);
+  });
+
+  it('behandelt Fremde (andere Gruppe, ohne Mitgliedschaft) wie "nicht gefunden" und löscht nichts', async () => {
+    const id = await newDraft();
+    expect(await deleteChecklist(users.foreign, id)).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+    expect(await deleteChecklist(users.outsider, id)).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+    expect(await exists(id)).toBe(true);
+  });
+
+  it('antwortet für eine unbekannte id mit "nicht gefunden"', async () => {
+    expect(await deleteChecklist(users.admin, 'gibt-es-nicht')).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+  });
+
+  it('löscht keine abgeschlossene und keine verworfene Checkliste, auch nicht als Admin', async () => {
+    const submitted = await newDraft();
+    await saveChecklistDraft(users.filler, { id: submitted, step: 8, data: completeData() });
+    expect((await submitChecklist(users.filler, submitted)).ok).toBe(true);
+    const discarded = await newDraft();
+    await discardChecklist(users.filler, discarded);
+    for (const id of [submitted, discarded]) {
+      expect(await deleteChecklist(users.filler, id)).toMatchObject({ ok: false, code: 'INVALID' });
+      expect(await deleteChecklist(users.admin, id)).toMatchObject({ ok: false, code: 'INVALID' });
+      expect(await exists(id)).toBe(true);
+    }
+  });
+
+  it('sperrt das Löschen, solange ein Flug mit dem Entwurf verknüpft ist, und gibt es danach frei', async () => {
+    const id = await newDraft();
+    const flight = await prisma.droneFlight.create({
+      data: {
+        startsAt: new Date('2026-06-15T08:00:00Z'),
+        pilotUserId: users.filler.id,
+        location: `${RUN}-ort`,
+        droneId: drone.id,
+        purpose: 'EINSATZ',
+        registeredById: users.filler.id,
+        checklistId: id,
+      },
+    });
+    const blocked = await deleteChecklist(users.filler, id);
+    expect(blocked).toMatchObject({ ok: false, code: 'INVALID' });
+    expect(blocked.ok === false && blocked.error).toContain('Flug');
+    expect(await exists(id)).toBe(true);
+    await prisma.droneFlight.delete({ where: { id: flight.id } });
+    expect((await deleteChecklist(users.filler, id)).ok).toBe(true);
+    expect(await exists(id)).toBe(false);
+  });
+
+  it('kann denselben Entwurf nicht zweimal löschen', async () => {
+    const id = await newDraft();
+    expect((await deleteChecklist(users.filler, id)).ok).toBe(true);
+    expect(await deleteChecklist(users.filler, id)).toMatchObject({ ok: false, code: 'NOT_FOUND' });
   });
 });
 

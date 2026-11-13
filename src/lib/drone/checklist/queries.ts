@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import type { SessionUser } from '@/types/next-auth';
 import {
   canConfirmChecklist,
+  canDeleteChecklist,
   canDiscardChecklist,
   canEditChecklist,
   canViewChecklist,
@@ -36,6 +37,8 @@ export interface DraftListItem {
   step: number;
   updatedAt: Date;
   isOwn: boolean;
+  /** Darf verwerfen/löschen: Ersteller oder Admin der Gruppe (dieselbe Regel serverseitig in service.ts). */
+  canManage: boolean;
   creatorName: string;
   /** Flug läuft gerade (Schritt 7, "Flug starten" gedrückt, "Flug beenden" noch nicht). */
   inFlight: boolean;
@@ -59,6 +62,7 @@ export async function listGroupDrafts(user: SessionUser, droneGroupId: string): 
       step: row.step,
       updatedAt: row.updatedAt,
       isOwn: row.createdById === user.id,
+      canManage: canDiscardChecklist(user, row, group) && canDeleteChecklist(user, row, group),
       creatorName: fullName(row.createdBy),
       inFlight: flightPhase(parseData(row.data)) === 'laeuft',
     }))

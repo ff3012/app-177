@@ -130,6 +130,17 @@ describe('listGroupDrafts', () => {
     expect(list.find((i) => i.id === theirs)).toMatchObject({ isOwn: false });
   });
 
+  it('setzt canManage nur für Ersteller und Admin der Gruppe (Verwerfen/Löschen), nicht für andere Mitglieder', async () => {
+    const mine = await checklist('owner', 'DRAFT');
+    const theirs = await checklist('plain', 'DRAFT');
+    const asOwner = await listGroupDrafts(users.owner, group.id);
+    expect(asOwner.find((i) => i.id === mine)?.canManage).toBe(true);
+    expect(asOwner.find((i) => i.id === theirs)?.canManage).toBe(false);
+    const asAdmin = await listGroupDrafts(users.admin, group.id);
+    expect(asAdmin.find((i) => i.id === mine)?.canManage).toBe(true);
+    expect(asAdmin.find((i) => i.id === theirs)?.canManage).toBe(true);
+  });
+
   it('markiert Entwürfe mit laufendem Flug als "Im Flug" und stellt sie nach oben', async () => {
     const own = await checklist('owner', 'DRAFT', { updatedAt: new Date('2026-04-01') });
     const flying = await checklist('plain', 'DRAFT', { updatedAt: new Date('2026-02-01'), flugStatus: 'laeuft' });

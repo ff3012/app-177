@@ -394,10 +394,11 @@ auf `/admin/drohnen` umlegen (`setChecklistFeature`); Ausschalten versteckt nur,
 - **Rechte** (`permissions.ts`, Abschnitt "Checkliste Drohnenflug"): ENTWÜRFE sieht jedes Mitglied der Gruppe;
   ABGEGEBENE (und verworfene) nur Ersteller, wer sie abgeschlossen hat, und Admins der Gruppe. Bearbeiten und
   Abschließen eines Entwurfs: Ersteller, Gruppen-Admin und **jeder BOS1-Pilot der Gruppe**
-  (`bos1AusbildungAm` gesetzt). Verwerfen nur Ersteller/Admin. Bestätigung des Piloten (ersetzt die
+  (`bos1AusbildungAm` gesetzt). Verwerfen und Löschen nur Ersteller/Admin der Gruppe (`canDiscardChecklist`/`canDeleteChecklist`, nur Entwürfe). Bestätigung des Piloten (ersetzt die
   Unterschrift): gewählter Pilot, Admin oder BOS1-Pilot; das PDF vermerkt "bestätigt durch X für Pilot Y", wenn es
   ein anderer war. Abschließen legt KEINEN Flug an.
 - **Verwerfen löscht nie** (`status DISCARDED`), die Zeile bleibt in `/admin/drohnen/checklisten`.
+- **Löschen** (`deleteChecklist` in `service.ts`, Aktion `deleteChecklistAction`, Schaltfläche `DeleteDraftButton`) entfernt einen NICHT abgeschlossenen Entwurf endgültig (Zeile weg, `DroneChecklistDrone` per Cascade). Nur `DRAFT`, nur Ersteller oder Admin der Gruppe (dieselbe Regel wie Verwerfen), und nur solange KEIN Flug mit dem Entwurf verknüpft ist (`DroneFlight.checklistId`, die Karte zeigt dann aber trotzdem Verwerfen): sonst `INVALID` mit Hinweis, zuerst den Flug zu löschen oder den Entwurf zu verwerfen. Das Löschen selbst ist ein atomares `deleteMany ... where status:'DRAFT', flights:{none:{}}` (kein Rennen mit gleichzeitigem Abschließen/Flug-Verknüpfen; ein Fremdschlüssel-Fehler P2003 wird wie "verknüpft" behandelt). Abgeschlossene und verworfene Checklisten lassen sich nie löschen. Die Entwurfsliste (`ChecklistCard`, `DraftListItem.canManage`) zeigt Verwerfen (×) und Löschen (Papierkorb) jetzt auch dem Admin der Gruppe für fremde Entwürfe, die Admin-Liste `/admin/drohnen/checklisten` bei Entwürfen den Textlink "Löschen". Beide fragen vorher per Dialog nach; bei einem laufenden Flug ("Im Flug") warnt der Dialog zusätzlich.
 - **PDF + E-Mail laufen nach dem Commit** (`after()` in `submitChecklistAction`) und können das Abschließen nie
   zurückrollen; das Ergebnis steht in `mailedTo`/`mailedAt`/`mailError`. Das PDF wird bei jedem Download aus den
   gespeicherten Daten neu erzeugt (kein S3 nötig) und zusätzlich best-effort unter

@@ -4,6 +4,7 @@ import type { SessionUser } from '@/types/next-auth';
 import {
   canConfirmChecklist,
   canCreateChecklist,
+  canDeleteChecklist,
   canDiscardChecklist,
   canEditChecklist,
   canViewChecklist,
@@ -159,6 +160,36 @@ export async function discardChecklist(user: SessionUser, id: string): Promise<S
     data: { status: 'DISCARDED', discardedAt: new Date() },
   });
   if (updated.count === 0) return notDraft();
+  return { ok: true };
+}
+
+/** Löscht einen Entwurf endgültig (anders als Verwerfen bleibt keine Zeile zurück). Nur nicht abgeschlossene
+ * Entwürfe, nur Ersteller/Admin der Gruppe, und nur solange KEIN Flug mit dem Entwurf verknüpft ist (die
+ * Flugdaten behalten ihren Bezug zur Checkliste). Das Löschen selbst ist atomar an beide Bedingungen
+ * gebunden, damit ein gleichzeitig registrierter Flug oder ein paralleles Abschließen nicht überrollt wird;
+ * die Zuordnung der Drohnen (DroneChecklistDrone) fällt per Cascade mit. */
+export async function deleteChecklist(user: SessionUser, id: string): Promise<ServiceResult> {
+  const checklist = await loadVisible(user, id);
+  if (!checklist) return notFound();
+  if (checklist.status !== 'DRAFT') return fail('INVALID', 'Nur Entwürfe können gelöscht werden.');
+  if (!canDeleteChecklist(user, checklist, checklist.droneGroup)) {
+    return fail('FORBIDDEN', 'Nur der Ersteller oder ein Admin der Drohnengruppe kann den Entwurf löschen.');
+  }
+  const linked = 'Mit diesem Entwurf ist bereits ein Flug verknüpft. Lösche zuerst den Flug oder verwirf den Entwurf stattdessen.';
+  if ((await prisma.droneFlight.count({ where: { checklistId: checklist.id } })) > 0) return fail('INVALID', linked);
+  try {
+    const deleted = await prisma.droneChecklist.deleteMany({ where: { id: checklist.id, status: 'DRAFT', flights: { none: {} } } });
+    if (deleted.count === 0) {
+      // Zwischen Prüfung und Löschen verändert: entweder schon weg/abgeschlossen oder jetzt mit einem Flug verknüpft.
+      const current = await prisma.droneChecklist.findUnique({ where: { id: checklist.id }, select: { status: true } });
+      if (!current) return notFound();
+      return current.status === 'DRAFT' ? fail('INVALID', linked) : fail('INVALID', 'Nur Entwürfe können gelöscht werden.');
+    }
+  } catch (error) {
+    // Ein Flug wurde im selben Augenblick angelegt (Fremdschlüssel greift): wie "verknüpft" behandeln.
+    if ((error as { code?: string }).code === 'P2003') return fail('INVALID', linked);
+    throw error;
+  }
   return { ok: true };
 }
 

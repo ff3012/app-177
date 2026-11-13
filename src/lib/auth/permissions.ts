@@ -507,6 +507,13 @@ export function canDiscardChecklist(user: SessionUser, checklist: ChecklistAcces
   return checklist.createdById === user.id || canManageDroneGroupFor(user, droneGroup);
 }
 
+/** Endgültig löschen (Zeile wird entfernt): nur nicht abgeschlossene Entwürfe, nur Ersteller und Admins der
+ * Gruppe - dieselbe Regel wie beim Verwerfen. Abgeschlossene und verworfene Checklisten nie. */
+export function canDeleteChecklist(user: SessionUser, checklist: ChecklistAccessSubject, droneGroup: DroneGroupRef): boolean {
+  if (checklist.status !== 'DRAFT') return false;
+  return checklist.createdById === user.id || canManageDroneGroupFor(user, droneGroup);
+}
+
 /** Die Bestätigung des Piloten (ersetzt die Unterschrift) setzen darf der gewählte Pilot, ein Admin der
  * Gruppe oder ein BOS1-Pilot der Gruppe. */
 export function canConfirmChecklist(
