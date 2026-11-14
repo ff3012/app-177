@@ -72,7 +72,7 @@ kein App-Store-Build nötig.
   eine native App (WebView auf die Live-Domain); Push läuft dort über Firebase Cloud Messaging.
 - **MCP-Connector für Claude und ChatGPT** – Benutzer mit dem Recht "KI-Zugriff (MCP)" (Lesen/Schreiben, in der Benutzerverwaltung
   vergeben) können Claude oder ChatGPT mit der App verbinden: Abfragen zu Benutzerverwaltung, Drohnengruppe (Flugbuch,
-  90-Tage-Regel, Einsatzbereitschaft), Kalender und Atemschutzstatus sowie (mit "Schreiben") Neuanlage von Benutzern. Die KI sieht nur,
+  90-Tage-Regel, Einsatzbereitschaft, abgeschlossene Checklisten), Berichte (Tätigkeits-/Übungsberichte, solange sie noch nicht automatisch gelöscht sind), Kalender und Atemschutzstatus sowie (mit "Schreiben") Neuanlage von Benutzern. Die KI sieht nur,
   was der Benutzer auch in der App sehen darf. Anmeldung per OAuth mit dem normalen App-Login, Verbindungen verwaltet jeder unter
   "Verbundene KI-Apps" im Profil; ein-/ausgeschaltet (standardmäßig aus) vom Bezirksadmin unter Verwaltung → KI-Zugriff. Prüfprotokoll für
   Schreibaktionen und abgelehnte Zugriffe. Als Connector-URL wird `https://<Domain>/api/mcp` eingetragen (genau die `AUTH_URL` der App,

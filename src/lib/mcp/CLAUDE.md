@@ -54,7 +54,18 @@ und die Clients prüfen, dass die Ressourcen-URL zu der eingetragenen passt.
 
 ## Werkzeuge (`tools/`)
 
-Lesen (`READ`): `list_users`, `get_user`, `get_atemschutz_status`, `list_drone_flights`, `get_drone_readiness`, `list_calendar_events`, `list_organizations`, `list_dienstgrade`.
+Lesen (`READ`, zwölf Werkzeuge): `list_users`, `get_user`, `get_atemschutz_status`, `list_drone_flights`, `get_drone_readiness`, `list_calendar_events`, `list_organizations`, `list_dienstgrade`,
+`search_reports`, `get_report`, `search_checklists`, `get_checklist`.
+
+- **Berichte** (`tools/reports.ts`, `search_reports`/`get_report`): Tätigkeits-/Übungs-/Einsatzberichte (`Report`). Sicht wörtlich wie in der App (`canViewReport`): eigene Berichte als Ersteller oder Ausfüller, Berichte der Feuerwehren aus
+  `feuerwehrAdminOrgIds` (Feuerwehr-/Abschnittsadmin), Bezirksadmin alle - als DB-Bedingung (`reportScopeWhere`) UND als Nachfilter mit `canViewReport`. Filter (Feuerwehr, Typ, Zeitraum, Suchtext) hängen als eigene `AND`-Zweige an, erweitern die
+  Sicht nie. Die Liste enthält nur Metadaten (keine Freitexte, keine E-Mail-Fehlertexte), `get_report` alle Details samt Bemerkung. Fremde und unbekannte IDs antworten mit demselben Text; nur der fremde Fall wird als DENIED protokolliert (wie `get_user`).
+  **Berichte werden vom Cron `report-retention` nach 14 Tagen gelöscht** - über MCP gibt es nur, was die App noch hat (steht in den Werkzeugbeschreibungen).
+- **Checklisten Drohnenflug** (`tools/checklists.ts`, `search_checklists`/`get_checklist`): nur abgeschlossene (`SUBMITTED`) Checklisten von Gruppen mit eingeschaltetem `featureChecklist`. Sicht wie `canViewChecklist`: **Ersteller, wer sie abgeschlossen hat
+  (`submittedById`) und Admins der Gruppe** (`getAllowedDroneGroups`/`canManageDroneGroupFor`: Gruppen-, Bezirks-Drohnen-, Abschnitts-, Bezirksadmin) - bewusst NICHT jedes Gruppenmitglied, denn Checklisten enthalten Namen von Piloten, Helfern und Teamleitern sowie Einsatzdetails
+  (Entwürfe sieht dagegen jedes Mitglied, die kommen hier nie vor). Zugang: Drohnenmodul-Mitglied oder Admin irgendeiner Gruppe, sonst DENIED; wie die Checklisten-Verwaltung der App braucht ein Bezirksadmin dafür keine Mitgliedschaft. Entwurf, verworfen,
+  Schalter aus oder unbekannt = "nicht gefunden" (ohne Protokoll), existierend aber nicht sichtbar = derselbe Text als DENIED. Checklisten bleiben dauerhaft gespeichert. `get_checklist` bildet den Inhalt des PDFs ab (Kontrollpunkte mit Nummer, Klartext und erledigt ja/nein,
+  Namen statt Benutzer-IDs). Die Textsuche läuft nur über das Fluggebiet/Gemeindegebiet (Spalte `area`).
 Schreiben (`WRITE`): `create_user` (Stammdaten plus Rollen; Willkommens-Mail immer, Link nie in der Antwort; über `createUserCore` in `lib/users/create-user.ts`,
 dieselbe Logik wie die Benutzerverwaltung, in EINER Transaktion; die Existenz der `adminOrgIds`-Feuerwehren prüft das Werkzeug selbst, weil `canGrantAdminFor` für Bezirksadmins jede ID durchlässt).
 Jedes Werkzeug ist eine reine Funktion `(ctx, input) => ToolResult` und ohne MCP-Transport testbar. `runTool` (`tools/run.ts`)

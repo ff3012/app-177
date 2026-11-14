@@ -125,10 +125,21 @@ describe('/api/mcp', () => {
     const names = body.result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('list_organizations');
     expect(names).toContain('list_dienstgrade');
-    for (const name of ['list_users', 'get_user', 'get_atemschutz_status', 'list_drone_flights', 'get_drone_readiness', 'list_calendar_events']) {
+    for (const name of [
+      'list_users',
+      'get_user',
+      'get_atemschutz_status',
+      'list_drone_flights',
+      'get_drone_readiness',
+      'list_calendar_events',
+      'search_reports',
+      'get_report',
+      'search_checklists',
+      'get_checklist',
+    ]) {
       expect(names).toContain(name);
     }
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(12);
     expect(names).not.toContain('create_user');
     expect(body.result.tools[0].annotations.readOnlyHint).toBe(true);
   });
@@ -137,7 +148,7 @@ describe('/api/mcp', () => {
     const body = await (await POST(rpc('tools/list', {}, writeToken))).json();
     const tools = body.result.tools as { name: string; annotations: Record<string, boolean>; inputSchema: { additionalProperties?: boolean } }[];
     expect(tools.map((t) => t.name)).toContain('create_user');
-    expect(tools).toHaveLength(9);
+    expect(tools).toHaveLength(13);
     const createUser = tools.find((t) => t.name === 'create_user')!;
     expect(createUser.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false });
     expect(createUser.inputSchema.additionalProperties).toBe(false);

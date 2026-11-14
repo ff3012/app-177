@@ -100,7 +100,7 @@ describe('MCP-Connector Ende-zu-Ende', () => {
     expect(list.status).toBe(200);
     const listBody = await list.json();
     const names: string[] = listBody.result.tools.map((t: { name: string }) => t.name);
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(12);
     expect(names).toContain('list_dienstgrade');
 
     const call = await POST(rpc('tools/call', { name: 'list_dienstgrade', arguments: {} }, first.access_token));
