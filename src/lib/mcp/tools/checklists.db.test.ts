@@ -177,18 +177,25 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Geguardet: nie ein deleteMany-Filter, der undefined sein kann. Reihenfolge wegen der Fremdschlüssel.
-  if (flightId) await prisma.droneFlight.deleteMany({ where: { id: flightId } });
-  const cIds = Object.values(checklistIds);
-  if (cIds.length > 0) await prisma.droneChecklist.deleteMany({ where: { id: { in: cIds } } });
-  const droneIds = [drone?.id, otherDrone?.id].filter((id): id is string => !!id);
-  if (droneIds.length > 0) await prisma.drone.deleteMany({ where: { id: { in: droneIds } } });
-  const userIds = Object.values(ids);
-  if (userIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-  for (const [groupId, value] of Object.entries(original)) {
-    if (groupId) await prisma.droneGroup.update({ where: { id: groupId }, data: { featureChecklist: value } });
+  // Zuerst den Funktionsschalter zurückstellen: ein fehlschlagendes Aufräumen darf die lokalen Gruppen nie eingeschaltet lassen.
+  try {
+    for (const [groupId, value] of Object.entries(original)) {
+      if (groupId) await prisma.droneGroup.update({ where: { id: groupId }, data: { featureChecklist: value } });
+    }
+  } finally {
+    // Geguardet: nie ein deleteMany-Filter, der undefined sein kann. Reihenfolge wegen der Fremdschlüssel.
+    try {
+      if (flightId) await prisma.droneFlight.deleteMany({ where: { id: flightId } });
+      const cIds = Object.values(checklistIds);
+      if (cIds.length > 0) await prisma.droneChecklist.deleteMany({ where: { id: { in: cIds } } });
+      const droneIds = [drone?.id, otherDrone?.id].filter((id): id is string => !!id);
+      if (droneIds.length > 0) await prisma.drone.deleteMany({ where: { id: { in: droneIds } } });
+      const userIds = Object.values(ids);
+      if (userIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    } finally {
+      await prisma.$disconnect();
+    }
   }
-  await prisma.$disconnect();
 });
 
 const memberOf = (key: string, groupRef: Group, role: 'PILOT' | 'ADMIN' = 'PILOT') =>

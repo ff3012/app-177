@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPoints, checklistScopeWhere, checklistSearchWhere } from './checklists';
+import { checkPoints, checklistScopeWhere, checklistSearchWhere, viennaIsoOrNull } from './checklists';
 import { sessionUserFixture } from './test-support';
 
 describe('checklistScopeWhere', () => {
@@ -42,5 +42,18 @@ describe('checkPoints', () => {
       { nummer: '15.2', text: 'Zweiter Punkt', erledigt: false },
       { nummer: '15.3', text: 'Dritter Punkt', erledigt: false },
     ]);
+  });
+});
+
+describe('viennaIsoOrNull', () => {
+  it('formatiert gültige ISO-Zeiten als Wiener Ortszeit mit Offset', () => {
+    expect(viennaIsoOrNull('2030-06-15T09:30:00Z')).toBe('2030-06-15T11:30:00+02:00');
+  });
+
+  it('liefert für fehlende oder ungültige Werte null statt eines RangeError', () => {
+    expect(viennaIsoOrNull(null)).toBeNull();
+    expect(viennaIsoOrNull(undefined)).toBeNull();
+    expect(viennaIsoOrNull('')).toBeNull();
+    expect(viennaIsoOrNull('kein-datum')).toBeNull();
   });
 });
