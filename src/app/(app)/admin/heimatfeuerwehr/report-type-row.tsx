@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ReportRecipientsForm } from './report-recipients-form';
-import { setReportTypeEnabled } from './actions';
+import { setReportTypeEnabled, setReportTypeRecipients } from './actions';
 
 /**
  * Eine Berichtsart in der Karte "Berichte": Schalter "Aktiviert" (gilt in der App und am iPad) und die
@@ -78,7 +78,12 @@ export function ReportTypeRow({
         </label>
       </div>
       <p className="text-xs text-ink-faint">Diese Adressen erhalten eine E-Mail mit PDF-Anhang, sobald ein {title} abgegeben wird.</p>
-      <ReportRecipientsForm organizationId={organizationId} type={type} initialEmails={recipients} members={members} />
+      <ReportRecipientsForm
+        action={setReportTypeRecipients.bind(null, organizationId, type)}
+        idSuffix={type}
+        initialEmails={recipients}
+        members={members}
+      />
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

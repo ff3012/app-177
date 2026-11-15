@@ -1,23 +1,24 @@
 'use client';
 
 import { useActionState, useEffect, useState } from 'react';
-import { setReportTypeRecipients, type ReportRecipientsState } from './actions';
+import type { ReportRecipientsState } from './actions';
 
 const initialState: ReportRecipientsState = {};
 
 export function ReportRecipientsForm({
-  organizationId,
-  type,
+  action,
+  idSuffix,
   initialEmails,
   members,
 }: {
-  organizationId: string;
-  type: string;
+  /** Bereits gebundene Server Action (Organisation und Berichtsart bzw. Formular sind darin gebunden). */
+  action: (prevState: ReportRecipientsState, formData: FormData) => Promise<ReportRecipientsState>;
+  /** Eindeutiger Teil der Element-Ids (mehrere Formulare auf einer Seite). */
+  idSuffix: string;
   initialEmails: string[];
   members: { id: string; firstName: string; lastName: string; email: string }[];
 }) {
-  const boundAction = setReportTypeRecipients.bind(null, organizationId, type);
-  const [state, formAction, pending] = useActionState(boundAction, initialState);
+  const [state, formAction, pending] = useActionState(action, initialState);
   const [emails, setEmails] = useState<string[]>(initialEmails);
   const [newEmail, setNewEmail] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -59,12 +60,12 @@ export function ReportRecipientsForm({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-1 flex-col gap-1">
-          <label htmlFor={`newReportRecipientEmail-${type}`} className="text-[13px] font-medium text-ink">
+          <label htmlFor={`newReportRecipientEmail-${idSuffix}`} className="text-[13px] font-medium text-ink">
             E-Mail-Adresse hinzufügen
           </label>
           <div className="flex gap-2">
             <input
-              id={`newReportRecipientEmail-${type}`}
+              id={`newReportRecipientEmail-${idSuffix}`}
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
@@ -86,11 +87,11 @@ export function ReportRecipientsForm({
 
         {members.length > 0 && (
           <div className="flex flex-1 flex-col gap-1">
-            <label htmlFor={`reportRecipientPicker-${type}`} className="text-[13px] font-medium text-ink">
+            <label htmlFor={`reportRecipientPicker-${idSuffix}`} className="text-[13px] font-medium text-ink">
               Aus Mitgliedern wählen
             </label>
             <select
-              id={`reportRecipientPicker-${type}`}
+              id={`reportRecipientPicker-${idSuffix}`}
               value=""
               onChange={(e) => {
                 if (e.target.value) addEmail(e.target.value);
