@@ -28,11 +28,12 @@ import { WappenUploadForm } from './wappen-upload-form';
 import { FunktionenCard } from './funktionen-card';
 import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
 import { PhotoUploadNotificationEmailsForm } from './photo-upload-notification-emails-form';
-import { ReportRecipientsForm } from './report-recipients-form';
+import { ReportTypeRow } from './report-type-row';
 import { ReportKioskCard } from './report-kiosk-card';
 import { createReportKioskLink, disableReportKioskLink } from './report-kiosk-actions';
 import { ReportDeleteButton } from './report-delete-button';
-import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
+import { ACTIVE_REPORT_TYPES, REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
+import { getReportTypeSettings } from '@/lib/heimatfeuerwehr/report-type-settings';
 import { reportPdfFileName } from '@/lib/heimatfeuerwehr/report-pdf';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
@@ -225,7 +226,6 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         wappenImageMimeType: true,
         fahrzeugReservierungEmails: true,
         photoUploadNotificationEmails: true,
-        reportRecipients: true,
         reportKioskToken: true,
         type: true,
         isActive: true,
@@ -239,6 +239,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
   if (!selectedOrgFull) {
     notFound();
   }
+  const reportTypeSettings = await getReportTypeSettings(selectedOrgId);
 
   // Eigene, von der Atemschutz-Query oben unabhängige Abfrage: ALLE (nicht nur Atemschutzgeräteträger-)
   // Mitglieder dieser einen Feuerwehr, geteilt von den beiden E-Mail-Chip-Picker-Karten unten
@@ -596,18 +597,27 @@ export default async function HeimatfeuerwehrVerwaltungPage({
 
       <div className="rounded-lg bg-surface p-4 shadow-card">
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Berichte</h2>
-        <p className="mb-2 text-xs text-ink-faint">
-          Tätigkeitsbericht: Aktiv · Übungsbericht: Nicht aktiv · Einsatzbericht: Nicht aktiv
-        </p>
         <p className="mb-3 text-xs text-ink-faint">
-          Diese Adressen erhalten eine E-Mail mit PDF-Anhang, sobald ein Tätigkeitsbericht abgegeben wird.
+          Je Berichtsart ein Schalter (gilt in der App und am iPad) und die Empfänger, die den Bericht per E-Mail mit PDF
+          erhalten. Einsatzbericht, Getränkeautomat und Schadensmeldung sind noch nicht verfügbar.
         </p>
-        <ReportRecipientsForm
-          key={selectedOrgId}
-          organizationId={selectedOrgId}
-          initialEmails={selectedOrgFull.reportRecipients}
-          members={heimatfeuerwehrPickerMembers}
-        />
+        {selectedOrgFull.type === 'FEUERWEHR' ? (
+          <div className="flex flex-col gap-3">
+            {ACTIVE_REPORT_TYPES.map((type) => (
+              <ReportTypeRow
+                key={`${selectedOrgId}-${type}`}
+                organizationId={selectedOrgId}
+                type={type}
+                title={REPORT_TYPE_LABEL[type]}
+                enabled={reportTypeSettings[type].enabled}
+                recipients={reportTypeSettings[type].recipients}
+                members={heimatfeuerwehrPickerMembers}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-faint">Nur für Feuerwehren verfügbar.</p>
+        )}
         <Table className="mt-3">
           <TableHeader>
             <TableRow>

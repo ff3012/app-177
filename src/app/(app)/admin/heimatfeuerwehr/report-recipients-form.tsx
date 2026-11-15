@@ -1,20 +1,22 @@
 'use client';
 
 import { useActionState, useEffect, useState } from 'react';
-import { setReportRecipients, type ReportRecipientsState } from './actions';
+import { setReportTypeRecipients, type ReportRecipientsState } from './actions';
 
 const initialState: ReportRecipientsState = {};
 
 export function ReportRecipientsForm({
   organizationId,
+  type,
   initialEmails,
   members,
 }: {
   organizationId: string;
+  type: string;
   initialEmails: string[];
   members: { id: string; firstName: string; lastName: string; email: string }[];
 }) {
-  const boundAction = setReportRecipients.bind(null, organizationId);
+  const boundAction = setReportTypeRecipients.bind(null, organizationId, type);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
   const [emails, setEmails] = useState<string[]>(initialEmails);
   const [newEmail, setNewEmail] = useState('');
@@ -57,12 +59,12 @@ export function ReportRecipientsForm({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-1 flex-col gap-1">
-          <label htmlFor="newReportRecipientEmail" className="text-[13px] font-medium text-ink">
+          <label htmlFor={`newReportRecipientEmail-${type}`} className="text-[13px] font-medium text-ink">
             E-Mail-Adresse hinzufügen
           </label>
           <div className="flex gap-2">
             <input
-              id="newReportRecipientEmail"
+              id={`newReportRecipientEmail-${type}`}
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
@@ -84,11 +86,11 @@ export function ReportRecipientsForm({
 
         {members.length > 0 && (
           <div className="flex flex-1 flex-col gap-1">
-            <label htmlFor="reportRecipientPicker" className="text-[13px] font-medium text-ink">
+            <label htmlFor={`reportRecipientPicker-${type}`} className="text-[13px] font-medium text-ink">
               Aus Mitgliedern wählen
             </label>
             <select
-              id="reportRecipientPicker"
+              id={`reportRecipientPicker-${type}`}
               value=""
               onChange={(e) => {
                 if (e.target.value) addEmail(e.target.value);

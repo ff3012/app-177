@@ -14,6 +14,7 @@ import { getOrganizationFeatures } from '@/lib/heimatfeuerwehr/features';
 import { ALLOWED_WAPPEN_MIME_TYPES } from '@/lib/organizations/wappen';
 import { reportPdfStorageKey } from '@/lib/heimatfeuerwehr/report-pdf';
 import { deleteReportPdf } from '@/lib/storage/report-pdf-s3';
+import { isActiveReportType, saveReportTypeEnabled, saveReportTypeRecipients } from '@/lib/heimatfeuerwehr/report-type-settings';
 
 export interface VehicleFormState {
   error?: string;
@@ -615,26 +616,49 @@ export interface ReportRecipientsState {
   error?: string;
 }
 
-/** Bericht-Brief.md §8: Empfänger der Tätigkeitsbericht-E-Mail - identisches Muster wie
- * setFahrzeugReservierungEmails/setPhotoUploadNotificationEmails. */
-export async function setReportRecipients(
+/** Empfänger des Berichts je Berichtsart (E-Mail mit PDF) - Chip-Liste wie bei den übrigen E-Mail-Listen. */
+export async function setReportTypeRecipients(
   organizationId: string,
+  type: string,
   _prevState: ReportRecipientsState,
   formData: FormData,
 ): Promise<ReportRecipientsState> {
   const user = await requireUser();
   assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+  if (!isActiveReportType(type)) return { error: 'Diese Berichtsart ist nicht verfügbar.' };
 
   const parsed = emailListSchema.safeParse(formData.get('emails'));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Ungültige Eingabe.' };
   }
 
-  await prisma.organization.update({
-    where: { id: organizationId },
-    data: { reportRecipients: [...new Set(parsed.data)] },
-  });
+  try {
+    await saveReportTypeRecipients(organizationId, type, parsed.data);
+  } catch {
+    return { error: 'Berichtsarten gibt es nur für Feuerwehren.' };
+  }
 
   revalidatePath('/admin/heimatfeuerwehr');
   return { success: true };
+}
+
+/** Schaltet eine Berichtsart für die Feuerwehr ein/aus (gilt in der App und am iPad, bestehende Berichte bleiben). */
+export async function setReportTypeEnabled(
+  organizationId: string,
+  type: string,
+  enabled: boolean,
+): Promise<{ error?: string }> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+  if (!isActiveReportType(type)) return { error: 'Diese Berichtsart ist nicht verfügbar.' };
+
+  try {
+    await saveReportTypeEnabled(organizationId, type, enabled);
+  } catch {
+    return { error: 'Berichtsarten gibt es nur für Feuerwehren.' };
+  }
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/meine-feuerwehr');
+  return {};
 }
