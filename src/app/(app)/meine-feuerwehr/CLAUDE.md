@@ -902,6 +902,10 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
   `Organization.reportKioskDeviceName` an und kopiert die bisherigen `reportRecipients` je Feuerwehr in je eine Zeile für
   `ACTIVITY` und `EXERCISE`; `20261115100000_drop_organization_report_recipients` löscht danach `Organization.reportRecipients`
   (nicht umkehrbar - vor dem PROD-Deploy ein Backup). Beide laufen beim Container-Start über `prisma migrate deploy`.
+  Nach Migration B läuft das vorherige Image nicht mehr (sein Prisma-Client liest `Organization.reportRecipients` bei der
+  Berichtsabgabe und auf der Verwaltungsseite), ein Rollback ist daher nur möglich, indem die Spalte aus dem Backup
+  wiederhergestellt wird; das Backup also unmittelbar vor dem PROD-Deploy ziehen (beide Migrationen laufen in einem
+  einzigen `prisma migrate deploy` beim Container-Start).
 - **Nicht geprüft in der Entwicklungsumgebung:** Hydration/Interaktion (derselbe Gap wie sonst in dieser Datei). Der ganze Ablauf
   muss auf einem echten iPad durchgeklickt werden; offen ist, ob "Zum Home-Bildschirm" auf iOS den geheimen Link öffnet.
 

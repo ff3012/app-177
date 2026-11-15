@@ -392,7 +392,7 @@ export default async function MeineFeuerwehrPage() {
       <HomeTodoList rsvpTodos={rsvpTodos} staticTodos={staticTodos} upcomingPool={upcomingPool} />
 
       {/* Auf ausdrücklichen Wunsch über die 4 Aktionskacheln geschoben (vorher direkt darunter). */}
-      {openVehicleReportReminders.length > 0 && (
+      {openVehicleReportReminders.length > 0 && enabledReportTypes.includes('ACTIVITY') && (
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8e8e93]">Zu erledigen</span>

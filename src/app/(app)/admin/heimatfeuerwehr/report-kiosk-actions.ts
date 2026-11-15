@@ -43,8 +43,12 @@ export async function setReportKioskDeviceName(
 
   try {
     await saveReportKioskDeviceName(organizationId, parsed.value);
-  } catch {
-    return { error: 'Die Schnellerfassung gibt es nur für aktive Feuerwehren.' };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Die Schnellerfassung gibt es nur für aktive Feuerwehren.') {
+      return { error: error.message };
+    }
+    console.error('Gerätename der Schnellerfassung konnte nicht gespeichert werden:', error);
+    return { error: 'Änderung konnte nicht gespeichert werden.' };
   }
 
   revalidatePath('/admin/heimatfeuerwehr');

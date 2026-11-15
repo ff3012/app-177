@@ -255,7 +255,6 @@ export async function submitReportCore(params: {
     where: { id: fireDepartmentId },
     select: { name: true, wappenImageData: true, wappenImageMimeType: true },
   });
-  const recipients = await getReportRecipients(fireDepartmentId, input.type);
   const wappenDataUri =
     fireDepartment.wappenImageData && fireDepartment.wappenImageMimeType
       ? `data:${fireDepartment.wappenImageMimeType};base64,${Buffer.from(fireDepartment.wappenImageData).toString('base64')}`
@@ -320,6 +319,9 @@ export async function submitReportCore(params: {
   try {
     const pdfBuffer = await generateReportPdf(pdfData);
     await putReportPdf(storageKey, pdfBuffer);
+    // Im Try, weil der Bericht schon gespeichert ist: ein Ausfall hier landet als emailError am Bericht
+    // und darf nie als Fehler beim Abgeben erscheinen (sonst entsteht beim erneuten Abgeben eine zweite Nummer).
+    const recipients = await getReportRecipients(fireDepartmentId, input.type);
     const emailResult = await sendReportSubmittedEmail(
       { ...pdfData, fireDepartmentEmails: recipients, filledByEmail: filledBy.email },
       pdfBuffer,

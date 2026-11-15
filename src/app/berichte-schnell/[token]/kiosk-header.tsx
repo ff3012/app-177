@@ -27,7 +27,7 @@ export function KioskHeader({
   }, []);
 
   return (
-    <header className="pt-safe border-b-4 border-brand bg-[#1c1c1e] px-6 py-4 text-white">
+    <header className="border-b-4 border-brand bg-[#1c1c1e] px-6 pb-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] text-white">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-6">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-white/70">{organizationName}</p>

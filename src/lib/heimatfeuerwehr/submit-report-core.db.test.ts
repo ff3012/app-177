@@ -2,13 +2,18 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/db/prisma';
 import { submitReportCore, type SubmitReportInput } from './submit-report-core';
 import { sendReportSubmittedEmail } from './notify-report-submitted';
-import { saveReportTypeEnabled, saveReportTypeRecipients } from './report-type-settings';
+import { getReportRecipients, saveReportTypeEnabled, saveReportTypeRecipients } from './report-type-settings';
 
 // PDF, S3 und E-Mail sind nicht Gegenstand dieser Tests und dürfen mit einer lokalen .env nie echt auslösen.
 vi.mock('@/lib/storage/report-pdf-s3', () => ({ putReportPdf: vi.fn(async () => undefined) }));
 vi.mock('@/lib/heimatfeuerwehr/notify-report-submitted', () => ({
   sendReportSubmittedEmail: vi.fn(async () => ({ attempted: 0, failed: 0 })),
 }));
+// Echte Empfängerabfrage, nur in einem Test lässt sich ein einzelner Ausfall vorgeben.
+vi.mock('./report-type-settings', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./report-type-settings')>();
+  return { ...original, getReportRecipients: vi.fn(original.getReportRecipients) };
+});
 vi.mock('@/lib/heimatfeuerwehr/report-pdf', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/heimatfeuerwehr/report-pdf')>()),
   generateReportPdf: vi.fn(async () => Buffer.from('pdf')),
@@ -218,6 +223,18 @@ describe('submitReportCore: Berichtsarten je Feuerwehr', () => {
 
     await submitReportCore({ fireDepartmentId: orgA, createdById: ids.creator, input: input({ type: 'EXERCISE' }) });
     expect(mail.mock.calls.at(-1)?.[0].fireDepartmentEmails).toEqual(['uebung@example.local']);
+  });
+
+  it('fällt die Empfängerabfrage nach dem Speichern aus, bleibt der Bericht gültig und emailError wird gesetzt', async () => {
+    vi.mocked(getReportRecipients).mockRejectedValueOnce(new Error('Datenbank kurz nicht erreichbar'));
+    const result = await submitReportCore({ fireDepartmentId: orgA, createdById: ids.creator, input: input({ type: 'ACTIVITY' }) });
+
+    expect(result.error).toBeUndefined();
+    expect(result.reportId).toBeDefined();
+    expect(result.number).toBeDefined();
+    const row = await prisma.report.findUniqueOrThrow({ where: { id: result.reportId! }, select: { emailError: true, emailSentAt: true } });
+    expect(row.emailError).toBe('Datenbank kurz nicht erreichbar');
+    expect(row.emailSentAt).toBeNull();
   });
 
   it('ohne Zeile: keine Empfänger', async () => {

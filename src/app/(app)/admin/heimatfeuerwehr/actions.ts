@@ -617,6 +617,19 @@ export interface ReportRecipientsState {
 }
 
 /** Empfänger des Berichts je Berichtsart (E-Mail mit PDF) - Chip-Liste wie bei den übrigen E-Mail-Listen. */
+/** Meldungen, die `report-type-settings.ts` bewusst wirft und die der Admin so lesen darf. */
+const REPORT_TYPE_BUSINESS_ERRORS = new Set([
+  'Berichtsarten gibt es nur für Feuerwehren.',
+  'Diese Berichtsart ist nicht verfügbar.',
+]);
+
+/** Fachliche Meldung durchreichen, jeden anderen Fehler (z. B. Datenbankausfall) loggen und allgemein melden. */
+function reportTypeSaveErrorMessage(error: unknown): string {
+  if (error instanceof Error && REPORT_TYPE_BUSINESS_ERRORS.has(error.message)) return error.message;
+  console.error('Berichtsart konnte nicht gespeichert werden:', error);
+  return 'Änderung konnte nicht gespeichert werden.';
+}
+
 export async function setReportTypeRecipients(
   organizationId: string,
   type: string,
@@ -634,8 +647,8 @@ export async function setReportTypeRecipients(
 
   try {
     await saveReportTypeRecipients(organizationId, type, parsed.data);
-  } catch {
-    return { error: 'Berichtsarten gibt es nur für Feuerwehren.' };
+  } catch (error) {
+    return { error: reportTypeSaveErrorMessage(error) };
   }
 
   revalidatePath('/admin/heimatfeuerwehr');
@@ -654,8 +667,8 @@ export async function setReportTypeEnabled(
 
   try {
     await saveReportTypeEnabled(organizationId, type, enabled);
-  } catch {
-    return { error: 'Berichtsarten gibt es nur für Feuerwehren.' };
+  } catch (error) {
+    return { error: reportTypeSaveErrorMessage(error) };
   }
 
   revalidatePath('/admin/heimatfeuerwehr');
