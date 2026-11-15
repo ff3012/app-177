@@ -23,6 +23,11 @@ export function viennaToday(now: Date = new Date()): string {
   return viennaDateFormat.format(now);
 }
 
+/** Frühestes zulässiges Schadensdatum (heute minus MAX_DAYS_BACK Tage) als YYYY-MM-DD; für das `min` des Datumsfelds. */
+export function minOccurredOn(today: string): string {
+  return new Date(Date.parse(`${today}T00:00:00Z`) - MAX_DAYS_BACK * 86_400_000).toISOString().slice(0, 10);
+}
+
 type Validation = { ok: true; value: NotificationInput } | { ok: false; error: string };
 
 function fail(error: string): Validation {

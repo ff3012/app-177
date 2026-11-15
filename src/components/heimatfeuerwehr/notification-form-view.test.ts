@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { minOccurredOn, viennaToday } from '@/lib/heimatfeuerwehr/notification-input';
 import { NotificationFormView } from './notification-form-view';
 
 const noop = async () => ({ ok: true as const });
@@ -40,6 +41,9 @@ describe('NotificationFormView: Schadensmeldung', () => {
     expect(html).toContain('Nicht akut');
     expect(html).toContain('Beschreibung des Schadens');
     expect(html).toContain('type="date"');
+    const today = viennaToday();
+    expect(html).toContain(`min="${minOccurredOn(today)}"`);
+    expect(html).toContain(`max="${today}"`);
     expect(html).toContain('1 / 3 Pflichtfelder ausgefüllt');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Meldung absenden<\/button>/);
   });
@@ -54,5 +58,15 @@ describe('NotificationFormView: Layouts', () => {
     expect(mobile).toContain('pb-safe-tabbar');
     expect(tablet).not.toContain('pb-safe-tabbar');
     expect(tablet).toContain('sticky');
+  });
+
+  it('gibt der Tablet-Fußleiste den Safe-Area-Abstand unten', () => {
+    const tablet = render({ layout: 'tablet' });
+    expect(tablet).toContain('padding-bottom:max(12px, env(safe-area-inset-bottom, 0px))');
+  });
+
+  it('zeigt ohne Fehler kein role="alert" (der Serverfehler ist interner Zustand nach dem Absenden und statisch nicht erzeugbar)', () => {
+    expect(render({ layout: 'mobile' })).not.toContain('role="alert"');
+    expect(render({ layout: 'tablet' })).not.toContain('role="alert"');
   });
 });

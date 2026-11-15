@@ -139,5 +139,6 @@ describe('submitNotificationCore: Versand', () => {
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error('einer')).mockResolvedValue(undefined);
     const partial = await submitNotificationCore({ organizationId: orgA, senderId: ids.senderA, input: damage(), now: NOW });
     expect(partial).toEqual({ ok: true });
+    expect(sendEmail).toHaveBeenCalledTimes(2);
   });
 });

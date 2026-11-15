@@ -54,7 +54,7 @@ model NotificationFormSetting {
 - **Fehlende Zeile bedeutet:** eingeschaltet, keine Empfänger, Standardprodukte.
 - **Verfügbar** ist ein Formular für eine Feuerwehr nur, wenn es **eingeschaltet ist und mindestens einen Empfänger hat**.
   Ohne Empfänger gäbe es sonst eine Meldung, die nirgends ankommt.
-- **Produktliste:** 1 bis 12 Produkte, je getrimmt, 1 bis 30 Zeichen, ohne Doppelte (Groß-/Kleinschreibung ignoriert).
+- **Produktliste:** höchstens 12 Produkte (leer = Standardprodukte), je getrimmt, 1 bis 30 Zeichen, ohne Doppelte (Groß-/Kleinschreibung ignoriert).
   `DEFAULT_DRINK_PRODUCTS = ['Bier', 'Spritzer', 'Eistee', 'Spezi']`. Eine leere gespeicherte Liste bedeutet die Standardliste.
 - **Bibliothek** `src/lib/heimatfeuerwehr/notification-form-settings.ts`: `getNotificationFormSettings(organizationId)` (Karte
   `{ DRINKS, DAMAGE }` mit `{ enabled, recipients, products }`, Voreinstellungen aufgelöst), `isNotificationFormAvailable(organizationId, form)`,
@@ -146,7 +146,7 @@ Eine gemeinsame Komponente `NotificationFormView` (`src/components/heimatfeuerwe
 
 In der Karte "Berichte" kommt unter den Berichtsarten ein Abschnitt **"Meldungen"** (nur für Feuerwehren): je Formular eine Zeile mit Schalter
 "Aktiviert", Empfängerliste (gleiche Chips und derselbe Mitglieder-Picker wie bei den Berichtsarten), beim Getränkeautomat zusätzlich die
-**Produktliste** (Chips, Hinzufügen/Entfernen, 1 bis 12, Hinweis auf die Standardprodukte). Ein Hinweistext erklärt: eine Meldung ist nur
+**Produktliste** (Chips, Hinzufügen/Entfernen, höchstens 12, Hinweis auf die Standardprodukte). Ein Hinweistext erklärt: eine Meldung ist nur
 verfügbar, wenn sie eingeschaltet ist und mindestens einen Empfänger hat. Beim Ausschalten fragt ein Dialog nach (Wirkung: verschwindet am iPad und
 in der App, Empfänger und Produkte bleiben erhalten). Server Actions in `admin/heimatfeuerwehr/actions.ts`: `setNotificationFormEnabled`,
 `setNotificationFormRecipients`, `setDrinkProducts`, jede mit `canManageHeimatfeuerwehrFor(user, organizationId)` neu geprüft, Formular

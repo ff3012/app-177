@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { NotificationForm } from '@prisma/client';
 import { countRequired, emptyValues, toInput, type NotificationValues } from '@/lib/heimatfeuerwehr/notification-form-fields';
-import { DESCRIPTION_MAX, EQUIPMENT_MAX, NOTE_MAX, viennaToday, type NotificationInput } from '@/lib/heimatfeuerwehr/notification-input';
+import { DESCRIPTION_MAX, EQUIPMENT_MAX, NOTE_MAX, minOccurredOn, viennaToday, type NotificationInput } from '@/lib/heimatfeuerwehr/notification-input';
 
 type SubmitResult = { ok?: true; error?: string };
 
@@ -49,7 +49,9 @@ export function NotificationFormView({
   onCancel: () => void;
 }) {
   const tablet = layout === 'tablet';
-  const [values, setValues] = useState<NotificationValues>(() => emptyValues(form, viennaToday()));
+  const today = viennaToday();
+  const dateMin = minOccurredOn(today);
+  const [values, setValues] = useState<NotificationValues>(() => emptyValues(form, today));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { filled, total, complete } = countRequired(values);
@@ -93,6 +95,12 @@ export function NotificationFormView({
       {submitting ? 'Wird gesendet …' : 'Meldung absenden'}
     </button>
   );
+
+  const errorMessage = error ? (
+    <p role="alert" className="text-sm text-red-700">
+      {error}
+    </p>
+  ) : null;
 
   return (
     <div data-layout={layout} className={`flex flex-col ${tablet ? 'gap-6' : 'gap-5 pb-48'}`}>
@@ -147,7 +155,8 @@ export function NotificationFormView({
               <input
                 type="date"
                 value={values.occurredOn}
-                max={viennaToday()}
+                min={dateMin}
+                max={today}
                 onChange={(event) => setValues((current) => (current.form === 'DAMAGE' ? { ...current, occurredOn: event.target.value } : current))}
                 className={inputClass}
               />
@@ -201,16 +210,21 @@ export function NotificationFormView({
         </>
       )}
 
-      {error && <p className="text-sm text-red-700">{error}</p>}
-
       {tablet ? (
-        <div className="sticky bottom-0 -mx-6 flex items-center justify-between gap-4 border-t border-neutral-200 bg-white px-6 py-3">
-          {cancelButton}
-          {counter}
-          {submitButton}
+        <div
+          className="sticky bottom-0 -mx-6 flex flex-col gap-2 border-t border-neutral-200 bg-white px-6 pt-3"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }}
+        >
+          {errorMessage}
+          <div className="flex items-center justify-between gap-4">
+            {cancelButton}
+            {counter}
+            {submitButton}
+          </div>
         </div>
       ) : (
         <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 flex flex-col gap-2 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
+          {errorMessage}
           <div className="text-center">{counter}</div>
           <div className="grid grid-cols-[1fr_2fr] gap-3">
             {cancelButton}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateNotificationInput, viennaToday } from './notification-input';
+import { minOccurredOn, validateNotificationInput, viennaToday } from './notification-input';
 
 const ctx = { products: ['Bier', 'Spritzer', 'Eistee', 'Spezi'], today: '2026-11-15' };
 
@@ -7,6 +7,14 @@ describe('viennaToday', () => {
   it('liefert das Datum in Wiener Zeit', () => {
     expect(viennaToday(new Date('2026-11-15T10:59:00Z'))).toBe('2026-11-15');
     expect(viennaToday(new Date('2026-11-15T23:30:00Z'))).toBe('2026-11-16');
+  });
+});
+
+describe('minOccurredOn', () => {
+  it('liefert heute minus 365 Tage (passt zur Obergrenze der Validierung)', () => {
+    expect(minOccurredOn('2026-11-15')).toBe('2025-11-15');
+    expect(minOccurredOn('2024-12-31')).toBe('2024-01-01');
+    expect(minOccurredOn('2024-03-01')).toBe('2023-03-02');
   });
 });
 

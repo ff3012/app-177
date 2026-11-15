@@ -11,7 +11,7 @@ import { setDrinkProducts, type ReportRecipientsState } from './actions';
 const initialState: ReportRecipientsState = {};
 
 /**
- * Produktliste des Getränkeautomaten je Feuerwehr (Chips, Hinzufügen/Entfernen, 1 bis 12 Produkte). Eine leere Liste
+ * Produktliste des Getränkeautomaten je Feuerwehr (Chips, Hinzufügen/Entfernen, höchstens 12 Produkte). Eine leere Liste
  * speichert die Standardprodukte. Die Liste geht als JSON in einem Hidden-Feld an die Server Action (wie die
  * E-Mail-Chips).
  */

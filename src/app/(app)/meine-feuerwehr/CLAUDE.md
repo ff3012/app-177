@@ -924,12 +924,12 @@ Zwei einfache Formulare am iPad und in der App, die als E-Mail an eine je Feuerw
 - **Daten:** Tabelle `NotificationFormSetting` (Migration `20261115110000_notification_form_setting`, rein additiv; je Feuerwehr und
   `NotificationForm` `DRINKS`/`DAMAGE` eine Zeile mit `enabled`, `recipients`, `products` - Letzteres nur bei DRINKS,
   `@@unique([organizationId, form])`). Eine fehlende Zeile bedeutet eingeschaltet, keine Empfänger, Standardprodukte
-  (`DEFAULT_DRINK_PRODUCTS` = Bier, Spritzer, Eistee, Spezi; eine leer gespeicherte Liste bedeutet ebenfalls die Standardprodukte; 1 bis 12
-  Produkte, je höchstens 30 Zeichen, ohne Doppelte). **Verfügbar ist ein Formular nur, wenn der Schalter an ist UND mindestens ein Empfänger
+  (`DEFAULT_DRINK_PRODUCTS` = Bier, Spritzer, Eistee, Spezi; eine leer gespeicherte Liste bedeutet ebenfalls die Standardprodukte; höchstens 12
+  Produkte (leer = Standardprodukte), je höchstens 30 Zeichen, ohne Doppelte). **Verfügbar ist ein Formular nur, wenn der Schalter an ist UND mindestens ein Empfänger
   eingetragen ist** - `notificationFormState` (`notification-form-constants.ts`, rein, auch für Client-Code) liefert `available` /
   `norecipient` / `off`. Konstanten, URL-Kennungen (`getraenkeautomat`/`schadensmeldung`, `formFromSlug`) und `parseDrinkProducts` liegen
   ebenfalls dort; die Datenbankzugriffe in `notification-form-settings.ts` (`getNotificationFormSettings`/`getNotificationFormStates`,
-  `saveNotificationFormEnabled`/`saveNotificationFormRecipients`/`saveDrinkProducts` per `upsert`, nur für aktive `FEUERWEHR`).
+  `saveNotificationFormEnabled`/`saveNotificationFormRecipients`/`saveDrinkProducts` per `upsert`, nur für Feuerwehren).
 - **Kern** `submit-notification-core.ts` (`submitNotificationCore`, wirft nie nach außen), geteilt von
   `submitNotificationForKiosk` (`report-kiosk-notification-submit.ts`: Link bei jeder Abgabe neu auflösen, danach das Limit mit
   **demselben** Schlüssel/Zähler wie die Berichte (`kioskRateKey`), erst nach der Linkprüfung; Server Action `submitNotificationViaKiosk` in
