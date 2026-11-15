@@ -5,6 +5,7 @@ import { ReportWizard } from '@/app/(app)/meine-feuerwehr/berichte/neu/report-wi
 import { ACTIVE_REPORT_TYPES, REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 import type { ReportType } from '@prisma/client';
 import { submitReportViaKiosk } from './actions';
+import { WizardFrame } from './wizard-frame';
 
 export interface KioskFlowProps {
   token: string;
@@ -83,11 +84,12 @@ export function KioskFlow({ token, organizationName, members, vehicles, recentKi
         onCancel={reset}
       />
     );
-    return layout === 'tablet' ? wizard : <div className="pt-safe mx-auto max-w-lg px-4 py-4">{wizard}</div>;
+    // Stabiler Rahmen in beiden Layouts: ein Layoutwechsel (Drehen) darf den Assistenten nicht neu einhängen.
+    return <WizardFrame layout={layout}>{wizard}</WizardFrame>;
   }
 
   return (
-    <div className="pt-safe flex min-h-[100dvh] flex-col bg-[#f6f6f7] text-[#1c1c1e]">
+    <div className="pt-safe flex min-h-[100dvh] touch-manipulation flex-col bg-[#f6f6f7] text-[#1c1c1e]">
       <header className="bg-[#1c1c1e] px-6 py-3 text-white">
         <span className="text-base font-semibold">{organizationName}</span>
         <span className="ml-3 text-sm opacity-80">Berichte erfassen</span>

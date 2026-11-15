@@ -227,6 +227,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         photoUploadNotificationEmails: true,
         reportRecipients: true,
         reportKioskToken: true,
+        type: true,
+        isActive: true,
         googleCalendarServiceAccountJson: true,
         googleCalendarId: true,
         googleCalendarLastSyncAt: true,
@@ -657,15 +659,19 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Berichte-Schnellerfassung (iPad)</h2>
         <p className="mb-3 text-xs text-ink-faint">
           Geheimer Link für ein gemeinsames iPad im Feuerwehrhaus: Mitglieder wählen ihren Namen und erfassen Berichte ohne
-          Anmeldung. Wer den Link kennt, kann Berichte unter dem Namen jedes aktiven Mitglieds dieser Feuerwehr anlegen. Den Link
+          Anmeldung. Wer den Link kennt, kann Berichte unter dem Namen jedes Mitglieds dieser Feuerwehr anlegen. Den Link
           deshalb nur auf dem Gerät hinterlegen.
         </p>
-        <ReportKioskCard
-          key={selectedOrgId}
-          link={selectedOrgFull.reportKioskToken ? buildReportKioskLink(selectedOrgFull.reportKioskToken) : null}
-          createAction={createReportKioskLink.bind(null, selectedOrgId)}
-          disableAction={disableReportKioskLink.bind(null, selectedOrgId)}
-        />
+        {selectedOrgFull.type === 'FEUERWEHR' && selectedOrgFull.isActive ? (
+          <ReportKioskCard
+            key={selectedOrgId}
+            link={selectedOrgFull.reportKioskToken ? buildReportKioskLink(selectedOrgFull.reportKioskToken) : null}
+            createAction={createReportKioskLink.bind(null, selectedOrgId)}
+            disableAction={disableReportKioskLink.bind(null, selectedOrgId)}
+          />
+        ) : (
+          <p className="text-sm text-ink-faint">Nur für aktive Feuerwehren verfügbar.</p>
+        )}
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">

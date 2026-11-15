@@ -186,7 +186,7 @@ Es kommt keine neue Umgebungsvariable und keine neue Abhängigkeit hinzu; `docke
 ## 7. Rollout
 
 1. DEV zuerst (`/opt/app-177-dev`), Link in `/admin/heimatfeuerwehr` erzeugen, am iPad aufrufen, je einen
-   Tätigkeits-, Übungs- und Einsatzbericht abgeben, PDF und E-Mail prüfen.
+   Tätigkeits- und Übungsbericht abgeben (Einsatzbericht ist noch nicht freigeschaltet), PDF und E-Mail prüfen.
 2. Dann PROD: Backup, `git pull`, Rebuild; die Migration läuft im Entrypoint. Alle Feuerwehren bleiben ausgeschaltet,
    bis ein Admin den Link erzeugt.
 3. Den Link am iPad als Lesezeichen/Startbildschirm-Symbol ablegen (siehe offene Punkte).

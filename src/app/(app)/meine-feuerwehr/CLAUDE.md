@@ -842,7 +842,9 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
 - **Link je Feuerwehr:** `Organization.reportKioskToken` (nullable, unique, Klartext wie `icsToken`; null = aus, jede Feuerwehr
   startet aus). Erzeugen, neu erzeugen (alter Link sofort ungültig) und abschalten in `/admin/heimatfeuerwehr`
   (Karte "Berichte-Schnellerfassung (iPad)", `report-kiosk-card.tsx`/`report-kiosk-actions.ts`, Recht
-  `canManageHeimatfeuerwehrFor`). Logik und Tests in `lib/heimatfeuerwehr/report-kiosk-token.ts` (nur aktive `FEUERWEHR`).
+  `canManageHeimatfeuerwehrFor`). Logik in `lib/heimatfeuerwehr/report-kiosk-token.ts` (nur aktive `FEUERWEHR`), Tests in
+  `report-kiosk-token.test.ts`/`.db.test.ts`. Die Karte erscheint nur für aktive Feuerwehren (sonst "Nur für aktive Feuerwehren
+  verfügbar."), weil Abschnittskommandos und deaktivierte Feuerwehren keinen Link bekommen dürfen.
 - **Öffentlich wie `/drohnen-schnell`:** eigenes oberstes Segment, Eintrag in `PUBLIC_PATH_PREFIXES`. Unbekannter,
   abgeschalteter, neu erzeugter Link oder deaktivierte Feuerwehr: 404 (`loadKioskData` -> `notFound()`).
 - **Ersteller = technischer Platzhalter** `berichte-schnellerfassung@system.local` (`report-kiosk-user.ts`, `isActive: false`,
@@ -854,7 +856,7 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
   (Link, `report-kiosk-submit.ts`) rufen ihn auf. Die Kiosk-Abgabe löst den Link bei JEDER Abgabe neu auf, nimmt die
   Feuerwehr nur aus dem Link und zählt das Limit (20/Stunde/Link, `checkRateLimit` aus `lib/mcp/rate-limit.ts`) erst NACH der
   Linkprüfung. Die Server Action `submitReportViaKiosk` ist dünn.
-- **Seitendaten** (`report-kiosk-data.ts`): nur Id und Name der aktiven Mitglieder, aktive Fahrzeuge, "Zuletzt verwendet" je
+- **Seitendaten** (`report-kiosk-data.ts`): nur Id und Name der nicht deaktivierten Mitglieder (auch noch nicht aktivierter Konten), aktive Fahrzeuge, "Zuletzt verwendet" je
   Berichtsart über die ganze Feuerwehr (nicht je Person, weil das Gerät gemeinsam genutzt wird).
 - **Assistent geteilt, nicht kopiert:** `ReportWizard` hat optionale Props `layout` ('mobile' Standard | 'tablet'), `onSubmit`,
   `onDone`, `onCancel`, `tabletHeader`, `lockFilledBy`. Ohne sie verhält er sich exakt wie in der App (Charakterisierungstests in
@@ -868,7 +870,8 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
   hat diese Sperre serverseitig nicht - bekannte Asymmetrie.
 - **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Namenswahl -> Berichtsart -> Assistent -> Bestätigung -> nach 30 s oder
   "Neuer Bericht" zurück zur Namenswahl (keine Person bleibt "angemeldet"). Ab 1024 px Fensterbreite Tablet-Layout, darunter das
-  Handy-Layout.
+  Handy-Layout. Der Assistent steckt in beiden Layouts in einem stabilen Rahmen (`wizard-frame.tsx`, immer ein `div`), damit ein
+  Wechsel bei 1024 px (iPad drehen, Split View) ihn nie neu einhängt und keine Eingaben verloren gehen.
 - **Nicht geprüft in der Entwicklungsumgebung:** Hydration/Interaktion (derselbe Gap wie sonst in dieser Datei). Der ganze Ablauf
   muss auf einem echten iPad durchgeklickt werden; offen ist, ob "Zum Home-Bildschirm" auf iOS den geheimen Link öffnet.
 
