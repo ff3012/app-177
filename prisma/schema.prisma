@@ -216,6 +216,7 @@ model Organization {
   facebookPostCache FacebookPostCache?
   reports           Report[]
   reportTypeSettings ReportTypeSetting[]
+  notificationFormSettings NotificationFormSetting[]
 
   // Nur für type == ABSCHNITTSKOMMANDO gesetzt: der Bezirk, dem dieser Abschnitt angehört.
   districtId String?
@@ -1030,6 +1031,28 @@ model ReportTypeSetting {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, type])
+}
+
+enum NotificationForm {
+  DRINKS
+  DAMAGE
+}
+
+// Einstellungen je Feuerwehr und Meldeformular (Getränkeautomat, Schadensmeldung): ob das Formular in App und am
+// iPad angeboten wird, wer die Meldung per E-Mail erhält und (nur DRINKS) die Produktliste. Keine Zeile =
+// eingeschaltet, keine Empfänger, Standardprodukte. Verfügbar ist ein Formular nur mit mindestens einem Empfänger.
+// Die Meldungen selbst werden nicht gespeichert.
+model NotificationFormSetting {
+  id             String           @id @default(cuid())
+  organizationId String
+  form           NotificationForm
+  enabled        Boolean          @default(true)
+  recipients     String[]         @default([])
+  products       String[]         @default([])
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, form])
 }
 
 // Ein von diesem Bericht verwendetes Fahrzeug samt gefahrener Kilometer - mehrere pro Bericht möglich
