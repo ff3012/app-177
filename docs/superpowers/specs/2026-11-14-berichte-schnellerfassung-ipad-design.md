@@ -137,6 +137,15 @@ Kachelvariante (`MemberTileSelect`, gleiche Schnittstelle `excludeIds`/`onAdd`) 
 ersetzt am Tablet das Popover. Die Zuordnung der Mitglieder zu Fahrzeugen und die "Ohne Fahrzeug"-Karte bleiben
 inhaltlich gleich.
 
+**Nachtrag (Umsetzungsplan):** Zusätzlich zu den vier genannten Props bekommt der Assistent `tabletHeader?: { title; subtitle? }`
+(Kopfzeile des Tablet-Layouts) und `lockFilledBy?: boolean` (blendet "Ausgefüllt von" aus, weil die Person am Kiosk schon gewählt
+ist). `SubmitReportResult` und `onDone` tragen zusätzlich `year`, damit die Bestätigung "Nr. 12 / 2026" zeigen kann.
+
+**Nachtrag (Berichtsarten):** Der Einsatzbericht ist in der App noch nicht freigeschaltet (`ACTIVE_REPORT_TYPES` =
+Tätigkeits- und Übungsbericht). Die Schnellerfassung übernimmt das: Der Einsatzbericht erscheint am iPad als ausgegraute,
+nicht antippbare Kachel und wird mit der App zusammen freigeschaltet, sobald er dort aktiv wird. Die Kiosk-Abgabe lehnt
+nicht freigeschaltete Arten zusätzlich serverseitig ab.
+
 ## 5. Dateien (Überblick)
 
 Neu:

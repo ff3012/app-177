@@ -164,6 +164,9 @@ protocol layer (JSON-RPC, transport, schema validation) is not worth hand-rollin
   `(app)` header/nav chrome nor its `requireUser()` gate. Nesting it under `(app)/drohnen/...` would have
   inherited that gate since layouts apply by directory nesting, not by URL. Follow the same pattern (new
   top-level segment + `PUBLIC_PATH_PREFIXES` entry) for any future no-login, capability-URL page.
+- `src/app/berichte-schnell/[token]/*` — the fourth top-level, session-less capability-URL segment (iPad quick capture of
+  Tätigkeits-/Übungs-/Einsatzberichte, one secret link per Feuerwehr in `Organization.reportKioskToken`, off by default);
+  listed in `PUBLIC_PATH_PREFIXES`. Details in `src/app/(app)/meine-feuerwehr/CLAUDE.md` ("Berichte-Schnellerfassung am iPad").
 - `src/middleware.ts` runs on the **Node.js runtime** (`export const config = { runtime: 'nodejs' }`), not
   the default Edge runtime — required because its `auth()` call triggers the same DB-backed permission
   refresh as everywhere else (see Session model below), and Prisma cannot run on Edge. Don't move this back

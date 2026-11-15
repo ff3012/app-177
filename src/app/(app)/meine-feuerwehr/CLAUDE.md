@@ -833,6 +833,45 @@ Bemerkung ankam). Der "Bericht abgeben"-Button ist dafür nicht mehr hart deakti
 während des Absendens) — die serverseitige Pflichtprüfung (`submitReport`) bestand bereits vorher
 unverändert.
 
+### Berichte-Schnellerfassung am iPad (`/berichte-schnell/[token]`)
+
+Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
+`docs/superpowers/specs/2026-11-14-berichte-schnellerfassung-ipad-design.md`, Plan:
+`docs/superpowers/plans/2026-11-14-berichte-schnellerfassung-ipad.md`.
+
+- **Link je Feuerwehr:** `Organization.reportKioskToken` (nullable, unique, Klartext wie `icsToken`; null = aus, jede Feuerwehr
+  startet aus). Erzeugen, neu erzeugen (alter Link sofort ungültig) und abschalten in `/admin/heimatfeuerwehr`
+  (Karte "Berichte-Schnellerfassung (iPad)", `report-kiosk-card.tsx`/`report-kiosk-actions.ts`, Recht
+  `canManageHeimatfeuerwehrFor`). Logik und Tests in `lib/heimatfeuerwehr/report-kiosk-token.ts` (nur aktive `FEUERWEHR`).
+- **Öffentlich wie `/drohnen-schnell`:** eigenes oberstes Segment, Eintrag in `PUBLIC_PATH_PREFIXES`. Unbekannter,
+  abgeschalteter, neu erzeugter Link oder deaktivierte Feuerwehr: 404 (`loadKioskData` -> `notFound()`).
+- **Ersteller = technischer Platzhalter** `berichte-schnellerfassung@system.local` (`report-kiosk-user.ts`, `isActive: false`,
+  Heimat = irgendein Abschnittskommando, nie in einer Feuerwehr-Mitgliederliste). `Report.filledById` ist die gewählte Person,
+  sie sieht den Bericht deshalb unter "Meine Berichte". Wer den Link hat, kann Berichte unter dem Namen jedes aktiven
+  Mitglieds anlegen - bewusste Entscheidung ("nur Name wählen").
+- **Geteilter Kern:** `lib/heimatfeuerwehr/submit-report-core.ts` (`submitReportCore`, liefert `{ reportId, number, year }`)
+  enthält die gesamte Prüfung, das Anlegen, PDF, S3 und E-Mail. `submitReport` (App, Sitzung) und `submitReportForKiosk`
+  (Link, `report-kiosk-submit.ts`) rufen ihn auf. Die Kiosk-Abgabe löst den Link bei JEDER Abgabe neu auf, nimmt die
+  Feuerwehr nur aus dem Link und zählt das Limit (20/Stunde/Link, `checkRateLimit` aus `lib/mcp/rate-limit.ts`) erst NACH der
+  Linkprüfung. Die Server Action `submitReportViaKiosk` ist dünn.
+- **Seitendaten** (`report-kiosk-data.ts`): nur Id und Name der aktiven Mitglieder, aktive Fahrzeuge, "Zuletzt verwendet" je
+  Berichtsart über die ganze Feuerwehr (nicht je Person, weil das Gerät gemeinsam genutzt wird).
+- **Assistent geteilt, nicht kopiert:** `ReportWizard` hat optionale Props `layout` ('mobile' Standard | 'tablet'), `onSubmit`,
+  `onDone`, `onCancel`, `tabletHeader`, `lockFilledBy`. Ohne sie verhält er sich exakt wie in der App (Charakterisierungstests in
+  `report-wizard.test.ts`). `layout='tablet'` rendert eine ganze Seite (Kopf, Schrittleiste links, zwei Spalten, feste untere
+  Leiste, Tipp-Ziele >= 48 px); Fahrzeuge und Mitglieder erscheinen als Kacheln (`MemberTileSelect` statt Popover). Die Wurzel
+  des Tablet-Layouts trägt zusätzlich `[&_button:not([class*=min-h])]:min-h-[48px]`, damit auch die vom Handy-Layout
+  übernommenen Schaltflächen 48 px erreichen.
+- **Berichtsarten:** wie in der App nur die in `ACTIVE_REPORT_TYPES` freigeschalteten (Tätigkeits- und Übungsbericht); der
+  Einsatzbericht erscheint ausgegraut und zieht mit der App nach. Die Kiosk-Abgabe erzwingt das auch serverseitig
+  (`submitReportForKiosk` lehnt andere Arten mit "Diese Berichtsart ist nicht verfügbar." ab); die App-eigene `submitReport`
+  hat diese Sperre serverseitig nicht - bekannte Asymmetrie.
+- **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Namenswahl -> Berichtsart -> Assistent -> Bestätigung -> nach 30 s oder
+  "Neuer Bericht" zurück zur Namenswahl (keine Person bleibt "angemeldet"). Ab 1024 px Fensterbreite Tablet-Layout, darunter das
+  Handy-Layout.
+- **Nicht geprüft in der Entwicklungsumgebung:** Hydration/Interaktion (derselbe Gap wie sonst in dieser Datei). Der ganze Ablauf
+  muss auf einem echten iPad durchgeklickt werden; offen ist, ob "Zum Home-Bildschirm" auf iOS den geheimen Link öffnet.
+
 ### Fahrzeug reservieren (neuer Einstieg, Fahrzeug-Statuskacheln)
 
 Ersetzt den bisherigen, wenig lesbaren Einstieg (ein `<select>` mit Kennzeichen + "Reservieren"-
