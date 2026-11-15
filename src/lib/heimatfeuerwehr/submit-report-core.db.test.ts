@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/db/prisma';
 import { submitReportCore, type SubmitReportInput } from './submit-report-core';
+import { sendReportSubmittedEmail } from './notify-report-submitted';
+import { saveReportTypeEnabled, saveReportTypeRecipients } from './report-type-settings';
 
 // PDF, S3 und E-Mail sind nicht Gegenstand dieser Tests und dürfen mit einer lokalen .env nie echt auslösen.
 vi.mock('@/lib/storage/report-pdf-s3', () => ({ putReportPdf: vi.fn(async () => undefined) }));
@@ -175,5 +177,52 @@ describe('submitReportCore', () => {
       input: input({ startAt: '2030-06-15T10:00:00.000Z', endAt: '2030-06-15T08:00:00.000Z' }),
     });
     expect(result.error).toBe('Das Ende muss nach dem Beginn liegen.');
+  });
+});
+
+describe('submitReportCore: Berichtsarten je Feuerwehr', () => {
+  it('lehnt die nicht freigeschaltete Art INCIDENT und eine erfundene Art ab, ohne Bericht und ohne Nummer', async () => {
+    const before = await prisma.report.count({ where: { fireDepartmentId: orgA } });
+    for (const type of ['INCIDENT', 'FOO'] as const) {
+      const result = await submitReportCore({
+        fireDepartmentId: orgA,
+        createdById: ids.creator,
+        input: input({ type: type as never }),
+      });
+      expect(result.error).toBe('Diese Berichtsart ist nicht verfügbar.');
+      expect(result.reportId).toBeUndefined();
+    }
+    expect(await prisma.report.count({ where: { fireDepartmentId: orgA } })).toBe(before);
+  });
+
+  it('lehnt eine von der Feuerwehr abgeschaltete Art ab und lässt die andere zu', async () => {
+    await saveReportTypeEnabled(orgA, 'EXERCISE', false);
+    try {
+      const blocked = await submitReportCore({ fireDepartmentId: orgA, createdById: ids.creator, input: input({ type: 'EXERCISE' }) });
+      expect(blocked.error).toBe('Diese Berichtsart ist nicht verfügbar.');
+      const allowed = await submitReportCore({ fireDepartmentId: orgA, createdById: ids.creator, input: input({ type: 'ACTIVITY' }) });
+      expect(allowed.error).toBeUndefined();
+      expect(allowed.reportId).toBeDefined();
+    } finally {
+      await saveReportTypeEnabled(orgA, 'EXERCISE', true);
+    }
+  });
+
+  it('nimmt die E-Mail-Empfänger aus der Zeile der Berichtsart', async () => {
+    await saveReportTypeRecipients(orgA, 'ACTIVITY', ['taetigkeit@example.local']);
+    await saveReportTypeRecipients(orgA, 'EXERCISE', ['uebung@example.local']);
+    const mail = vi.mocked(sendReportSubmittedEmail);
+
+    await submitReportCore({ fireDepartmentId: orgA, createdById: ids.creator, input: input({ type: 'ACTIVITY' }) });
+    expect(mail.mock.calls.at(-1)?.[0].fireDepartmentEmails).toEqual(['taetigkeit@example.local']);
+
+    await submitReportCore({ fireDepartmentId: orgA, createdById: ids.creator, input: input({ type: 'EXERCISE' }) });
+    expect(mail.mock.calls.at(-1)?.[0].fireDepartmentEmails).toEqual(['uebung@example.local']);
+  });
+
+  it('ohne Zeile: keine Empfänger', async () => {
+    const mail = vi.mocked(sendReportSubmittedEmail);
+    await submitReportCore({ fireDepartmentId: orgB, createdById: ids.creator, input: input({ filledById: ids.fillerB }) });
+    expect(mail.mock.calls.at(-1)?.[0].fireDepartmentEmails).toEqual([]);
   });
 });

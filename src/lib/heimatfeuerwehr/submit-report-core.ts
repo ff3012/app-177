@@ -5,6 +5,7 @@ import { getNextReportNumber } from '@/lib/heimatfeuerwehr/report-sequence';
 import { generateReportPdf, reportPdfFileName, reportPdfStorageKey, type ReportForPdf } from '@/lib/heimatfeuerwehr/report-pdf';
 import { putReportPdf } from '@/lib/storage/report-pdf-s3';
 import { sendReportSubmittedEmail } from '@/lib/heimatfeuerwehr/notify-report-submitted';
+import { getReportRecipients, isReportTypeEnabled } from './report-type-settings';
 import type { ReportType, ReportMemberFunktion } from '@prisma/client';
 
 export interface SubmitReportInput {
@@ -67,6 +68,12 @@ export async function submitReportCore(params: {
   input: SubmitReportInput;
 }): Promise<SubmitReportResult> {
   const { fireDepartmentId, createdById, input } = params;
+
+  // Verfügbarkeit der Berichtsart: nicht freigeschaltet (Einsatzbericht) oder von der Feuerwehr abgeschaltet.
+  // Gilt für App und iPad gleich (geteilter Kern) - die Oberfläche blendet solche Arten zusätzlich aus.
+  if (!(await isReportTypeEnabled(fireDepartmentId, input.type))) {
+    return { error: 'Diese Berichtsart ist nicht verfügbar.' };
+  }
 
   if (typeof input.ownActivity !== 'boolean') {
     return { error: '"Eigene Tätigkeit" muss angegeben werden.' };
@@ -246,8 +253,9 @@ export async function submitReportCore(params: {
   // oben - ein Fehler hier darf die bereits abgegebene Nummer nie zurückrollen.
   const fireDepartment = await prisma.organization.findUniqueOrThrow({
     where: { id: fireDepartmentId },
-    select: { name: true, reportRecipients: true, wappenImageData: true, wappenImageMimeType: true },
+    select: { name: true, wappenImageData: true, wappenImageMimeType: true },
   });
+  const recipients = await getReportRecipients(fireDepartmentId, input.type);
   const wappenDataUri =
     fireDepartment.wappenImageData && fireDepartment.wappenImageMimeType
       ? `data:${fireDepartment.wappenImageMimeType};base64,${Buffer.from(fireDepartment.wappenImageData).toString('base64')}`
@@ -313,7 +321,7 @@ export async function submitReportCore(params: {
     const pdfBuffer = await generateReportPdf(pdfData);
     await putReportPdf(storageKey, pdfBuffer);
     const emailResult = await sendReportSubmittedEmail(
-      { ...pdfData, fireDepartmentEmails: fireDepartment.reportRecipients, filledByEmail: filledBy.email },
+      { ...pdfData, fireDepartmentEmails: recipients, filledByEmail: filledBy.email },
       pdfBuffer,
       pdfFileName,
     );
