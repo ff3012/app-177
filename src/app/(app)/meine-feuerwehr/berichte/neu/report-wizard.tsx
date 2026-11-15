@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MemberSearchSelect, type ReportMemberOption } from '@/components/heimatfeuerwehr/member-search-select';
 import { MemberMultiSelect } from '@/components/heimatfeuerwehr/member-multi-select';
+import { MemberTileSelect } from '@/components/heimatfeuerwehr/member-tile-select';
 import {
   MATERIALS,
   EQUIPMENT,
   LOESCHER_CODES,
   FUNKTION_LABEL,
+  REPORT_TYPE_LABEL,
   getKindOptionsForType,
 } from '@/lib/heimatfeuerwehr/report-constants';
 import { ActivityKindPicker } from './activity-kind-picker';
@@ -92,11 +94,13 @@ function MemberRow({
   members,
   onFunktionChange,
   onRemove,
+  large = false,
 }: {
   entry: ReportMemberEntry;
   members: ReportMemberOption[];
   onFunktionChange: (userId: string, funktion: (typeof FUNKTIONEN)[number]) => void;
   onRemove: (userId: string) => void;
+  large?: boolean;
 }) {
   const member = members.find((m) => m.id === entry.userId);
   return (
@@ -113,7 +117,11 @@ function MemberRow({
           </option>
         ))}
       </select>
-      <button type="button" onClick={() => onRemove(entry.userId)} className="text-red-700">
+      <button
+        type="button"
+        onClick={() => onRemove(entry.userId)}
+        className={large ? 'min-h-[48px] min-w-[48px] text-xl text-red-700' : 'text-red-700'}
+      >
         ×
       </button>
     </div>
@@ -160,9 +168,6 @@ export function ReportWizard({
   tabletHeader?: { title: string; subtitle?: string };
   lockFilledBy?: boolean;
 }) {
-  void layout;
-  void tabletHeader;
-  void lockFilledBy;
   const router = useRouter();
   const isExercise = type === 'EXERCISE';
   // Zusätzlicher Übungsdetails-Schritt nur für Übungsberichte, direkt nach den Grunddaten - Fahrzeuge/
@@ -172,6 +177,11 @@ export function ReportWizard({
   const stepFahrzeuge = isExercise ? 3 : 2;
   const stepAbschluss = isExercise ? 4 : 3;
   const [step, setStep] = useState(1);
+  const [maxStep, setMaxStep] = useState(1);
+  function goTo(next: number) {
+    setStep(next);
+    setMaxStep((current) => Math.max(current, next));
+  }
 
   const now = useState(() => new Date())[0];
   const oneHourLater = useState(() => new Date(now.getTime() + 60 * 60 * 1000))[0];
@@ -228,10 +238,10 @@ export function ReportWizard({
 
   function goToStep1Next() {
     if (!canContinueStep1) return;
-    setStep((current) => current + 1);
+    goTo(step + 1);
   }
   function goToNextStep() {
-    setStep((current) => Math.min(current + 1, totalSteps));
+    goTo(Math.min(step + 1, totalSteps));
   }
   function goBack() {
     setStep((current) => Math.max(current - 1, 1));
@@ -373,16 +383,16 @@ export function ReportWizard({
   const kindTitle = isExercise ? 'Übungsart' : 'Tätigkeitsart';
   const kindListLabel = isExercise ? 'Alle Übungsarten' : 'Alle Tätigkeitsarten';
 
-  return (
-    <div className="flex flex-col gap-5 pb-48">
-      <WizardHeader step={step} totalSteps={totalSteps} onBack={goBack} onCancel={onCancel} />
-
-      {step === 1 && (
+  // Die Schrittinhalte (ohne die feste Handy-Leiste) liegen in Konstanten, damit Handy- und Tablet-
+  // Layout dieselben Karten verwenden; die Handy-Leisten stehen unten im Handy-Zweig des return.
+  const step1Cards = (
         <>
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Ausgefüllt von</label>
-            <MemberSearchSelect members={members} value={filledById} onChange={setFilledById} placeholder="Mitglied wählen" />
-          </div>
+          {!lockFilledBy && (
+            <div className="rounded-xl bg-white p-4 shadow-sm">
+              <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Ausgefüllt von</label>
+              <MemberSearchSelect members={members} value={filledById} onChange={setFilledById} placeholder="Mitglied wählen" />
+            </div>
+          )}
 
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Zeitraum</label>
@@ -453,23 +463,10 @@ export function ReportWizard({
               onClose={() => setPickerOpen(false)}
             />
           )}
-
-          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
-            <button
-              type="button"
-              onClick={goToStep1Next}
-              disabled={!canContinueStep1}
-              className={`flex h-[52px] w-full items-center justify-center rounded-lg text-[15px] font-semibold text-white ${
-                canContinueStep1 ? 'bg-brand' : 'pointer-events-none bg-neutral-300'
-              }`}
-            >
-              Weiter
-            </button>
-          </div>
         </>
-      )}
+  );
 
-      {isExercise && step === 2 && (
+  const uebungCards = (
         <>
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">Übungsleiter</label>
@@ -527,20 +524,10 @@ export function ReportWizard({
               className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
             />
           </div>
-
-          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
-            <button
-              type="button"
-              onClick={goToNextStep}
-              className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
-            >
-              Weiter
-            </button>
-          </div>
         </>
-      )}
+  );
 
-      {step === stepFahrzeuge && (
+  const fahrzeugeCards = (
         <>
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Fahrzeuge</label>
@@ -624,22 +611,12 @@ export function ReportWizard({
               />
             </div>
           </div>
-
-          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
-            <button
-              type="button"
-              onClick={goToNextStep}
-              className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
-            >
-              Weiter
-            </button>
-          </div>
         </>
-      )}
+  );
 
-      {step === stepAbschluss && (
+  const abschlussCards = (
         <>
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div data-wide className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Verbrauchsmaterial</label>
             <div className="flex flex-col gap-1">{nonLoescherMaterials.map((m) => renderQuantityRow('MATERIAL', m))}</div>
             {!showLoescher ? (
@@ -682,7 +659,7 @@ export function ReportWizard({
             </>
           )}
 
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div data-wide className="rounded-xl bg-white p-4 shadow-sm">
             <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">
               Bemerkung <span className="text-red-600">*</span>
             </label>
@@ -697,8 +674,227 @@ export function ReportWizard({
             {remark.trim().length === 0 && <p className="mt-1 text-xs text-red-600">Bemerkung ist erforderlich.</p>}
           </div>
 
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && (
+            <p data-wide className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
+        </>
+  );
 
+  const fahrzeugeTabletCards = (
+    <>
+      <div data-wide className="rounded-xl bg-white p-4 shadow-sm">
+        <label className="mb-2 block text-[13px] font-medium text-[#1c1c1e]">Fahrzeuge</label>
+        <div className="grid grid-cols-4 gap-3">
+          {vehicles.map((vehicle) => {
+            const selected = vehicleEntries.some((entry) => entry.vehicleId === vehicle.id);
+            return (
+              <button
+                key={vehicle.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => (selected ? removeVehicle(vehicle.id) : addVehicle(vehicle.id))}
+                className={`min-h-[56px] rounded-lg border px-3 py-2 text-[15px] font-semibold ${
+                  selected ? 'border-brand bg-brand text-white' : 'border-neutral-300 bg-white text-[#1c1c1e]'
+                }`}
+              >
+                {vehicle.taktischeBezeichnung}
+                <span className="block text-xs font-normal opacity-80">{vehicle.kennzeichen}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {vehicleEntries.map((entry) => {
+        const vehicle = vehicles.find((v) => v.id === entry.vehicleId);
+        const vehicleMembers = reportMembers.filter((m) => m.vehicleId === entry.vehicleId);
+        return (
+          <div key={entry.vehicleId} className="rounded-xl bg-white p-4 shadow-sm">
+            <div className="mb-2 text-[15px] font-semibold text-[#1c1c1e]">
+              {vehicle ? `${vehicle.taktischeBezeichnung} (${vehicle.kennzeichen})` : entry.vehicleId}
+            </div>
+            <label className="mb-1 block text-[13px] font-medium text-[#1c1c1e]">km</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={entry.km}
+              onChange={(e) => setVehicleKm(entry.vehicleId, e.target.value)}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+            />
+            <div className="mt-3 flex flex-col gap-2">
+              {vehicleMembers.map((memberEntry) => (
+                <MemberRow key={memberEntry.userId} entry={memberEntry} members={members} onFunktionChange={setMemberFunktion} onRemove={removeMember} large />
+              ))}
+            </div>
+            <div className="mt-3">
+              <MemberTileSelect
+                members={members}
+                excludeIds={reportMembers.map((m) => m.userId)}
+                onAdd={(ids) => addMembers(entry.vehicleId, ids)}
+                placeholder="Mitglied hinzufügen"
+              />
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className="mb-2 text-[15px] font-semibold text-[#1c1c1e]">Ohne Fahrzeug</div>
+        <div className="flex flex-col gap-2">
+          {reportMembers
+            .filter((entry) => entry.vehicleId === null)
+            .map((entry) => (
+              <MemberRow key={entry.userId} entry={entry} members={members} onFunktionChange={setMemberFunktion} onRemove={removeMember} large />
+            ))}
+        </div>
+        <div className="mt-3">
+          <MemberTileSelect
+            members={members}
+            excludeIds={reportMembers.map((entry) => entry.userId)}
+            onAdd={(ids) => addMembers(null, ids)}
+            placeholder="Mitglied hinzufügen"
+          />
+        </div>
+      </div>
+    </>
+  );
+
+  const stepLabels = isExercise
+    ? ['Grunddaten', 'Übungsdetails', 'Fahrzeuge / Mitglieder', 'Abschluss']
+    : ['Grunddaten', 'Fahrzeuge / Mitglieder', 'Abschluss'];
+
+  if (layout === 'tablet') {
+    const content = step === 1 ? step1Cards : isExercise && step === 2 ? uebungCards : step === stepFahrzeuge ? fahrzeugeTabletCards : abschlussCards;
+    const isLast = step === totalSteps;
+    const primaryDisabled = step === 1 ? !canContinueStep1 : isLast ? submitting : false;
+    const primaryLabel = isLast ? (submitting ? 'Wird abgegeben …' : 'Bericht abgeben') : 'Weiter';
+    const primaryAction = step === 1 ? goToStep1Next : isLast ? handleSubmit : goToNextStep;
+
+    return (
+      <div
+        data-layout="tablet"
+        className="flex h-[100dvh] flex-col bg-[#f6f6f7] text-[#1c1c1e] [&_input]:min-h-[48px] [&_input]:text-base [&_select]:min-h-[48px] [&_select]:text-base [&_textarea]:text-base"
+      >
+        <header className="pt-safe flex items-center justify-between bg-[#1c1c1e] px-6 py-3 text-white">
+          <span className="text-base font-semibold">{tabletHeader?.title ?? REPORT_TYPE_LABEL[type]}</span>
+          {tabletHeader?.subtitle && <span className="text-sm opacity-80">{tabletHeader.subtitle}</span>}
+        </header>
+        <div className="flex min-h-0 flex-1">
+          <nav aria-label="Schritte" className="flex w-60 shrink-0 flex-col gap-2 border-r border-neutral-200 bg-white p-4">
+            {stepLabels.map((label, index) => {
+              const n = index + 1;
+              const current = n === step;
+              const done = n < step;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={current || n > maxStep}
+                  aria-current={current ? 'step' : undefined}
+                  onClick={() => setStep(n)}
+                  className={`flex min-h-[52px] items-center rounded-full px-4 text-left text-[15px] font-semibold ${
+                    current ? 'bg-[#1c1c1e] text-white' : done ? 'bg-green-100 text-[#1c1c1e]' : 'bg-neutral-200 text-neutral-600'
+                  }`}
+                >
+                  {done ? '✓ ' : `${n} `}
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
+          <main className="min-w-0 flex-1 overflow-y-auto p-6">
+            <div className="grid grid-cols-2 items-start gap-5 [&>[data-wide]]:col-span-2">{content}</div>
+          </main>
+        </div>
+        <footer
+          className="flex items-center justify-between gap-4 border-t border-neutral-200 bg-white px-6 pt-3"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }}
+        >
+          {step === 1 ? (
+            onCancel ? (
+              <button type="button" onClick={onCancel} className="min-h-[52px] rounded-lg border border-neutral-300 px-6 text-[15px] font-semibold">
+                Abbrechen
+              </button>
+            ) : (
+              <Link href="/meine-feuerwehr" className="flex min-h-[52px] items-center rounded-lg border border-neutral-300 px-6 text-[15px] font-semibold">
+                Abbrechen
+              </Link>
+            )
+          ) : (
+            <button type="button" onClick={goBack} className="min-h-[52px] rounded-lg border border-neutral-300 px-6 text-[15px] font-semibold">
+              ← Zurück
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={primaryDisabled}
+            onClick={primaryAction}
+            className={`min-h-[52px] rounded-lg px-10 text-[15px] font-semibold text-white ${primaryDisabled ? 'bg-neutral-300' : 'bg-brand'}`}
+          >
+            {primaryLabel}
+          </button>
+        </footer>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5 pb-48">
+      <WizardHeader step={step} totalSteps={totalSteps} onBack={goBack} onCancel={onCancel} />
+
+      {step === 1 && (
+        <>
+          {step1Cards}
+          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
+            <button
+              type="button"
+              onClick={goToStep1Next}
+              disabled={!canContinueStep1}
+              className={`flex h-[52px] w-full items-center justify-center rounded-lg text-[15px] font-semibold text-white ${
+                canContinueStep1 ? 'bg-brand' : 'pointer-events-none bg-neutral-300'
+              }`}
+            >
+              Weiter
+            </button>
+          </div>
+        </>
+      )}
+
+      {isExercise && step === 2 && (
+        <>
+          {uebungCards}
+          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
+            >
+              Weiter
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === stepFahrzeuge && (
+        <>
+          {fahrzeugeCards}
+          <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="flex h-[52px] w-full items-center justify-center rounded-lg bg-brand text-[15px] font-semibold text-white"
+            >
+              Weiter
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === stepAbschluss && (
+        <>
+          {abschlussCards}
           <div className="pb-safe-tabbar fixed inset-x-0 bottom-[98px] z-40 border-t border-neutral-200 bg-white p-4 sm:bottom-0">
             <button
               type="button"
