@@ -123,6 +123,31 @@ describe('submitReportForKiosk', () => {
     expect(result.error).toBe('Das ausgewählte Mitglied gehört nicht zu dieser Feuerwehr.');
   });
 
+  it('lehnt den nicht freigeschalteten Einsatzbericht (INCIDENT) serverseitig ab und legt nichts an', async () => {
+    const token = await setReportKioskToken(orgA);
+    const before = await prisma.report.count({ where: { fireDepartmentId: orgA } });
+    const result = await submitReportForKiosk(token, input({ type: 'INCIDENT' }));
+    expect(result.error).toBe('Diese Berichtsart ist nicht verfügbar.');
+    expect(result.reportId).toBeUndefined();
+    expect(await prisma.report.count({ where: { fireDepartmentId: orgA } })).toBe(before);
+  });
+
+  it('lehnt eine erfundene Berichtsart ab', async () => {
+    const token = await setReportKioskToken(orgA);
+    const before = await prisma.report.count({ where: { fireDepartmentId: orgA } });
+    const result = await submitReportForKiosk(token, input({ type: 'FOO' as never }));
+    expect(result.error).toBe('Diese Berichtsart ist nicht verfügbar.');
+    expect(result.reportId).toBeUndefined();
+    expect(await prisma.report.count({ where: { fireDepartmentId: orgA } })).toBe(before);
+  });
+
+  it('lässt die freigeschaltete Berichtsart EXERCISE weiterhin zu', async () => {
+    const token = await setReportKioskToken(orgA);
+    const result = await submitReportForKiosk(token, input({ type: 'EXERCISE' }));
+    expect(result.error).toBeUndefined();
+    expect(result.reportId).toBeDefined();
+  });
+
   it('begrenzt die Abgaben je Link', async () => {
     const token = await setReportKioskToken(orgB);
     for (let i = 0; i < KIOSK_SUBMIT_MAX; i += 1) {
