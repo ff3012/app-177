@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/db/prisma';
 import { setReportKioskToken } from './report-kiosk-token';
 import { loadKioskData } from './report-kiosk-data';
+import { saveReportTypeEnabled } from './report-type-settings';
 
 const RUN = `kiosk-data-${Date.now()}`;
 const userIds: string[] = [];
@@ -83,5 +84,24 @@ describe('loadKioskData', () => {
     const data = await loadKioskData(token);
     expect(data?.recentKindsByType.ACTIVITY).toEqual(['KIND_X']);
     expect(data?.recentKindsByType.EXERCISE).toEqual([]);
+  });
+
+  it('liefert Gerätename und eingeschaltete Arten', async () => {
+    const token = await setReportKioskToken(orgA);
+    const before = await loadKioskData(token);
+    expect(before?.deviceName).toBeNull();
+    expect(before?.enabledTypes).toEqual(['ACTIVITY', 'EXERCISE']);
+
+    await prisma.organization.update({ where: { id: orgA }, data: { reportKioskDeviceName: 'Tablet EG' } });
+    await saveReportTypeEnabled(orgA, 'EXERCISE', false);
+    try {
+      const after = await loadKioskData(token);
+      expect(after?.deviceName).toBe('Tablet EG');
+      expect(after?.enabledTypes).toEqual(['ACTIVITY']);
+      expect(Object.keys(after?.recentKindsByType ?? {})).toEqual(['ACTIVITY']);
+    } finally {
+      await saveReportTypeEnabled(orgA, 'EXERCISE', true);
+      await prisma.organization.update({ where: { id: orgA }, data: { reportKioskDeviceName: null } });
+    }
   });
 });

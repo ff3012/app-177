@@ -30,6 +30,7 @@ import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-for
 import { PhotoUploadNotificationEmailsForm } from './photo-upload-notification-emails-form';
 import { ReportTypeRow } from './report-type-row';
 import { ReportKioskCard } from './report-kiosk-card';
+import { ReportKioskDeviceNameForm } from './report-kiosk-device-name-form';
 import { createReportKioskLink, disableReportKioskLink } from './report-kiosk-actions';
 import { ReportDeleteButton } from './report-delete-button';
 import { ACTIVE_REPORT_TYPES, REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
@@ -227,6 +228,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         fahrzeugReservierungEmails: true,
         photoUploadNotificationEmails: true,
         reportKioskToken: true,
+        reportKioskDeviceName: true,
         type: true,
         isActive: true,
         googleCalendarServiceAccountJson: true,
@@ -673,12 +675,17 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           deshalb nur auf dem Gerät hinterlegen.
         </p>
         {selectedOrgFull.type === 'FEUERWEHR' && selectedOrgFull.isActive ? (
-          <ReportKioskCard
-            key={selectedOrgId}
-            link={selectedOrgFull.reportKioskToken ? buildReportKioskLink(selectedOrgFull.reportKioskToken) : null}
-            createAction={createReportKioskLink.bind(null, selectedOrgId)}
-            disableAction={disableReportKioskLink.bind(null, selectedOrgId)}
-          />
+          <>
+            <ReportKioskCard
+              key={selectedOrgId}
+              link={selectedOrgFull.reportKioskToken ? buildReportKioskLink(selectedOrgFull.reportKioskToken) : null}
+              createAction={createReportKioskLink.bind(null, selectedOrgId)}
+              disableAction={disableReportKioskLink.bind(null, selectedOrgId)}
+            />
+            <div className="mt-3">
+              <ReportKioskDeviceNameForm key={selectedOrgId} organizationId={selectedOrgId} initialName={selectedOrgFull.reportKioskDeviceName} />
+            </div>
+          </>
         ) : (
           <p className="text-sm text-ink-faint">Nur für aktive Feuerwehren verfügbar.</p>
         )}

@@ -1,7 +1,6 @@
-import type { ReportType } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
-import { ACTIVE_REPORT_TYPES } from './report-constants';
+import { getEnabledReportTypes } from './report-type-settings';
 import { findOrganizationByKioskToken } from './report-kiosk-token';
 import { getRecentActivityKindsForOrg } from './recent-activity-kinds';
 
@@ -10,7 +9,10 @@ export interface KioskData {
   /** Nur Id und Name: das Gerät ist öffentlich, E-Mail/Stb-Nr./Telefon verlassen den Server nie. */
   members: { id: string; firstName: string; lastName: string }[];
   vehicles: { id: string; taktischeBezeichnung: string; kennzeichen: string }[];
+  /** Nur eingeschaltete Berichtsarten. */
   recentKindsByType: Record<string, string[]>;
+  deviceName: string | null;
+  enabledTypes: string[];
 }
 
 /** Alles, was die Seite /berichte-schnell/[token] braucht - null bei unbekanntem/abgeschaltetem Link. */
@@ -18,7 +20,8 @@ export async function loadKioskData(token: string): Promise<KioskData | null> {
   const organization = await findOrganizationByKioskToken(token);
   if (!organization) return null;
 
-  const [members, vehicles, recent] = await Promise.all([
+  const enabledTypes = await getEnabledReportTypes(organization.id);
+  const [members, vehicles, recent, device] = await Promise.all([
     prisma.user.findMany({
       where: { homeOrganizationId: organization.id, ...NOT_DEACTIVATED_WHERE },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -30,9 +33,17 @@ export async function loadKioskData(token: string): Promise<KioskData | null> {
       select: { id: true, taktischeBezeichnung: true, kennzeichen: true },
     }),
     Promise.all(
-      ACTIVE_REPORT_TYPES.map(async (type) => [type, await getRecentActivityKindsForOrg(organization.id, type as ReportType)] as const),
+      enabledTypes.map(async (type) => [type, await getRecentActivityKindsForOrg(organization.id, type)] as const),
     ),
+    prisma.organization.findUniqueOrThrow({ where: { id: organization.id }, select: { reportKioskDeviceName: true } }),
   ]);
 
-  return { organization, members, vehicles, recentKindsByType: Object.fromEntries(recent) };
+  return {
+    organization,
+    members,
+    vehicles,
+    recentKindsByType: Object.fromEntries(recent),
+    deviceName: device.reportKioskDeviceName,
+    enabledTypes,
+  };
 }
