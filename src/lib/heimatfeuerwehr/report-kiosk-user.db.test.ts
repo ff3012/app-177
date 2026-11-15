@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/db/prisma';
 import { getOrCreateReportKioskUser, isReportKioskEmail } from './report-kiosk-user';
 
@@ -28,9 +28,20 @@ describe('getOrCreateReportKioskUser', () => {
     expect(isReportKioskEmail(first.email)).toBe(true);
   });
 
-  it('übersteht zwei gleichzeitige erste Aufrufe', async () => {
-    const [a, b] = await Promise.all([getOrCreateReportKioskUser(), getOrCreateReportKioskUser()]);
-    expect(a.id).toBe(b.id);
+  it('übersteht zwei gleichzeitige erste Aufrufe (Unique-Konflikt P2002 wird abgefangen)', async () => {
+    // Den Platzhalter gibt es sicher (erster Test bzw. schon vorhanden). Damit beide Aufrufe den
+    // Create-Pfad betreten wie bei einem echten Rennen, meldet die erste Suche "nicht gefunden":
+    // beide create()-Aufrufe scheitern am Unique-Index und müssen über den P2002-Zweig laden.
+    const existing = await getOrCreateReportKioskUser();
+    const findSpy = vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null as never);
+    try {
+      const [a, b] = await Promise.all([getOrCreateReportKioskUser(), getOrCreateReportKioskUser()]);
+      expect(findSpy).toHaveBeenCalledTimes(2);
+      expect(a.id).toBe(existing.id);
+      expect(b.id).toBe(existing.id);
+    } finally {
+      findSpy.mockRestore();
+    }
   });
 });
 
