@@ -606,7 +606,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Berichte</h2>
         <p className="mb-3 text-xs text-ink-faint">
           Je Berichtsart ein Schalter (gilt in der App und am iPad) und die Empfänger, die den Bericht per E-Mail mit PDF
-          erhalten. Einsatzbericht, Getränkeautomat und Schadensmeldung sind noch nicht verfügbar.
+          erhalten. Der Einsatzbericht ist noch nicht verfügbar. Getränkeautomat und Schadensmeldung stellen Sie unten im
+          Abschnitt „Meldungen“ ein.
         </p>
         {selectedOrgFull.type === 'FEUERWEHR' ? (
           <div className="flex flex-col gap-3">
