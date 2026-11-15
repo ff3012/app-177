@@ -15,6 +15,12 @@ import { ALLOWED_WAPPEN_MIME_TYPES } from '@/lib/organizations/wappen';
 import { reportPdfStorageKey } from '@/lib/heimatfeuerwehr/report-pdf';
 import { deleteReportPdf } from '@/lib/storage/report-pdf-s3';
 import { isActiveReportType, saveReportTypeEnabled, saveReportTypeRecipients } from '@/lib/heimatfeuerwehr/report-type-settings';
+import { isNotificationForm, parseDrinkProducts } from '@/lib/heimatfeuerwehr/notification-form-constants';
+import {
+  saveDrinkProducts,
+  saveNotificationFormEnabled,
+  saveNotificationFormRecipients,
+} from '@/lib/heimatfeuerwehr/notification-form-settings';
 
 export interface VehicleFormState {
   error?: string;
@@ -674,4 +680,102 @@ export async function setReportTypeEnabled(
   revalidatePath('/admin/heimatfeuerwehr');
   revalidatePath('/meine-feuerwehr');
   return {};
+}
+
+/** Meldungen, die `notification-form-settings.ts`/`notification-form-constants.ts` bewusst werfen und die der Admin so lesen darf. */
+const NOTIFICATION_FORM_BUSINESS_ERRORS = new Set([
+  'Dieses Formular ist nicht verfügbar.',
+  'Meldungen gibt es nur für Feuerwehren.',
+  'Ungültige Eingabe.',
+  'Höchstens 12 Produkte.',
+]);
+
+function notificationFormSaveErrorMessage(error: unknown): string {
+  if (
+    error instanceof Error &&
+    (NOTIFICATION_FORM_BUSINESS_ERRORS.has(error.message) || /^Ein Produktname darf höchstens \d+ Zeichen haben\.$/.test(error.message))
+  ) {
+    return error.message;
+  }
+  console.error('Meldeformular konnte nicht gespeichert werden:', error);
+  return 'Änderung konnte nicht gespeichert werden.';
+}
+
+/** Empfänger eines Meldeformulars (Getränkeautomat/Schadensmeldung) - Chip-Liste wie bei den Berichtsarten. */
+export async function setNotificationFormRecipients(
+  organizationId: string,
+  form: string,
+  _prevState: ReportRecipientsState,
+  formData: FormData,
+): Promise<ReportRecipientsState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+  if (!isNotificationForm(form)) return { error: 'Dieses Formular ist nicht verfügbar.' };
+
+  const parsed = emailListSchema.safeParse(formData.get('emails'));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Ungültige Eingabe.' };
+  }
+
+  try {
+    await saveNotificationFormRecipients(organizationId, form, parsed.data);
+  } catch (error) {
+    return { error: notificationFormSaveErrorMessage(error) };
+  }
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/meine-feuerwehr');
+  return { success: true };
+}
+
+/** Schaltet ein Meldeformular für die Feuerwehr ein/aus (gilt in der App und am iPad; Empfänger und Produkte bleiben). */
+export async function setNotificationFormEnabled(
+  organizationId: string,
+  form: string,
+  enabled: boolean,
+): Promise<{ error?: string }> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+  if (!isNotificationForm(form)) return { error: 'Dieses Formular ist nicht verfügbar.' };
+
+  try {
+    await saveNotificationFormEnabled(organizationId, form, enabled);
+  } catch (error) {
+    return { error: notificationFormSaveErrorMessage(error) };
+  }
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  revalidatePath('/meine-feuerwehr');
+  return {};
+}
+
+/** Produktliste des Getränkeautomaten (Chip-Liste als JSON in einem Hidden-Feld; leer = Standardprodukte). */
+export async function setDrinkProducts(
+  organizationId: string,
+  _prevState: ReportRecipientsState,
+  formData: FormData,
+): Promise<ReportRecipientsState> {
+  const user = await requireUser();
+  assertPermission(canManageHeimatfeuerwehrFor(user, organizationId));
+
+  const raw = formData.get('products');
+  let list: unknown = [];
+  if (typeof raw === 'string' && raw.length > 0) {
+    try {
+      list = JSON.parse(raw);
+    } catch {
+      return { error: 'Ungültige Eingabe.' };
+    }
+  }
+  const parsed = parseDrinkProducts(list);
+  if (!parsed.ok) return { error: parsed.error };
+
+  try {
+    await saveDrinkProducts(organizationId, parsed.value);
+  } catch (error) {
+    return { error: notificationFormSaveErrorMessage(error) };
+  }
+
+  revalidatePath('/admin/heimatfeuerwehr');
+  return { success: true };
 }

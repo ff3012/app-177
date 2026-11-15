@@ -881,18 +881,20 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
 - **App-Seite:** `ReportTypeSheet` (Blatt "Welcher Bericht?") bekommt die Prop `enabledTypes` (Aufrufer `ActionRow` in `action-row.tsx`, dort
   heißt die Prop `enabledReportTypes`; Daten von `meine-feuerwehr/page.tsx`); nicht eingeschaltete Arten sind ausgegraut und nicht antippbar. `berichte/neu/page.tsx` nimmt die
   Art über `pickReportType(typeParam, enabledTypes)` (Rückfall auf die erste eingeschaltete Art, ohne eingeschaltete Art `notFound()`).
-- **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Formular -> Name -> Assistent (Art steht fest) -> Bestätigung -> nach 30 s oder
+- **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Formular -> Name -> Assistent (Art steht fest; bei Getränkeautomat/Schadensmeldung
+  stattdessen das Meldeformular, Phase `notify`) -> Bestätigung -> nach 30 s oder
   "Neues Formular" zurück zum Formularbildschirm (keine Person bleibt "angemeldet"); auf dem Namensbildschirm gibt es "← Anderes
   Formular", im Assistenten bricht "Abbrechen" zum Formularbildschirm zurück. Ab 1024 px Fensterbreite Tablet-Layout, darunter das
   Handy-Layout. Der Assistent steckt in beiden Layouts in einem stabilen Rahmen (`wizard-frame.tsx`, immer ein `div`), damit ein
   Wechsel bei 1024 px (iPad drehen, Split View) ihn nie neu einhängt und keine Eingaben verloren gehen.
 - **Startbildschirm** (`kiosk-form-screen.tsx`, Kacheln aus `lib/heimatfeuerwehr/kiosk-tiles.ts`): fünf Kacheln (Tätigkeitsbericht,
-  Übungsbericht, Einsatzbericht, Getränkeautomat, Schadensmeldung) in drei Zuständen: aktiv (freigeschaltet UND eingeschaltet),
-  "Nicht aktiviert" (freigeschaltet, aber von der Feuerwehr abgeschaltet), "Bald verfügbar" (alles Übrige). Einsatzbericht,
-  Getränkeautomat und Schadensmeldung sind reine Platzhalter ohne Funktion (Getränkeautomat und Schadensmeldung haben keine
-  Berichtsart). Der Kopf (`kiosk-header.tsx`) zeigt Feuerwehrname, Titel, den Gerätenamen (nur wenn gesetzt) sowie Datum und Uhrzeit in
+  Übungsbericht, Einsatzbericht, Getränkeautomat, Schadensmeldung) in vier Zuständen: aktiv, "Nicht aktiviert" (von der Feuerwehr
+  abgeschaltet), "Kein Empfänger hinterlegt" (nur Meldeformulare: eingeschaltet, aber ohne Empfänger) und "Bald verfügbar". Bei
+  Tätigkeits- und Übungsbericht ist eine Kachel aktiv, wenn die Art freigeschaltet UND eingeschaltet ist; Getränkeautomat und
+  Schadensmeldung sind echte Meldeformulare (siehe "Meldeformulare" unten, keine Berichtsart) und aktiv, wenn das Formular
+  verfügbar ist. Nur der Einsatzbericht ist noch ein Platzhalter ohne Funktion ("Bald verfügbar"). Der Kopf (`kiosk-header.tsx`) zeigt Feuerwehrname, Titel, den Gerätenamen (nur wenn gesetzt) sowie Datum und Uhrzeit in
   Wiener Zeit (`kiosk-clock.ts`); Datum/Uhrzeit werden erst nach dem Einhängen im Browser gesetzt und alle 30 s aktualisiert.
-- **Verwaltung** (`/admin/heimatfeuerwehr`): Die Karte "Berichte" zeigt je Berichtsart einen Block (`report-type-row.tsx`) mit Schalter
+- **Verwaltung** (`/admin/heimatfeuerwehr`; die Meldeformulare stehen in einem eigenen Abschnitt "Meldungen" derselben Karte, siehe unten): Die Karte "Berichte" zeigt je Berichtsart einen Block (`report-type-row.tsx`) mit Schalter
   "Aktiviert" (Ausschalten fragt per Dialog nach, Einschalten nicht) und der Empfängerliste (`report-recipients-form.tsx`, je Art
   gebunden); Server Actions `setReportTypeEnabled`/`setReportTypeRecipients` in `admin/heimatfeuerwehr/actions.ts`, beide prüfen
   `canManageHeimatfeuerwehrFor` neu und akzeptieren nur Arten aus `ACTIVE_REPORT_TYPES`. Der Gerätename (höchstens 60 Zeichen, leer =
@@ -908,6 +910,59 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
   einzigen `prisma migrate deploy` beim Container-Start).
 - **Nicht geprüft in der Entwicklungsumgebung:** Hydration/Interaktion (derselbe Gap wie sonst in dieser Datei). Der ganze Ablauf
   muss auf einem echten iPad durchgeklickt werden; offen ist, ob "Zum Home-Bildschirm" auf iOS den geheimen Link öffnet.
+
+#### Meldeformulare (Getränkeautomat, Schadensmeldung)
+
+Zwei einfache Formulare am iPad und in der App, die als E-Mail an eine je Feuerwehr einstellbare Empfängerliste gehen. Spec:
+`docs/superpowers/specs/2026-11-15-meldungen-getraenke-schaden-design.md`, Plan:
+`docs/superpowers/plans/2026-11-15-meldungen-getraenke-schaden.md`.
+
+- **Keine Berichte:** kein `Report`, keine Nummer, kein PDF, **nichts wird gespeichert**. Die Meldung geht als **eine E-Mail je Empfänger**
+  (kein gemeinsames An/Cc), der Absender steht nur als Reply-To. Scheitert der Versand an **allen** Empfängern, bekommt der Nutzer einen
+  Fehler und kann es erneut versuchen; ein Teilausfall gilt als gesendet. Bekannte Folge von "nur E-Mail": es gibt keinen Verlauf und
+  keinen Nachweis über abgeschickte Meldungen außer den E-Mails selbst (wer das braucht, spezifiziert eine Speicherung separat).
+- **Daten:** Tabelle `NotificationFormSetting` (Migration `20261115110000_notification_form_setting`, rein additiv; je Feuerwehr und
+  `NotificationForm` `DRINKS`/`DAMAGE` eine Zeile mit `enabled`, `recipients`, `products` - Letzteres nur bei DRINKS,
+  `@@unique([organizationId, form])`). Eine fehlende Zeile bedeutet eingeschaltet, keine Empfänger, Standardprodukte
+  (`DEFAULT_DRINK_PRODUCTS` = Bier, Spritzer, Eistee, Spezi; eine leer gespeicherte Liste bedeutet ebenfalls die Standardprodukte; höchstens 12
+  Produkte (leer = Standardprodukte), je höchstens 30 Zeichen, ohne Doppelte). **Verfügbar ist ein Formular nur, wenn der Schalter an ist UND mindestens ein Empfänger
+  eingetragen ist** - `notificationFormState` (`notification-form-constants.ts`, rein, auch für Client-Code) liefert `available` /
+  `norecipient` / `off`. Konstanten, URL-Kennungen (`getraenkeautomat`/`schadensmeldung`, `formFromSlug`) und `parseDrinkProducts` liegen
+  ebenfalls dort; die Datenbankzugriffe in `notification-form-settings.ts` (`getNotificationFormSettings`/`getNotificationFormStates`,
+  `saveNotificationFormEnabled`/`saveNotificationFormRecipients`/`saveDrinkProducts` per `upsert`, nur für Feuerwehren).
+- **Kern** `submit-notification-core.ts` (`submitNotificationCore`, wirft nie nach außen), geteilt von
+  `submitNotificationForKiosk` (`report-kiosk-notification-submit.ts`: Link bei jeder Abgabe neu auflösen, danach das Limit mit
+  **demselben** Schlüssel/Zähler wie die Berichte (`kioskRateKey`), erst nach der Linkprüfung; Server Action `submitNotificationViaKiosk` in
+  `berichte-schnell/[token]/actions.ts`) und der App-Aktion `submitNotification` (`meine-feuerwehr/meldungen/actions.ts`, `requireUser()` +
+  `canCreateReportFor`, Absender ist der angemeldete Benutzer). Reihenfolge der Prüfung: Formular verfügbar -> Absender ist nicht deaktiviertes
+  Mitglied genau dieser Feuerwehr -> Felder (`notification-input.ts`, rein: Getränkeautomat mindestens ein Produkt aus der Liste der
+  Feuerwehr, Anmerkung höchstens 1000 Zeichen; Schadensmeldung Datum nicht in der Zukunft und höchstens 365 Tage zurück (Wiener Datum), Gerät
+  1 bis 120, Beschreibung 1 bis 2000 Zeichen, `acute` true/false/null) -> Versand (`notify-notification-form.ts`). Die Mail zeigt Feuerwehr,
+  Formular, Absender und Zeitpunkt (Wiener Zeit); Betreff Schadensmeldung mit dem Vorsatz `AKUT: `, wenn der Schaden als akut gemeldet ist,
+  im Text "Akut: Ja / Nein / nicht angegeben". Einzelne Sendefehler werden pro Empfänger ohne Adresse und Inhalt protokolliert. Ohne
+  konfiguriertes Mailjet (z. B. lokale Entwicklung) scheitert der Versand an allen Empfängern, der Nutzer sieht den Fehler.
+- **Oberfläche:** `NotificationFormView` (`components/heimatfeuerwehr/notification-form-view.tsx`, `layout: 'mobile' | 'tablet'`) sammelt nur
+  die Eingaben, der Server prüft alles; Pflichtfeldzähler über `notification-form-fields.ts` (`countRequired`, `emptyValues`, `toInput`;
+  Getränkeautomat 1 Pflichtfeld, Schadensmeldung 3), "Meldung absenden" erst aktiv, wenn alle Pflichtfelder ausgefüllt sind. Der Layoutwechsel
+  ändert nur Klassen, nie die Elementstruktur. Am iPad die Kiosk-Phase `notify` (nach der Namenswahl, Layout ab 1024 px Tablet, darunter
+  Handy) mit der Bestätigung "Meldung gesendet" ohne Nummer; in der App die Seite `/meine-feuerwehr/meldungen/[formular]`
+  (`meldung-client.tsx`, Handy-Layout; 404 bei unbekannter Kennung, abgeschaltetem Formular oder fehlendem Empfänger) und ein zweiter
+  Abschnitt "Meldungen" im `ReportTypeSheet` (Prop `notificationStates`, Daten aus `getNotificationFormStates` in `meine-feuerwehr/page.tsx`
+  über `ActionRow`).
+- **Kachelzustände am iPad** (`getKioskTiles(enabledTypes, notificationStates)`): aktiv / "Kein Empfänger hinterlegt" (`norecipient`) /
+  "Nicht aktiviert" (`off`) / "Bald verfügbar" (nur noch der Einsatzbericht; auch ein Meldeformular ohne Angabe zum Zustand bliebe "soon").
+  `loadKioskData` liefert zusätzlich `notificationForms` je Formular `{ state, products }` (Produkte nur beim Getränkeautomat); Empfängeradressen
+  und Einstellungen verlassen den Server nicht, weil das Gerät öffentlich ist.
+- **Verwaltung** (`/admin/heimatfeuerwehr`, nur für Feuerwehren): Abschnitt "Meldungen" in der Karte "Berichte" mit je einer Zeile
+  (`notification-form-row.tsx`: Schalter "Aktiviert", Ausschalten fragt per Dialog nach; Empfänger über `ReportRecipientsForm`; beim
+  Getränkeautomat zusätzlich die Produktliste `drink-products-form.tsx`). Server Actions `setNotificationFormEnabled` /
+  `setNotificationFormRecipients` / `setDrinkProducts` in `admin/heimatfeuerwehr/actions.ts`, jede prüft `canManageHeimatfeuerwehrFor` neu und
+  validiert das Formular gegen die bekannten Werte. `ReportRecipientsForm` bekam dafür die bereits gebundene Server Action (`action`) und
+  `idSuffix` als Props (dieselbe Komponente dient den Berichtsarten und den Meldeformularen).
+- **Rollout:** Migration rein additiv (läuft beim Container-Start), keine neue Umgebungsvariable, keine Cron-/Compose-Änderung; Voraussetzung ist
+  ein konfiguriertes Mailjet. Nach dem Deploy sind beide Formulare **nicht verfügbar**, bis ein Admin Empfänger einträgt.
+- **Nicht geprüft in der Entwicklungsumgebung:** Hydration/Interaktion der Formulare (derselbe Gap wie sonst in dieser Datei); das
+  Durchklicken am echten iPad und im Handy sowie der tatsächliche Mailversand mit Reply-To/Betreff müssen auf DEV geprüft werden.
 
 ### Fahrzeug reservieren (neuer Einstieg, Fahrzeug-Statuskacheln)
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ReportTypeSheet } from './berichte/report-type-sheet';
+import type { NotificationFormState } from '@/lib/heimatfeuerwehr/notification-form-constants';
 
 /** Bericht-Brief.md §4: "Neuer Bericht" öffnet zuerst das Berichtsart-Sheet (Task 3), "Foto Upload"
  * ist unverändert derselbe Link/dieselbe Berechtigung wie zuvor. Rendert seit der Aktionen-Neuordnung
@@ -15,9 +16,11 @@ import { ReportTypeSheet } from './berichte/report-type-sheet';
 export function ActionRow({
   showPhotoUpload,
   enabledReportTypes,
+  notificationStates,
 }: {
   showPhotoUpload: boolean;
   enabledReportTypes: string[];
+  notificationStates: Record<string, NotificationFormState>;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -40,7 +43,9 @@ export function ActionRow({
       ) : (
         <div aria-hidden="true" />
       )}
-      {sheetOpen && <ReportTypeSheet onClose={() => setSheetOpen(false)} enabledTypes={enabledReportTypes} />}
+      {sheetOpen && (
+        <ReportTypeSheet onClose={() => setSheetOpen(false)} enabledTypes={enabledReportTypes} notificationStates={notificationStates} />
+      )}
     </>
   );
 }

@@ -35,6 +35,10 @@ import { createReportKioskLink, disableReportKioskLink } from './report-kiosk-ac
 import { ReportDeleteButton } from './report-delete-button';
 import { ACTIVE_REPORT_TYPES, REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 import { getReportTypeSettings } from '@/lib/heimatfeuerwehr/report-type-settings';
+import { NOTIFICATION_FORMS, NOTIFICATION_FORM_LABEL } from '@/lib/heimatfeuerwehr/notification-form-constants';
+import { getNotificationFormSettings } from '@/lib/heimatfeuerwehr/notification-form-settings';
+import { NotificationFormRow } from './notification-form-row';
+import { DrinkProductsForm } from './drink-products-form';
 import { reportPdfFileName } from '@/lib/heimatfeuerwehr/report-pdf';
 import { listDashboardTokens } from '@/lib/dashboard/token';
 import { generateQrCodeDataUri } from '@/lib/dashboard/qr-code';
@@ -242,6 +246,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
     notFound();
   }
   const reportTypeSettings = await getReportTypeSettings(selectedOrgId);
+  const notificationFormSettings = await getNotificationFormSettings(selectedOrgId);
 
   // Eigene, von der Atemschutz-Query oben unabhängige Abfrage: ALLE (nicht nur Atemschutzgeräteträger-)
   // Mitglieder dieser einen Feuerwehr, geteilt von den beiden E-Mail-Chip-Picker-Karten unten
@@ -601,7 +606,8 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         <h2 className="mb-1 text-[15px] font-semibold text-ink">Berichte</h2>
         <p className="mb-3 text-xs text-ink-faint">
           Je Berichtsart ein Schalter (gilt in der App und am iPad) und die Empfänger, die den Bericht per E-Mail mit PDF
-          erhalten. Einsatzbericht, Getränkeautomat und Schadensmeldung sind noch nicht verfügbar.
+          erhalten. Der Einsatzbericht ist noch nicht verfügbar. Getränkeautomat und Schadensmeldung stellen Sie unten im
+          Abschnitt „Meldungen“ ein.
         </p>
         {selectedOrgFull.type === 'FEUERWEHR' ? (
           <div className="flex flex-col gap-3">
@@ -619,6 +625,36 @@ export default async function HeimatfeuerwehrVerwaltungPage({
           </div>
         ) : (
           <p className="text-sm text-ink-faint">Nur für Feuerwehren verfügbar.</p>
+        )}
+        {selectedOrgFull.type === 'FEUERWEHR' && (
+          <>
+            <h3 className="mb-1 mt-5 text-[15px] font-semibold text-ink">Meldungen</h3>
+            <p className="mb-3 text-xs text-ink-faint">
+              Getränkeautomat und Schadensmeldung gehen als E-Mail an die Empfänger. Eine Meldung ist nur verfügbar, wenn sie
+              eingeschaltet ist und mindestens einen Empfänger hat. Es wird nichts gespeichert.
+            </p>
+            <div className="flex flex-col gap-3">
+              {NOTIFICATION_FORMS.map((form) => (
+                <NotificationFormRow
+                  key={`${selectedOrgId}-${form}`}
+                  organizationId={selectedOrgId}
+                  form={form}
+                  title={NOTIFICATION_FORM_LABEL[form]}
+                  enabled={notificationFormSettings[form].enabled}
+                  recipients={notificationFormSettings[form].recipients}
+                  members={heimatfeuerwehrPickerMembers}
+                >
+                  {form === 'DRINKS' && (
+                    <DrinkProductsForm
+                      key={`${selectedOrgId}-products`}
+                      organizationId={selectedOrgId}
+                      initialProducts={notificationFormSettings.DRINKS.products}
+                    />
+                  )}
+                </NotificationFormRow>
+              ))}
+            </div>
+          </>
         )}
         <Table className="mt-3">
           <TableHeader>

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { REPORT_TYPE_LABEL, ACTIVE_REPORT_TYPES } from '@/lib/heimatfeuerwehr/report-constants';
+import { NOTIFICATION_FORMS, NOTIFICATION_FORM_LABEL, NOTIFICATION_FORM_SLUG, type NotificationFormState } from '@/lib/heimatfeuerwehr/notification-form-constants';
 
 const REPORT_TYPES = ['ACTIVITY', 'EXERCISE', 'INCIDENT'] as const;
 
@@ -12,15 +13,22 @@ const REPORT_TYPES = ['ACTIVITY', 'EXERCISE', 'INCIDENT'] as const;
 export function ReportTypeSheet({
   onClose,
   enabledTypes,
+  notificationStates,
 }: {
   onClose: () => void;
   enabledTypes: readonly string[];
+  notificationStates: Record<string, NotificationFormState>;
 }) {
   const router = useRouter();
 
   function choose(type: (typeof REPORT_TYPES)[number]) {
     if (!enabledTypes.includes(type)) return;
     router.push(`/meine-feuerwehr/berichte/neu?type=${type}`);
+  }
+
+  function chooseForm(form: (typeof NOTIFICATION_FORMS)[number]) {
+    if (notificationStates[form] !== 'available') return;
+    router.push(`/meine-feuerwehr/meldungen/${NOTIFICATION_FORM_SLUG[form]}`);
   }
 
   return (
@@ -50,6 +58,29 @@ export function ReportTypeSheet({
                   <span className="text-xs font-normal">
                     {ACTIVE_REPORT_TYPES.includes(type) ? 'Nicht aktiviert' : 'Bald verfügbar'}
                   </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <h2 className="mb-3 mt-6 text-[17px] font-semibold text-[#1c1c1e]">Meldungen</h2>
+        <div className="flex flex-col gap-2">
+          {NOTIFICATION_FORMS.map((form) => {
+            const state = notificationStates[form];
+            const active = state === 'available';
+            return (
+              <button
+                key={form}
+                type="button"
+                disabled={!active}
+                onClick={() => chooseForm(form)}
+                className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left text-[15px] font-medium ${
+                  active ? 'border-brand text-[#1c1c1e]' : 'cursor-not-allowed border-neutral-200 text-neutral-400'
+                }`}
+              >
+                <span>{NOTIFICATION_FORM_LABEL[form]}</span>
+                {!active && (
+                  <span className="text-xs font-normal">{state === 'norecipient' ? 'Kein Empfänger hinterlegt' : 'Nicht aktiviert'}</span>
                 )}
               </button>
             );

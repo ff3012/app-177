@@ -14,7 +14,8 @@ const TILE_ICON: Record<KioskTile['key'], LucideIcon> = {
 
 /**
  * Startbildschirm: eine Kachel je Formular. Aktive Kacheln sind weiß mit Markenrot (App-Stil), gesperrte
- * grau mit Hinweis ("Bald verfügbar" = noch nicht vorhanden, "Nicht aktiviert" = von der Feuerwehr abgeschaltet).
+ * grau mit Hinweis ("Bald verfügbar" = noch nicht vorhanden, "Nicht aktiviert" = von der Feuerwehr abgeschaltet,
+ * "Kein Empfänger hinterlegt" = Meldeformular ohne Empfänger).
  * Alle Kacheln mindestens 120 px hoch.
  */
 export function KioskFormScreen({ tiles, onChoose }: { tiles: KioskTile[]; onChoose: (tile: KioskTile) => void }) {
@@ -41,7 +42,7 @@ export function KioskFormScreen({ tiles, onChoose }: { tiles: KioskTile[]; onCho
                 <span className={`mt-1 block text-sm ${active ? 'text-[#6c6c70]' : 'text-neutral-400'}`}>{tile.subtitle}</span>
                 {!active && (
                   <span className="mt-2 inline-block rounded-full bg-neutral-200 px-2.5 py-0.5 text-xs font-semibold text-neutral-500">
-                    {KIOSK_TILE_HINT[tile.state === 'off' ? 'off' : 'soon']}
+                    {tile.state !== 'active' && KIOSK_TILE_HINT[tile.state]}
                   </span>
                 )}
               </span>
