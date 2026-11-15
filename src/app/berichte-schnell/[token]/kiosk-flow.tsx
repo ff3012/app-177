@@ -2,36 +2,48 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReportWizard } from '@/app/(app)/meine-feuerwehr/berichte/neu/report-wizard';
-import { ACTIVE_REPORT_TYPES, REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
+import { getKioskTiles, type KioskTile } from '@/lib/heimatfeuerwehr/kiosk-tiles';
+import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 import type { ReportType } from '@prisma/client';
 import { submitReportViaKiosk } from './actions';
+import { KioskFormScreen } from './kiosk-form-screen';
+import { KioskHeader } from './kiosk-header';
 import { WizardFrame } from './wizard-frame';
 
 export interface KioskFlowProps {
   token: string;
   organizationName: string;
+  deviceName: string | null;
+  enabledTypes: string[];
   members: { id: string; firstName: string; lastName: string }[];
   vehicles: { id: string; taktischeBezeichnung: string; kennzeichen: string }[];
   recentKindsByType: Record<string, string[]>;
 }
 
 type Phase =
-  | { phase: 'name' }
-  | { phase: 'type'; filledById: string }
+  | { phase: 'form' }
+  | { phase: 'name'; type: ReportType }
   | { phase: 'wizard'; filledById: string; type: ReportType; run: number }
   | { phase: 'done'; number?: number; year?: number };
 
-const REPORT_TYPES = ['ACTIVITY', 'EXERCISE', 'INCIDENT'] as const;
 const DONE_RESET_MS = 30_000;
 
 /**
- * Ablauf der iPad-Schnellerfassung als reiner Client-Zustand: Namenswahl -> Berichtsart -> Assistent ->
- * Bestätigung -> (nach 30 s oder "Neuer Bericht") zurück zur Namenswahl. Damit bleibt keine Person auf
+ * Ablauf der iPad-Schnellerfassung als reiner Client-Zustand: Formular (Kacheln) -> Namenswahl -> Assistent ->
+ * Bestätigung -> (nach 30 s oder "Neues Formular") zurück zum Formularbildschirm. Damit bleibt keine Person auf
  * dem gemeinsamen Gerät "angemeldet", und die Eingaben der Vorgängerin sind weg (der Assistent hält
  * seinen Zustand nur im Browser-Speicher und wird bei jedem Lauf neu eingehängt).
  */
-export function KioskFlow({ token, organizationName, members, vehicles, recentKindsByType }: KioskFlowProps) {
-  const [state, setState] = useState<Phase>({ phase: 'name' });
+export function KioskFlow({
+  token,
+  organizationName,
+  deviceName,
+  enabledTypes,
+  members,
+  vehicles,
+  recentKindsByType,
+}: KioskFlowProps) {
+  const [state, setState] = useState<Phase>({ phase: 'form' });
   const [run, setRun] = useState(0);
   const [search, setSearch] = useState('');
   const [layout, setLayout] = useState<'mobile' | 'tablet'>('tablet');
@@ -47,10 +59,10 @@ export function KioskFlow({ token, organizationName, members, vehicles, recentKi
 
   const reset = useCallback(() => {
     setSearch('');
-    setState({ phase: 'name' });
+    setState({ phase: 'form' });
   }, []);
 
-  // Nach der Bestätigung automatisch zurück zur Namenswahl; der Timer wird beim Verlassen der Phase gelöscht.
+  // Nach der Bestätigung automatisch zurück zum Formularbildschirm; der Timer wird beim Verlassen der Phase gelöscht.
   const isDone = state.phase === 'done';
   useEffect(() => {
     if (!isDone) return;
@@ -88,17 +100,28 @@ export function KioskFlow({ token, organizationName, members, vehicles, recentKi
     return <WizardFrame layout={layout}>{wizard}</WizardFrame>;
   }
 
+  const tiles = getKioskTiles(enabledTypes);
+  const headerTitle =
+    state.phase === 'form' ? 'Welches Formular ausfüllen?' : state.phase === 'name' ? 'Wer schreibt den Bericht?' : 'Bericht abgegeben';
+
   return (
-    <div className="pt-safe flex min-h-[100dvh] touch-manipulation flex-col bg-[#f6f6f7] text-[#1c1c1e]">
-      <header className="bg-[#1c1c1e] px-6 py-3 text-white">
-        <span className="text-base font-semibold">{organizationName}</span>
-        <span className="ml-3 text-sm opacity-80">Berichte erfassen</span>
-      </header>
+    <div className="flex min-h-[100dvh] touch-manipulation flex-col bg-[#f6f6f7] text-[#1c1c1e]">
+      <KioskHeader organizationName={organizationName} title={headerTitle} deviceName={deviceName} />
 
       <main className="mx-auto w-full max-w-5xl flex-1 p-6">
+        {state.phase === 'form' && (
+          <KioskFormScreen
+            tiles={tiles}
+            onChoose={(tile: KioskTile) => {
+              if (tile.state !== 'active' || !tile.type) return;
+              setSearch('');
+              setState({ phase: 'name', type: tile.type });
+            }}
+          />
+        )}
+
         {state.phase === 'name' && (
           <>
-            <h1 className="mb-4 text-2xl font-bold">Wer schreibt den Bericht?</h1>
             <input
               type="search"
               value={search}
@@ -114,7 +137,12 @@ export function KioskFlow({ token, organizationName, members, vehicles, recentKi
                   <button
                     key={member.id}
                     type="button"
-                    onClick={() => setState({ phase: 'type', filledById: member.id })}
+                    onClick={() => {
+                      // Jeder Lauf bekommt einen neuen key, damit der Assistent mit leerem Zustand startet.
+                      const nextRun = run + 1;
+                      setRun(nextRun);
+                      setState({ phase: 'wizard', filledById: member.id, type: state.type, run: nextRun });
+                    }}
                     className="min-h-[64px] rounded-xl border border-neutral-300 bg-white px-4 py-3 text-left text-[16px] font-semibold shadow-sm"
                   >
                     {member.lastName} {member.firstName}
@@ -122,51 +150,21 @@ export function KioskFlow({ token, organizationName, members, vehicles, recentKi
                 ))}
               </div>
             )}
-          </>
-        )}
-
-        {state.phase === 'type' && (
-          <>
-            <h1 className="mb-4 text-2xl font-bold">Welcher Bericht?</h1>
-            <div className="grid grid-cols-3 gap-4">
-              {REPORT_TYPES.map((type) => {
-                const active = ACTIVE_REPORT_TYPES.includes(type);
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    disabled={!active}
-                    onClick={() => {
-                      // Jeder Lauf bekommt einen neuen key, damit der Assistent mit leerem Zustand startet.
-                      const nextRun = run + 1;
-                      setRun(nextRun);
-                      setState({ phase: 'wizard', filledById: state.filledById, type, run: nextRun });
-                    }}
-                    className={`min-h-[96px] rounded-xl px-4 py-6 text-lg font-semibold shadow-sm ${
-                      active ? 'bg-brand text-white' : 'bg-neutral-200 text-neutral-400'
-                    }`}
-                  >
-                    {REPORT_TYPE_LABEL[type]}
-                  </button>
-                );
-              })}
-            </div>
             <button type="button" onClick={reset} className="mt-6 min-h-[52px] rounded-lg border border-neutral-300 bg-white px-6 text-[15px] font-semibold">
-              ← Zurück
+              ← Anderes Formular
             </button>
           </>
         )}
 
         {state.phase === 'done' && (
           <div className="flex flex-col items-center gap-4 py-16 text-center">
-            <h1 className="text-3xl font-bold">Bericht abgegeben</h1>
             {state.number !== undefined && state.year !== undefined && (
               <p className="text-lg text-neutral-600">
                 Nr. {state.number} / {state.year}
               </p>
             )}
             <button type="button" onClick={reset} className="mt-4 min-h-[56px] rounded-lg bg-brand px-10 text-[16px] font-semibold text-white">
-              Neuer Bericht
+              Neues Formular
             </button>
             <p className="text-sm text-neutral-400">Der Bildschirm wechselt nach 30 Sekunden von selbst zurück.</p>
           </div>

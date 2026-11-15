@@ -31,6 +31,8 @@ export default async function BerichteSchnellPage({ params }: { params: Promise<
     <KioskFlow
       token={token}
       organizationName={data.organization.name}
+      deviceName={data.deviceName}
+      enabledTypes={data.enabledTypes}
       members={data.members}
       vehicles={data.vehicles}
       recentKindsByType={data.recentKindsByType}
