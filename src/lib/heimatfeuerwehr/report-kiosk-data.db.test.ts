@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { setReportKioskToken } from './report-kiosk-token';
 import { loadKioskData } from './report-kiosk-data';
 import { saveReportTypeEnabled } from './report-type-settings';
+import { saveDrinkProducts, saveNotificationFormEnabled, saveNotificationFormRecipients } from './notification-form-settings';
 
 const RUN = `kiosk-data-${Date.now()}`;
 const userIds: string[] = [];
@@ -102,6 +103,30 @@ describe('loadKioskData', () => {
     } finally {
       await saveReportTypeEnabled(orgA, 'EXERCISE', true);
       await prisma.organization.update({ where: { id: orgA }, data: { reportKioskDeviceName: null } });
+    }
+  });
+
+  it('liefert Zustand und Produkte der Meldeformulare, ohne Empfängeradressen', async () => {
+    const token = await setReportKioskToken(orgA);
+    const before = await loadKioskData(token);
+    expect(before?.notificationForms.DRINKS.state).toBe('norecipient');
+    expect(before?.notificationForms.DRINKS.products).toEqual(['Bier', 'Spritzer', 'Eistee', 'Spezi']);
+    expect(before?.notificationForms.DAMAGE).toEqual({ state: 'norecipient', products: [] });
+
+    await saveNotificationFormRecipients(orgA, 'DRINKS', ['geheim@example.local']);
+    await saveNotificationFormRecipients(orgA, 'DAMAGE', ['geheim2@example.local']);
+    await saveDrinkProducts(orgA, ['Cola']);
+    await saveNotificationFormEnabled(orgA, 'DAMAGE', false);
+    try {
+      const after = await loadKioskData(token);
+      expect(after?.notificationForms.DRINKS).toEqual({ state: 'available', products: ['Cola'] });
+      expect(after?.notificationForms.DAMAGE.state).toBe('off');
+      expect(JSON.stringify(after)).not.toContain('geheim');
+    } finally {
+      await saveNotificationFormEnabled(orgA, 'DAMAGE', true);
+      await saveNotificationFormRecipients(orgA, 'DRINKS', []);
+      await saveNotificationFormRecipients(orgA, 'DAMAGE', []);
+      await saveDrinkProducts(orgA, []);
     }
   });
 });

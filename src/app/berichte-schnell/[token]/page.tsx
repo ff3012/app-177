@@ -33,6 +33,7 @@ export default async function BerichteSchnellPage({ params }: { params: Promise<
       organizationName={data.organization.name}
       deviceName={data.deviceName}
       enabledTypes={data.enabledTypes}
+      notificationForms={data.notificationForms}
       members={data.members}
       vehicles={data.vehicles}
       recentKindsByType={data.recentKindsByType}

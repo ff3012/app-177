@@ -1,5 +1,8 @@
+import type { NotificationForm } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
+import { NOTIFICATION_FORMS, notificationFormState, type NotificationFormState } from './notification-form-constants';
+import { getNotificationFormSettings } from './notification-form-settings';
 import { getEnabledReportTypes } from './report-type-settings';
 import { findOrganizationByKioskToken } from './report-kiosk-token';
 import { getRecentActivityKindsForOrg } from './recent-activity-kinds';
@@ -13,6 +16,8 @@ export interface KioskData {
   recentKindsByType: Record<string, string[]>;
   deviceName: string | null;
   enabledTypes: string[];
+  /** Zustand je Meldeformular und (nur Getränkeautomat) die Produktliste; nie die Empfängeradressen (das Gerät ist öffentlich). */
+  notificationForms: Record<NotificationForm, { state: NotificationFormState; products: string[] }>;
 }
 
 /** Alles, was die Seite /berichte-schnell/[token] braucht - null bei unbekanntem/abgeschaltetem Link. */
@@ -21,6 +26,13 @@ export async function loadKioskData(token: string): Promise<KioskData | null> {
   if (!organization) return null;
 
   const enabledTypes = await getEnabledReportTypes(organization.id);
+  const notificationSettings = await getNotificationFormSettings(organization.id);
+  const notificationForms = Object.fromEntries(
+    NOTIFICATION_FORMS.map((form) => [
+      form,
+      { state: notificationFormState(notificationSettings[form]), products: notificationSettings[form].products },
+    ]),
+  ) as KioskData['notificationForms'];
   const [members, vehicles, recent, device] = await Promise.all([
     prisma.user.findMany({
       where: { homeOrganizationId: organization.id, ...NOT_DEACTIVATED_WHERE },
@@ -45,5 +57,6 @@ export async function loadKioskData(token: string): Promise<KioskData | null> {
     recentKindsByType: Object.fromEntries(recent),
     deviceName: device.reportKioskDeviceName,
     enabledTypes,
+    notificationForms,
   };
 }

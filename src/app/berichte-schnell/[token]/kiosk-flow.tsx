@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReportWizard } from '@/app/(app)/meine-feuerwehr/berichte/neu/report-wizard';
+import { NotificationFormView } from '@/components/heimatfeuerwehr/notification-form-view';
 import { getKioskTiles, type KioskTile } from '@/lib/heimatfeuerwehr/kiosk-tiles';
+import { NOTIFICATION_FORM_LABEL, type NotificationFormState } from '@/lib/heimatfeuerwehr/notification-form-constants';
 import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
-import type { ReportType } from '@prisma/client';
-import { submitReportViaKiosk } from './actions';
+import type { NotificationForm, ReportType } from '@prisma/client';
+import { submitNotificationViaKiosk, submitReportViaKiosk } from './actions';
 import { KioskFormScreen } from './kiosk-form-screen';
 import { KioskHeader } from './kiosk-header';
 import { WizardFrame } from './wizard-frame';
@@ -15,30 +17,36 @@ export interface KioskFlowProps {
   organizationName: string;
   deviceName: string | null;
   enabledTypes: string[];
+  notificationForms: Record<NotificationForm, { state: NotificationFormState; products: string[] }>;
   members: { id: string; firstName: string; lastName: string }[];
   vehicles: { id: string; taktischeBezeichnung: string; kennzeichen: string }[];
   recentKindsByType: Record<string, string[]>;
 }
 
+type Target = { kind: 'report'; type: ReportType } | { kind: 'form'; form: NotificationForm };
+
 type Phase =
   | { phase: 'form' }
-  | { phase: 'name'; type: ReportType }
+  | { phase: 'name'; target: Target }
   | { phase: 'wizard'; filledById: string; type: ReportType; run: number }
-  | { phase: 'done'; number?: number; year?: number };
+  | { phase: 'notify'; filledById: string; form: NotificationForm; run: number }
+  | { phase: 'done'; kind: 'report' | 'notification'; number?: number; year?: number };
 
 const DONE_RESET_MS = 30_000;
 
 /**
- * Ablauf der iPad-Schnellerfassung als reiner Client-Zustand: Formular (Kacheln) -> Namenswahl -> Assistent ->
- * Bestätigung -> (nach 30 s oder "Neues Formular") zurück zum Formularbildschirm. Damit bleibt keine Person auf
- * dem gemeinsamen Gerät "angemeldet", und die Eingaben der Vorgängerin sind weg (der Assistent hält
- * seinen Zustand nur im Browser-Speicher und wird bei jedem Lauf neu eingehängt).
+ * Ablauf der iPad-Schnellerfassung als reiner Client-Zustand: Formular (Kacheln) -> Namenswahl -> Assistent (Bericht) bzw.
+ * Meldeformular (Getränkeautomat/Schadensmeldung) -> Bestätigung -> (nach 30 s oder "Neues Formular") zurück zum
+ * Formularbildschirm. Damit bleibt keine Person auf dem gemeinsamen Gerät "angemeldet", und die Eingaben der Vorgängerin
+ * sind weg (Assistent und Meldeformular halten ihren Zustand nur im Browser-Speicher und werden bei jedem Lauf neu
+ * eingehängt). Die Elementstruktur der Phasen hängt nie vom Layout ab: ein Layoutwechsel (Drehen) hängt nichts neu ein.
  */
 export function KioskFlow({
   token,
   organizationName,
   deviceName,
   enabledTypes,
+  notificationForms,
   members,
   vehicles,
   recentKindsByType,
@@ -92,7 +100,7 @@ export function KioskFlow({
           subtitle: filledBy ? `Ausfüller: ${filledBy.firstName} ${filledBy.lastName}` : undefined,
         }}
         onSubmit={(payload) => submitReportViaKiosk(token, payload)}
-        onDone={(result) => setState({ phase: 'done', number: result.number, year: result.year })}
+        onDone={(result) => setState({ phase: 'done', kind: 'report', number: result.number, year: result.year })}
         onCancel={reset}
       />
     );
@@ -100,9 +108,45 @@ export function KioskFlow({
     return <WizardFrame layout={layout}>{wizard}</WizardFrame>;
   }
 
-  const tiles = getKioskTiles(enabledTypes);
+  if (state.phase === 'notify') {
+    const sender = members.find((member) => member.id === state.filledById);
+    return (
+      <div className="flex min-h-[100dvh] touch-manipulation flex-col bg-[#f6f6f7] text-[#1c1c1e]">
+        <KioskHeader organizationName={organizationName} title={NOTIFICATION_FORM_LABEL[state.form]} deviceName={deviceName} />
+        <main className="mx-auto w-full max-w-5xl flex-1 p-6">
+          {sender && (
+            <p className="mb-4 text-sm text-neutral-500">
+              Meldung von {sender.firstName} {sender.lastName}
+            </p>
+          )}
+          <NotificationFormView
+            key={state.run}
+            form={state.form}
+            products={notificationForms[state.form].products}
+            layout={layout}
+            onSubmit={(input) => submitNotificationViaKiosk(token, state.filledById, input)}
+            onDone={() => setState({ phase: 'done', kind: 'notification' })}
+            onCancel={reset}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  const tiles = getKioskTiles(
+    enabledTypes,
+    Object.fromEntries(Object.entries(notificationForms).map(([form, value]) => [form, value.state])),
+  );
   const headerTitle =
-    state.phase === 'form' ? 'Welches Formular ausfüllen?' : state.phase === 'name' ? 'Wer schreibt den Bericht?' : 'Bericht abgegeben';
+    state.phase === 'form'
+      ? 'Welches Formular ausfüllen?'
+      : state.phase === 'name'
+        ? state.target.kind === 'report'
+          ? 'Wer schreibt den Bericht?'
+          : 'Wer macht die Meldung?'
+        : state.kind === 'notification'
+          ? 'Meldung gesendet'
+          : 'Bericht abgegeben';
 
   return (
     <div className="flex min-h-[100dvh] touch-manipulation flex-col bg-[#f6f6f7] text-[#1c1c1e]">
@@ -113,9 +157,14 @@ export function KioskFlow({
           <KioskFormScreen
             tiles={tiles}
             onChoose={(tile: KioskTile) => {
-              if (tile.state !== 'active' || !tile.type) return;
-              setSearch('');
-              setState({ phase: 'name', type: tile.type });
+              if (tile.state !== 'active') return;
+              if (tile.type) {
+                setSearch('');
+                setState({ phase: 'name', target: { kind: 'report', type: tile.type } });
+              } else if (tile.form) {
+                setSearch('');
+                setState({ phase: 'name', target: { kind: 'form', form: tile.form } });
+              }
             }}
           />
         )}
@@ -138,10 +187,14 @@ export function KioskFlow({
                     key={member.id}
                     type="button"
                     onClick={() => {
-                      // Jeder Lauf bekommt einen neuen key, damit der Assistent mit leerem Zustand startet.
+                      // Jeder Lauf bekommt einen neuen key, damit Assistent bzw. Meldeformular mit leerem Zustand starten.
                       const nextRun = run + 1;
                       setRun(nextRun);
-                      setState({ phase: 'wizard', filledById: member.id, type: state.type, run: nextRun });
+                      setState(
+                        state.target.kind === 'report'
+                          ? { phase: 'wizard', filledById: member.id, type: state.target.type, run: nextRun }
+                          : { phase: 'notify', filledById: member.id, form: state.target.form, run: nextRun },
+                      );
                     }}
                     className="min-h-[64px] rounded-xl border border-neutral-300 bg-white px-4 py-3 text-left text-[16px] font-semibold shadow-sm"
                   >
@@ -158,7 +211,7 @@ export function KioskFlow({
 
         {state.phase === 'done' && (
           <div className="flex flex-col items-center gap-4 py-16 text-center">
-            {state.number !== undefined && state.year !== undefined && (
+            {state.kind === 'report' && state.number !== undefined && state.year !== undefined && (
               <p className="text-lg text-neutral-600">
                 Nr. {state.number} / {state.year}
               </p>
