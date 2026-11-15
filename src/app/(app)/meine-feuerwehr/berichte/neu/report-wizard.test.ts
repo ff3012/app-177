@@ -79,6 +79,12 @@ describe('ReportWizard (Tablet-Layout)', () => {
     expect(render(tablet)).toContain('Ausgefüllt von');
   });
 
+  it('gibt am Tablet jeder Schaltfläche ohne eigene Mindesthöhe mindestens 48 px (nicht am Handy)', () => {
+    const rule = '[&amp;_button:not([class*=min-h])]:min-h-[48px]';
+    expect(render(tablet)).toContain(rule);
+    expect(render()).not.toContain('min-h-[48px]');
+  });
+
   it('bietet am Tablet statt des Abbrechen-Links die Abbrechen-Schaltfläche (onCancel) im Fuß', () => {
     const html = render({ ...tablet, onCancel: () => undefined });
     expect(html).toContain('Abbrechen');

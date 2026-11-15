@@ -775,7 +775,7 @@ export function ReportWizard({
     return (
       <div
         data-layout="tablet"
-        className="flex h-[100dvh] flex-col bg-[#f6f6f7] text-[#1c1c1e] [&_input]:min-h-[48px] [&_input]:text-base [&_select]:min-h-[48px] [&_select]:text-base [&_textarea]:text-base"
+        className="flex h-[100dvh] flex-col bg-[#f6f6f7] text-[#1c1c1e] [&_button:not([class*=min-h])]:min-h-[48px] [&_input]:min-h-[48px] [&_input]:text-base [&_select]:min-h-[48px] [&_select]:text-base [&_textarea]:text-base"
       >
         <header className="pt-safe flex items-center justify-between bg-[#1c1c1e] px-6 py-3 text-white">
           <span className="text-base font-semibold">{tabletHeader?.title ?? REPORT_TYPE_LABEL[type]}</span>
