@@ -118,6 +118,9 @@ model Organization {
   // bestehende Zeile ohne separaten Backfill-Schritt auf FREIWILLIGE_FEUERWEHR landet.
   feuerwehrKategorie FeuerwehrKategorie @default(FREIWILLIGE_FEUERWEHR)
   icsToken           String             @unique @default(cuid())
+  // Geheimer Link der iPad-Berichte-Schnellerfassung (/berichte-schnell/<token>), Klartext wie icsToken
+  // (der Admin muss ihn wieder anzeigen können). null = Schnellerfassung aus (Standard für jede Feuerwehr).
+  reportKioskToken   String?            @unique
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   // Bezirksverwaltung: deaktivierte Feuerwehren/Abschnitte bleiben vollständig erhalten (Termine,
