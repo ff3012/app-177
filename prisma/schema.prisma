@@ -121,6 +121,8 @@ model Organization {
   // Geheimer Link der iPad-Berichte-Schnellerfassung (/berichte-schnell/<token>), Klartext wie icsToken
   // (der Admin muss ihn wieder anzeigen können). null = Schnellerfassung aus (Standard für jede Feuerwehr).
   reportKioskToken   String?            @unique
+  // Anzeigename des gemeinsamen iPads im Kopf der Schnellerfassung (z. B. "Tablet Feuerwehr EG"), null = keiner.
+  reportKioskDeviceName String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   // Bezirksverwaltung: deaktivierte Feuerwehren/Abschnitte bleiben vollständig erhalten (Termine,
@@ -218,6 +220,7 @@ model Organization {
   dashboardTokens   DashboardToken[]
   facebookPostCache FacebookPostCache?
   reports           Report[]
+  reportTypeSettings ReportTypeSetting[]
 
   // Nur für type == ABSCHNITTSKOMMANDO gesetzt: der Bezirk, dem dieser Abschnitt angehört.
   districtId String?
@@ -1018,6 +1021,20 @@ model Report {
   vehicles  ReportVehicle[]
 
   @@unique([fireDepartmentId, year, number])
+}
+
+// Einstellungen je Feuerwehr und Berichtsart: ob die Art in App und am iPad verfügbar ist und wer den Bericht per
+// E-Mail erhält. Keine Zeile = eingeschaltet, keine Empfänger. Zeilen entstehen erst, wenn ein Admin etwas ändert.
+model ReportTypeSetting {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           ReportType
+  enabled        Boolean      @default(true)
+  recipients     String[]     @default([])
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type])
 }
 
 // Ein von diesem Bericht verwendetes Fahrzeug samt gefahrener Kilometer - mehrere pro Bericht möglich
