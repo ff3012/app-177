@@ -726,7 +726,8 @@ Das dritte "Neuer Bericht"/"Meine Berichte"-Modul unter Meine Feuerwehr. Grundla
 `ReportQuantity`/`ReportSequence` (fortlaufende Nummer je Feuerwehr/Jahr), ein 3(-4)-Schritt-Assistent
 (`berichte/neu/report-wizard.tsx`, reiner Client-State bis zur Abgabe), PDF-Erzeugung
 (`lib/heimatfeuerwehr/report-pdf.tsx`, `@react-pdf/renderer`) + S3-Upload + Best-effort-E-Mail an
-`Organization.reportRecipients`. **Kein Entwurf-Konzept**: eine `Report`-Zeile entsteht erst und
+die Empfänger der jeweiligen Berichtsart (`ReportTypeSetting`, siehe "Berichte-Schnellerfassung am iPad"
+unten). **Kein Entwurf-Konzept**: eine `Report`-Zeile entsteht erst und
 ausschließlich bei "Bericht abgeben" (`submitReport`, `berichte/submit-actions.ts`), mit
 `number`/`year`/`submittedAt` bereits gesetzt — ein ursprünglich vorhandener `DRAFT`-Status samt
 Cron-getriggerter Auto-Anlage bei Reservierungsende wurde auf ausdrücklichen Wunsch vollständig
@@ -857,21 +858,49 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
   Feuerwehr nur aus dem Link und zählt das Limit (20/Stunde/Link, `checkRateLimit` aus `lib/mcp/rate-limit.ts`) erst NACH der
   Linkprüfung. Die Server Action `submitReportViaKiosk` ist dünn.
 - **Seitendaten** (`report-kiosk-data.ts`): nur Id und Name der nicht deaktivierten Mitglieder (auch noch nicht aktivierter Konten), aktive Fahrzeuge, "Zuletzt verwendet" je
-  Berichtsart über die ganze Feuerwehr (nicht je Person, weil das Gerät gemeinsam genutzt wird).
+  Berichtsart über die ganze Feuerwehr (nicht je Person, weil das Gerät gemeinsam genutzt wird) - nur für eingeschaltete Arten.
+  Zusätzlich `deviceName` (`Organization.reportKioskDeviceName`) und `enabledTypes` (`getEnabledReportTypes`).
 - **Assistent geteilt, nicht kopiert:** `ReportWizard` hat optionale Props `layout` ('mobile' Standard | 'tablet'), `onSubmit`,
   `onDone`, `onCancel`, `tabletHeader`, `lockFilledBy`. Ohne sie verhält er sich exakt wie in der App (Charakterisierungstests in
   `report-wizard.test.ts`). `layout='tablet'` rendert eine ganze Seite (Kopf, Schrittleiste links, zwei Spalten, feste untere
   Leiste, Tipp-Ziele >= 48 px); Fahrzeuge und Mitglieder erscheinen als Kacheln (`MemberTileSelect` statt Popover). Die Wurzel
   des Tablet-Layouts trägt zusätzlich `[&_button:not([class*=min-h])]:min-h-[48px]`, damit auch die vom Handy-Layout
   übernommenen Schaltflächen 48 px erreichen.
-- **Berichtsarten:** wie in der App nur die in `ACTIVE_REPORT_TYPES` freigeschalteten (Tätigkeits- und Übungsbericht); der
-  Einsatzbericht erscheint ausgegraut und zieht mit der App nach. Die Kiosk-Abgabe erzwingt das auch serverseitig
-  (`submitReportForKiosk` lehnt andere Arten mit "Diese Berichtsart ist nicht verfügbar." ab); die App-eigene `submitReport`
-  hat diese Sperre serverseitig nicht - bekannte Asymmetrie.
-- **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Namenswahl -> Berichtsart -> Assistent -> Bestätigung -> nach 30 s oder
-  "Neuer Bericht" zurück zur Namenswahl (keine Person bleibt "angemeldet"). Ab 1024 px Fensterbreite Tablet-Layout, darunter das
+- **Berichtsarten je Feuerwehr** (Spec `docs/superpowers/specs/2026-11-15-kiosk-startbildschirm-berichtsarten-design.md`):
+  `ReportTypeSetting` (je Feuerwehr und Berichtsart eine Zeile mit `enabled` und `recipients`, `@@unique([organizationId, type])`).
+  Eine fehlende Zeile bedeutet eingeschaltet ohne Empfänger; Zeilen entstehen erst, wenn ein Admin etwas ändert. Einstellbar sind nur
+  Arten aus `ACTIVE_REPORT_TYPES` (heute Tätigkeits- und Übungsbericht). Bibliothek: `lib/heimatfeuerwehr/report-type-settings.ts`
+  (`getReportTypeSettings`, `getEnabledReportTypes`, `isReportTypeEnabled`, `getReportRecipients`, `saveReportTypeEnabled`/
+  `saveReportTypeRecipients` per `upsert`, reine Hilfen `resolveReportTypeSettings`/`pickReportType`). `submitReportCore` prüft als
+  ERSTES die Verfügbarkeit der Art (freigeschaltet UND für die Feuerwehr eingeschaltet, sonst "Diese Berichtsart ist nicht
+  verfügbar.") - die Sperre gilt damit für die App (`submitReport`) und das iPad (`submitReportForKiosk`) gleich, die Kiosk-Abgabe hat
+  keine eigene Prüfung mehr (die frühere Asymmetrie ist geschlossen). Die E-Mail-Empfänger kommen aus der Zeile der Berichtsart
+  (`getReportRecipients(fireDepartmentId, input.type)`); ohne Zeile oder Empfänger geht keine Empfänger-Mail, die Bestätigung an den
+  Ausfüller bleibt. Abschalten versteckt nur: bereits abgegebene Berichte bleiben in "Meine Berichte", PDF und Verwaltungsliste.
+- **App-Seite:** `ReportTypeSheet` (Blatt "Welcher Bericht?") bekommt die Prop `enabledTypes` (Aufrufer `action-row.tsx`, Daten von
+  `meine-feuerwehr/page.tsx`); nicht eingeschaltete Arten sind ausgegraut und nicht antippbar. `berichte/neu/page.tsx` nimmt die
+  Art über `pickReportType(typeParam, enabledTypes)` (Rückfall auf die erste eingeschaltete Art, ohne eingeschaltete Art `notFound()`).
+- **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Formular -> Name -> Assistent (Art steht fest) -> Bestätigung -> nach 30 s oder
+  "Neues Formular" zurück zum Formularbildschirm (keine Person bleibt "angemeldet"); auf dem Namensbildschirm gibt es "← Anderes
+  Formular", im Assistenten bricht "Abbrechen" zum Formularbildschirm zurück. Ab 1024 px Fensterbreite Tablet-Layout, darunter das
   Handy-Layout. Der Assistent steckt in beiden Layouts in einem stabilen Rahmen (`wizard-frame.tsx`, immer ein `div`), damit ein
   Wechsel bei 1024 px (iPad drehen, Split View) ihn nie neu einhängt und keine Eingaben verloren gehen.
+- **Startbildschirm** (`kiosk-form-screen.tsx`, Kacheln aus `lib/heimatfeuerwehr/kiosk-tiles.ts`): fünf Kacheln (Tätigkeitsbericht,
+  Übungsbericht, Einsatzbericht, Getränkeautomat, Schadensmeldung) in drei Zuständen: aktiv (freigeschaltet UND eingeschaltet),
+  "Nicht aktiviert" (freigeschaltet, aber von der Feuerwehr abgeschaltet), "Bald verfügbar" (alles Übrige). Einsatzbericht,
+  Getränkeautomat und Schadensmeldung sind reine Platzhalter ohne Funktion (Getränkeautomat und Schadensmeldung haben keine
+  Berichtsart). Der Kopf (`kiosk-header.tsx`) zeigt Feuerwehrname, Titel, den Gerätenamen (nur wenn gesetzt) sowie Datum und Uhrzeit in
+  Wiener Zeit (`kiosk-clock.ts`); Datum/Uhrzeit werden erst nach dem Einhängen im Browser gesetzt und alle 30 s aktualisiert.
+- **Verwaltung** (`/admin/heimatfeuerwehr`): Die Karte "Berichte" zeigt je Berichtsart einen Block (`report-type-row.tsx`) mit Schalter
+  "Aktiviert" (Ausschalten fragt per Dialog nach, Einschalten nicht) und der Empfängerliste (`report-recipients-form.tsx`, je Art
+  gebunden); Server Actions `setReportTypeEnabled`/`setReportTypeRecipients` in `admin/heimatfeuerwehr/actions.ts`, beide prüfen
+  `canManageHeimatfeuerwehrFor` neu und akzeptieren nur Arten aus `ACTIVE_REPORT_TYPES`. Der Gerätename (höchstens 60 Zeichen, leer =
+  entfernt) steht in der Link-Karte (`report-kiosk-device-name-form.tsx`, Action `setReportKioskDeviceName` in
+  `report-kiosk-actions.ts`).
+- **Zwei Migrationen, gemeinsam deployen:** `20261115090000_report_type_setting` legt `ReportTypeSetting` und
+  `Organization.reportKioskDeviceName` an und kopiert die bisherigen `reportRecipients` je Feuerwehr in je eine Zeile für
+  `ACTIVITY` und `EXERCISE`; `20261115100000_drop_organization_report_recipients` löscht danach `Organization.reportRecipients`
+  (nicht umkehrbar - vor dem PROD-Deploy ein Backup). Beide laufen beim Container-Start über `prisma migrate deploy`.
 - **Nicht geprüft in der Entwicklungsumgebung:** Hydration/Interaktion (derselbe Gap wie sonst in dieser Datei). Der ganze Ablauf
   muss auf einem echten iPad durchgeklickt werden; offen ist, ob "Zum Home-Bildschirm" auf iOS den geheimen Link öffnet.
 
