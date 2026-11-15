@@ -13,7 +13,8 @@ import {
   getKindOptionsForType,
 } from '@/lib/heimatfeuerwehr/report-constants';
 import { ActivityKindPicker } from './activity-kind-picker';
-import { submitReport, type SubmitReportInput } from '../submit-actions';
+import { submitReport } from '../submit-actions';
+import type { SubmitReportInput } from '@/lib/heimatfeuerwehr/submit-report-core';
 import type { ReportType } from '@prisma/client';
 
 const FUNKTIONEN = ['KOMMANDANT', 'FAHRER', 'MANNSCHAFT'] as const;

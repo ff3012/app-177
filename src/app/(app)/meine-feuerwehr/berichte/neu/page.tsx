@@ -3,30 +3,9 @@ import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canCreateReportFor } from '@/lib/auth/permissions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { ACTIVE_REPORT_TYPES } from '@/lib/heimatfeuerwehr/report-constants';
+import { getRecentActivityKindsForUser } from '@/lib/heimatfeuerwehr/recent-activity-kinds';
 import type { ReportType } from '@prisma/client';
 import { ReportWizard } from './report-wizard';
-
-// Zeigt "Zuletzt verwendet" (die 3 zuletzt vom Benutzer gewählten Tätigkeits-/Übungsarten) - über alle
-// bereits abgegebenen eigenen Berichte DESSELBEN Typs hinweg (ein Übungsbericht soll keine
-// Tätigkeitsart-Codes vorschlagen und umgekehrt - beide Listen sind komplett unterschiedliche
-// Codesätze, siehe getKindOptionsForType), neueste zuerst, ohne Duplikate. Kein Entwurf-Konzept mehr,
-// also immer aus tatsächlich abgegebenen Berichten (jeder existierende Report ist abgegeben).
-async function getRecentActivityKinds(userId: string, type: ReportType): Promise<string[]> {
-  const recent = await prisma.report.findMany({
-    where: { filledById: userId, type },
-    orderBy: { submittedAt: 'desc' },
-    take: 10,
-    select: { activityKinds: true },
-  });
-  const seen = new Set<string>();
-  for (const report of recent) {
-    for (const code of report.activityKinds) {
-      seen.add(code);
-      if (seen.size >= 3) return [...seen];
-    }
-  }
-  return [...seen];
-}
 
 /** Einzige Seite des Formulars - kein Entwurf-Konzept mehr, also keine [reportId]-Route und keine
  * serverseitige Autospeicherung: der Assistent (ReportWizard, Client Component) hält alle Eingaben
@@ -56,7 +35,7 @@ export default async function NeuerBerichtPage({
       orderBy: { taktischeBezeichnung: 'asc' },
       select: { id: true, taktischeBezeichnung: true, kennzeichen: true },
     }),
-    getRecentActivityKinds(user.id, type),
+    getRecentActivityKindsForUser(user.id, type),
   ]);
 
   // Vorbefüllung aus einer "Zu erledigen"-Erinnerung (vehicle-report-reminder-card.tsx): vehicleId nur
