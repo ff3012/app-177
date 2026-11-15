@@ -14,7 +14,7 @@ import {
 } from '@/lib/heimatfeuerwehr/report-constants';
 import { ActivityKindPicker } from './activity-kind-picker';
 import { submitReport } from '../submit-actions';
-import type { SubmitReportInput } from '@/lib/heimatfeuerwehr/submit-report-core';
+import type { SubmitReportInput, SubmitReportResult } from '@/lib/heimatfeuerwehr/submit-report-core';
 import type { ReportType } from '@prisma/client';
 
 const FUNKTIONEN = ['KOMMANDANT', 'FAHRER', 'MANNSCHAFT'] as const;
@@ -32,14 +32,30 @@ function combine(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
-function WizardHeader({ step, totalSteps, onBack }: { step: number; totalSteps: number; onBack: () => void }) {
+function WizardHeader({
+  step,
+  totalSteps,
+  onBack,
+  onCancel,
+}: {
+  step: number;
+  totalSteps: number;
+  onBack: () => void;
+  onCancel?: () => void;
+}) {
   return (
     <div className="mb-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         {step === 1 ? (
-          <Link href="/meine-feuerwehr" className="text-sm font-medium text-brand">
-            ‹ Abbrechen
-          </Link>
+          onCancel ? (
+            <button type="button" onClick={onCancel} className="text-sm font-medium text-brand">
+              ‹ Abbrechen
+            </button>
+          ) : (
+            <Link href="/meine-feuerwehr" className="text-sm font-medium text-brand">
+              ‹ Abbrechen
+            </Link>
+          )
         ) : (
           <button type="button" onClick={onBack} className="text-sm font-medium text-brand">
             ‹ Zurück
@@ -120,6 +136,12 @@ export function ReportWizard({
   prefillVehicleId,
   prefillStartAt,
   prefillEndAt,
+  layout = 'mobile',
+  onSubmit,
+  onDone,
+  onCancel,
+  tabletHeader,
+  lockFilledBy = false,
 }: {
   type: ReportType;
   filledById: string;
@@ -131,7 +153,16 @@ export function ReportWizard({
   prefillVehicleId?: string | null;
   prefillStartAt?: string | null;
   prefillEndAt?: string | null;
+  layout?: 'mobile' | 'tablet';
+  onSubmit?: (payload: SubmitReportInput) => Promise<SubmitReportResult>;
+  onDone?: (result: { reportId: string; number?: number; year?: number }) => void;
+  onCancel?: () => void;
+  tabletHeader?: { title: string; subtitle?: string };
+  lockFilledBy?: boolean;
 }) {
+  void layout;
+  void tabletHeader;
+  void lockFilledBy;
   const router = useRouter();
   const isExercise = type === 'EXERCISE';
   // Zusätzlicher Übungsdetails-Schritt nur für Übungsberichte, direkt nach den Grunddaten - Fahrzeuge/
@@ -282,13 +313,17 @@ export function ReportWizard({
     };
 
     try {
-      const result = await submitReport(payload);
-      if (result.error) {
-        setError(result.error);
+      const result = await (onSubmit ?? submitReport)(payload);
+      if (result.error || !result.reportId) {
+        setError(result.error ?? 'Der Bericht konnte nicht abgegeben werden. Bitte erneut versuchen.');
         setSubmitting(false);
         return;
       }
-      router.push(`/meine-feuerwehr/berichte/${result.reportId}/abgeschlossen`);
+      if (onDone) {
+        onDone({ reportId: result.reportId, number: result.number, year: result.year });
+      } else {
+        router.push(`/meine-feuerwehr/berichte/${result.reportId}/abgeschlossen`);
+      }
     } catch {
       setError('Der Bericht konnte nicht abgegeben werden. Bitte erneut versuchen.');
       setSubmitting(false);
@@ -340,7 +375,7 @@ export function ReportWizard({
 
   return (
     <div className="flex flex-col gap-5 pb-48">
-      <WizardHeader step={step} totalSteps={totalSteps} onBack={goBack} />
+      <WizardHeader step={step} totalSteps={totalSteps} onBack={goBack} onCancel={onCancel} />
 
       {step === 1 && (
         <>
