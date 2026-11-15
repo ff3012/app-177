@@ -29,6 +29,8 @@ import { FunktionenCard } from './funktionen-card';
 import { FahrzeugReservierungEmailForm } from './fahrzeug-reservierung-email-form';
 import { PhotoUploadNotificationEmailsForm } from './photo-upload-notification-emails-form';
 import { ReportRecipientsForm } from './report-recipients-form';
+import { ReportKioskCard } from './report-kiosk-card';
+import { createReportKioskLink, disableReportKioskLink } from './report-kiosk-actions';
 import { ReportDeleteButton } from './report-delete-button';
 import { REPORT_TYPE_LABEL } from '@/lib/heimatfeuerwehr/report-constants';
 import { reportPdfFileName } from '@/lib/heimatfeuerwehr/report-pdf';
@@ -48,6 +50,11 @@ function toDateInputValue(date: Date | null): string {
 function buildDashboardLink(token: string): string {
   const baseUrl = process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
   return `${baseUrl}/dashboard/${token}`;
+}
+
+function buildReportKioskLink(token: string): string {
+  const baseUrl = process.env.AUTH_URL?.replace(/\/$/, '') ?? '';
+  return `${baseUrl}/berichte-schnell/${token}`;
 }
 
 function formatBookingRange(startsAt: Date, endsAt: Date): string {
@@ -219,6 +226,7 @@ export default async function HeimatfeuerwehrVerwaltungPage({
         fahrzeugReservierungEmails: true,
         photoUploadNotificationEmails: true,
         reportRecipients: true,
+        reportKioskToken: true,
         googleCalendarServiceAccountJson: true,
         googleCalendarId: true,
         googleCalendarLastSyncAt: true,
@@ -643,6 +651,21 @@ export default async function HeimatfeuerwehrVerwaltungPage({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="rounded-lg bg-surface p-4 shadow-card">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">Berichte-Schnellerfassung (iPad)</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          Geheimer Link für ein gemeinsames iPad im Feuerwehrhaus: Mitglieder wählen ihren Namen und erfassen Berichte ohne
+          Anmeldung. Wer den Link kennt, kann Berichte unter dem Namen jedes aktiven Mitglieds dieser Feuerwehr anlegen. Den Link
+          deshalb nur auf dem Gerät hinterlegen.
+        </p>
+        <ReportKioskCard
+          key={selectedOrgId}
+          link={selectedOrgFull.reportKioskToken ? buildReportKioskLink(selectedOrgFull.reportKioskToken) : null}
+          createAction={createReportKioskLink.bind(null, selectedOrgId)}
+          disableAction={disableReportKioskLink.bind(null, selectedOrgId)}
+        />
       </div>
 
       <div className="rounded-lg bg-surface p-4 shadow-card">

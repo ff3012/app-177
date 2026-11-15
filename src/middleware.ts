@@ -13,6 +13,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/registrieren',
   '/datenschutz',
   '/drohnen-schnell',
+  '/berichte-schnell',
   '/api/cron',
   '/dashboard',
   '/api/wastl',
