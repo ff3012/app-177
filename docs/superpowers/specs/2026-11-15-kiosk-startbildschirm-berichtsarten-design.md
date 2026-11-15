@@ -75,8 +75,9 @@ Damit gilt die Sperre für die App-Aktion `submitReport` und die Kiosk-Abgabe gl
 die bekannte Lücke, dass `submitReport` nicht aktive Berichtsarten serverseitig nicht ablehnt.
 
 Empfänger: `submitReportCore` liest die E-Mail-Empfänger aus der Zeile `ReportTypeSetting` der Feuerwehr und der **Art des
-Berichts** statt aus `Organization.reportRecipients`. Ohne Zeile oder ohne Empfänger wird wie bisher keine E-Mail an Empfänger
-gesendet (die Bestätigung an den Ausfüller bleibt unverändert).
+Berichts** statt aus `Organization.reportRecipients`. Ohne Zeile oder ohne Empfänger wird wie bisher gar keine E-Mail gesendet
+(es gibt keine separate Bestätigungsmail an den Ausfüller; seine Adresse dient nur als Reply-To der Empfänger-Mails); Bericht,
+PDF und S3-Upload entstehen trotzdem, `emailSentAt` und `emailError` bleiben `null`.
 
 ## 3. App: abgeschaltete Arten ausblenden
 

@@ -875,10 +875,11 @@ Gemeinsames iPad im Feuerwehrhaus (Querformat), Berichte ohne Anmeldung. Spec:
   ERSTES die Verfügbarkeit der Art (freigeschaltet UND für die Feuerwehr eingeschaltet, sonst "Diese Berichtsart ist nicht
   verfügbar.") - die Sperre gilt damit für die App (`submitReport`) und das iPad (`submitReportForKiosk`) gleich, die Kiosk-Abgabe hat
   keine eigene Prüfung mehr (die frühere Asymmetrie ist geschlossen). Die E-Mail-Empfänger kommen aus der Zeile der Berichtsart
-  (`getReportRecipients(fireDepartmentId, input.type)`); ohne Zeile oder Empfänger geht keine Empfänger-Mail, die Bestätigung an den
-  Ausfüller bleibt. Abschalten versteckt nur: bereits abgegebene Berichte bleiben in "Meine Berichte", PDF und Verwaltungsliste.
-- **App-Seite:** `ReportTypeSheet` (Blatt "Welcher Bericht?") bekommt die Prop `enabledTypes` (Aufrufer `action-row.tsx`, Daten von
-  `meine-feuerwehr/page.tsx`); nicht eingeschaltete Arten sind ausgegraut und nicht antippbar. `berichte/neu/page.tsx` nimmt die
+  (`getReportRecipients(fireDepartmentId, input.type)`); ohne Zeile oder ohne Empfänger wird gar keine E-Mail
+  gesendet (es gibt keine separate Bestätigungsmail an den Ausfüller; seine Adresse dient nur als Reply-To der Empfänger-Mails),
+  Bericht, PDF und S3-Upload entstehen trotzdem, und `emailSentAt`/`emailError` bleiben `null`. Abschalten versteckt nur: bereits abgegebene Berichte bleiben in "Meine Berichte", PDF und Verwaltungsliste.
+- **App-Seite:** `ReportTypeSheet` (Blatt "Welcher Bericht?") bekommt die Prop `enabledTypes` (Aufrufer `ActionRow` in `action-row.tsx`, dort
+  heißt die Prop `enabledReportTypes`; Daten von `meine-feuerwehr/page.tsx`); nicht eingeschaltete Arten sind ausgegraut und nicht antippbar. `berichte/neu/page.tsx` nimmt die
   Art über `pickReportType(typeParam, enabledTypes)` (Rückfall auf die erste eingeschaltete Art, ohne eingeschaltete Art `notFound()`).
 - **Ablauf** (`kiosk-flow.tsx`, reiner Client-Zustand): Formular -> Name -> Assistent (Art steht fest) -> Bestätigung -> nach 30 s oder
   "Neues Formular" zurück zum Formularbildschirm (keine Person bleibt "angemeldet"); auf dem Namensbildschirm gibt es "← Anderes
