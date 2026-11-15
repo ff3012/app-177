@@ -12,7 +12,13 @@ import { ReportTypeSheet } from './berichte/report-type-sheet';
  * dieser Zeile als unsichtbarer Platzhalter erhalten (nicht einfach weggelassen), damit die
  * Zeilenpaarung der übrigen Kacheln nicht verrutscht - exakt dasselbe Muster wie MobileTabBar's leere
  * `aria-hidden`-Zelle. */
-export function ActionRow({ showPhotoUpload }: { showPhotoUpload: boolean }) {
+export function ActionRow({
+  showPhotoUpload,
+  enabledReportTypes,
+}: {
+  showPhotoUpload: boolean;
+  enabledReportTypes: string[];
+}) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
@@ -34,7 +40,7 @@ export function ActionRow({ showPhotoUpload }: { showPhotoUpload: boolean }) {
       ) : (
         <div aria-hidden="true" />
       )}
-      {sheetOpen && <ReportTypeSheet onClose={() => setSheetOpen(false)} />}
+      {sheetOpen && <ReportTypeSheet onClose={() => setSheetOpen(false)} enabledTypes={enabledReportTypes} />}
     </>
   );
 }

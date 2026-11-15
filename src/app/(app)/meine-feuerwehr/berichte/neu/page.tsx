@@ -2,9 +2,9 @@ import { prisma } from '@/lib/db/prisma';
 import { requireUser } from '@/lib/auth/session';
 import { assertPermission, canCreateReportFor } from '@/lib/auth/permissions';
 import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
-import { ACTIVE_REPORT_TYPES } from '@/lib/heimatfeuerwehr/report-constants';
+import { notFound } from 'next/navigation';
+import { getEnabledReportTypes, pickReportType } from '@/lib/heimatfeuerwehr/report-type-settings';
 import { getRecentActivityKindsForUser } from '@/lib/heimatfeuerwehr/recent-activity-kinds';
-import type { ReportType } from '@prisma/client';
 import { ReportWizard } from './report-wizard';
 
 /** Einzige Seite des Formulars - kein Entwurf-Konzept mehr, also keine [reportId]-Route und keine
@@ -22,7 +22,11 @@ export default async function NeuerBerichtPage({
   assertPermission(canCreateReportFor(user, user.homeOrganizationId));
 
   const { type: typeParam, vehicleId: vehicleIdParam, startAt: startAtParam, endAt: endAtParam } = await searchParams;
-  const type: ReportType = ACTIVE_REPORT_TYPES.includes(typeParam ?? '') ? (typeParam as ReportType) : 'ACTIVITY';
+  // Nur eingeschaltete Arten: ein abgeschalteter oder unbekannter Wunsch fällt auf die erste eingeschaltete Art
+  // zurück, ohne eingeschaltete Art gibt es das Formular nicht.
+  const enabledTypes = await getEnabledReportTypes(user.homeOrganizationId);
+  const type = pickReportType(typeParam, enabledTypes);
+  if (!type) notFound();
 
   const [members, vehicles, recentActivityKinds] = await Promise.all([
     prisma.user.findMany({

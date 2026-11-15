@@ -9,11 +9,17 @@ const REPORT_TYPES = ['ACTIVITY', 'EXERCISE', 'INCIDENT'] as const;
  * sind ausgegraut und nicht antippbar. Legt KEINEN Bericht in der DB an (kein Entwurf-Konzept mehr) -
  * navigiert nur zum Assistenten, der die Eingaben rein clientseitig hält, bis "Bericht abgeben"
  * gedrückt wird. */
-export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
+export function ReportTypeSheet({
+  onClose,
+  enabledTypes,
+}: {
+  onClose: () => void;
+  enabledTypes: readonly string[];
+}) {
   const router = useRouter();
 
   function choose(type: (typeof REPORT_TYPES)[number]) {
-    if (!ACTIVE_REPORT_TYPES.includes(type)) return;
+    if (!enabledTypes.includes(type)) return;
     router.push(`/meine-feuerwehr/berichte/neu?type=${type}`);
   }
 
@@ -26,7 +32,7 @@ export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
         <h2 className="mb-4 text-[17px] font-semibold text-[#1c1c1e]">Welcher Bericht?</h2>
         <div className="flex flex-col gap-2">
           {REPORT_TYPES.map((type) => {
-            const active = ACTIVE_REPORT_TYPES.includes(type);
+            const active = enabledTypes.includes(type);
             return (
               <button
                 key={type}
@@ -40,7 +46,11 @@ export function ReportTypeSheet({ onClose }: { onClose: () => void }) {
                 }`}
               >
                 <span>{REPORT_TYPE_LABEL[type]}</span>
-                {!active && <span className="text-xs font-normal">Bald verfügbar</span>}
+                {!active && (
+                  <span className="text-xs font-normal">
+                    {ACTIVE_REPORT_TYPES.includes(type) ? 'Nicht aktiviert' : 'Bald verfügbar'}
+                  </span>
+                )}
               </button>
             );
           })}

@@ -14,6 +14,7 @@ import { RecentPhotoUploadsBlock } from '@/components/photo-uploads/recent-photo
 import { getVisibleNews } from '@/lib/news/audience';
 import { cancelVehicleBooking } from './actions';
 import { ActionRow } from './action-row';
+import { getEnabledReportTypes } from '@/lib/heimatfeuerwehr/report-type-settings';
 import { VehicleReportReminderCard } from '@/components/home/vehicle-report-reminder-card';
 
 const STATUS_LABEL: Record<AtemschutzExpiryStatus, string> = {
@@ -127,6 +128,7 @@ export default async function MeineFeuerwehrPage() {
     visibleNews,
     myRecentReports,
     openVehicleReportReminders,
+    enabledReportTypes,
   ] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
@@ -214,6 +216,8 @@ export default async function MeineFeuerwehrPage() {
       orderBy: { startsAt: 'asc' },
       include: { vehicle: { select: { taktischeBezeichnung: true, kennzeichen: true } } },
     }),
+    // Eingeschaltete Berichtsarten der Heimatfeuerwehr: steuert, welche Arten im Auswahlblatt antippbar sind.
+    getEnabledReportTypes(user.homeOrganizationId),
   ]);
 
   const unreadNews = visibleNews.filter((post) => !post.isRead).slice(0, 2);
@@ -439,7 +443,10 @@ export default async function MeineFeuerwehrPage() {
         ) : (
           <div aria-hidden="true" />
         )}
-        <ActionRow showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)} />
+        <ActionRow
+          showPhotoUpload={canManagePhotoUploadsFor(user, user.homeOrganizationId)}
+          enabledReportTypes={enabledReportTypes}
+        />
       </div>
 
       {canManagePhotoUploadsFor(user, user.homeOrganizationId) && (
