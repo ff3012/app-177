@@ -1,6 +1,7 @@
 import { sendEmail } from '@/lib/email/mailjet';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { MATERIALS, EQUIPMENT, FUNKTION_LABEL, REPORT_TYPE_LABEL, getKindOptionsForType } from './report-constants';
+import { buildMailFooter } from './mail-footer';
 import type { ReportForPdf } from './report-pdf';
 
 export interface ReportSubmittedEmailContext extends ReportForPdf {
@@ -104,6 +105,7 @@ export async function sendReportSubmittedEmail(
   const usedMaterials = MATERIALS.filter((option) => (context.materials.find((m) => m.code === option.code)?.value ?? 0) > 0);
   const usedEquipment = EQUIPMENT.filter((option) => (context.equipment.find((e) => e.code === option.code)?.value ?? 0) > 0);
 
+  const footer = buildMailFooter(context.fireDepartmentEmails);
   const textPart = [
     ...tableRows.map(([label, value]) => `${label}: ${value}`),
     '',
@@ -126,6 +128,8 @@ export async function sendReportSubmittedEmail(
     usedEquipment.length
       ? usedEquipment.map((option) => `- ${option.label}: ${context.equipment.find((e) => e.code === option.code)?.value}`).join('\n')
       : 'Keine',
+    '',
+    footer.text,
   ].join('\n');
   // Jeder Wert wird escaped (src/lib/email/CLAUDE.md) - Bemerkung, "Sonstige"-Freitext, Namen und
   // Fahrzeugbezeichnung sind benutzerkontrolliert. Die Labels sind feste Literale, escapen schadet aber nicht.
@@ -149,7 +153,7 @@ export async function sendReportSubmittedEmail(
     .map(([label, value]) => `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(value).replace(/\n/g, '<br>')}</td></tr>`)
     .join(
       '',
-    )}</table><p><strong>Mitglieder</strong></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse"><tr><th align="left">Name</th><th align="left">Stb.-Nr.</th><th align="left">Funktion</th><th align="left">Fahrzeug</th></tr>${membersHtmlRows}</table>${quantityTableHtml('Verbrauchsmaterial', usedMaterials, context.materials, 'Keines')}${quantityTableHtml('Eingesetzte Geräte', usedEquipment, context.equipment, 'Keine')}`;
+    )}</table><p><strong>Mitglieder</strong></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse"><tr><th align="left">Name</th><th align="left">Stb.-Nr.</th><th align="left">Funktion</th><th align="left">Fahrzeug</th></tr>${membersHtmlRows}</table>${quantityTableHtml('Verbrauchsmaterial', usedMaterials, context.materials, 'Keines')}${quantityTableHtml('Eingesetzte Geräte', usedEquipment, context.equipment, 'Keine')}${footer.html}`;
 
   let failed = 0;
   for (const recipient of context.fireDepartmentEmails) {

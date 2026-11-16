@@ -1,5 +1,6 @@
 import { sendEmail } from '@/lib/email/mailjet';
 import { escapeHtml } from '@/lib/email/escape-html';
+import { buildMailFooter } from './mail-footer';
 import type { NotificationInput } from './notification-input';
 
 export interface NotificationMailContext {
@@ -31,12 +32,6 @@ const sentAtFormat = new Intl.DateTimeFormat('de-AT', {
   minute: '2-digit',
   hourCycle: 'h23',
 });
-
-const FALLBACK_APP_URL = 'https://app-17.bfkdo-stpoelten.at';
-
-function appUrl(): string {
-  return `${(process.env.AUTH_URL?.replace(/\/$/, '') || FALLBACK_APP_URL)}/`;
-}
 
 function germanDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-');
@@ -75,25 +70,9 @@ export function buildNotificationMail(ctx: NotificationMailContext): { subject: 
 
   const greeting = recipientFirstName ? `Hallo ${recipientFirstName},` : 'Hallo,';
   const intro = `${what} in Feuerwehr ${organizationShortName} ist eingegangen.`;
-  const url = appUrl();
-  const closing = 'Dies ist eine automatische E-Mail, bitte nicht darauf antworten.';
-  const recipientLine = `Ergeht an: ${recipientEmails.join(', ')}`;
+  const footer = buildMailFooter(recipientEmails);
 
-  const textPart = [
-    greeting,
-    '',
-    intro,
-    '',
-    ...all.map((line) => `${line.label}: ${line.value}`),
-    '',
-    'Vielen Dank',
-    'App-17',
-    url,
-    '',
-    closing,
-    '',
-    recipientLine,
-  ].join('\n');
+  const textPart = [greeting, '', intro, '', ...all.map((line) => `${line.label}: ${line.value}`), '', footer.text].join('\n');
 
   const htmlPart =
     `<p>${escapeHtml(greeting)}</p>` +
@@ -101,9 +80,7 @@ export function buildNotificationMail(ctx: NotificationMailContext): { subject: 
     `<ul>${all
       .map((line) => `<li><b>${escapeHtml(line.label)}:</b> ${escapeHtml(line.value).replace(/\n/g, '<br>')}</li>`)
       .join('')}</ul>` +
-    `<p>Vielen Dank<br>App-17<br><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>` +
-    `<p>${escapeHtml(closing)}</p>` +
-    `<p>${escapeHtml(recipientLine)}</p>`;
+    footer.html;
   return { subject, textPart, htmlPart };
 }
 

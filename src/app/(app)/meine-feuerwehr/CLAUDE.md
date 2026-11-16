@@ -922,6 +922,8 @@ Zwei einfache Formulare am iPad und in der App, die als E-Mail an eine je Feuerw
   wenn die Empfängeradresse einem aktiven Mitglied gehört (Suche ohne Beachtung der Groß-/Kleinschreibung, sonst "Hallo,"), nennt
   "Feuerwehr <Kurzname>", endet mit "Vielen Dank / App-17 / AUTH_URL" und dem Hinweis "automatische E-Mail, bitte nicht darauf
   antworten" und führt in der Zeile "Ergeht an:" **alle** Empfängeradressen auf (jeder Empfänger sieht also die anderen Adressen).
+  Dieser Fuß kommt aus `mail-footer.ts` (`buildMailFooter`) und steht ebenso am Ende der Tätigkeits-/Übungsbericht-Mails
+  (`notify-report-submitted.ts`, dort ohne Anrede).
   Scheitert der Versand an **allen** Empfängern, bekommt der Nutzer einen
   Fehler und kann es erneut versuchen; ein Teilausfall gilt als gesendet. Bekannte Folge von "nur E-Mail": es gibt keinen Verlauf und
   keinen Nachweis über abgeschickte Meldungen außer den E-Mails selbst (wer das braucht, spezifiziert eine Speicherung separat).
