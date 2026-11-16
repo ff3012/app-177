@@ -4,11 +4,22 @@ import type { NotificationInput } from './notification-input';
 
 export interface NotificationMailContext {
   organizationName: string;
+  /** Kurzname der Feuerwehr für den Einleitungssatz ("Feuerwehr Ambach"). */
+  organizationShortName: string;
   senderName: string;
   /** Nur als Reply-To (wie bei den Berichten); null = kein Reply-To. */
   senderEmail: string | null;
   sentAt: Date;
   input: NotificationInput;
+  /** Vorname dieses Empfängers, falls die Adresse einem aktiven Mitglied gehört; sonst null ("Hallo,"). */
+  recipientFirstName: string | null;
+  /** Alle Empfängeradressen der Meldung (Zeile "Ergeht an"). */
+  recipientEmails: string[];
+}
+
+export interface NotificationRecipient {
+  email: string;
+  firstName: string | null;
 }
 
 const sentAtFormat = new Intl.DateTimeFormat('de-AT', {
@@ -21,6 +32,12 @@ const sentAtFormat = new Intl.DateTimeFormat('de-AT', {
   hourCycle: 'h23',
 });
 
+const FALLBACK_APP_URL = 'https://app-17.bfkdo-stpoelten.at';
+
+function appUrl(): string {
+  return `${(process.env.AUTH_URL?.replace(/\/$/, '') || FALLBACK_APP_URL)}/`;
+}
+
 function germanDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-');
   return `${day}.${month}.${year}`;
@@ -30,19 +47,19 @@ type Line = { label: string; value: string };
 
 /** Betreff, Text und HTML der Meldung (rein, ohne Versand). Alle Werte werden im HTML maskiert. */
 export function buildNotificationMail(ctx: NotificationMailContext): { subject: string; textPart: string; htmlPart: string } {
-  const { organizationName, senderName, sentAt, input } = ctx;
+  const { organizationName, organizationShortName, senderName, sentAt, input, recipientFirstName, recipientEmails } = ctx;
 
   let subject: string;
-  let intro: string;
+  let what: string;
   let lines: Line[];
   if (input.form === 'DRINKS') {
     subject = `Getränkeautomat: Produkte fehlen – ${organizationName}`;
-    intro = `Meldung zum Getränkeautomat in ${organizationName}.`;
+    what = 'eine neue Meldung zum Getränkeautomat';
     lines = [{ label: 'Fehlende Produkte', value: input.products.join(', ') }];
     if (input.note) lines.push({ label: 'Anmerkung', value: input.note });
   } else {
     subject = `${input.acute === true ? 'AKUT: ' : ''}Schadensmeldung: ${input.equipment} – ${organizationName}`;
-    intro = `Schadensmeldung in ${organizationName}.`;
+    what = 'eine neue Schadensmeldung';
     lines = [
       { label: 'Datum', value: germanDate(input.occurredOn) },
       { label: 'Gerät / Ausrüstung', value: input.equipment },
@@ -56,26 +73,54 @@ export function buildNotificationMail(ctx: NotificationMailContext): { subject: 
   ];
   const all = [...meta, ...lines];
 
-  const textPart = [intro, '', ...all.map((line) => `${line.label}: ${line.value}`)].join('\n');
-  const htmlPart = `<p>${escapeHtml(intro)}</p><ul>${all
-    .map((line) => `<li><b>${escapeHtml(line.label)}:</b> ${escapeHtml(line.value).replace(/\n/g, '<br>')}</li>`)
-    .join('')}</ul>`;
+  const greeting = recipientFirstName ? `Hallo ${recipientFirstName},` : 'Hallo,';
+  const intro = `${what} in Feuerwehr ${organizationShortName} ist eingegangen.`;
+  const url = appUrl();
+  const closing = 'Dies ist eine automatische E-Mail, bitte nicht darauf antworten.';
+  const recipientLine = `Ergeht an: ${recipientEmails.join(', ')}`;
+
+  const textPart = [
+    greeting,
+    '',
+    intro,
+    '',
+    ...all.map((line) => `${line.label}: ${line.value}`),
+    '',
+    'Vielen Dank',
+    'App-17',
+    url,
+    '',
+    closing,
+    '',
+    recipientLine,
+  ].join('\n');
+
+  const htmlPart =
+    `<p>${escapeHtml(greeting)}</p>` +
+    `<p>${escapeHtml(intro)}</p>` +
+    `<ul>${all
+      .map((line) => `<li><b>${escapeHtml(line.label)}:</b> ${escapeHtml(line.value).replace(/\n/g, '<br>')}</li>`)
+      .join('')}</ul>` +
+    `<p>Vielen Dank<br>App-17<br><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>` +
+    `<p>${escapeHtml(closing)}</p>` +
+    `<p>${escapeHtml(recipientLine)}</p>`;
   return { subject, textPart, htmlPart };
 }
 
 /**
- * Sendet die Meldung als eine E-Mail je Empfänger (kein gemeinsames An/Cc, damit kein Empfänger die Adressen der
- * anderen sieht). Einzelne Fehler werden pro Empfänger abgefangen und ohne Adresse/Inhalt protokolliert.
+ * Sendet die Meldung als eine E-Mail je Empfänger (kein gemeinsames An/Cc; die Empfängerliste steht nur als Text im
+ * Inhalt). Einzelne Fehler werden pro Empfänger abgefangen und ohne Adresse/Inhalt protokolliert.
  */
 export async function sendNotificationMails(
-  ctx: NotificationMailContext,
-  recipients: string[],
+  ctx: Omit<NotificationMailContext, 'recipientFirstName' | 'recipientEmails'>,
+  recipients: NotificationRecipient[],
 ): Promise<{ attempted: number; failed: number }> {
-  const { subject, textPart, htmlPart } = buildNotificationMail(ctx);
+  const recipientEmails = recipients.map((recipient) => recipient.email);
   let failed = 0;
-  for (const to of recipients) {
+  for (const recipient of recipients) {
+    const { subject, textPart, htmlPart } = buildNotificationMail({ ...ctx, recipientFirstName: recipient.firstName, recipientEmails });
     try {
-      await sendEmail({ to, subject, textPart, htmlPart, replyTo: ctx.senderEmail ?? undefined });
+      await sendEmail({ to: recipient.email, subject, textPart, htmlPart, replyTo: ctx.senderEmail ?? undefined });
     } catch {
       failed += 1;
       console.error('Meldung: Versand an einen Empfänger fehlgeschlagen.');

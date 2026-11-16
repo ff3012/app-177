@@ -3,7 +3,7 @@ import { NOT_DEACTIVATED_WHERE } from '@/lib/auth/user-status';
 import { isNotificationForm, notificationFormState } from './notification-form-constants';
 import { getNotificationFormSettings } from './notification-form-settings';
 import { validateNotificationInput, viennaToday } from './notification-input';
-import { sendNotificationMails } from './notify-notification-form';
+import { sendNotificationMails, type NotificationRecipient } from './notify-notification-form';
 
 export interface SubmitNotificationResult {
   ok?: true;
@@ -15,6 +15,25 @@ const SEND_FAILED = 'Die Meldung konnte nicht gesendet werden. Bitte erneut vers
 
 function formOf(input: unknown): unknown {
   return typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as { form?: unknown }).form : undefined;
+}
+
+/**
+ * Ordnet jeder Empfängeradresse den Vornamen eines aktiven Mitglieds mit dieser Adresse zu (ohne Beachtung der
+ * Groß-/Kleinschreibung); unbekannte Adressen bekommen null und werden in der Mail neutral begrüßt. Ein Fehler bei der
+ * Suche darf den Versand nie verhindern.
+ */
+async function withFirstNames(emails: string[]): Promise<NotificationRecipient[]> {
+  const names = new Map<string, string>();
+  try {
+    const users = await prisma.user.findMany({
+      where: { ...NOT_DEACTIVATED_WHERE, OR: emails.map((email) => ({ email: { equals: email, mode: 'insensitive' as const } })) },
+      select: { email: true, firstName: true },
+    });
+    for (const user of users) names.set(user.email.toLowerCase(), user.firstName);
+  } catch {
+    console.error('Meldung: Vornamen der Empfänger konnten nicht ermittelt werden.');
+  }
+  return emails.map((email) => ({ email, firstName: names.get(email.toLowerCase()) ?? null }));
 }
 
 /**
@@ -49,16 +68,21 @@ export async function submitNotificationCore(params: {
     const validated = validateNotificationInput(input, { products: setting.products, today: viennaToday(now) });
     if (!validated.ok) return { error: validated.error };
 
-    const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } });
+    const organization = await prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { name: true, shortName: true },
+    });
+    const recipients = await withFirstNames(setting.recipients);
     const result = await sendNotificationMails(
       {
         organizationName: organization.name,
+        organizationShortName: organization.shortName ?? organization.name,
         senderName: `${sender.firstName} ${sender.lastName}`,
         senderEmail: sender.email,
         sentAt: now,
         input: validated.value,
       },
-      setting.recipients,
+      recipients,
     );
     if (result.attempted > 0 && result.failed === result.attempted) return { error: SEND_FAILED };
     return { ok: true };

@@ -127,6 +127,19 @@ describe('submitNotificationCore: Versand', () => {
     expect(calls[0].subject).toBe(`AKUT: Schadensmeldung: Atemschutzgerät 3 – ${RUN}-a`);
     expect(calls[0].replyTo).toBe(`${RUN}-senderA@example.local`);
     expect(calls[0].textPart).toContain('Gemeldet von: senderA');
+    // Unbekannte Adressen werden neutral begrüßt; die Empfängerliste steht in jeder Mail.
+    expect(calls[0].textPart?.startsWith('Hallo,\n')).toBe(true);
+    expect(calls[1].textPart).toContain('Ergeht an: r1@example.local, r2@example.local');
+  });
+
+  it('begrüßt Empfänger, die aktive Mitglieder sind, mit dem Vornamen (Adresse ohne Beachtung der Groß-/Kleinschreibung)', async () => {
+    const memberEmail = `${RUN}-senderA@example.local`;
+    await saveNotificationFormRecipients(orgA, 'DRINKS', [memberEmail.toLowerCase(), 'fremd@example.local']);
+    const result = await submitNotificationCore({ organizationId: orgA, senderId: ids.senderA, input: drinks(), now: NOW });
+    expect(result).toEqual({ ok: true });
+    const calls = vi.mocked(sendEmail).mock.calls.map((call) => call[0]);
+    expect(calls[0].textPart?.startsWith('Hallo senderA,\n')).toBe(true);
+    expect(calls[1].textPart?.startsWith('Hallo,\n')).toBe(true);
   });
 
   it('meldet einen Fehler, wenn der Versand an ALLE Empfänger scheitert, aber nicht bei einem Teilausfall', async () => {

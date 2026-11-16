@@ -918,7 +918,11 @@ Zwei einfache Formulare am iPad und in der App, die als E-Mail an eine je Feuerw
 `docs/superpowers/plans/2026-11-15-meldungen-getraenke-schaden.md`.
 
 - **Keine Berichte:** kein `Report`, keine Nummer, kein PDF, **nichts wird gespeichert**. Die Meldung geht als **eine E-Mail je Empfänger**
-  (kein gemeinsames An/Cc), der Absender steht nur als Reply-To. Scheitert der Versand an **allen** Empfängern, bekommt der Nutzer einen
+  (kein gemeinsames An/Cc), der Absender steht nur als Reply-To. Der Mailtext (`notify-notification-form.ts`) begrüßt mit dem Vornamen,
+  wenn die Empfängeradresse einem aktiven Mitglied gehört (Suche ohne Beachtung der Groß-/Kleinschreibung, sonst "Hallo,"), nennt
+  "Feuerwehr <Kurzname>", endet mit "Vielen Dank / App-17 / AUTH_URL" und dem Hinweis "automatische E-Mail, bitte nicht darauf
+  antworten" und führt in der Zeile "Ergeht an:" **alle** Empfängeradressen auf (jeder Empfänger sieht also die anderen Adressen).
+  Scheitert der Versand an **allen** Empfängern, bekommt der Nutzer einen
   Fehler und kann es erneut versuchen; ein Teilausfall gilt als gesendet. Bekannte Folge von "nur E-Mail": es gibt keinen Verlauf und
   keinen Nachweis über abgeschickte Meldungen außer den E-Mails selbst (wer das braucht, spezifiziert eine Speicherung separat).
 - **Daten:** Tabelle `NotificationFormSetting` (Migration `20261115110000_notification_form_setting`, rein additiv; je Feuerwehr und
