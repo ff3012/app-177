@@ -1,4 +1,10 @@
-const CONTENT_SECURITY_POLICY = [
+// Seiten, die ein Fremdsystem einbetten darf: nur das schreibgeschützte Feuerwehrhaus-Dashboard
+// (/dashboard/[token], Link-geschützt, keine Aktionen auf der Seite) darf in einem iFrame von BlaulichtSMS
+// erscheinen ("HTML/iFrame-Integration" im BlaulichtSMS-Dashboard). Alle übrigen Seiten bleiben gegen
+// Einbettung gesperrt (Clickjacking-Schutz).
+const DASHBOARD_FRAME_ANCESTORS = "frame-ancestors 'self' https://blaulichtsms.net https://*.blaulichtsms.net";
+
+const contentSecurityPolicy = (frameAncestors) => [
   "default-src 'self'",
   // Next.js injects its own inline bootstrap/hydration scripts, so 'unsafe-inline' is needed here
   // unless a nonce-based CSP is set up (bigger change - not done here).
@@ -19,10 +25,17 @@ const CONTENT_SECURITY_POLICY = [
   // https://*.exo.io: derselbe Exoscale-SOS-Bucket - der Foto-Upload (lib/photo-upload/
   // foreground-upload.ts) lädt Originale per presigned PUT direkt vom Client zu S3 hoch, kein Server-Proxy.
   "connect-src 'self' https://*.exo.io",
-  "frame-ancestors 'none'",
+  frameAncestors,
   "base-uri 'self'",
   "form-action 'self'",
 ].join('; ');
+
+const COMMON_HEADERS = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -36,15 +49,19 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/:path*',
+        // Alles außer /dashboard/...: Einbettung in fremde Seiten verboten.
+        source: '/((?!dashboard(?:/|$)).*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          { key: 'Content-Security-Policy', value: CONTENT_SECURITY_POLICY },
+          ...COMMON_HEADERS,
+          { key: 'Content-Security-Policy', value: contentSecurityPolicy("frame-ancestors 'none'") },
         ],
+      },
+      {
+        // /dashboard/...: bewusst OHNE X-Frame-Options (das würde frame-ancestors aushebeln), Einbettung nur
+        // durch die eigene Seite und BlaulichtSMS.
+        source: '/dashboard/:path*',
+        headers: [...COMMON_HEADERS, { key: 'Content-Security-Policy', value: contentSecurityPolicy(DASHBOARD_FRAME_ANCESTORS) }],
       },
     ];
   },
