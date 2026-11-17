@@ -37,6 +37,9 @@ export async function getDashboardEvents(organizationId: string): Promise<Dashbo
   return prisma.event.findMany({
     where: {
       startsAt: { gte: now },
+      // Fahrzeug-Buchungen stehen als geschützte Kalender-Termine in der Datenbank (Event.vehicleBookingId),
+      // haben aber ihre eigene Ansicht "Ausgeborgte Fahrzeuge" - hier würden sie nur doppelt erscheinen.
+      vehicleBookingId: null,
       OR: [
         { organizationId },
         {
