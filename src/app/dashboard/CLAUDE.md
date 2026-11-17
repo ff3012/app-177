@@ -188,3 +188,5 @@ mockup), not derived from scratch — the spec at
   `'use client'` island (`clock-display.tsx`) so the whole page doesn't re-render for that. Chrome launch
   flags and the crontab entry are documented in `docker/README.md`.
 
+
+- **Einbettung in BlaulichtSMS (iFrame)**: `next.config.mjs` sperrt jede Seite gegen Einbettung (`X-Frame-Options: DENY` + `frame-ancestors 'none'`), nur `/dashboard/...` ist ausgenommen: dort fehlt `X-Frame-Options` bewusst (es würde `frame-ancestors` aushebeln) und `frame-ancestors` erlaubt `'self'`, `blaulichtsms.net` und `*.blaulichtsms.net`. Ohne diese Ausnahme zeigt die "HTML/iFrame-Integration" von BlaulichtSMS nur "refused to connect" (so geschehen 2026-11-17, auf DEV und PROD bestätigt behoben). Zeigt ein anderes Fremdsystem dasselbe Fehlerbild, steht die fehlende Domain in der Browserkonsole ("Refused to frame … frame-ancestors"); sie wird in `DASHBOARD_FRAME_ANCESTORS` ergänzt.
